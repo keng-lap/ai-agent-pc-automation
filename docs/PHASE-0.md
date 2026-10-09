@@ -4,6 +4,8 @@
 
 **In Progress**
 
+Close-out work (directory structure, `.gitignore`, status reconciliation, recorded proposals) is prepared on a separate branch and awaits project owner review and merge. Remaining items are listed in Section 7.
+
 ## Objective
 
 Prepare the project foundation so that another developer or AI coding agent can understand the project and continue development without needing the original conversation.
@@ -48,7 +50,9 @@ scripts/
 .gitignore
 ```
 
-These directories may remain empty during Phase 0.
+These directories may remain empty during Phase 0. Because Git does not track empty directories, each contains a `.gitkeep` placeholder file.
+
+Additional file (not required by Phase 0): `docs/PROPOSALS.md` records proposals that are pending project owner approval. It is not a source of truth.
 
 ---
 
@@ -83,6 +87,15 @@ Recommended commit message:
 ```text
 chore: initialize project foundation
 ```
+
+## Branch rule for all later changes
+
+Project owner directive (2026-10-09):
+
+- After the initial commit, do not commit directly to `main`.
+- Make changes on a dedicated branch and push that branch.
+- Merge into `main` only after the project owner has reviewed and approved the changes.
+- A general branch naming convention is not defined yet (see `docs/PROPOSALS.md`).
 
 ---
 
@@ -160,14 +173,19 @@ Phase 0 is complete when:
 - [x] PROJECT.md exists
 - [x] ROADMAP.md exists
 - [x] PHASE-0.md exists
-- [x] src/ exists
-- [x] tests/ exists
-- [x] scripts/ exists
-- [x] .gitignore exists
-- [ ] Documentation reviewed
-- [ ] Git commit created
-- [ ] GitHub push completed
-- [ ] GitHub repository verified
+- [x] src/ exists (tracked via `.gitkeep`)
+- [x] tests/ exists (tracked via `.gitkeep`)
+- [x] scripts/ exists (tracked via `.gitkeep`)
+- [x] .gitignore exists (populated; tested with `git check-ignore`)
+- [x] Documentation consistency check completed by Claude (2026-10-09)
+- [ ] Documentation reviewed and approved by the project owner
+- [x] Git commit created (initial commit `2e0c28f`, verified with `git log`)
+- [x] GitHub push completed (initial commit `2e0c28f` verified present on `origin/main` from a fresh clone)
+- [ ] Close-out branch pushed to GitHub and verified
+- [ ] Close-out changes merged into `main` after project owner approval
+- [ ] GitHub repository verified after merge (`main` up to date with `origin/main`, working tree clean)
+
+Phase 0 is not marked complete until every item above is checked.
 
 ---
 

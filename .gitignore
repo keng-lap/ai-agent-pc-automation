@@ -1,0 +1,82 @@
+# ==========================================================
+# AI Agent PC Automation - .gitignore
+# Language/framework is not selected yet (decided in Phase 1),
+# so this file is language-agnostic. Revisit it in Phase 1.
+# ==========================================================
+
+# --- Secrets, credentials, API keys (NEVER commit) ---
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+secrets/
+*.secret
+*.secrets
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+.pypirc
+.netrc
+
+# --- Build artifacts and dependencies ---
+node_modules/
+dist/
+build/
+out/
+target/
+coverage/
+htmlcov/
+*.egg-info/
+.next/
+.nuxt/
+.vite/
+.turbo/
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.parcel-cache/
+
+# --- Logs (agent/audit logs may contain sensitive data) ---
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Temporary and backup files ---
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# --- OS files (Windows / macOS) ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# --- Editor / IDE / local tool settings ---
+.idea/
+.vscode/
+.claude/settings.local.json

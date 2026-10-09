@@ -34,7 +34,7 @@ Prepare the project foundation.
 
 ## Status
 
-**In Progress**
+**In Progress** — close-out changes are prepared and awaiting project owner review and merge. See `docs/PHASE-0.md`, Section 7.
 
 ---
 
