@@ -130,6 +130,8 @@ docs/PHASE-0.md
 
 If there is a conflict between implementation assumptions and these documents, stop and clarify the conflict before implementing major changes.
 
+`docs/PROPOSALS.md` contains proposals that are pending project owner approval. It is not a source of truth and its contents are not requirements.
+
 ## 10. Current Status
 
 Current phase:
@@ -139,5 +141,7 @@ Current phase:
 Status:
 
 **In Progress**
+
+Phase 0 deliverables, the required directory structure (`src/`, `tests/`, `scripts/`) and `.gitignore` are in place. Remaining: project owner review, and merge of the close-out changes into `main`. See `docs/PHASE-0.md`, Section 7.
 
 No production AI Agent functionality has been implemented yet.

@@ -23,6 +23,8 @@ We are currently preparing the project structure, documentation, development rul
 
 No real PC automation should be implemented during Phase 0.
 
+**Status:** In Progress. The close-out changes are prepared and awaiting project owner review. Phase 1 has not been authorized.
+
 ## Architecture
 
 Initial architecture:
@@ -63,3 +65,5 @@ See:
 - `docs/PROJECT.md`
 - `docs/ROADMAP.md`
 - `docs/PHASE-0.md`
+
+Non-binding proposals awaiting owner approval (not requirements): `docs/PROPOSALS.md`
