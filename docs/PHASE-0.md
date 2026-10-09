@@ -178,10 +178,10 @@ Phase 0 is complete when:
 - [x] scripts/ exists (tracked via `.gitkeep`)
 - [x] .gitignore exists (populated; tested with `git check-ignore`)
 - [x] Documentation consistency check completed by Claude (2026-10-09)
-- [ ] Documentation reviewed and approved by the project owner
+- [x] Documentation reviewed and approved by the project owner
 - [x] Git commit created (initial commit `2e0c28f`, verified with `git log`)
 - [x] GitHub push completed (initial commit `2e0c28f` verified present on `origin/main` from a fresh clone)
-- [ ] Close-out branch pushed to GitHub and verified
+- [x] Close-out branch pushed to GitHub and verified
 - [ ] Close-out changes merged into `main` after project owner approval
 - [ ] GitHub repository verified after merge (`main` up to date with `origin/main`, working tree clean)
 
