@@ -140,8 +140,10 @@ Current phase:
 
 Status:
 
-**In Progress**
+**Complete**
 
-Phase 0 deliverables, the required directory structure (`src/`, `tests/`, `scripts/`) and `.gitignore` are in place. Remaining: project owner review, and merge of the close-out changes into `main`. See `docs/PHASE-0.md`, Section 7.
+Phase 0 deliverables, the required directory structure (`src/`, `tests/`, `scripts/`) and `.gitignore` are in place and merged into `main`. See `docs/PHASE-0.md`, Section 7 and Section 9.
+
+Phase 1 has not been started. It requires an explicit start from the project owner.
 
 No production AI Agent functionality has been implemented yet.

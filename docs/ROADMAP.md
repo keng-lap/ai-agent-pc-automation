@@ -34,7 +34,7 @@ Prepare the project foundation.
 
 ## Status
 
-**In Progress** — close-out changes are prepared and awaiting project owner review and merge. See `docs/PHASE-0.md`, Section 7.
+**Complete** — see `docs/PHASE-0.md`, Section 7. Phase 1 has not been started.
 
 ---
 
@@ -326,7 +326,7 @@ A phase is considered complete only when:
 # Current Position
 
 ```text
-Phase 0  ██████████  In Progress
+Phase 0  ██████████  Complete
 Phase 1  ░░░░░░░░░░  Not Started
 Phase 2  ░░░░░░░░░░  Not Started
 Phase 3  ░░░░░░░░░░  Not Started

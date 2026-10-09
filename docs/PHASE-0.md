@@ -2,9 +2,9 @@
 
 ## Status
 
-**In Progress**
+**Complete**
 
-Close-out work (directory structure, `.gitignore`, status reconciliation, recorded proposals) is prepared on a separate branch and awaits project owner review and merge. Remaining items are listed in Section 7.
+All Definition of Done items in Section 7 are checked. Phase 1 has not been started and requires an explicit start from the project owner.
 
 ## Objective
 
@@ -182,8 +182,8 @@ Phase 0 is complete when:
 - [x] Git commit created (initial commit `2e0c28f`, verified with `git log`)
 - [x] GitHub push completed (initial commit `2e0c28f` verified present on `origin/main` from a fresh clone)
 - [x] Close-out branch pushed to GitHub and verified
-- [ ] Close-out changes merged into `main` after project owner approval
-- [ ] GitHub repository verified after merge (`main` up to date with `origin/main`, working tree clean)
+- [x] Close-out changes merged into `main` after project owner approval (Pull Request #1, merge commit `d761025`)
+- [x] GitHub repository verified after merge (fresh clone at `d761025`: `main` up to date with `origin/main`, working tree clean, file tree identical to the close-out branch)
 
 Phase 0 is not marked complete until every item above is checked.
 
@@ -229,6 +229,16 @@ Git:
 Next Phase:
 Phase 1 — Local Development Environment
 ```
+
+## Completion Record
+
+- Date: 2026-10-09
+- Initial commit: `2e0c28f` (`chore: initialize project foundation`)
+- Close-out commits: `6e6a874` (`chore: close out phase 0 foundation`), `40f5c51` (`Update PHASE-0.md`, project owner review)
+- Merged by Pull Request #1 into `main` as `d761025`
+- Tests: none applicable. No code exists. Checks run: `git check-ignore` tests for `.gitignore`, `git diff --check`, secret scan of staged content, fresh-clone verification of `main`.
+- Phase 1: not started. It requires an explicit start from the project owner.
+- Open decisions are listed in `docs/PROPOSALS.md` (none block Phase 0).
 
 ---
 

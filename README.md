@@ -19,11 +19,11 @@ Examples:
 
 **Phase 0 — Project Foundation**
 
-We are currently preparing the project structure, documentation, development rules, and Git workflow.
+Phase 0 prepared the project structure, documentation, development rules, and Git workflow.
 
 No real PC automation should be implemented during Phase 0.
 
-**Status:** In Progress. The close-out changes are prepared and awaiting project owner review. Phase 1 has not been authorized.
+**Status:** Complete. Phase 1 (Local Development Environment) has not been started and requires an explicit start from the project owner.
 
 ## Architecture
 
