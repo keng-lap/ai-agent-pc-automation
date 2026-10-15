@@ -29,6 +29,7 @@ id_ed25519.*
 
 # --- Build artifacts and dependencies ---
 node_modules/
+.angular/
 dist/
 build/
 out/

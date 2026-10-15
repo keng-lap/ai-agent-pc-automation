@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-backend"
+version = "0.0.0"
+description = "AI Agent PC Automation - backend (Phase 1 skeleton)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.143",
+    "uvicorn>=0.54",
+    "python-dotenv>=1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1",
+    "httpx2>=2.13",
+    "ruff>=0.17",
+]
+
+[tool.setuptools.packages.find]
+include = ["agent_backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["../../tests/backend"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100

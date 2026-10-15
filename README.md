@@ -17,13 +17,13 @@ Examples:
 
 ## Current Phase
 
-**Phase 0 — Project Foundation**
+**Phase 1 — Local Development Environment**
 
-Phase 0 prepared the project structure, documentation, development rules, and Git workflow.
+Phase 0 (Project Foundation) is complete. Phase 1 builds a runnable local development environment: Angular (TypeScript) frontend, Python (FastAPI) backend, environment variables and development scripts.
 
-No real PC automation should be implemented during Phase 0.
+No Agent or PC-automation functionality is implemented yet. Do not implement future-phase features early.
 
-**Status:** Complete. Phase 1 (Local Development Environment) has not been started and requires an explicit start from the project owner.
+**Status:** In Progress. Open items: `docs/PHASE-1.md`, Section 7.
 
 ## Architecture
 
@@ -65,5 +65,23 @@ See:
 - `docs/PROJECT.md`
 - `docs/ROADMAP.md`
 - `docs/PHASE-0.md`
+- `docs/PHASE-1.md`
 
 Non-binding proposals awaiting owner approval (not requirements): `docs/PROPOSALS.md`
+
+## Local Development
+
+Requires Windows 11, Git, Python 3.11+, and Node.js `^22.22.3`, `^24.15.0` or `>=26.0.0` (details in `docs/PHASE-1.md`).
+
+From the repository root in PowerShell:
+
+```text
+scripts\setup.ps1    install dependencies and create .env (once)
+scripts\dev.ps1      run backend and frontend (Ctrl+C stops both)
+scripts\test.ps1     run all tests
+```
+
+- Backend health check: `http://127.0.0.1:8000/health`
+- Frontend: `http://127.0.0.1:4200/`
+
+Both servers bind to `127.0.0.1` only.
