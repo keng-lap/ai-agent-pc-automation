@@ -60,7 +60,7 @@ A runnable local development environment.
 
 ## Status
 
-**In Progress** — see `docs/PHASE-1.md`, Section 7.
+**Complete** — see `docs/PHASE-1.md`, Section 7. Phase 2 has not been started.
 
 ---
 
@@ -327,7 +327,7 @@ A phase is considered complete only when:
 
 ```text
 Phase 0  ██████████  Complete
-Phase 1  ░░░░░░░░░░  In Progress
+Phase 1  ██████████  Complete
 Phase 2  ░░░░░░░░░░  Not Started
 Phase 3  ░░░░░░░░░░  Not Started
 Phase 4  ░░░░░░░░░░  Not Started

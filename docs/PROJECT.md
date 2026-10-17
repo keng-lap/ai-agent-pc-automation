@@ -140,10 +140,10 @@ Current phase:
 
 Status:
 
-**In Progress**
+**Complete**
 
-Phase 0 (Project Foundation) is complete and merged into `main`. See `docs/PHASE-0.md`.
+Phase 0 (Project Foundation) and Phase 1 are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
-Phase 1 is building a runnable local development environment (Angular frontend, FastAPI backend, scripts). Open items are listed in `docs/PHASE-1.md`, Section 7.
+Phase 2 (Local Web Application) has not been started. It requires an explicit start from the project owner.
 
 No production AI Agent functionality has been implemented yet.

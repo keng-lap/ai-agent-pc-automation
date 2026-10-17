@@ -19,11 +19,11 @@ Examples:
 
 **Phase 1 — Local Development Environment**
 
-Phase 0 (Project Foundation) is complete. Phase 1 builds a runnable local development environment: Angular (TypeScript) frontend, Python (FastAPI) backend, environment variables and development scripts.
+Phase 0 (Project Foundation) and Phase 1 are complete. Phase 1 built a runnable local development environment: Angular (TypeScript) frontend, Python (FastAPI) backend, environment variables and development scripts.
 
 No Agent or PC-automation functionality is implemented yet. Do not implement future-phase features early.
 
-**Status:** In Progress. Open items: `docs/PHASE-1.md`, Section 7.
+**Status:** Complete. Phase 2 (Local Web Application) has not been started and requires an explicit start from the project owner.
 
 ## Architecture
 
