@@ -26,7 +26,7 @@ Initial target environment:
 - Git / GitHub
 - AI Agent
 - Claude will participate in development
-- Programming language and framework will be selected during the appropriate project phase
+- Frontend: Angular (TypeScript). Backend: Python (FastAPI). Selected in Phase 1; see `docs/PHASE-1.md`
 
 ## 4. Initial Architecture
 
@@ -136,14 +136,14 @@ If there is a conflict between implementation assumptions and these documents, s
 
 Current phase:
 
-**Phase 0 — Project Foundation**
+**Phase 1 — Local Development Environment**
 
 Status:
 
-**Complete**
+**In Progress**
 
-Phase 0 deliverables, the required directory structure (`src/`, `tests/`, `scripts/`) and `.gitignore` are in place and merged into `main`. See `docs/PHASE-0.md`, Section 7 and Section 9.
+Phase 0 (Project Foundation) is complete and merged into `main`. See `docs/PHASE-0.md`.
 
-Phase 1 has not been started. It requires an explicit start from the project owner.
+Phase 1 is building a runnable local development environment (Angular frontend, FastAPI backend, scripts). Open items are listed in `docs/PHASE-1.md`, Section 7.
 
 No production AI Agent functionality has been implemented yet.
