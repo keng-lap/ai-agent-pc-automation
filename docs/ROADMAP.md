@@ -34,7 +34,7 @@ Prepare the project foundation.
 
 ## Status
 
-**Complete** — see `docs/PHASE-0.md`, Section 7. Phase 1 has not been started.
+**Complete** — see `docs/PHASE-0.md`, Section 7.
 
 ---
 

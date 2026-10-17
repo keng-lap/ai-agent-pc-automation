@@ -4,7 +4,7 @@
 
 **Complete**
 
-All Definition of Done items in Section 7 are checked. Phase 1 has not been started and requires an explicit start from the project owner.
+All Definition of Done items in Section 7 are checked. The next phase, Phase 1, has since been started by the project owner and completed. See `docs/PHASE-1.md`.
 
 ## Objective
 
@@ -237,7 +237,7 @@ Phase 1 — Local Development Environment
 - Close-out commits: `6e6a874` (`chore: close out phase 0 foundation`), `40f5c51` (`Update PHASE-0.md`, project owner review)
 - Merged by Pull Request #1 into `main` as `d761025`
 - Tests: none applicable. No code exists. Checks run: `git check-ignore` tests for `.gitignore`, `git diff --check`, secret scan of staged content, fresh-clone verification of `main`.
-- Phase 1: not started. It requires an explicit start from the project owner.
+- Phase 1: not started at the time of this record. It has since been started by the project owner and completed (see `docs/PHASE-1.md`).
 - Open decisions are listed in `docs/PROPOSALS.md` (none block Phase 0).
 
 ---
