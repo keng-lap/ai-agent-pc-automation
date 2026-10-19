@@ -2,12 +2,12 @@
 
 ## Status of this document
 
-Everything in this file is a **proposal**. None of it is a requirement, and none of it is approved.
+Everything in this file is a **proposal** unless a Decision note below says otherwise. A proposal is not a requirement until the Product Owner approves it.
 
 - This file is **not** a source of truth (see `docs/PROJECT.md`, Section 9).
 - Nothing here may be implemented until the project owner approves it and it is moved into the appropriate phase document.
-- Nothing here changes `docs/ROADMAP.md`. The roadmap order is unchanged.
-- Nothing here is implemented in Phase 0. Phase 0 only records the proposals.
+- Nothing here changes the roadmap order.
+- Decisions recorded so far: P-SEC-1 (approved for Phase 1, see `docs/PHASE-1.md`) and P-ORDER-1 (option A, Section 2). All other proposals are still pending.
 
 Proposed on: 2026-10-09
 
@@ -25,6 +25,8 @@ The Agent will eventually control a real Windows computer, and it will be reacha
 
 Suggested phase: Phase 1 (configuration) and Phase 2 (web application).
 
+**Decision (2026-10-15):** approved for Phase 1 only (`docs/PHASE-1.md`). Whether it is a standing rule for later phases is open decision D-SEC-5 in `docs/PHASE-2.md`, Section 14.
+
 ## P-SEC-2: Protection against requests from other websites
 
 A page open in the user's browser on any website can send requests to `localhost`. A local-only listener alone does not stop this. Proposed measures:
@@ -37,6 +39,8 @@ A page open in the user's browser on any website can send requests to `localhost
 - A random per-session secret token, generated at startup, required on every API call. This also stops other local processes and arbitrary web pages from driving the Agent.
 
 Suggested phase: Phase 2 (web application), verified again in Phase 5.
+
+**Phase 2 treatment:** specified in `docs/PHASE-2.md`, Section 11. The Product Owner's 2026-10-17 selection of a minimal subset (Host and Origin checks, JSON-only, no permissive CORS, no state-changing GET) is carried into that draft and is confirmed when the draft is approved. The per-session token is not approved and is open decision D-SEC-1.
 
 ## P-SEC-3: Permission and confirmation
 
@@ -71,7 +75,7 @@ Suggested phase: Phase 3 and Phase 4 (tool design), with real execution enabled 
 
 **Suggestion.** Option A, because it keeps the approved phase order and needs only a constraint added to the Phase 3 and Phase 4 descriptions.
 
-**Decision needed from the project owner.** `ROADMAP.md` is not changed until the owner decides.
+**Decision (2026-10-19, Product Owner): Option A.** The phase order is unchanged. Tools that can modify the machine are dry-run or mock only until the safety system is implemented and approved. The constraint is recorded in `docs/ROADMAP.md` (Phase 3 and Phase 4) and applied to Phase 2 in `docs/PHASE-2.md`, Section 12. Options B and C are not selected. P-SEC-4 (how dry-run and mock modes are designed) remains a proposal.
 
 ---
 

@@ -84,7 +84,7 @@ User can open a local web application and communicate with the Agent.
 
 ## Status
 
-Not Started
+Not Started — specification drafted in `docs/PHASE-2.md` (Draft, awaiting Product Owner approval).
 
 ---
 
@@ -107,6 +107,10 @@ Create the AI Agent core.
 ## Deliverables
 
 A basic working AI Agent.
+
+## Safety Constraint (P-ORDER-1, option A)
+
+Product Owner decision (2026-10-19): the phase order does not change. Tools that can modify the machine are dry-run or mock only until the Safety and Permission System (Phase 5) is implemented and approved. See `docs/PROPOSALS.md`.
 
 ## Status
 
@@ -137,6 +141,10 @@ Tools must have explicit permissions and validation.
 ## Deliverables
 
 A controlled tool execution layer.
+
+## Safety Constraint (P-ORDER-1, option A)
+
+Product Owner decision (2026-10-19): the phase order does not change. Tools that can modify the machine are dry-run or mock only until the Safety and Permission System (Phase 5) is implemented and approved. See `docs/PROPOSALS.md`.
 
 ## Status
 
