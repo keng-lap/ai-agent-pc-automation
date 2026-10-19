@@ -23,7 +23,7 @@ Phase 0 (Project Foundation) and Phase 1 are complete. Phase 1 built a runnable 
 
 No Agent or PC-automation functionality is implemented yet. Do not implement future-phase features early.
 
-**Status:** Complete. Phase 2 (Local Web Application) has not been started and requires an explicit start from the project owner.
+**Status:** Complete. Phase 2 (Local Web Application) has not been started and requires an explicit start from the project owner. Its specification is a draft awaiting Product Owner approval: `docs/PHASE-2.md`.
 
 ## Architecture
 
@@ -66,6 +66,7 @@ See:
 - `docs/ROADMAP.md`
 - `docs/PHASE-0.md`
 - `docs/PHASE-1.md`
+- `docs/PHASE-2.md` (draft, awaiting Product Owner approval)
 
 Non-binding proposals awaiting owner approval (not requirements): `docs/PROPOSALS.md`
 
