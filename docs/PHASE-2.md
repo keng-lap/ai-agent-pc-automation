@@ -157,7 +157,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | FR-6 | The newest entry is scrolled into view after each change |
 | FR-7 | The message list uses `role="log"` with polite live announcements. The input has a programmatic label |
 | FR-8 | Chat history exists only in the page. It is not written to local storage, session storage, IndexedDB or cookies. A reload clears it |
-| FR-9 | All user-visible text is English (Open decision D-API-2). Unicode input of any language must work |
+| FR-9 | All user-visible text is Thai (Product Owner decision, 2026-10-20). Unicode input of any language must work |
 | FR-10 | The page is readable in light and dark system themes |
 
 ## 6.3 UI states
@@ -700,9 +700,9 @@ Approval of this document does not approve a decision unless the decision is ans
 | D-SEC-4 | Request size limit | 16 KiB (413) / Validation only | 16 KiB | Pending |
 | D-SEC-5 | P-SEC-1 beyond Phase 1 | Standing rule / Phase by phase | Standing rule | Pending |
 | D-API-1 | Frontend request timeout | 10 s / other | 10 s | Pending |
-| D-API-2 | UI language | English / Thai | English (Thai input must work either way) | Pending |
+| D-API-2 | UI language | English / Thai | Thai, selected by Product Owner on 2026-10-20 | Decided in conversation; record as pending until this spec is approved |
 | D-API-3 | Mock reply content | Reply includes the message length (Section 7.3) / Constant text only | Includes the length: it proves the message reached the backend and was counted correctly, without echoing user text | Pending |
-| D-GIT-1 | Branch naming | Section 16 proposal / other | Section 16 proposal | Pending |
+| D-GIT-1 | Branch naming | `<type>/<task-id>-<short-name>` for all work, including docs | Product Owner selected this convention on 2026-10-20 | Decided in conversation; record as pending until this spec is approved |
 | D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Pending |
 
 ---
@@ -731,7 +731,7 @@ Do not mark any item before it has been verified. Do not mark Phase 2 complete b
 # 16. Git Workflow
 
 - The repository defines one rule: **do not commit directly to `main`**. Work on a branch, push it, and merge only after the Product Owner has reviewed it (`docs/PHASE-0.md`). A general naming convention is not defined (`docs/PROPOSALS.md`)
-- **Proposed convention [Proposed, D-GIT-1]:** `<type>/<task-id>-<short-name>`, using the prefixes already in use. Examples: `feat/t-202-chat-ui`, `feat/t-203-chat-endpoint`, `feat/t-205-local-web-security`, `feat/t-204-integration`. Documentation branches use a hyphenated name such as `docs-phase-2-spec`, matching the existing `docs-fix-status`
+- **Product Owner decision (2026-10-20):** Use `<type>/<task-id>-<short-name>` for every branch, including documentation branches. Examples: `docs/t-201-phase-2-spec`, `feat/t-202-chat-ui`, `feat/t-203-chat-endpoint`, `feat/t-205-local-web-security`, `feat/t-204-integration`. Do not use a separate naming format for documentation branches.
 - One task is one branch and one pull request. Branch from the latest `main`
 - Commit messages use the existing style: `type: short summary` with a body listing the changes
 - Before each commit: review the full diff, run the tests that apply, check that only allowed paths changed, and scan the diff for secrets
