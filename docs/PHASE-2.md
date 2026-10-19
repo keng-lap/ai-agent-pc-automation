@@ -198,7 +198,6 @@ From every state S-4 to S-12, the user can send another message without reloadin
 The backend never returns 502, 503 or 504 itself, and every 500 it returns carries a `detail` (Section 8). That is why a 5xx without a `detail` is treated as "disconnected". The UI shows its own fixed texts. It does not display backend `detail` text.
 
 ## 6.5 User-visible text (frozen in T-201)
-
 | ID | Text |
 |----|------|
 | MSG-01 | Type a message to start. The Agent is not implemented yet, so replies are placeholders. |
@@ -354,7 +353,7 @@ Error handling rules:
 - A test result may be reported only if the test was actually run. Reports state what was run and where
 - Test counts must not fall below the baseline (14 backend, 2 frontend)
 - A frontend component depends on a `ChatApi` abstraction. Tests use fakes. The real HTTP implementation is added in T-204
-- Each security test must be shown to **fail** when its control is removed (mutation check), and the evidence goes into the T-205 report
+- For backend security controls owned by T-205, each applicable ST test must be shown to **fail** when its control is removed (mutation check); record this evidence in the T-205 report. ST-22 is verified end-to-end in T-204, and ST-24 is verified in T-202.
 - Integration checks must not depend on the Agent. The mock reply is the oracle
 - Tests do not call the internet
 
@@ -397,7 +396,6 @@ Error handling rules:
 | F-16 | Table-driven error classification covers every row of Section 6.4, including 502 with an empty body, 500 with `detail`, 500 without `detail` |
 
 ## 9.5 Integration checks (T-204)
-
 These run against the real servers started by `scripts\dev.ps1` or an equivalent harness.
 
 | ID | Check |
@@ -597,8 +595,7 @@ For Phase 2:
 
 - **WIP limit: 1.** Only one implementation task may be in progress. The next task starts only after the previous one is merged into `main`, verified, and the Product Owner explicitly starts the next one
 - Each task uses its own branch and its own pull request (Section 16)
-- A task changes only the paths listed under "Allowed changes". Anything else is a stop-and-ask
-- Every task ends with the completion report in Section 17
+- A task changes only the paths listed under "Allowed changes". Anything else is a stop-and-ask- Every task ends with the completion report in Section 17
 - No task may add a runtime dependency, an AI provider, API key, database, tool execution or authentication framework
 - No task changes `docs/ROADMAP.md` phase order or the technology stack
 
