@@ -58,6 +58,7 @@ The Agent does not exist in this phase (it belongs to Phase 3). The backend retu
 | G-7 | Option A for P-ORDER-1: keep the phase order. Tools that can modify the machine are dry-run or mock only until the safety system is implemented and approved | Product Owner, 2026-10-19 (recorded in `docs/PROPOSALS.md` by the change that adds this document) | [Carried forward] |
 | G-8 | One implementation task at a time. No task starts without explicit Product Owner approval | Product Owner, 2026-10-19 | [Carried forward] |
 | G-9 | An earlier, unmerged implementation attempt of Phase 2 was discarded by the Product Owner on 2026-10-19. This specification is the new starting point. Nothing from that attempt is part of the repository | Product Owner, 2026-10-19 | [Carried forward] |
+| G-10 | The chat UI supports Thai and English with a visible language switch. Thai is the default on first visit; the selected UI language may be stored in `localStorage`. Chat messages and history must never be stored in browser storage | Product Owner, 2026-10-20 | [Carried forward] |
 
 Not approved and not part of Phase 2: any AI provider or model, API keys, a database, tool execution, an authentication framework, and every other proposal in `docs/PROPOSALS.md`.
 
@@ -126,7 +127,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | ID | Story | Acceptance criteria |
 |----|-------|---------------------|
 | US-1 | As a user, I open the app and see a chat page | **AC-1.1** Given the backend and frontend are running, when I open `http://127.0.0.1:4200/`, then I see the page title, an empty message list with the hint MSG-01, an empty input box and a disabled Send button. **AC-1.2** The page needs no backend response to render |
-| US-2 | As a user, I send a message and see the reply | **AC-2.1** Given I typed a non-empty message, when I press Enter or click Send, then my message appears as a "You" entry, the input is cleared, a pending indicator (MSG-02) is shown and Send is disabled. **AC-2.2** When the reply arrives, it appears as an "Agent" entry, the indicator disappears and Send is enabled again. **AC-2.3** The reply text is exactly the text defined in Section 7.3 for that message. **AC-2.4** Entries stay in the order they happened. The newest entry is visible |
+| US-2 | As a user, I send a message and see the reply | **AC-2.1** Given I typed a non-empty message, when I press Enter or click Send, then my message appears as a "You" entry, the input is cleared, a pending indicator (MSG-02) is shown and Send is disabled. **AC-2.2** When the reply arrives, it appears as an "Agent" entry, the indicator disappears and Send is enabled again. **AC-2.3** The reply text is exactly the localized text defined in Section 7.3 for that message and selected language. **AC-2.4** Entries stay in the order they happened. The newest entry is visible |
 | US-3 | As a user, I cannot send invalid input | **AC-3.1** Send is disabled while the input is empty or only whitespace. **AC-3.2** The input does not accept more than 2000 characters. **AC-3.3** If an invalid message still reaches the backend, the user sees MSG-04 and can send again |
 | US-4 | As a user, I understand when the backend is not reachable | **AC-4.1** Given the backend is not running, when I send a message, then I see the disconnected message MSG-03 as an "Error" entry. **AC-4.2** Send is enabled again. **AC-4.3** After the backend is started again, sending works without reloading the page |
 | US-5 | As a user, I see a clear message for every other failure | **AC-5.1** Each failure class in Section 6.4 shows its own message and never shows a stack trace, file path or internal detail. **AC-5.2** After any failure, the user can send another message. **AC-5.3** A request that does not finish within the timeout ends with MSG-07 |
@@ -157,7 +158,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | FR-6 | The newest entry is scrolled into view after each change |
 | FR-7 | The message list uses `role="log"` with polite live announcements. The input has a programmatic label |
 | FR-8 | Chat history exists only in the page. It is not written to local storage, session storage, IndexedDB or cookies. A reload clears it |
-| FR-9 | All user-visible text is Thai (Product Owner decision, 2026-10-20). Unicode input of any language must work |
+| FR-9 | All user-visible UI text and system messages are localized in Thai and English. Provide a visible language switch; default to Thai on first visit and remember the selected UI language in `localStorage`. This preference is the only permitted browser-storage value. Unicode input of any language must work |
 | FR-10 | The page is readable in light and dark system themes |
 
 ## 6.3 UI states
@@ -200,18 +201,18 @@ The backend never returns 502, 503 or 504 itself, and every 500 it returns carri
 ## 6.5 User-visible text (frozen in T-201)
 | ID | Text |
 |----|------|
-| MSG-01 | Type a message to start. The Agent is not implemented yet, so replies are placeholders. |
-| MSG-02 | Waiting for the Agent… |
-| MSG-03 | Cannot reach the backend. Check that it is running (scripts\dev.ps1). |
-| MSG-04 | The message was not accepted. Messages must be 1 to 2000 characters. |
-| MSG-05 | The backend rejected the request (security check). |
-| MSG-06 | The backend reported an internal error. Please try again. |
-| MSG-07 | The Agent did not respond in time. Please try again. |
-| MSG-08 | The backend sent an unexpected response. |
-| MSG-09 | The message is too large. |
-| MSG-10 | Unexpected error (HTTP <status>). |
+| MSG-01 | TH: เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน คำตอบในตอนนี้เป็นเพียงตัวอย่างจำลอง. / EN: Type a message to start. The Agent is not implemented yet, so replies are placeholders. |
+| MSG-02 | TH: กำลังรอคำตอบจาก Agent… / EN: Waiting for the Agent… |
+| MSG-03 | TH: เชื่อมต่อ Backend ไม่ได้ โปรดตรวจสอบว่า Backend ทำงานอยู่ (`scripts\dev.ps1`). / EN: Cannot reach the backend. Check that it is running (`scripts\dev.ps1`). |
+| MSG-04 | TH: ไม่รับข้อความนี้ ข้อความต้องมีความยาว 1 ถึง 2000 อักขระ / EN: The message was not accepted. Messages must be 1 to 2000 characters. |
+| MSG-05 | TH: Backend ปฏิเสธคำขอ (ไม่ผ่านการตรวจสอบความปลอดภัย) / EN: The backend rejected the request (security check). |
+| MSG-06 | TH: Backend พบข้อผิดพลาดภายใน โปรดลองอีกครั้ง / EN: The backend reported an internal error. Please try again. |
+| MSG-07 | TH: Agent ไม่ตอบกลับภายในเวลาที่กำหนด โปรดลองอีกครั้ง / EN: The Agent did not respond in time. Please try again. |
+| MSG-08 | TH: Backend ส่งคำตอบในรูปแบบที่ไม่คาดคิด / EN: The backend sent an unexpected response. |
+| MSG-09 | TH: ข้อความมีขนาดใหญ่เกินไป / EN: The message is too large. |
+| MSG-10 | TH: เกิดข้อผิดพลาดที่ไม่คาดคิด (HTTP <status>) / EN: Unexpected error (HTTP <status>). |
 
-Entry labels: "You", "Agent", "Error".
+Entry labels: TH: "คุณ", "Agent", "ข้อผิดพลาด"; EN: "You", "Agent", "Error". The language switch and all labels, hints, pending states, and error messages must use the selected language.
 
 ---
 
@@ -233,15 +234,16 @@ Headers:
 - `Content-Type: application/json` (required; see Section 11)
 - `Origin`: see Section 11
 
-Body: a JSON object with exactly one property:
+Body: a JSON object with exactly two properties:
 
 ```json
-{"message": "Install Google Chrome"}
+{"message": "Install Google Chrome", "language": "en"}
 ```
 
 Rules:
 
 - `message` is required and must be a string
+- `language` is required and must be exactly `th` or `en`; it selects the language of the mock reply, not the UI preference itself
 - The string is trimmed of leading and trailing Unicode whitespace
 - After trimming it must contain 1 to 2000 Unicode characters. Length is counted in Unicode code points, not bytes, not UTF-16 units and not grapheme clusters
 - No other property is allowed
@@ -255,14 +257,16 @@ Status `200`, `Content-Type: application/json`:
 {"reply": "Message received (length: 21). The Agent is not implemented yet (planned for Phase 3)."}
 ```
 
-The reply is produced by this rule and by nothing else:
+The reply is produced by the selected language and the trimmed message length, and by nothing else:
 
-> `"Message received (length: " + N + "). The Agent is not implemented yet (planned for Phase 3)."`
-> where N is the number of Unicode code points of the trimmed message, written in decimal digits.
+- `en`: `"Message received (length: " + N + "). The Agent is not implemented yet (planned for Phase 3)."`
+- `th`: `"รับข้อความแล้ว (ความยาว: " + N + " ตัวอักษร) Agent ยังไม่พร้อมใช้งาน (วางแผนไว้ใน Phase 3)."`
+
+Here N is the number of Unicode code points of the trimmed message, written in decimal digits.
 
 Properties:
 
-- Deterministic: the reply depends only on N. No time, randomness, host data or earlier requests are used
+- Deterministic: the same `message` and `language` always produce the same reply. No time, randomness, host data or earlier requests are used
 - The reply never repeats the message text
 - No state is stored between requests
 
@@ -270,9 +274,9 @@ Examples:
 
 | Request body | Reply |
 |--------------|-------|
-| `{"message": "Install Google Chrome"}` | `Message received (length: 21). The Agent is not implemented yet (planned for Phase 3).` |
-| `{"message": "สวัสดี"}` | `Message received (length: 6). The Agent is not implemented yet (planned for Phase 3).` |
-| `{"message": "  hi  "}` | `Message received (length: 2). The Agent is not implemented yet (planned for Phase 3).` |
+| `{"message": "Install Google Chrome", "language": "en"}` | `Message received (length: 21). The Agent is not implemented yet (planned for Phase 3).` |
+| `{"message": "สวัสดี", "language": "th"}` | `รับข้อความแล้ว (ความยาว: 6 ตัวอักษร) Agent ยังไม่พร้อมใช้งาน (วางแผนไว้ใน Phase 3).` |
+| `{"message": "  hi  ", "language": "en"}` | `Message received (length: 2). The Agent is not implemented yet (planned for Phase 3).` |
 
 ## 7.4 Error responses
 
@@ -286,13 +290,13 @@ Every error response is JSON of the form `{"detail": "<text>"}` and never contai
 | 413 | Body larger than the limit (only if D-SEC-4 is approved) | `Request body too large.` |
 | 404 | Unknown path | `Not Found` |
 | 405 | Method not allowed on a known path, for example `GET /api/chat` | `Method Not Allowed` |
-| 422 | Validation failure or malformed JSON (Section 8) | `Invalid request. Send JSON like {"message": "..."} with 1 to 2000 characters.` |
+| 422 | Validation failure or malformed JSON (Section 8) | `Invalid request. Send JSON like {"message": "...", "language": "th"} with 1 to 2000 characters and language th or en.` |
 | 500 | Unexpected error | `Internal server error.` |
 
 Example, invalid request:
 
 ```json
-{"detail": "Invalid request. Send JSON like {\"message\": \"...\"} with 1 to 2000 characters."}
+{"detail": "Invalid request. Send JSON like {\"message\": \"...\", \"language\": \"th\"} with 1 to 2000 characters and language th or en."}
 ```
 
 ## 7.5 Order of checks
@@ -320,8 +324,8 @@ The checks run in this order, and the first failure decides the response. Tests 
 | ID | Rule | Result on violation |
 |----|------|---------------------|
 | V-1 | Body is a JSON object | 422 |
-| V-2 | The only property is `message` | 422 |
-| V-3 | `message` is a string | 422 |
+| V-2 | Exactly two properties are present: `message` and `language` | 422 |
+| V-3 | `message` is a string and `language` is exactly `th` or `en` | 422 |
 | V-4 | Trimmed `message` has 1 to 2000 Unicode code points | 422 |
 | V-5 | Body size is at most 16 KiB (proposal D-SEC-4) | 413 |
 | V-6 | Request content type is `application/json` (parameters such as `charset=utf-8` are allowed) | 415 |
@@ -361,14 +365,14 @@ Error handling rules:
 
 | ID | Test |
 |----|------|
-| B-01 | Valid ASCII message returns 200 and the exact reply |
-| B-02 | Thai message `สวัสดี` returns length 6 (code points) |
+| B-01 | Valid ASCII message with `language: en` returns 200 and the exact English reply |
+| B-02 | Thai message `สวัสดี` with `language: th` returns the exact Thai reply with length 6 (code points) |
 | B-03 | Leading and trailing whitespace is trimmed and not counted |
 | B-04 | 2000 characters are accepted, 2001 returns 422 |
 | B-05 | Empty and whitespace-only messages return 422 |
-| B-06 | Missing `message`, wrong type and extra properties return 422 |
+| B-06 | Missing `message` or `language`, wrong types, unsupported language and extra properties return 422 |
 | B-07 | Malformed JSON returns 422 |
-| B-08 | The same message gives the identical reply 100 times, and two different messages with the same length give the identical reply |
+| B-08 | The same message and language give the identical reply 100 times; different messages with the same length and language give the identical reply |
 | B-09 | An unexpected exception returns 500 with the generic body and no internal detail |
 | B-10 | `GET /api/chat` returns 405 |
 | B-11 | `GET /health` is unchanged (existing test) |
@@ -390,9 +394,9 @@ Error handling rules:
 | F-10 | HTML in the user text and in the reply is displayed as text |
 | F-11 | Entry order is preserved and the newest entry is scrolled into view |
 | F-12 | The input has a label and the list has `role="log"` with a polite live region |
-| F-13 | No browser storage API is used |
+| F-13 | Chat messages and history are never written to browser storage; `localStorage` may be used only for the selected UI language |
 | F-14 | The placeholder `ChatApi` shipped by T-202 reports "not connected" and the UI shows MSG-03 |
-| F-15 | The HTTP implementation posts JSON `{"message": <text>}` to `/api/chat` |
+| F-15 | The HTTP implementation posts JSON `{"message": <text>, "language": "th" or "en"}` to `/api/chat` |
 | F-16 | Table-driven error classification covers every row of Section 6.4, including 502 with an empty body, 500 with `detail`, 500 without `detail` |
 
 ## 9.5 Integration checks (T-204)
@@ -400,7 +404,7 @@ These run against the real servers started by `scripts\dev.ps1` or an equivalent
 
 | ID | Check |
 |----|-------|
-| I-01 | A message through the frontend address (proxy) returns 200 and the exact reply, 20 times, each within 1 second |
+| I-01 | A message through the frontend address (proxy), with the selected language, returns the exact localized reply 20 times, each within 1 second |
 | I-02 | With the backend stopped, a request through the proxy produces the status the frontend classifies as S-6. Re-verify the observation in Section 3 on Windows |
 | I-03 | A request through the proxy with a foreign Origin returns 403 |
 | I-04 | A direct request to the backend with a foreign Host returns 400 |
@@ -429,7 +433,7 @@ Open `http://127.0.0.1:4200/`. These are the existing scripts. Phase 2 does not 
 | ID | Steps | Expected |
 |----|-------|----------|
 | MV-01 | Open the page | Title, hint MSG-01, Send disabled |
-| MV-02 | Type `Install Google Chrome`, press Enter | "You" entry, then the "Agent" entry with `length: 21`, input cleared |
+| MV-02 | Type `Install Google Chrome`, press Enter with English selected | "You" entry, then the English "Agent" entry with `length: 21`, input cleared; repeat with Thai selected and verify a Thai reply |
 | MV-03 | Click Send with an empty or space-only box | Send is disabled, nothing is sent |
 | MV-04 | Type Thai text, press Enter while choosing a word with the Thai input method | The message is not sent until the word is confirmed. Then `length` is the number of characters |
 | MV-05 | Paste 2000 characters, then try to add one more | The 2001st character is not accepted. The 2000 are sent and accepted |
@@ -640,7 +644,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 |-------|---------|
 | Scope | Chat page in the Angular app (message list, composer, all UI states in Section 6.3, interaction rules FR-1 to FR-10, texts in Section 6.5). The UI depends on a `ChatApi` abstraction. This task ships a placeholder `ChatApi` that reports "not connected", so the page shows MSG-03 when used. Tests use fake implementations |
 | Allowed changes | New files under `src/frontend/src/app/chat/`; `app.ts`, `app.html`, `app.css`, `app.spec.ts`, `src/frontend/src/styles.css`; documentation status |
-| Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage; Markdown or HTML rendering; new dependencies; routing changes |
+| Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage for messages/history (the UI-language preference in `localStorage` is allowed); Markdown or HTML rendering; new dependencies; routing changes |
 | Dependencies | T-201 approved |
 | Acceptance criteria | AC-1.1, AC-1.2, AC-2.1 (up to the request), AC-2.2 to AC-2.4 with a fake, AC-3.1, AC-3.2, AC-4.1 and AC-4.2 with a fake, AC-5.1 to AC-5.3 with a fake, AC-6.1 (frontend part), AC-6.2, AC-6.3 |
 | Tests | F-01 to F-14 plus existing tests. Manual MV-01, MV-03, MV-04 to MV-06, MV-09, MV-10 against the placeholder |
@@ -650,7 +654,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
-| Scope | `POST /api/chat` with the request rules in Section 7.2, the deterministic reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
+| Scope | `POST /api/chat` with the request rules in Section 7.2, including language selection, the deterministic localized reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
 | Allowed changes | New module(s) under `src/backend/agent_backend/` for the endpoint; `main.py`; `tests/backend/`; documentation status |
 | Prohibited changes | Host, Origin or content-type checks (T-205); CORS middleware; any AI call; storage of messages; logging of message text; subprocess, file writing or network calls; new dependencies; frontend files |
 | Dependencies | T-201 approved (T-202 is not required) |
@@ -694,16 +698,16 @@ Approval of this document does not approve a decision unless the decision is ans
 
 | ID | Question | Alternatives | Recommendation | Product Owner answer |
 |----|----------|--------------|----------------|----------------------|
-| D-SEC-1 | Local authorization (token) in Phase 2 | A none, B proxy-injected token, C page-fetched token, D launcher-passed token (Section 11.4) | A for Phase 2, with a mandatory decision before Phase 3 enables any Agent capability | Pending |
-| D-SEC-2 | POST without Origin | Accept / Reject (Section 11.4) | Reject | Pending |
-| D-SEC-3 | API docs endpoints | Always / Development only / Disabled | Development only | Pending |
-| D-SEC-4 | Request size limit | 16 KiB (413) / Validation only | 16 KiB | Pending |
-| D-SEC-5 | P-SEC-1 beyond Phase 1 | Standing rule / Phase by phase | Standing rule | Pending |
-| D-API-1 | Frontend request timeout | 10 s / other | 10 s | Pending |
-| D-API-2 | UI language | English / Thai | Thai, selected by Product Owner on 2026-10-20 | Decided in conversation; record as pending until this spec is approved |
-| D-API-3 | Mock reply content | Reply includes the message length (Section 7.3) / Constant text only | Includes the length: it proves the message reached the backend and was counted correctly, without echoing user text | Pending |
-| D-GIT-1 | Branch naming | `<type>/<task-id>-<short-name>` for all work, including docs | Product Owner selected this convention on 2026-10-20 | Decided in conversation; record as pending until this spec is approved |
-| D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Pending |
+| D-SEC-1 | Local authorization (token) in Phase 2 | A none, B proxy-injected token, C page-fetched token, D launcher-passed token (Section 11.4) | A for Phase 2, with a mandatory decision before Phase 3 enables any Agent capability | Accept A — no token in Phase 2; revisit before Phase 3 enables any Agent capability |
+| D-SEC-2 | POST without Origin | Accept / Reject (Section 11.4) | Reject | Reject |
+| D-SEC-3 | API docs endpoints | Always / Development only / Disabled | Development only | Development only |
+| D-SEC-4 | Request size limit | 16 KiB (413) / Validation only | 16 KiB | 16 KiB (413) |
+| D-SEC-5 | P-SEC-1 beyond Phase 1 | Standing rule / Phase by phase | Standing rule | Standing rule for all phases |
+| D-API-1 | Frontend request timeout | 10 s / other | 10 s | 10 seconds |
+| D-API-2 | UI language | English / Thai / Thai and English | Thai and English with a visible language switch; Thai default on first visit; persist only the selected UI language in `localStorage` | Accept — bilingual UI; no chat history or messages stored |
+| D-API-3 | Mock reply content | Reply includes the message length (Section 7.3) / Constant text only | Includes the length: it proves the message reached the backend and was counted correctly, without echoing user text | Accept — include the trimmed message's Unicode code-point length |
+| D-GIT-1 | Branch naming | `<type>/<task-id>-<short-name>` for all work, including docs | Product Owner selected this convention on 2026-10-20 | Accept — use `<type>/<task-id>-<short-name>` for every task, including docs |
+| D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Pending — updated specification is awaiting Product Owner review |
 
 ---
 
@@ -730,7 +734,7 @@ Do not mark any item before it has been verified. Do not mark Phase 2 complete b
 
 # 16. Git Workflow
 
-- The repository defines one rule: **do not commit directly to `main`**. Work on a branch, push it, and merge only after the Product Owner has reviewed it (`docs/PHASE-0.md`). A general naming convention is not defined (`docs/PROPOSALS.md`)
+- The repository defines one rule: **do not commit directly to `main`**. Work on a branch, push it, and merge only after the Product Owner has reviewed it (`docs/PHASE-0.md`). The approved naming convention is `<type>/<task-id>-<short-name>` for all work, including docs.
 - **Product Owner decision (2026-10-20):** Use `<type>/<task-id>-<short-name>` for every branch, including documentation branches. Examples: `docs/t-201-phase-2-spec`, `feat/t-202-chat-ui`, `feat/t-203-chat-endpoint`, `feat/t-205-local-web-security`, `feat/t-204-integration`. Do not use a separate naming format for documentation branches.
 - One task is one branch and one pull request. Branch from the latest `main`
 - Commit messages use the existing style: `type: short summary` with a body listing the changes
