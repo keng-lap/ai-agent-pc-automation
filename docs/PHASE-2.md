@@ -2,9 +2,9 @@
 
 ## Status
 
-**Draft — Awaiting Product Owner Approval**
+**Approved — Implementation Not Started**
 
-Phase 2 has not been started. This document is a specification only. No Phase 2 implementation exists. No implementation task (T-202 to T-205) may start until the Product Owner approves this document and explicitly starts that task.
+Phase 2 has not been started. This document is a specification only. No Phase 2 implementation exists. No implementation task (T-202 to T-205) may start until the Product Owner explicitly starts that task.
 
 | Item | Value |
 |------|-------|
@@ -13,13 +13,13 @@ Phase 2 has not been started. This document is a specification only. No Phase 2 
 | Prepared on | 2026-10-19 |
 | Last updated | 2026-10-20 (see Revision History) |
 | Baseline | `main` at `cbb3c8d` (Phase 0 and Phase 1 complete) |
-| Product Owner approval | Pending. To be recorded in Section 14 |
+| Product Owner approval | Approved by the Product Owner on 2026-10-20; recorded in Section 14 |
 
 Markers used in this document:
 
 - **[Carried forward]** A decision already made by the Product Owner and recorded elsewhere or in this chat history. It is confirmed when this document is approved.
 - **[Proposed]** A proposal by the Implementation Engineer. It is not a requirement until approved.
-- **[Open]** A decision the Product Owner must make. See Section 14. As of the 2026-10-20 revision, every decision there has an answer except D-APP-1 (approval of this document).
+- **[Open]** A decision the Product Owner must make. See Section 14. All decisions in Section 14, including D-APP-1 (approval of this document), have been answered.
 
 ## Revision History
 
@@ -28,7 +28,7 @@ Markers used in this document:
 | 2026-10-19 | Initial draft (PR #6) | Implementation Engineer (Claude) |
 | 2026-10-19 | Security test and mutation-evidence ownership aligned with tasks (PRs #7, #8) | Repository account `keng-lap` |
 | 2026-10-20 | Product Owner decisions recorded; Thai and English UI; `language` request field; branch naming (PRs #9, #10) | Repository account `keng-lap` |
-| 2026-10-20 | Consistency fixes: bilingual acceptance criteria, tests and manual checks; ST-24 ownership; resolved-decision wording; manual-check bodies include `language`; formatting; this history. Pending review | Implementation Engineer (Claude) |
+| 2026-10-20 | Product Owner approved Phase 2 specification (T-201); status and approval record updated. Implementation remains not started | Product Owner / documentation update |
 
 ---
 
@@ -745,7 +745,7 @@ Approval of this document does not approve a decision unless the decision is ans
 | D-API-2 | UI language | English / Thai / Thai and English | Thai and English with a visible language switch; Thai default on first visit; persist only the selected UI language in `localStorage` | Accept — bilingual UI; no chat history or messages stored |
 | D-API-3 | Mock reply content | Reply includes the message length (Section 7.3) / Constant text only | Includes the length: it proves the message reached the backend and was counted correctly, without echoing user text | Accept — include the trimmed message's Unicode code-point length |
 | D-GIT-1 | Branch naming | `<type>/<task-id>-<short-name>` for all work, including docs | Product Owner selected this convention on 2026-10-20 | Accept — use `<type>/<task-id>-<short-name>` for every task, including docs |
-| D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Pending — updated specification is awaiting Product Owner review |
+| D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Approve — Product Owner approved this specification on 2026-10-20 |
 
 ---
 
