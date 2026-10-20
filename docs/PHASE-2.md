@@ -11,6 +11,7 @@ Phase 2 has not been started. This document is a specification only. No Phase 2 
 | Prepared by | Implementation Engineer (Claude) |
 | Reviewers | Product Owner; System Architect and Technical Reviewer (ChatGPT) |
 | Prepared on | 2026-10-19 |
+| Last updated | 2026-10-20 (see Revision History) |
 | Baseline | `main` at `cbb3c8d` (Phase 0 and Phase 1 complete) |
 | Product Owner approval | Pending. To be recorded in Section 14 |
 
@@ -18,7 +19,16 @@ Markers used in this document:
 
 - **[Carried forward]** A decision already made by the Product Owner and recorded elsewhere or in this chat history. It is confirmed when this document is approved.
 - **[Proposed]** A proposal by the Implementation Engineer. It is not a requirement until approved.
-- **[Open]** A decision the Product Owner must make. See Section 14.
+- **[Open]** A decision the Product Owner must make. See Section 14. As of the 2026-10-20 revision, every decision there has an answer except D-APP-1 (approval of this document).
+
+## Revision History
+
+| Date | Change | Committed by |
+|------|--------|--------------|
+| 2026-10-19 | Initial draft (PR #6) | Implementation Engineer (Claude) |
+| 2026-10-19 | Security test and mutation-evidence ownership aligned with tasks (PRs #7, #8) | Repository account `keng-lap` |
+| 2026-10-20 | Product Owner decisions recorded; Thai and English UI; `language` request field; branch naming (PRs #9, #10) | Repository account `keng-lap` |
+| 2026-10-20 | Consistency fixes: bilingual acceptance criteria, tests and manual checks; ST-24 ownership; resolved-decision wording; manual-check bodies include `language`; formatting; this history. Pending review | Implementation Engineer (Claude) |
 
 ---
 
@@ -42,6 +52,7 @@ The Agent does not exist in this phase (it belongs to Phase 3). The backend retu
 | M-6 | Every security requirement in Section 11 has a passing negative test. Backend security controls have mutation evidence in the T-205 report; integration and frontend checks are evidenced in their owning task reports | ST-01 to ST-21 and ST-23 in T-205; ST-22 in T-204; ST-24 in T-202 |
 | M-7 | No regression: the existing 14 backend tests and 2 frontend tests (baseline) still pass, and `GET /health` is unchanged | `scripts\test.ps1` and test B-11 |
 | M-8 | `scripts\setup.ps1`, `scripts\dev.ps1` and `scripts\test.ps1` work unchanged for the Product Owner | Manual verification MV-12 |
+| M-9 | The UI works in Thai and English: Thai by default, a visible switch, the choice remembered, and no chat data stored in the browser | F-17 to F-23, MV-13 and MV-14 |
 
 ---
 
@@ -134,6 +145,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | US-6 | As a Thai-speaking user, I can write in Thai and other Unicode text | **AC-6.1** Thai and other Unicode text is sent and counted correctly (Section 7.2). **AC-6.2** Pressing Enter while an input method (IME) is composing does not send the message. **AC-6.3** Shift+Enter inserts a new line |
 | US-7 | As the Product Owner, I need Phase 2 to be unable to change the PC | **AC-7.1** The reply is clearly a placeholder (MSG-01 and the reply text say the Agent is not implemented). **AC-7.2** The backend code contains no process execution, file writing or outbound network access (test B-12). **AC-7.3** No new runtime dependency is added without approval |
 | US-8 | As the Product Owner, I need other websites and programs to be unable to misuse the local API through the browser | **AC-8.1** Requests with a foreign Origin or Host are rejected with the defined status. **AC-8.2** All security tests ST-01 to ST-24 pass. **AC-8.3** The backend sends no CORS headers and no cookies |
+| US-9 | As a user, I can use the interface in Thai or English | **AC-9.1** Given no saved language preference, when I open the page, then all UI text is in Thai. **AC-9.2** A visible language switch offers Thai and English. When I change it, all UI text (hint, entry labels, placeholder, Send button, pending indicator and error messages; the product name is not translated) changes immediately, and the page language attribute follows the selection. **AC-9.3** The selected language is saved and restored after a reload. It is the only value written to browser storage: no chat message and no history is stored. **AC-9.4** If the saved value is not `th` or `en`, or browser storage is unavailable or fails, the UI uses Thai and keeps working. **AC-9.5** The `language` sent with each message equals the language selected when the message was sent. **AC-9.6** The Agent reply is in the language sent with the message. Replies already shown do not change when the language is switched later. Error entries are shown in the currently selected language |
 
 ---
 
@@ -160,6 +172,11 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | FR-8 | Chat history exists only in the page. It is not written to local storage, session storage, IndexedDB or cookies. A reload clears it |
 | FR-9 | All user-visible UI text and system messages are localized in Thai and English. Provide a visible language switch; default to Thai on first visit and remember the selected UI language in `localStorage`. This preference is the only permitted browser-storage value. Unicode input of any language must work |
 | FR-10 | The page is readable in light and dark system themes |
+| FR-11 | Error entries are kept as message IDs and shown in the language currently selected. User text and Agent replies already received are never translated or changed |
+| FR-12 | The page language attribute (`lang`) is `th` or `en` and follows the selected language |
+| FR-13 | The language preference is one `localStorage` entry whose value is `th` or `en`. Any other value, or storage that is unavailable or throws, is ignored and Thai is used. Nothing else is stored |
+
+FR-11 to FR-13 clarify the Product Owner's bilingual decision (D-API-2) so that it can be tested. They are [Proposed] and are confirmed when this document is approved.
 
 ## 6.3 UI states
 
@@ -175,7 +192,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | S-8 Server failure | Backend answers 500 with its own error body | "Error" entry MSG-06 |
 | S-9 Timeout | No answer within the timeout | "Error" entry MSG-07 |
 | S-10 Unexpected response | 200 with a body that is not `{"reply": <string>}` | "Error" entry MSG-08 |
-| S-11 Too large | Backend answers 413 (only if D-SEC-4 is approved) | "Error" entry MSG-09 |
+| S-11 Too large | Backend answers 413 | "Error" entry MSG-09 |
 | S-12 Other | Any other status | "Error" entry MSG-10 |
 
 From every state S-4 to S-12, the user can send another message without reloading.
@@ -285,9 +302,9 @@ Every error response is JSON of the form `{"detail": "<text>"}` and never contai
 | Status | Condition | `detail` |
 |--------|-----------|----------|
 | 400 | Host header not allowed | `Host not allowed.` |
-| 403 | Origin not allowed (or missing, if D-SEC-2 chooses to reject) | `Origin not allowed.` |
+| 403 | Origin not allowed, or missing on a state-changing request (D-SEC-2) | `Origin not allowed.` |
 | 415 | A state-changing request whose content type is not `application/json` | `Content-Type must be application/json.` |
-| 413 | Body larger than the limit (only if D-SEC-4 is approved) | `Request body too large.` |
+| 413 | Body larger than 16 KiB (D-SEC-4) | `Request body too large.` |
 | 404 | Unknown path | `Not Found` |
 | 405 | Method not allowed on a known path, for example `GET /api/chat` | `Method Not Allowed` |
 | 422 | Validation failure or malformed JSON (Section 8) | `Invalid request. Send JSON like {"message": "...", "language": "th"} with 1 to 2000 characters and language th or en.` |
@@ -327,7 +344,7 @@ The checks run in this order, and the first failure decides the response. Tests 
 | V-2 | Exactly two properties are present: `message` and `language` | 422 |
 | V-3 | `message` is a string and `language` is exactly `th` or `en` | 422 |
 | V-4 | Trimmed `message` has 1 to 2000 Unicode code points | 422 |
-| V-5 | Body size is at most 16 KiB (proposal D-SEC-4) | 413 |
+| V-5 | Body size is at most 16 KiB (D-SEC-4) | 413 |
 | V-6 | Request content type is `application/json` (parameters such as `charset=utf-8` are allowed) | 415 |
 
 Error handling rules:
@@ -378,7 +395,7 @@ Error handling rules:
 | B-11 | `GET /health` is unchanged (existing test) |
 | B-12 | Static guard: the backend package imports none of `subprocess`, `ctypes`, `winreg`, `multiprocessing`, `shutil`, `socket`, `urllib`, `http.client`, `requests`, `httpx` |
 
-## 9.4 Frontend tests (T-202 uses a fake `ChatApi`; F-15 and F-16 belong to T-204)
+## 9.4 Frontend tests (T-202 uses a fake `ChatApi`; F-15, F-16 and F-23 belong to T-204; all other F tests belong to T-202)
 
 | ID | Test |
 |----|------|
@@ -389,7 +406,7 @@ Error handling rules:
 | F-05 | A second send while one is pending is ignored |
 | F-06 | Enter sends, Shift+Enter does not, Enter during IME composition does not |
 | F-07 | The input limit of 2000 is enforced |
-| F-08 | Each failure class (MSG-03 to MSG-10) is shown as an "Error" entry and re-enables Send |
+| F-08 | Each failure class (MSG-03 to MSG-10) is shown as an "Error" entry, in both Thai and English, and re-enables Send |
 | F-09 | A timeout shows MSG-07 and re-enables Send |
 | F-10 | HTML in the user text and in the reply is displayed as text |
 | F-11 | Entry order is preserved and the newest entry is scrolled into view |
@@ -398,6 +415,13 @@ Error handling rules:
 | F-14 | The placeholder `ChatApi` shipped by T-202 reports "not connected" and the UI shows MSG-03 |
 | F-15 | The HTTP implementation posts JSON `{"message": <text>, "language": "th" or "en"}` to `/api/chat` |
 | F-16 | Table-driven error classification covers every row of Section 6.4, including 502 with an empty body, 500 with `detail`, 500 without `detail` |
+| F-17 | With no saved preference the UI is in Thai: hint, entry labels, placeholder, Send button and pending indicator |
+| F-18 | A visible language switch changes all UI text immediately in both directions, and the page language attribute follows |
+| F-19 | The selected language is saved in exactly one `localStorage` entry and restored on the next load. Nothing else is stored (extends F-13) |
+| F-20 | A saved value other than `th` or `en` falls back to Thai, and storage that is unavailable or throws does not break the UI |
+| F-21 | Table-driven: every text MSG-01 to MSG-10 and the entry labels exist in Thai and English, none is empty, and each is shown in the selected language |
+| F-22 | After a language switch, existing Error entries are shown in the new language, while user text and Agent replies already shown are unchanged |
+| F-23 | The `language` sent equals the language selected when the message was sent. Switching later does not change a request already sent |
 
 ## 9.5 Integration checks (T-204)
 These run against the real servers started by `scripts\dev.ps1` or an equivalent harness.
@@ -432,7 +456,7 @@ Open `http://127.0.0.1:4200/`. These are the existing scripts. Phase 2 does not 
 
 | ID | Steps | Expected |
 |----|-------|----------|
-| MV-01 | Open the page | Title, hint MSG-01, Send disabled |
+| MV-01 | Open the page in a browser with no saved language | Title, hint MSG-01 in Thai, Send disabled, language switch visible |
 | MV-02 | Type `Install Google Chrome`, press Enter with English selected | "You" entry, then the English "Agent" entry with `length: 21`, input cleared; repeat with Thai selected and verify a Thai reply |
 | MV-03 | Click Send with an empty or space-only box | Send is disabled, nothing is sent |
 | MV-04 | Type Thai text, press Enter while choosing a word with the Thai input method | The message is not sent until the word is confirmed. Then `length` is the number of characters |
@@ -440,23 +464,26 @@ Open `http://127.0.0.1:4200/`. These are the existing scripts. Phase 2 does not 
 | MV-06 | Use Shift+Enter | A new line is added, nothing is sent |
 | MV-07 | Stop only the backend, send a message | "Error" entry MSG-03. Send is enabled again |
 | MV-08 | Start the backend again (or restart `scripts\dev.ps1`) and send without reloading | The reply appears |
-| MV-09 | Reload the page | History is empty |
+| MV-09 | Reload the page | History is empty and the selected language is still applied |
 | MV-10 | Switch Windows between light and dark mode | The page stays readable |
 | MV-11 | Run the negative checks in 10.3 | Each returns the expected status |
 | MV-12 | Run `scripts\test.ps1` | All checks pass, counts at least 14 backend and 2 frontend |
+| MV-13 | Switch the language between Thai and English, including while an "Error" entry is shown (stop the backend and send first) | All UI text changes at once, including the Error entry. Replies already shown keep their language |
+| MV-14 | After choosing a language and sending a message, open the browser developer tools and look at the saved site data. Then set the saved language to an invalid value and reload | Only one saved entry exists (the language). No message or history is stored. The invalid value falls back to Thai |
 
 ## 10.3 Negative checks (MV-11)
 
 Windows 11 includes `curl.exe`. Use a body file to avoid quoting problems:
 
 ```text
-Set-Content -Path $env:TEMP\chat.json -Value '{"message":"hi"}' -NoNewline
+Set-Content -Path $env:TEMP\chat.json -Value '{"message":"hi","language":"en"}' -NoNewline
 curl.exe -s -o NUL -w "%{http_code}`n" -X POST http://127.0.0.1:8000/api/chat -H "Content-Type: application/json" -H "Origin: https://evil.com" --data-binary "@$env:TEMP\chat.json"
 curl.exe -s -o NUL -w "%{http_code}`n" http://127.0.0.1:8000/health -H "Host: evil.com"
 curl.exe -s -o NUL -w "%{http_code}`n" -X POST http://127.0.0.1:8000/api/chat -H "Content-Type: text/plain" -H "Origin: http://127.0.0.1:4200" --data-binary "@$env:TEMP\chat.json"
+curl.exe -s -o NUL -w "%{http_code}`n" -X POST http://127.0.0.1:8000/api/chat -H "Content-Type: application/json" --data-binary "@$env:TEMP\chat.json"
 ```
 
-Expected: `403`, `400`, `415` (with the default ports). A request with a correct `Origin` header and `Content-Type: application/json` returns `200`.
+Expected, with the default ports: `403`, `400`, `415`, `403` (the last one has no `Origin` header, D-SEC-2). A request with a correct `Origin` header, `Content-Type: application/json` and this body returns `200`.
 
 ---
 
@@ -472,7 +499,7 @@ Binding to `127.0.0.1` alone does not protect the backend. Any website open in t
 |----|-------------|--------|
 | SEC-01 | **Loopback only.** The backend and the Angular dev server bind to loopback. The backend refuses to start with a non-loopback `BACKEND_HOST` (exists today) | [Carried forward] |
 | SEC-02 | **Exact Host validation.** The `Host` header must equal one of `127.0.0.1:<BACKEND_PORT>`, `localhost:<BACKEND_PORT>`, `[::1]:<BACKEND_PORT>` (case-insensitive host, exact port). No suffix, prefix or pattern matching. A missing or empty Host is rejected with 400. This blocks DNS-rebinding names | [Carried forward] |
-| SEC-03 | **Exact Origin validation.** When an `Origin` header is present it must equal `http://127.0.0.1:<FRONTEND_PORT>` or `http://localhost:<FRONTEND_PORT>`. Scheme, host and port are compared exactly. No wildcards, no regular expressions, no suffix matching. `null` is rejected. Handling of a missing Origin is D-SEC-2 | [Carried forward] |
+| SEC-03 | **Exact Origin validation.** When an `Origin` header is present it must equal `http://127.0.0.1:<FRONTEND_PORT>` or `http://localhost:<FRONTEND_PORT>`. Scheme, host and port are compared exactly. No wildcards, no regular expressions, no suffix matching. `null` is rejected. A state-changing request without an `Origin` header is rejected with 403, and `GET /health` without an `Origin` is accepted (D-SEC-2) | [Carried forward] |
 | SEC-04 | **No CORS.** The backend sends no `Access-Control-*` headers, has no CORS middleware and does not handle preflight requests. The browser uses one origin through the dev proxy | [Carried forward] |
 | SEC-05 | **JSON only.** `POST`, `PUT`, `PATCH` and `DELETE` require `Content-Type: application/json`, otherwise 415. A cross-site page cannot send this content type without a CORS preflight, which SEC-04 refuses | [Carried forward] |
 | SEC-06 | **Cross-site request protection.** SEC-02 to SEC-05 together protect against cross-site requests. The application uses no cookies and no ambient credentials, so there is nothing for a forged request to ride on. No separate CSRF token is added unless D-SEC-1 introduces a session | [Proposed] |
@@ -483,9 +510,9 @@ Binding to `127.0.0.1` alone does not protect the backend. Any website open in t
 | SEC-11 | **No secrets and no new dependencies.** No API key, token or secret in the repository or `.env.example`. No new runtime dependency without approval | [Carried forward] |
 | SEC-12 | **Fail closed.** If the allowed hosts or origins cannot be built from the configuration (for example an invalid `FRONTEND_PORT`), the backend refuses to start | [Proposed] |
 | SEC-13 | **No system-changing capability** in Phase 2 (Section 12) | [Carried forward] |
-| SEC-14 | **Docs endpoints** (`/docs`, `/redoc`, `/openapi.json`) follow D-SEC-3 | [Open] |
-| SEC-15 | **Request size limit** follows D-SEC-4 | [Open] |
-| SEC-16 | **Local authorization** (token) follows D-SEC-1 | [Open] |
+| SEC-14 | **Docs endpoints** (`/docs`, `/redoc`, `/openapi.json`) are enabled only when `APP_ENV=development` and are disabled otherwise (D-SEC-3) | [Carried forward] |
+| SEC-15 | **Request size limit.** A body larger than 16 KiB is rejected with 413 before it is parsed (D-SEC-4) | [Carried forward] |
+| SEC-16 | **Local authorization.** No token in Phase 2 (D-SEC-1, option A). A local-authorization decision is required before Phase 3 enables any Agent capability | [Carried forward] |
 
 ## 11.2 Explicit failure behavior and security tests (T-205)
 
@@ -502,14 +529,14 @@ ST-01 to ST-21 and ST-23 are backend security tests owned by T-205 unless a row 
 | ST-07 | `Origin: https://127.0.0.1:4200` (wrong scheme) | 403 |
 | ST-08 | `Origin: null` | 403 |
 | ST-09 | `Origin: http://127.0.0.1.evil.com:4200` | 403 |
-| ST-10 | `POST` without an Origin header | Per D-SEC-2: 403, or 200 |
+| ST-10 | `POST` without an `Origin` header. Also `GET /health` without an `Origin` header | POST: 403. `GET /health`: 200 |
 | ST-11 | `Origin: http://127.0.0.1:4200` and `http://localhost:4200` | 200 |
 | ST-12 | `Content-Type: text/plain`, form types and multipart on POST | 415. `application/json; charset=utf-8` returns 200 |
 | ST-13 | `OPTIONS /api/chat` preflight | Not 2xx, no `Access-Control-*` headers |
 | ST-14 | Any direct backend response (not a response generated by the Angular dev server proxy) | No `Access-Control-*` and no `Set-Cookie` header |
 | ST-15 | `GET /api/chat` | 405, and 403 first when the Origin is foreign |
 | ST-16 | Enumerated GET routes (OpenAPI) | Equal to the allow-list |
-| ST-17 | Body over the limit | 413 (only if D-SEC-4 is approved) |
+| ST-17 | Body over 16 KiB | 413 |
 | ST-18 | Malformed JSON and schema violations | 422 with the Section 7.4 body |
 | ST-19 | Forced internal exception | 500 generic body, no leak, message text not in logs |
 | ST-20 | Invalid `FRONTEND_PORT` or `BACKEND_PORT` at startup | Backend refuses to start |
@@ -537,7 +564,9 @@ ST-01 to ST-21 and ST-23 are backend security tests owned by T-205 unless a row 
 | C. Token fetched by the page | The page requests a token at start and sends it with each call | Little: any local program can request the token too | Same as A in practice | Adds a handshake endpoint and state |
 | D. Token passed only to the launched browser | A launcher opens the browser with the token in the URL fragment; the page keeps it in memory | Programs and other users that did not launch the page and cannot read its start-up arguments | A same-user program that can read process arguments | A launcher, new startup flow |
 
-**Recommendation.** **Option A for Phase 2.** In Phase 2 the backend only returns a fixed mock reply and exposes no data or action, so the impact of another local caller is negligible, and options B and C add complexity with little real protection. **A real local-authorization decision is mandatory before Phase 3 enables any Agent capability**, and before any tool that changes the machine is enabled (see Section 12). Option D is the candidate to evaluate then. Approve A, or choose another option now.
+**Recommendation.** **Option A for Phase 2.** In Phase 2 the backend only returns a fixed mock reply and exposes no data or action, so the impact of another local caller is negligible, and options B and C add complexity with little real protection. **A real local-authorization decision is mandatory before Phase 3 enables any Agent capability**, and before any tool that changes the machine is enabled (see Section 12). Option D is the candidate to evaluate then.
+
+**Product Owner decision (2026-10-20):** Accept option A. No token in Phase 2. Revisit before Phase 3 enables any Agent capability.
 
 ### D-SEC-2: Request with no `Origin` header on state-changing requests
 
@@ -546,7 +575,9 @@ ST-01 to ST-21 and ST-23 are backend security tests owned by T-205 unless a row 
 | Accept | A POST without Origin is processed (curl, scripts, tests work without extra headers) | Any non-browser caller works. Browsers are still protected because they always send Origin on POST |
 | Reject | A POST without Origin returns 403 | Failure is explicit and non-browser callers must declare an Origin. This does not stop a local program, which can send any Origin, so it is a guard against accidental callers only |
 
-**Recommendation.** Reject for state-changing requests (403), accept for `GET /health`. It makes failure behavior explicit, at the cost of adding `-H "Origin: ..."` to manual `curl.exe` calls. The integration checks and MV-11 are written for either choice.
+**Recommendation.** Reject for state-changing requests (403), accept for `GET /health`. It makes failure behavior explicit, at the cost of adding `-H "Origin: ..."` to manual `curl.exe` calls.
+
+**Product Owner decision (2026-10-20):** Reject.
 
 ### D-SEC-3: API documentation endpoints (`/docs`, `/redoc`, `/openapi.json`)
 
@@ -558,6 +589,8 @@ ST-01 to ST-21 and ST-23 are backend security tests owned by T-205 unless a row 
 
 **Recommendation.** Enabled only when `APP_ENV=development`. Note that the route-enumeration test (SEC-07) reads the schema from the application object, so it works with any option.
 
+**Product Owner decision (2026-10-20):** Development only.
+
 ### D-SEC-4: Request body size limit
 
 | Option | Trade-off |
@@ -567,9 +600,13 @@ ST-01 to ST-21 and ST-23 are backend security tests owned by T-205 unless a row 
 
 **Recommendation.** 16 KiB limit.
 
+**Product Owner decision (2026-10-20):** 16 KiB (413).
+
 ### D-SEC-5: Scope of P-SEC-1
 
 P-SEC-1 (loopback binding) was approved for Phase 1 only. The code still enforces it. **Recommendation:** confirm it as a standing rule for all phases.
+
+**Product Owner decision (2026-10-20):** Standing rule for all phases.
 
 ## 11.5 Known limits that remain even with all recommendations
 
@@ -599,7 +636,8 @@ For Phase 2:
 
 - **WIP limit: 1.** Only one implementation task may be in progress. The next task starts only after the previous one is merged into `main`, verified, and the Product Owner explicitly starts the next one
 - Each task uses its own branch and its own pull request (Section 16)
-- A task changes only the paths listed under "Allowed changes". Anything else is a stop-and-ask- Every task ends with the completion report in Section 17
+- A task changes only the paths listed under "Allowed changes". Anything else is a stop-and-ask
+- Every task ends with the completion report in Section 17
 - No task may add a runtime dependency, an AI provider, API key, database, tool execution or authentication framework
 - No task changes `docs/ROADMAP.md` phase order or the technology stack
 
@@ -646,9 +684,9 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 | Allowed changes | New files under `src/frontend/src/app/chat/`; `app.ts`, `app.html`, `app.css`, `app.spec.ts`, `src/frontend/src/styles.css`; documentation status |
 | Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage for messages/history (the UI-language preference in `localStorage` is allowed); Markdown or HTML rendering; new dependencies; routing changes |
 | Dependencies | T-201 approved |
-| Acceptance criteria | AC-1.1, AC-1.2, AC-2.1 (up to the request), AC-2.2 to AC-2.4 with a fake, AC-3.1, AC-3.2, AC-4.1 and AC-4.2 with a fake, AC-5.1 to AC-5.3 with a fake, AC-6.1 (frontend part), AC-6.2, AC-6.3 |
-| Tests | F-01 to F-14 plus existing tests. Manual MV-01, MV-03, MV-04 to MV-06, MV-09, MV-10 against the placeholder |
-| Definition of Done | Tests pass in `scripts\test.ps1` (counts at least baseline plus F-01 to F-14). Manual checks reported by the Product Owner. No file outside Allowed changes. Report delivered. Merged and verified |
+| Acceptance criteria | AC-1.1, AC-1.2, AC-2.1 (up to the request), AC-2.2 to AC-2.4 with a fake, AC-3.1, AC-3.2, AC-4.1 and AC-4.2 with a fake, AC-5.1 to AC-5.3 with a fake, AC-6.1 (frontend part), AC-6.2, AC-6.3, AC-9.1 to AC-9.4, AC-9.6 (frontend part), SEC-10 (plain-text rendering) |
+| Tests | F-01 to F-14, F-17 to F-22 and ST-24, plus existing tests. Manual MV-01, MV-03, MV-04 to MV-06, MV-09, MV-10, MV-13, MV-14 against the placeholder |
+| Definition of Done | Tests pass in `scripts\test.ps1` (counts at least baseline plus F-01 to F-14 and F-17 to F-22). ST-24 reported. Manual checks reported by the Product Owner. No file outside Allowed changes. Report delivered. Merged and verified |
 
 ## 13.5 T-203: Backend message endpoint with deterministic mock response
 
@@ -658,7 +696,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 | Allowed changes | New module(s) under `src/backend/agent_backend/` for the endpoint; `main.py`; `tests/backend/`; documentation status |
 | Prohibited changes | Host, Origin or content-type checks (T-205); CORS middleware; any AI call; storage of messages; logging of message text; subprocess, file writing or network calls; new dependencies; frontend files |
 | Dependencies | T-201 approved (T-202 is not required) |
-| Acceptance criteria | AC-2.3, AC-3.3 (backend side), AC-7.1, AC-7.2, AC-7.3; Section 7.2 to 7.4 behavior for 200, 405, 422, 500; M-4 and M-5 |
+| Acceptance criteria | AC-2.3, AC-3.3 (backend side), AC-7.1, AC-7.2, AC-7.3; Section 7.2 to 7.4 behavior for 200, 405, 422, 500; AC-9.6 (reply language, B-01 and B-02); M-4 and M-5 |
 | Tests | B-01 to B-12 plus existing tests |
 | Definition of Done | All B tests pass. `GET /health` unchanged. Static guard passes. Report delivered. Merged and verified |
 
@@ -670,9 +708,9 @@ Note: until T-205 is merged, the endpoint must not be called from a browser. T-2
 |-------|---------|
 | Scope | Implement the backend security controls SEC-01 to SEC-09, SEC-11, SEC-12, and the approved choices for SEC-14 to SEC-16. SEC-10 (plain-text rendering) is owned by T-202; SEC-13 (no system-changing capability) is enforced by T-203 and B-12. Verify backend controls with the applicable ST tests and mutation evidence |
 | Allowed changes | New security module and its wiring under `src/backend/agent_backend/`; `config.py` only if needed; `tests/backend/`; comments in `.env.example`; documentation status and a security verification record |
-| Prohibited changes | CORS middleware; cookies or sessions; an authentication framework; a token unless D-SEC-1 approves one; new dependencies; frontend files; endpoint behavior defined in T-203 |
-| Dependencies | T-203 merged. **Product Owner approval of Section 11 and the answers to D-SEC-1 to D-SEC-5** (this task must not start without them) |
-| Acceptance criteria | AC-8.1 to AC-8.3; M-6; every ST test in Section 11.2 that applies to the approved options passes; mutation evidence for each |
+| Prohibited changes | CORS middleware; cookies or sessions; an authentication framework; a token (not approved, D-SEC-1); new dependencies; frontend files; endpoint behavior defined in T-203 |
+| Dependencies | T-203 merged. **Product Owner approval of Section 11** (the answers to D-SEC-1 to D-SEC-5 are recorded in Section 14). This task must not start without that approval |
+| Acceptance criteria | AC-8.1 to AC-8.3; M-6; every backend ST test (ST-01 to ST-21 and ST-23) passes; mutation evidence for each |
 | Tests | ST-01 to ST-21 and ST-23 (backend). ST-22 belongs to T-204; ST-24 belongs to T-202. T-205 records only its own backend tests and mutation evidence |
 | Definition of Done | All applicable backend ST tests pass. Mutation evidence is recorded for each backend security control owned by T-205. Existing tests pass. Report lists each control and its test. ST-22 and ST-24 are reported by their owning tasks. Merged and verified |
 
@@ -684,9 +722,9 @@ Note: until T-205 is merged, the endpoint must not be called from a browser. T-2
 | Allowed changes | `src/frontend/proxy.conf.js` (new); `angular.json` (`proxyConfig` only); `src/frontend/src/app/**`; optional new script under `scripts/`; documentation status and the Phase 2 verification record |
 | Prohibited changes | Backend behavior changes (a defect found here goes back to its own task); CORS; new dependencies; changes to the existing scripts' behavior |
 | Dependencies | T-202, T-203 and T-205 merged and verified |
-| Acceptance criteria | AC-2.1 to AC-2.4, AC-4.1 to AC-4.3, AC-5.1 to AC-5.3 end to end; M-1 to M-3, M-7, M-8 |
-| Tests | F-15, F-16, I-01 to I-07, ST-22, and manual MV-01 to MV-12 on the Product Owner's machine. ST-24 is owned and reported by T-202 |
-| Definition of Done | All automated checks pass. Product Owner reports MV-01 to MV-12. Observation in Section 3 re-verified on Windows (I-02). Report delivered. Merged and verified |
+| Acceptance criteria | AC-2.1 to AC-2.4, AC-4.1 to AC-4.3, AC-5.1 to AC-5.3 end to end; AC-9.5; M-1 to M-3, M-7, M-8 |
+| Tests | F-15, F-16, F-23, I-01 to I-07, ST-22, and manual MV-01 to MV-14 on the Product Owner's machine. ST-24 is owned and reported by T-202 |
+| Definition of Done | All automated checks pass. Product Owner reports MV-01 to MV-14. Observation in Section 3 re-verified on Windows (I-02). Report delivered. Merged and verified |
 
 After T-204 is merged, Phase 2 closes with a documentation-only change (Section 15), as in Phase 0 and Phase 1.
 
@@ -719,11 +757,12 @@ Phase 2 is complete only when all of these are true and evidenced:
 - [ ] T-202, T-203, T-205 and T-204 are each merged into `main`, one at a time, each with its report
 - [ ] A user can open the web application, send a message and see the mock reply (MV-01, MV-02)
 - [ ] All failure states in Section 6.3 behave as specified (MV-07, MV-08, F-08, F-09, F-16)
+- [ ] Thai and English UI behave as specified, and only the language preference is stored in the browser (F-17 to F-23, MV-13, MV-14)
 - [ ] All applicable security tests pass (ST-01 to ST-24). Mutation evidence is required for backend security controls owned by T-205; ST-22 is evidenced by T-204 and ST-24 by T-202
 - [ ] No capability to execute system-changing actions exists (B-12)
 - [ ] No new runtime dependency, AI provider, API key, database or authentication framework was added
 - [ ] Existing tests still pass and counts are not below baseline (M-7)
-- [ ] `scripts\test.ps1` passes on the Product Owner's Windows 11 machine, and manual checks MV-01 to MV-12 are reported (M-8)
+- [ ] `scripts\test.ps1` passes on the Product Owner's Windows 11 machine, and manual checks MV-01 to MV-14 are reported (M-8)
 - [ ] `README.md`, `docs/PROJECT.md`, `docs/ROADMAP.md` and this document show the true status, backed by evidence
 - [ ] The completion report (Section 17) is delivered and the Product Owner has approved Phase 2
 - [ ] Phase 3 has not been started. It requires an explicit start from the Product Owner
@@ -775,4 +814,4 @@ Date:
 14. Status of the next task: not started (requires explicit Product Owner start)
 ```
 
-At the end of Phase 2, add: results of MV-01 to MV-12, the final test counts, a list of every merged task with commit hashes, and the statement that Phase 3 is not started.
+At the end of Phase 2, add: results of MV-01 to MV-14, the final test counts, a list of every merged task with commit hashes, and the statement that Phase 3 is not started.

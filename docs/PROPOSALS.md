@@ -7,7 +7,7 @@ Everything in this file is a **proposal** unless a Decision note below says othe
 - This file is **not** a source of truth (see `docs/PROJECT.md`, Section 9).
 - Nothing here may be implemented until the project owner approves it and it is moved into the appropriate phase document.
 - Nothing here changes the roadmap order.
-- Decisions recorded so far: P-SEC-1 (approved for Phase 1, see `docs/PHASE-1.md`) and P-ORDER-1 (option A, Section 2). All other proposals are still pending.
+- Decisions recorded so far: P-SEC-1 (loopback binding: approved for Phase 1 and confirmed as a standing rule for all phases on 2026-10-20), a minimal subset of P-SEC-2 (approved for Phase 2) and P-ORDER-1 (option A, Section 2). Details are in `docs/PHASE-2.md`, Section 14. All other proposals are still pending.
 
 Proposed on: 2026-10-09
 
@@ -25,7 +25,9 @@ The Agent will eventually control a real Windows computer, and it will be reacha
 
 Suggested phase: Phase 1 (configuration) and Phase 2 (web application).
 
-**Decision (2026-10-15):** approved for Phase 1 only (`docs/PHASE-1.md`). Whether it is a standing rule for later phases is open decision D-SEC-5 in `docs/PHASE-2.md`, Section 14.
+**Decision (2026-10-15):** approved for Phase 1 (`docs/PHASE-1.md`).
+
+**Decision (2026-10-20):** confirmed by the Product Owner as a standing rule for all phases (D-SEC-5 in `docs/PHASE-2.md`, Section 14).
 
 ## P-SEC-2: Protection against requests from other websites
 
@@ -40,7 +42,7 @@ A page open in the user's browser on any website can send requests to `localhost
 
 Suggested phase: Phase 2 (web application), verified again in Phase 5.
 
-**Phase 2 treatment:** specified in `docs/PHASE-2.md`, Section 11. The Product Owner's 2026-10-17 selection of a minimal subset (Host and Origin checks, JSON-only, no permissive CORS, no state-changing GET) is carried into that draft and is confirmed when the draft is approved. The per-session token is not approved and is open decision D-SEC-1.
+**Phase 2 decisions:** the Product Owner approved a minimal subset on 2026-10-17 (Host and Origin checks, JSON-only state-changing requests, no permissive CORS, no state-changing GET) and answered the related open decisions on 2026-10-20 (`docs/PHASE-2.md`, Section 14): no per-session token in Phase 2, with a local-authorization decision required before Phase 3 enables any Agent capability (D-SEC-1, option A); a state-changing request without an Origin header is rejected (D-SEC-2); API documentation endpoints only in development (D-SEC-3); request body limit of 16 KiB (D-SEC-4). The per-session token proposal above is therefore not approved for Phase 2. The Phase 2 specification remains a draft until the Product Owner approves it (D-APP-1).
 
 ## P-SEC-3: Permission and confirmation
 
@@ -88,7 +90,7 @@ These are not proposals to change anything yet. They are items found during the 
 | Programming language, backend and frontend frameworks | Selected in Phase 1 (per roadmap). Not decided. |
 | AI model / provider | Not defined. Phase 3 (Agent Core) per roadmap. |
 | License | Repository has no license file. |
-| Branch naming convention | Rule is "no direct commits to `main`". A naming convention is not defined. The Phase 0 close-out branch used `chore/phase-0-closeout`. |
+| Branch naming convention | Decided by the Product Owner on 2026-10-20: `<type>/<task-id>-<short-name>` for every branch, including documentation branches (`docs/PHASE-2.md`, Section 16). Earlier branches, for example `chore/phase-0-closeout`, predate it. |
 | "Task history" listed twice | Appears in Phase 7 and Phase 9 in `ROADMAP.md`. |
 | Phase 0 title differs | `ROADMAP.md` says "Phase 0 — Foundation"; other documents say "Phase 0 — Project Foundation". |
 | `.gitignore` is language-agnostic | Review it when the language and framework are chosen in Phase 1. It currently ignores `.vscode/` and `.idea/`; revisit if shared editor settings are wanted. |
