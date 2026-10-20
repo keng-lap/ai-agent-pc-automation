@@ -234,15 +234,16 @@ Headers:
 - `Content-Type: application/json` (required; see Section 11)
 - `Origin`: see Section 11
 
-Body: a JSON object with exactly one property:
+Body: a JSON object with exactly two properties:
 
 ```json
-{"message": "Install Google Chrome"}
+{"message": "Install Google Chrome", "language": "en"}
 ```
 
 Rules:
 
 - `message` is required and must be a string
+- `language` is required and must be exactly `th` or `en`; it selects the language of the mock reply, not the UI preference itself
 - The string is trimmed of leading and trailing Unicode whitespace
 - After trimming it must contain 1 to 2000 Unicode characters. Length is counted in Unicode code points, not bytes, not UTF-16 units and not grapheme clusters
 - No other property is allowed
@@ -256,14 +257,16 @@ Status `200`, `Content-Type: application/json`:
 {"reply": "Message received (length: 21). The Agent is not implemented yet (planned for Phase 3)."}
 ```
 
-The reply is produced by this rule and by nothing else:
+The reply is produced by the selected language and the trimmed message length, and by nothing else:
 
-> `"Message received (length: " + N + "). The Agent is not implemented yet (planned for Phase 3)."`
-> where N is the number of Unicode code points of the trimmed message, written in decimal digits.
+- `en`: `"Message received (length: " + N + "). The Agent is not implemented yet (planned for Phase 3)."`
+- `th`: `"รับข้อความแล้ว (ความยาว: " + N + " ตัวอักษร) Agent ยังไม่พร้อมใช้งาน (วางแผนไว้ใน Phase 3)."`
+
+Here N is the number of Unicode code points of the trimmed message, written in decimal digits.
 
 Properties:
 
-- Deterministic: the reply depends only on N. No time, randomness, host data or earlier requests are used
+- Deterministic: the same `message` and `language` always produce the same reply. No time, randomness, host data or earlier requests are used
 - The reply never repeats the message text
 - No state is stored between requests
 
@@ -271,9 +274,9 @@ Examples:
 
 | Request body | Reply |
 |--------------|-------|
-| `{"message": "Install Google Chrome"}` | `Message received (length: 21). The Agent is not implemented yet (planned for Phase 3).` |
-| `{"message": "สวัสดี"}` | `Message received (length: 6). The Agent is not implemented yet (planned for Phase 3).` |
-| `{"message": "  hi  "}` | `Message received (length: 2). The Agent is not implemented yet (planned for Phase 3).` |
+| `{"message": "Install Google Chrome", "language": "en"}` | `Message received (length: 21). The Agent is not implemented yet (planned for Phase 3).` |
+| `{"message": "สวัสดี", "language": "th"}` | `รับข้อความแล้ว (ความยาว: 6 ตัวอักษร) Agent ยังไม่พร้อมใช้งาน (วางแผนไว้ใน Phase 3).` |
+| `{"message": "  hi  ", "language": "en"}` | `Message received (length: 2). The Agent is not implemented yet (planned for Phase 3).` |
 
 ## 7.4 Error responses
 
@@ -362,14 +365,14 @@ Error handling rules:
 
 | ID | Test |
 |----|------|
-| B-01 | Valid ASCII message returns 200 and the exact reply |
-| B-02 | Thai message `สวัสดี` returns length 6 (code points) |
+| B-01 | Valid ASCII message with `language: en` returns 200 and the exact English reply |
+| B-02 | Thai message `สวัสดี` with `language: th` returns the exact Thai reply with length 6 (code points) |
 | B-03 | Leading and trailing whitespace is trimmed and not counted |
 | B-04 | 2000 characters are accepted, 2001 returns 422 |
 | B-05 | Empty and whitespace-only messages return 422 |
-| B-06 | Missing `message`, wrong type and extra properties return 422 |
+| B-06 | Missing `message` or `language`, wrong types, unsupported language and extra properties return 422 |
 | B-07 | Malformed JSON returns 422 |
-| B-08 | The same message gives the identical reply 100 times, and two different messages with the same length give the identical reply |
+| B-08 | The same message and language give the identical reply 100 times; different messages with the same length and language give the identical reply |
 | B-09 | An unexpected exception returns 500 with the generic body and no internal detail |
 | B-10 | `GET /api/chat` returns 405 |
 | B-11 | `GET /health` is unchanged (existing test) |
@@ -401,7 +404,7 @@ These run against the real servers started by `scripts\dev.ps1` or an equivalent
 
 | ID | Check |
 |----|-------|
-| I-01 | A message through the frontend address (proxy) returns 200 and the exact reply, 20 times, each within 1 second |
+| I-01 | A message through the frontend address (proxy), with the selected language, returns the exact localized reply 20 times, each within 1 second |
 | I-02 | With the backend stopped, a request through the proxy produces the status the frontend classifies as S-6. Re-verify the observation in Section 3 on Windows |
 | I-03 | A request through the proxy with a foreign Origin returns 403 |
 | I-04 | A direct request to the backend with a foreign Host returns 400 |
@@ -430,7 +433,7 @@ Open `http://127.0.0.1:4200/`. These are the existing scripts. Phase 2 does not 
 | ID | Steps | Expected |
 |----|-------|----------|
 | MV-01 | Open the page | Title, hint MSG-01, Send disabled |
-| MV-02 | Type `Install Google Chrome`, press Enter | "You" entry, then the "Agent" entry with `length: 21`, input cleared |
+| MV-02 | Type `Install Google Chrome`, press Enter with English selected | "You" entry, then the English "Agent" entry with `length: 21`, input cleared; repeat with Thai selected and verify a Thai reply |
 | MV-03 | Click Send with an empty or space-only box | Send is disabled, nothing is sent |
 | MV-04 | Type Thai text, press Enter while choosing a word with the Thai input method | The message is not sent until the word is confirmed. Then `length` is the number of characters |
 | MV-05 | Paste 2000 characters, then try to add one more | The 2001st character is not accepted. The 2000 are sent and accepted |
