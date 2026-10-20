@@ -129,7 +129,7 @@ docs/PHASE-0.md
 docs/PHASE-1.md
 ```
 
-`docs/PHASE-2.md` is a draft specification awaiting Product Owner approval. It becomes part of the primary documentation when it is approved.
+`docs/PHASE-2.md` is the approved Phase 2 specification (Product Owner approval recorded on 2026-10-20).
 
 If there is a conflict between implementation assumptions and these documents, stop and clarify the conflict before implementing major changes.
 
@@ -147,6 +147,6 @@ Status:
 
 Phase 0 (Project Foundation) and Phase 1 are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
-Phase 2 (Local Web Application) has not been started. It requires an explicit start from the project owner. Its specification, `docs/PHASE-2.md`, is a draft awaiting Product Owner approval.
+Phase 2 (Local Web Application) has not been started. It requires an explicit start from the project owner. Its specification, `docs/PHASE-2.md`, is approved; implementation has not started and requires an explicit start for each task.
 
 No production AI Agent functionality has been implemented yet.

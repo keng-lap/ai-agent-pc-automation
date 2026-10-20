@@ -60,7 +60,7 @@ A runnable local development environment.
 
 ## Status
 
-**Complete** — see `docs/PHASE-1.md`, Section 7. Phase 2 has not been started.
+**Complete** — see `docs/PHASE-1.md`, Section 7. Phase 2 implementation has not been started.
 
 ---
 
@@ -84,7 +84,7 @@ User can open a local web application and communicate with the Agent.
 
 ## Status
 
-Not Started — specification drafted in `docs/PHASE-2.md` (Draft, awaiting Product Owner approval).
+Specification approved on 2026-10-20 (`docs/PHASE-2.md`, T-201). Implementation not started; each implementation task requires an explicit start from the Product Owner.
 
 ---
 
