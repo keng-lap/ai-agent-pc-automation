@@ -127,7 +127,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | ID | Story | Acceptance criteria |
 |----|-------|---------------------|
 | US-1 | As a user, I open the app and see a chat page | **AC-1.1** Given the backend and frontend are running, when I open `http://127.0.0.1:4200/`, then I see the page title, an empty message list with the hint MSG-01, an empty input box and a disabled Send button. **AC-1.2** The page needs no backend response to render |
-| US-2 | As a user, I send a message and see the reply | **AC-2.1** Given I typed a non-empty message, when I press Enter or click Send, then my message appears as a "You" entry, the input is cleared, a pending indicator (MSG-02) is shown and Send is disabled. **AC-2.2** When the reply arrives, it appears as an "Agent" entry, the indicator disappears and Send is enabled again. **AC-2.3** The reply text is exactly the text defined in Section 7.3 for that message. **AC-2.4** Entries stay in the order they happened. The newest entry is visible |
+| US-2 | As a user, I send a message and see the reply | **AC-2.1** Given I typed a non-empty message, when I press Enter or click Send, then my message appears as a "You" entry, the input is cleared, a pending indicator (MSG-02) is shown and Send is disabled. **AC-2.2** When the reply arrives, it appears as an "Agent" entry, the indicator disappears and Send is enabled again. **AC-2.3** The reply text is exactly the localized text defined in Section 7.3 for that message and selected language. **AC-2.4** Entries stay in the order they happened. The newest entry is visible |
 | US-3 | As a user, I cannot send invalid input | **AC-3.1** Send is disabled while the input is empty or only whitespace. **AC-3.2** The input does not accept more than 2000 characters. **AC-3.3** If an invalid message still reaches the backend, the user sees MSG-04 and can send again |
 | US-4 | As a user, I understand when the backend is not reachable | **AC-4.1** Given the backend is not running, when I send a message, then I see the disconnected message MSG-03 as an "Error" entry. **AC-4.2** Send is enabled again. **AC-4.3** After the backend is started again, sending works without reloading the page |
 | US-5 | As a user, I see a clear message for every other failure | **AC-5.1** Each failure class in Section 6.4 shows its own message and never shows a stack trace, file path or internal detail. **AC-5.2** After any failure, the user can send another message. **AC-5.3** A request that does not finish within the timeout ends with MSG-07 |
@@ -290,13 +290,13 @@ Every error response is JSON of the form `{"detail": "<text>"}` and never contai
 | 413 | Body larger than the limit (only if D-SEC-4 is approved) | `Request body too large.` |
 | 404 | Unknown path | `Not Found` |
 | 405 | Method not allowed on a known path, for example `GET /api/chat` | `Method Not Allowed` |
-| 422 | Validation failure or malformed JSON (Section 8) | `Invalid request. Send JSON like {"message": "..."} with 1 to 2000 characters.` |
+| 422 | Validation failure or malformed JSON (Section 8) | `Invalid request. Send JSON like {"message": "...", "language": "th"} with 1 to 2000 characters and language th or en.` |
 | 500 | Unexpected error | `Internal server error.` |
 
 Example, invalid request:
 
 ```json
-{"detail": "Invalid request. Send JSON like {\"message\": \"...\"} with 1 to 2000 characters."}
+{"detail": "Invalid request. Send JSON like {\"message\": \"...\", \"language\": \"th\"} with 1 to 2000 characters and language th or en."}
 ```
 
 ## 7.5 Order of checks
@@ -324,8 +324,8 @@ The checks run in this order, and the first failure decides the response. Tests 
 | ID | Rule | Result on violation |
 |----|------|---------------------|
 | V-1 | Body is a JSON object | 422 |
-| V-2 | The only property is `message` | 422 |
-| V-3 | `message` is a string | 422 |
+| V-2 | Exactly two properties are present: `message` and `language` | 422 |
+| V-3 | `message` is a string and `language` is exactly `th` or `en` | 422 |
 | V-4 | Trimmed `message` has 1 to 2000 Unicode code points | 422 |
 | V-5 | Body size is at most 16 KiB (proposal D-SEC-4) | 413 |
 | V-6 | Request content type is `application/json` (parameters such as `charset=utf-8` are allowed) | 415 |
@@ -396,7 +396,7 @@ Error handling rules:
 | F-12 | The input has a label and the list has `role="log"` with a polite live region |
 | F-13 | Chat messages and history are never written to browser storage; `localStorage` may be used only for the selected UI language |
 | F-14 | The placeholder `ChatApi` shipped by T-202 reports "not connected" and the UI shows MSG-03 |
-| F-15 | The HTTP implementation posts JSON `{"message": <text>}` to `/api/chat` |
+| F-15 | The HTTP implementation posts JSON `{"message": <text>, "language": "th" or "en"}` to `/api/chat` |
 | F-16 | Table-driven error classification covers every row of Section 6.4, including 502 with an empty body, 500 with `detail`, 500 without `detail` |
 
 ## 9.5 Integration checks (T-204)
@@ -654,7 +654,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
-| Scope | `POST /api/chat` with the request rules in Section 7.2, the deterministic reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
+| Scope | `POST /api/chat` with the request rules in Section 7.2, including language selection, the deterministic localized reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
 | Allowed changes | New module(s) under `src/backend/agent_backend/` for the endpoint; `main.py`; `tests/backend/`; documentation status |
 | Prohibited changes | Host, Origin or content-type checks (T-205); CORS middleware; any AI call; storage of messages; logging of message text; subprocess, file writing or network calls; new dependencies; frontend files |
 | Dependencies | T-201 approved (T-202 is not required) |
