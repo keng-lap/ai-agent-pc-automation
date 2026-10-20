@@ -42,7 +42,7 @@ A page open in the user's browser on any website can send requests to `localhost
 
 Suggested phase: Phase 2 (web application), verified again in Phase 5.
 
-**Phase 2 decisions:** the Product Owner approved a minimal subset on 2026-10-17 (Host and Origin checks, JSON-only state-changing requests, no permissive CORS, no state-changing GET) and answered the related open decisions on 2026-10-20 (`docs/PHASE-2.md`, Section 14): no per-session token in Phase 2, with a local-authorization decision required before Phase 3 enables any Agent capability (D-SEC-1, option A); a state-changing request without an Origin header is rejected (D-SEC-2); API documentation endpoints only in development (D-SEC-3); request body limit of 16 KiB (D-SEC-4). The per-session token proposal above is therefore not approved for Phase 2. The Phase 2 specification remains a draft until the Product Owner approves it (D-APP-1).
+**Phase 2 decisions:** the Product Owner approved a minimal subset on 2026-10-17 (Host and Origin checks, JSON-only state-changing requests, no permissive CORS, no state-changing GET) and answered the related open decisions on 2026-10-20 (`docs/PHASE-2.md`, Section 14): no per-session token in Phase 2, with a local-authorization decision required before Phase 3 enables any Agent capability (D-SEC-1, option A); a state-changing request without an Origin header is rejected (D-SEC-2); API documentation endpoints only in development (D-SEC-3); request body limit of 16 KiB (D-SEC-4). The per-session token proposal above is therefore not approved for Phase 2. The Phase 2 specification was approved by the Product Owner on 2026-10-20 (D-APP-1).
 
 ## P-SEC-3: Permission and confirmation
 

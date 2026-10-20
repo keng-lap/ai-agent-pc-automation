@@ -2,9 +2,9 @@
 
 ## Status
 
-**Approved — Implementation Not Started**
+**Approved — Implementation In Progress (T-202)**
 
-Phase 2 has not been started. This document is a specification only. No Phase 2 implementation exists. No implementation task (T-202 to T-205) may start until the Product Owner explicitly starts that task.
+The specification is approved (T-201 is complete). The Product Owner explicitly started T-202 on 2026-10-20. Its work is on branch `feat/t-202-chat-ui` and is not merged. T-203, T-205 and T-204 have not been started. Each task requires an explicit start from the Product Owner, and only one implementation task may be in progress at a time.
 
 | Item | Value |
 |------|-------|
@@ -28,7 +28,8 @@ Markers used in this document:
 | 2026-10-19 | Initial draft (PR #6) | Implementation Engineer (Claude) |
 | 2026-10-19 | Security test and mutation-evidence ownership aligned with tasks (PRs #7, #8) | Repository account `keng-lap` |
 | 2026-10-20 | Product Owner decisions recorded; Thai and English UI; `language` request field; branch naming (PRs #9, #10) | Repository account `keng-lap` |
-| 2026-10-20 | Product Owner approved Phase 2 specification (T-201); status and approval record updated. Implementation remains not started | Product Owner / documentation update |
+| 2026-10-20 | Product Owner approved Phase 2 specification (T-201); status and approval record updated | Repository account `keng-lap` |
+| 2026-10-20 | T-201 recorded as complete. T-202 recorded as started by the Product Owner (branch `feat/t-202-chat-ui`, not merged). Approval wording and task statuses updated. Pending review | Implementation Engineer (Claude) |
 
 ---
 
@@ -176,7 +177,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | FR-12 | The page language attribute (`lang`) is `th` or `en` and follows the selected language |
 | FR-13 | The language preference is one `localStorage` entry whose value is `th` or `en`. Any other value, or storage that is unavailable or throws, is ignored and Thai is used. Nothing else is stored |
 
-FR-11 to FR-13 clarify the Product Owner's bilingual decision (D-API-2) so that it can be tested. They are [Proposed] and are confirmed when this document is approved.
+FR-11 to FR-13 clarify the Product Owner's bilingual decision (D-API-2) so that it can be tested. They were proposed and were confirmed by the Product Owner's approval of this document on 2026-10-20.
 
 ## 6.3 UI states
 
@@ -667,7 +668,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
-| Status | Drafted in this document. Complete when the Product Owner approves it and answers every open decision (Section 14) |
+| Status | Complete. Approved by the Product Owner on 2026-10-20 (Pull Request #12, merge commit `638326a`). Every open decision is answered (Section 14) |
 | Scope | Define and freeze: user stories and acceptance criteria, UI states and texts (Sections 5, 6), API contract (Sections 7, 8), test matrix (Section 9), security requirements (Section 11), task breakdown. Record the safety decision (Section 12) |
 | Allowed changes | `docs/PHASE-2.md`, navigation references in `README.md`, `docs/PROJECT.md`, `docs/ROADMAP.md`, decision records in `docs/PROPOSALS.md` |
 | Prohibited changes | Any file under `src/`, `tests/`, `scripts/`; `.env.example`; `.gitignore`; dependency files |
@@ -680,6 +681,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
+| Status | In progress. Explicitly started by the Product Owner on 2026-10-20. Branch `feat/t-202-chat-ui` is not merged. Not complete until its Definition of Done is met and the Product Owner approves the merge |
 | Scope | Chat page in the Angular app (message list, composer, all UI states in Section 6.3, interaction rules FR-1 to FR-10, texts in Section 6.5). The UI depends on a `ChatApi` abstraction. This task ships a placeholder `ChatApi` that reports "not connected", so the page shows MSG-03 when used. Tests use fake implementations |
 | Allowed changes | New files under `src/frontend/src/app/chat/`; `app.ts`, `app.html`, `app.css`, `app.spec.ts`, `src/frontend/src/styles.css`; documentation status |
 | Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage for messages/history (the UI-language preference in `localStorage` is allowed); Markdown or HTML rendering; new dependencies; routing changes |
@@ -692,6 +694,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
+| Status | Not started. Requires an explicit start from the Product Owner |
 | Scope | `POST /api/chat` with the request rules in Section 7.2, including language selection, the deterministic localized reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
 | Allowed changes | New module(s) under `src/backend/agent_backend/` for the endpoint; `main.py`; `tests/backend/`; documentation status |
 | Prohibited changes | Host, Origin or content-type checks (T-205); CORS middleware; any AI call; storage of messages; logging of message text; subprocess, file writing or network calls; new dependencies; frontend files |
@@ -706,6 +709,7 @@ Note: until T-205 is merged, the endpoint must not be called from a browser. T-2
 
 | Field | Content |
 |-------|---------|
+| Status | Not started. Requires an explicit start from the Product Owner |
 | Scope | Implement the backend security controls SEC-01 to SEC-09, SEC-11, SEC-12, and the approved choices for SEC-14 to SEC-16. SEC-10 (plain-text rendering) is owned by T-202; SEC-13 (no system-changing capability) is enforced by T-203 and B-12. Verify backend controls with the applicable ST tests and mutation evidence |
 | Allowed changes | New security module and its wiring under `src/backend/agent_backend/`; `config.py` only if needed; `tests/backend/`; comments in `.env.example`; documentation status and a security verification record |
 | Prohibited changes | CORS middleware; cookies or sessions; an authentication framework; a token (not approved, D-SEC-1); new dependencies; frontend files; endpoint behavior defined in T-203 |
@@ -718,6 +722,7 @@ Note: until T-205 is merged, the endpoint must not be called from a browser. T-2
 
 | Field | Content |
 |-------|---------|
+| Status | Not started. Requires an explicit start from the Product Owner |
 | Scope | Real `ChatApi` using `HttpClient` to `POST /api/chat`. Dev-server proxy for `/api` with the backend port from `BACKEND_PORT`. Error classification in Section 6.4 against real responses. Request timeout. Integration checks. A scripted smoke check is optional and, if added, is a new script and does not change the existing three |
 | Allowed changes | `src/frontend/proxy.conf.js` (new); `angular.json` (`proxyConfig` only); `src/frontend/src/app/**`; optional new script under `scripts/`; documentation status and the Phase 2 verification record |
 | Prohibited changes | Backend behavior changes (a defect found here goes back to its own task); CORS; new dependencies; changes to the existing scripts' behavior |
@@ -753,7 +758,7 @@ Approval of this document does not approve a decision unless the decision is ans
 
 Phase 2 is complete only when all of these are true and evidenced:
 
-- [ ] This specification is approved by the Product Owner and open decisions are answered (T-201)
+- [x] This specification is approved by the Product Owner and open decisions are answered (T-201). Approved 2026-10-20 (Pull Request #12, merge commit `638326a`)
 - [ ] T-202, T-203, T-205 and T-204 are each merged into `main`, one at a time, each with its report
 - [ ] A user can open the web application, send a message and see the mock reply (MV-01, MV-02)
 - [ ] All failure states in Section 6.3 behave as specified (MV-07, MV-08, F-08, F-09, F-16)

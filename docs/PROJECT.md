@@ -139,14 +139,14 @@ If there is a conflict between implementation assumptions and these documents, s
 
 Current phase:
 
-**Phase 1 — Local Development Environment**
+**Phase 2 — Local Web Application**
 
 Status:
 
-**Complete**
+**In Progress**
 
-Phase 0 (Project Foundation) and Phase 1 are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
+Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
-Phase 2 (Local Web Application) has not been started. It requires an explicit start from the project owner. Its specification, `docs/PHASE-2.md`, is approved; implementation has not started and requires an explicit start for each task.
+The Phase 2 specification, `docs/PHASE-2.md`, is approved (2026-10-20). The Product Owner explicitly started task T-202 (chat UI), which is not merged yet. The other tasks have not been started, and each requires an explicit start.
 
 No production AI Agent functionality has been implemented yet.
