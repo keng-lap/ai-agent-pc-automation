@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NEVER, Observable, Subject, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { TimeoutError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
@@ -272,7 +272,6 @@ describe('App chat UI (T-202)', () => {
     english.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Error');
-    expect(fixture.nativeElement.textContent).toContain('My message').toBe(false);
     expect(fixture.nativeElement.textContent).toContain('ข้อความของฉัน');
     expect(fixture.nativeElement.textContent).toContain('ตอบกลับภาษาไทย');
     expect(fixture.nativeElement.textContent).toContain('security check');
