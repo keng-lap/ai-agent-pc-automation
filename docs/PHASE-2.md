@@ -58,6 +58,7 @@ The Agent does not exist in this phase (it belongs to Phase 3). The backend retu
 | G-7 | Option A for P-ORDER-1: keep the phase order. Tools that can modify the machine are dry-run or mock only until the safety system is implemented and approved | Product Owner, 2026-10-19 (recorded in `docs/PROPOSALS.md` by the change that adds this document) | [Carried forward] |
 | G-8 | One implementation task at a time. No task starts without explicit Product Owner approval | Product Owner, 2026-10-19 | [Carried forward] |
 | G-9 | An earlier, unmerged implementation attempt of Phase 2 was discarded by the Product Owner on 2026-10-19. This specification is the new starting point. Nothing from that attempt is part of the repository | Product Owner, 2026-10-19 | [Carried forward] |
+| G-10 | The chat UI supports Thai and English with a visible language switch. Thai is the default on first visit; the selected UI language may be stored in `localStorage`. Chat messages and history must never be stored in browser storage | Product Owner, 2026-10-20 | [Carried forward] |
 
 Not approved and not part of Phase 2: any AI provider or model, API keys, a database, tool execution, an authentication framework, and every other proposal in `docs/PROPOSALS.md`.
 
@@ -157,7 +158,7 @@ These are observations from a Linux sandbox, not from the Product Owner's machin
 | FR-6 | The newest entry is scrolled into view after each change |
 | FR-7 | The message list uses `role="log"` with polite live announcements. The input has a programmatic label |
 | FR-8 | Chat history exists only in the page. It is not written to local storage, session storage, IndexedDB or cookies. A reload clears it |
-| FR-9 | All user-visible text is Thai (Product Owner decision, 2026-10-20). Unicode input of any language must work |
+| FR-9 | All user-visible UI text and system messages are localized in Thai and English. Provide a visible language switch; default to Thai on first visit and remember the selected UI language in `localStorage`. This preference is the only permitted browser-storage value. Unicode input of any language must work |
 | FR-10 | The page is readable in light and dark system themes |
 
 ## 6.3 UI states
@@ -200,18 +201,18 @@ The backend never returns 502, 503 or 504 itself, and every 500 it returns carri
 ## 6.5 User-visible text (frozen in T-201)
 | ID | Text |
 |----|------|
-| MSG-01 | Type a message to start. The Agent is not implemented yet, so replies are placeholders. |
-| MSG-02 | Waiting for the Agent… |
-| MSG-03 | Cannot reach the backend. Check that it is running (scripts\dev.ps1). |
-| MSG-04 | The message was not accepted. Messages must be 1 to 2000 characters. |
-| MSG-05 | The backend rejected the request (security check). |
-| MSG-06 | The backend reported an internal error. Please try again. |
-| MSG-07 | The Agent did not respond in time. Please try again. |
-| MSG-08 | The backend sent an unexpected response. |
-| MSG-09 | The message is too large. |
-| MSG-10 | Unexpected error (HTTP <status>). |
+| MSG-01 | TH: เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน คำตอบในตอนนี้เป็นเพียงตัวอย่างจำลอง. / EN: Type a message to start. The Agent is not implemented yet, so replies are placeholders. |
+| MSG-02 | TH: กำลังรอคำตอบจาก Agent… / EN: Waiting for the Agent… |
+| MSG-03 | TH: เชื่อมต่อ Backend ไม่ได้ โปรดตรวจสอบว่า Backend ทำงานอยู่ (`scripts\dev.ps1`). / EN: Cannot reach the backend. Check that it is running (`scripts\dev.ps1`). |
+| MSG-04 | TH: ไม่รับข้อความนี้ ข้อความต้องมีความยาว 1 ถึง 2000 อักขระ / EN: The message was not accepted. Messages must be 1 to 2000 characters. |
+| MSG-05 | TH: Backend ปฏิเสธคำขอ (ไม่ผ่านการตรวจสอบความปลอดภัย) / EN: The backend rejected the request (security check). |
+| MSG-06 | TH: Backend พบข้อผิดพลาดภายใน โปรดลองอีกครั้ง / EN: The backend reported an internal error. Please try again. |
+| MSG-07 | TH: Agent ไม่ตอบกลับภายในเวลาที่กำหนด โปรดลองอีกครั้ง / EN: The Agent did not respond in time. Please try again. |
+| MSG-08 | TH: Backend ส่งคำตอบในรูปแบบที่ไม่คาดคิด / EN: The backend sent an unexpected response. |
+| MSG-09 | TH: ข้อความมีขนาดใหญ่เกินไป / EN: The message is too large. |
+| MSG-10 | TH: เกิดข้อผิดพลาดที่ไม่คาดคิด (HTTP <status>) / EN: Unexpected error (HTTP <status>). |
 
-Entry labels: "You", "Agent", "Error".
+Entry labels: TH: "คุณ", "Agent", "ข้อผิดพลาด"; EN: "You", "Agent", "Error". The language switch and all labels, hints, pending states, and error messages must use the selected language.
 
 ---
 
@@ -390,7 +391,7 @@ Error handling rules:
 | F-10 | HTML in the user text and in the reply is displayed as text |
 | F-11 | Entry order is preserved and the newest entry is scrolled into view |
 | F-12 | The input has a label and the list has `role="log"` with a polite live region |
-| F-13 | No browser storage API is used |
+| F-13 | Chat messages and history are never written to browser storage; `localStorage` may be used only for the selected UI language |
 | F-14 | The placeholder `ChatApi` shipped by T-202 reports "not connected" and the UI shows MSG-03 |
 | F-15 | The HTTP implementation posts JSON `{"message": <text>}` to `/api/chat` |
 | F-16 | Table-driven error classification covers every row of Section 6.4, including 502 with an empty body, 500 with `detail`, 500 without `detail` |
@@ -640,7 +641,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 |-------|---------|
 | Scope | Chat page in the Angular app (message list, composer, all UI states in Section 6.3, interaction rules FR-1 to FR-10, texts in Section 6.5). The UI depends on a `ChatApi` abstraction. This task ships a placeholder `ChatApi` that reports "not connected", so the page shows MSG-03 when used. Tests use fake implementations |
 | Allowed changes | New files under `src/frontend/src/app/chat/`; `app.ts`, `app.html`, `app.css`, `app.spec.ts`, `src/frontend/src/styles.css`; documentation status |
-| Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage; Markdown or HTML rendering; new dependencies; routing changes |
+| Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage for messages/history (the UI-language preference in `localStorage` is allowed); Markdown or HTML rendering; new dependencies; routing changes |
 | Dependencies | T-201 approved |
 | Acceptance criteria | AC-1.1, AC-1.2, AC-2.1 (up to the request), AC-2.2 to AC-2.4 with a fake, AC-3.1, AC-3.2, AC-4.1 and AC-4.2 with a fake, AC-5.1 to AC-5.3 with a fake, AC-6.1 (frontend part), AC-6.2, AC-6.3 |
 | Tests | F-01 to F-14 plus existing tests. Manual MV-01, MV-03, MV-04 to MV-06, MV-09, MV-10 against the placeholder |
@@ -694,16 +695,16 @@ Approval of this document does not approve a decision unless the decision is ans
 
 | ID | Question | Alternatives | Recommendation | Product Owner answer |
 |----|----------|--------------|----------------|----------------------|
-| D-SEC-1 | Local authorization (token) in Phase 2 | A none, B proxy-injected token, C page-fetched token, D launcher-passed token (Section 11.4) | A for Phase 2, with a mandatory decision before Phase 3 enables any Agent capability | Pending |
-| D-SEC-2 | POST without Origin | Accept / Reject (Section 11.4) | Reject | Pending |
-| D-SEC-3 | API docs endpoints | Always / Development only / Disabled | Development only | Pending |
-| D-SEC-4 | Request size limit | 16 KiB (413) / Validation only | 16 KiB | Pending |
-| D-SEC-5 | P-SEC-1 beyond Phase 1 | Standing rule / Phase by phase | Standing rule | Pending |
-| D-API-1 | Frontend request timeout | 10 s / other | 10 s | Pending |
-| D-API-2 | UI language | English / Thai | Thai, selected by Product Owner on 2026-10-20 | Decided in conversation; record as pending until this spec is approved |
-| D-API-3 | Mock reply content | Reply includes the message length (Section 7.3) / Constant text only | Includes the length: it proves the message reached the backend and was counted correctly, without echoing user text | Pending |
-| D-GIT-1 | Branch naming | `<type>/<task-id>-<short-name>` for all work, including docs | Product Owner selected this convention on 2026-10-20 | Decided in conversation; record as pending until this spec is approved |
-| D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Pending |
+| D-SEC-1 | Local authorization (token) in Phase 2 | A none, B proxy-injected token, C page-fetched token, D launcher-passed token (Section 11.4) | A for Phase 2, with a mandatory decision before Phase 3 enables any Agent capability | Accept A — no token in Phase 2; revisit before Phase 3 enables any Agent capability |
+| D-SEC-2 | POST without Origin | Accept / Reject (Section 11.4) | Reject | Reject |
+| D-SEC-3 | API docs endpoints | Always / Development only / Disabled | Development only | Development only |
+| D-SEC-4 | Request size limit | 16 KiB (413) / Validation only | 16 KiB | 16 KiB (413) |
+| D-SEC-5 | P-SEC-1 beyond Phase 1 | Standing rule / Phase by phase | Standing rule | Standing rule for all phases |
+| D-API-1 | Frontend request timeout | 10 s / other | 10 s | 10 seconds |
+| D-API-2 | UI language | English / Thai / Thai and English | Thai and English with a visible language switch; Thai default on first visit; persist only the selected UI language in `localStorage` | Accept — bilingual UI; no chat history or messages stored |
+| D-API-3 | Mock reply content | Reply includes the message length (Section 7.3) / Constant text only | Includes the length: it proves the message reached the backend and was counted correctly, without echoing user text | Accept — include the trimmed message's Unicode code-point length |
+| D-GIT-1 | Branch naming | `<type>/<task-id>-<short-name>` for all work, including docs | Product Owner selected this convention on 2026-10-20 | Accept — use `<type>/<task-id>-<short-name>` for every task, including docs |
+| D-APP-1 | Approval of this specification (T-201) | Approve / Request changes | Approve after the answers above | Pending — updated specification is awaiting Product Owner review |
 
 ---
 
@@ -730,7 +731,7 @@ Do not mark any item before it has been verified. Do not mark Phase 2 complete b
 
 # 16. Git Workflow
 
-- The repository defines one rule: **do not commit directly to `main`**. Work on a branch, push it, and merge only after the Product Owner has reviewed it (`docs/PHASE-0.md`). A general naming convention is not defined (`docs/PROPOSALS.md`)
+- The repository defines one rule: **do not commit directly to `main`**. Work on a branch, push it, and merge only after the Product Owner has reviewed it (`docs/PHASE-0.md`). The approved naming convention is `<type>/<task-id>-<short-name>` for all work, including docs.
 - **Product Owner decision (2026-10-20):** Use `<type>/<task-id>-<short-name>` for every branch, including documentation branches. Examples: `docs/t-201-phase-2-spec`, `feat/t-202-chat-ui`, `feat/t-203-chat-endpoint`, `feat/t-205-local-web-security`, `feat/t-204-integration`. Do not use a separate naming format for documentation branches.
 - One task is one branch and one pull request. Branch from the latest `main`
 - Commit messages use the existing style: `type: short summary` with a body listing the changes
