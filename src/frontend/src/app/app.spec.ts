@@ -16,7 +16,7 @@ class FakeChatApi {
 }
 
 describe('App chat UI (T-202)', () => {
-  let fixture: ComponentFixture<App>;
+  let fixture!: ComponentFixture<App>;
   let api: FakeChatApi;
 
   async function render(): Promise<void> {
