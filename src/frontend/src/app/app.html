@@ -46,7 +46,7 @@
               <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
             </div>
             @if (entry.kind === 'user') {
-              <div class="user-avatar" aria-hidden="true">You</div>
+              <div class="user-avatar" aria-hidden="true">{{ language() === 'th' ? 'คุณ' : 'You' }}</div>
             }
           </article>
         }
