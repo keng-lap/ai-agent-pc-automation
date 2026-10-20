@@ -86,7 +86,7 @@ export class App implements AfterViewChecked {
         window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
       }
     } catch {
-      // The UI remains usable when browser storage is blocked or unavailable.
+      // Keep the UI usable when browser storage is blocked or unavailable.
     }
   }
 
@@ -135,7 +135,7 @@ export class App implements AfterViewChecked {
             this.appendError('MSG-08');
           }
         },
-        error: (error: unknown) => this.appendError(this.classifyError(error)),
+        error: (error: unknown) => this.appendError(this.classifyError(error), this.getStatus(error)),
       });
   }
 
@@ -172,7 +172,7 @@ export class App implements AfterViewChecked {
   protected errorText(entry: ChatEntry): string {
     if (!entry.errorCode) return entry.text;
     const template = MESSAGES[this.language()][entry.errorCode];
-    return template.replace('{status}', String(this.statusFromError(entry.text)));
+    return template.replace('{status}', entry.text || 'unknown');
   }
 
   private appendError(code: ErrorCode, status?: number): void {
@@ -192,6 +192,12 @@ export class App implements AfterViewChecked {
       && typeof (value as { reply: unknown }).reply === 'string';
   }
 
+  private getStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null || !('status' in error)) return undefined;
+    const status = Number((error as { status: unknown }).status);
+    return Number.isFinite(status) ? status : undefined;
+  }
+
   private classifyError(error: unknown): ErrorCode {
     if (error instanceof TimeoutError) return 'MSG-07';
     if (typeof error !== 'object' || error === null || !('status' in error)) return 'MSG-03';
@@ -205,9 +211,5 @@ export class App implements AfterViewChecked {
       return 'detail' in error ? 'MSG-06' : 'MSG-03';
     }
     return 'MSG-10';
-  }
-
-  private statusFromError(text: string): number | string {
-    return text || 'unknown';
   }
 }
