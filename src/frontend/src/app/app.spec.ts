@@ -90,7 +90,7 @@ describe('App chat UI (T-202)', () => {
     send('first');
     expect(fixture.nativeElement.textContent).toContain('กำลังรอคำตอบจาก Agent');
     expect(sendButton().disabled).toBe(true);
-    fixture.componentInstance['send']();
+    sendButton().click();
     expect(api.calls).toHaveLength(1);
     response.next({ reply: 'done' });
     response.complete();
@@ -150,7 +150,8 @@ describe('App chat UI (T-202)', () => {
     api.responder = () => throwError(() => new TimeoutError());
     send('slow');
     expect(fixture.nativeElement.textContent).toContain('Agent did not respond in time');
-    expect(fixture.componentInstance['pending']()).toBe(false);
+    send('again');
+    expect(api.calls).toHaveLength(2);
   });
 
   it('F-10: renders user and reply HTML as literal text', async () => {
