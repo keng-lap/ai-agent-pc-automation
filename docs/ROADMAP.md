@@ -60,7 +60,7 @@ A runnable local development environment.
 
 ## Status
 
-**Complete** — see `docs/PHASE-1.md`, Section 7. Phase 2 implementation has not been started.
+**Complete** — see `docs/PHASE-1.md`, Section 7.
 
 ---
 
@@ -84,7 +84,7 @@ User can open a local web application and communicate with the Agent.
 
 ## Status
 
-Specification approved on 2026-10-20 (`docs/PHASE-2.md`, T-201). Implementation not started; each implementation task requires an explicit start from the Product Owner.
+**In Progress** — specification approved on 2026-10-20 (`docs/PHASE-2.md`, T-201). The Product Owner explicitly started T-202, which is not merged yet. Each remaining task requires an explicit start from the Product Owner.
 
 ---
 
@@ -336,7 +336,7 @@ A phase is considered complete only when:
 ```text
 Phase 0  ██████████  Complete
 Phase 1  ██████████  Complete
-Phase 2  ░░░░░░░░░░  Not Started
+Phase 2  ░░░░░░░░░░  In Progress
 Phase 3  ░░░░░░░░░░  Not Started
 Phase 4  ░░░░░░░░░░  Not Started
 Phase 5  ░░░░░░░░░░  Not Started
