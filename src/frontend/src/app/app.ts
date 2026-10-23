@@ -198,6 +198,14 @@ export class App implements AfterViewChecked {
     return Number.isFinite(status) ? status : undefined;
   }
 
+  private hasBackendDetail(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) return false;
+    const error = value as Record<string, unknown>;
+    const body = 'error' in error ? error['error'] : error;
+    return typeof body === 'object' && body !== null
+      && 'detail' in body && typeof (body as { detail: unknown }).detail === 'string';
+  }
+
   private classifyError(error: unknown): ErrorCode {
     if (error instanceof TimeoutError) return 'MSG-07';
     if (typeof error !== 'object' || error === null || !('status' in error)) return 'MSG-03';
@@ -207,8 +215,9 @@ export class App implements AfterViewChecked {
     if (status === 400 || status === 403 || status === 415) return 'MSG-05';
     if (status === 413) return 'MSG-09';
     if (status === 422) return 'MSG-04';
+    if (status === 200) return 'MSG-08';
     if (status >= 500 && status <= 599) {
-      return 'detail' in error ? 'MSG-06' : 'MSG-03';
+      return this.hasBackendDetail(error) ? 'MSG-06' : 'MSG-03';
     }
     return 'MSG-10';
   }

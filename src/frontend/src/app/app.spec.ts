@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { TimeoutError } from 'rxjs';
@@ -40,6 +42,7 @@ describe('App baseline', () => {
 describe('App chat UI (T-202)', () => {
   let fixture!: ComponentFixture<App>;
   let api: FakeChatApi;
+  let httpTestingController: HttpTestingController | null = null;
 
   async function render(): Promise<void> {
     fixture = TestBed.createComponent(App);
@@ -86,6 +89,8 @@ describe('App chat UI (T-202)', () => {
 
   afterEach(() => {
     fixture?.destroy();
+    httpTestingController?.verify();
+    httpTestingController = null;
     vi.restoreAllMocks();
   });
 
@@ -149,7 +154,7 @@ describe('App chat UI (T-202)', () => {
     expect(api.calls[0]?.message).toHaveLength(2000);
   });
 
-  it('F-08: maps validation, rejection, server, malformed reply, too-large and other errors', async () => {
+  it('F-08/F-16: maps every specified backend, proxy, malformed-body and timeout error class', async () => {
     const cases: Array<{ error: unknown; thai: string; english: string }> = [
       { error: { status: 0 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 400 }, thai: 'Backend ปฏิเสธคำขอ', english: 'security check' },
@@ -158,6 +163,8 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 413 }, thai: 'ข้อความมีขนาดใหญ่เกินไป', english: 'message is too large' },
       { error: { status: 422 }, thai: 'ไม่รับข้อความนี้', english: '1 to 2000 characters' },
       { error: { status: 500, detail: 'internal' }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
+      { error: { status: 501, error: { detail: 'internal' } }, thai: 'Backend', english: 'internal error' },
+      { error: { status: 500, error: { detail: 42 } }, thai: 'Backend', english: 'Cannot reach the backend' },
       { error: { status: 502 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 503 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 504 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
@@ -181,6 +188,16 @@ describe('App chat UI (T-202)', () => {
       inputText('next');
       expect(sendButton().disabled).toBe(false);
     }
+  });
+
+  it('F-16: an HTTP 200 parse error is an unexpected response', async () => {
+    await render();
+    api.responder = () => throwError(() => ({ status: 200, error: 'invalid JSON' }));
+    send('malformed');
+    expect(fixture.nativeElement.textContent).not.toContain('Cannot reach the backend');
+    languageButton('EN').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('unexpected response');
   });
 
   it('F-09: timeout shows MSG-07 and allows a new send', async () => {
@@ -229,14 +246,46 @@ describe('App chat UI (T-202)', () => {
     expect(localStorage.getItem('private test message')).toBeNull();
   });
 
-  it('F-14: the default ChatApi is disconnected and shows MSG-03', async () => {
+  it('F-15: the HTTP ChatApi posts the message and selected language to /api/chat', async () => {
     await TestBed.resetTestingModule();
     localStorage.clear();
-    await TestBed.configureTestingModule({ imports: [App] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    httpTestingController = TestBed.inject(HttpTestingController);
     await render();
+    languageButton('EN').click();
+    fixture.detectChanges();
     send('hello');
-    expect(fixture.nativeElement.textContent).toContain('ข้อผิดพลาด');
-    expect(fixture.nativeElement.textContent).toContain('เชื่อมต่อ Backend ไม่ได้');
+    const request = httpTestingController.expectOne('/api/chat');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ message: 'hello', language: 'en' });
+    request.flush({ reply: 'Mock reply' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Mock reply');
+  });
+
+  it('F-23: the request keeps the language selected when Send was pressed', async () => {
+    await TestBed.resetTestingModule();
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    httpTestingController = TestBed.inject(HttpTestingController);
+    await render();
+    send('Thai request');
+    const thaiRequest = httpTestingController.expectOne('/api/chat');
+    expect(thaiRequest.request.body).toEqual({ message: 'Thai request', language: 'th' });
+    languageButton('EN').click();
+    fixture.detectChanges();
+    thaiRequest.flush({ reply: 'Thai reply' });
+    fixture.detectChanges();
+    send('English request');
+    const englishRequest = httpTestingController.expectOne('/api/chat');
+    expect(englishRequest.request.body).toEqual({ message: 'English request', language: 'en' });
+    englishRequest.flush({ reply: 'English reply' });
   });
 
   it('F-17/F-18: language switch updates the UI and document language', async () => {
