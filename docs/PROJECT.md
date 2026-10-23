@@ -147,6 +147,6 @@ Status:
 
 Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
-The Phase 2 specification, `docs/PHASE-2.md`, is approved (2026-10-20). The Product Owner explicitly started task T-202 (chat UI), which is not merged yet. The other tasks have not been started, and each requires an explicit start.
+The Phase 2 specification, `docs/PHASE-2.md`, is approved (2026-10-20). T-202 (chat UI) is merged into `main`. The Product Owner explicitly started T-203 (backend chat endpoint) on 2026-10-23; it is in progress on `feat/t-203-chat-endpoint`. T-205 and T-204 have not been started and each requires an explicit start.
 
 No production AI Agent functionality has been implemented yet.

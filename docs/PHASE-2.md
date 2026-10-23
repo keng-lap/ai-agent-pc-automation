@@ -2,9 +2,9 @@
 
 ## Status
 
-**Approved — Implementation In Progress (T-202)**
+**Approved — Implementation In Progress (T-203)**
 
-The specification is approved (T-201 is complete). The Product Owner explicitly started T-202 on 2026-10-20. Its work is on branch `feat/t-202-chat-ui` and is not merged. T-203, T-205 and T-204 have not been started. Each task requires an explicit start from the Product Owner, and only one implementation task may be in progress at a time.
+The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. The Product Owner explicitly started T-203 on 2026-10-23; its work is on branch `feat/t-203-chat-endpoint`. T-205 and T-204 have not been started. Each task requires an explicit start from the Product Owner, and only one implementation task may be in progress at a time.
 
 | Item | Value |
 |------|-------|
@@ -30,6 +30,7 @@ Markers used in this document:
 | 2026-10-20 | Product Owner decisions recorded; Thai and English UI; `language` request field; branch naming (PRs #9, #10) | Repository account `keng-lap` |
 | 2026-10-20 | Product Owner approved Phase 2 specification (T-201); status and approval record updated | Repository account `keng-lap` |
 | 2026-10-20 | T-201 recorded as complete. T-202 recorded as started by the Product Owner (branch `feat/t-202-chat-ui`, not merged). Approval wording and task statuses updated. Pending review | Implementation Engineer (Claude) |
+| 2026-10-23 | T-202 merge confirmed on `main`; T-203 recorded as started by the Product Owner on `feat/t-203-chat-endpoint` | Implementation Engineer |
 
 ---
 
@@ -681,7 +682,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
-| Status | In progress. Explicitly started by the Product Owner on 2026-10-20. Branch `feat/t-202-chat-ui` is not merged. Not complete until its Definition of Done is met and the Product Owner approves the merge |
+| Status | Complete. Merged into `main` by PR #13 (merge commit `add4b13`) |
 | Scope | Chat page in the Angular app (message list, composer, all UI states in Section 6.3, interaction rules FR-1 to FR-10, texts in Section 6.5). The UI depends on a `ChatApi` abstraction. This task ships a placeholder `ChatApi` that reports "not connected", so the page shows MSG-03 when used. Tests use fake implementations |
 | Allowed changes | New files under `src/frontend/src/app/chat/`; `app.ts`, `app.html`, `app.css`, `app.spec.ts`, `src/frontend/src/styles.css`; documentation status |
 | Prohibited changes | `HttpClient` and its provider; proxy configuration; backend files; browser storage for messages/history (the UI-language preference in `localStorage` is allowed); Markdown or HTML rendering; new dependencies; routing changes |
@@ -694,7 +695,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
-| Status | Not started. Requires an explicit start from the Product Owner |
+| Status | In progress. Explicitly started by the Product Owner on 2026-10-23. Branch `feat/t-203-chat-endpoint`; not merged |
 | Scope | `POST /api/chat` with the request rules in Section 7.2, including language selection, the deterministic localized reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
 | Allowed changes | New module(s) under `src/backend/agent_backend/` for the endpoint; `main.py`; `tests/backend/`; documentation status |
 | Prohibited changes | Host, Origin or content-type checks (T-205); CORS middleware; any AI call; storage of messages; logging of message text; subprocess, file writing or network calls; new dependencies; frontend files |
