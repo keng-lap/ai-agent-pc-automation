@@ -23,7 +23,7 @@ Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are com
 
 No Agent or PC-automation functionality is implemented yet. Do not implement future-phase features early.
 
-**Status:** In Progress. T-202, T-203 and T-205 are merged into `main`. The Product Owner started T-204 (frontend/backend integration) on 2026-10-23 on branch `feat/t-204-integration`: `docs/PHASE-2.md`.
+**Status:** Phase 2 is complete (2026-10-23). T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`; PR #19 records the Product Owner's report that MV-01 to MV-14 passed, and PR #20 makes backend tests independent of local `.env` ports. See `docs/PHASE-2-COMPLETION-REPORT.md`. Phase 3 has not started.
 
 ## Architecture
 
@@ -66,7 +66,8 @@ See:
 - `docs/ROADMAP.md`
 - `docs/PHASE-0.md`
 - `docs/PHASE-1.md`
-- `docs/PHASE-2.md` (approved specification; T-204 integration is in progress)
+- `docs/PHASE-2.md` (approved specification and completed Phase 2 record)
+- `docs/PHASE-2-COMPLETION-REPORT.md` (Phase 2 closeout evidence)
 
 Non-binding proposals awaiting owner approval (not requirements): `docs/PROPOSALS.md`
 
