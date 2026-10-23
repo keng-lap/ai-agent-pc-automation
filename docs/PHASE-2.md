@@ -2,9 +2,9 @@
 
 ## Status
 
-**Approved — T-205 complete; T-204 not started**
+**Approved — Implementation In Progress (T-204)**
 
-The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. T-203 was merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`). T-205 was merged into `main` by PR #16 (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`) and its security verification report is recorded in `docs/T-205-SECURITY-REPORT.md`. T-204 has not been started and requires an explicit start from the Product Owner.
+The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. T-203 was merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`). T-205 was merged into `main` by PR #16 (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`) and its security verification report is recorded in `docs/T-205-SECURITY-REPORT.md`. The Product Owner explicitly started T-204 on 2026-10-23 on branch `feat/t-204-integration`; automated checks are recorded in `docs/T-204-INTEGRATION-REPORT.md`, with Product Owner manual checks pending.
 
 | Item | Value |
 |------|-------|
@@ -33,6 +33,7 @@ Markers used in this document:
 | 2026-10-23 | T-202 merge confirmed on `main`; T-203 recorded as started by the Product Owner on `feat/t-203-chat-endpoint` | Implementation Engineer |
 | 2026-10-23 | T-203 merge in PR #15 confirmed; T-205 started by the Product Owner; security implementation and verification begun | Codex |
 | 2026-10-23 | T-205 merge in PR #16 confirmed on `main` (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`); T-205 complete; T-204 remains not started | Codex |
+| 2026-10-23 | T-204 explicitly started by the Product Owner on branch `feat/t-204-integration`; HTTP adapter, proxy, error handling and integration verification underway | Codex |
 
 ---
 
@@ -706,7 +707,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 | Tests | B-01 to B-12 plus existing tests |
 | Definition of Done | All B tests pass. `GET /health` unchanged. Static guard passes. Report delivered. Merged and verified |
 
-T-205 is merged and verified. T-204 may now implement browser integration, but it remains unstarted until the Product Owner explicitly starts it.
+T-205 is merged and verified. T-204 started after the Product Owner explicitly approved it on 2026-10-23.
 
 ## 13.6 T-205: Local web security implementation and verification
 
@@ -725,7 +726,7 @@ T-205 is merged and verified. T-204 may now implement browser integration, but i
 
 | Field | Content |
 |-------|---------|
-| Status | Not started. Requires an explicit start from the Product Owner |
+| Status | In progress. Explicitly started by the Product Owner on 2026-10-23; implementation and verification underway |
 | Scope | Real `ChatApi` using `HttpClient` to `POST /api/chat`. Dev-server proxy for `/api` with the backend port from `BACKEND_PORT`. Error classification in Section 6.4 against real responses. Request timeout. Integration checks. A scripted smoke check is optional and, if added, is a new script and does not change the existing three |
 | Allowed changes | `src/frontend/proxy.conf.js` (new); `angular.json` (`proxyConfig` only); `src/frontend/src/app/**`; optional new script under `scripts/`; documentation status and the Phase 2 verification record |
 | Prohibited changes | Backend behavior changes (a defect found here goes back to its own task); CORS; new dependencies; changes to the existing scripts' behavior |

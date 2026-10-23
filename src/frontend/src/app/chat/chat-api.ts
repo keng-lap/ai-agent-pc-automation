@@ -1,15 +1,14 @@
-import { Injectable } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
 
 export type UiLanguage = 'th' | 'en';
 
-/**
- * T-202 intentionally ships a disconnected adapter. The real HTTP adapter
- * belongs to T-204; this placeholder never contacts the network.
- */
+/** Sends chat requests through the same-origin Angular development proxy. */
 @Injectable({ providedIn: 'root' })
 export class ChatApi {
-  sendMessage(_message: string, _language: UiLanguage): Observable<unknown> {
-    return throwError(() => ({ status: 0 }));
+  private readonly http = inject(HttpClient);
+  sendMessage(message: string, language: UiLanguage): Observable<unknown> {
+    return this.http.post<unknown>('/api/chat', { message, language });
   }
 }
