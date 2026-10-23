@@ -8,7 +8,11 @@ from fastapi.testclient import TestClient
 from agent_backend import chat as chat_module
 from agent_backend.main import app
 
-client = TestClient(app)
+client = TestClient(
+    app,
+    base_url="http://127.0.0.1:8000",
+    headers={"origin": "http://127.0.0.1:4200"},
+)
 INVALID_REQUEST = (
     'Invalid request. Send JSON like {"message": "...", "language": "th"} '
     "with 1 to 2000 characters and language th or en."
@@ -76,7 +80,12 @@ def test_empty_or_whitespace_message_is_rejected(message):
     ],
 )
 def test_invalid_payload_is_rejected_without_details(payload):
-    response = client.post("/api/chat", json=payload)
+    if payload is None:
+        response = client.post(
+            "/api/chat", content=b"null", headers={"content-type": "application/json"}
+        )
+    else:
+        response = client.post("/api/chat", json=payload)
     assert response.status_code == 422
     assert response.json() == {"detail": INVALID_REQUEST}
 
@@ -104,7 +113,12 @@ def test_unexpected_exception_returns_generic_error_and_scrubs_message(monkeypat
         raise RuntimeError("private internal detail")
 
     monkeypatch.setattr(chat_module, "make_reply", fail)
-    error_client = TestClient(app, raise_server_exceptions=False)
+    error_client = TestClient(
+        app,
+        base_url="http://127.0.0.1:8000",
+        headers={"origin": "http://127.0.0.1:4200"},
+        raise_server_exceptions=False,
+    )
     response = error_client.post("/api/chat", json={"message": "hello", "language": "en"})
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}

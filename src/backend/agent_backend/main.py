@@ -13,9 +13,27 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .chat import router as chat_router
+from .config import load_settings
+from .security import LocalWebSecurityMiddleware
 
-app = FastAPI(title="AI Agent PC Automation", version="0.0.0")
-app.include_router(chat_router)
+
+def create_app(settings=None) -> FastAPI:
+    settings = settings or load_settings()
+    docs_enabled = settings.app_env == "development"
+    application = FastAPI(
+        title="AI Agent PC Automation",
+        version="0.0.0",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
+    application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
+    application.include_router(chat_router)
+    return application
+
+
+settings = load_settings()
+app = create_app(settings)
 
 INVALID_REQUEST = (
     'Invalid request. Send JSON like {"message": "...", "language": "th"} '

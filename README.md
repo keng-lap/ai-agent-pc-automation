@@ -23,7 +23,7 @@ Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are com
 
 No Agent or PC-automation functionality is implemented yet. Do not implement future-phase features early.
 
-**Status:** In Progress. T-202 (chat UI) is merged. The Product Owner explicitly started T-203 (backend chat endpoint) on 2026-10-23; it is in progress on `feat/t-203-chat-endpoint`. T-205 and T-204 have not been started and require an explicit start: `docs/PHASE-2.md`.
+**Status:** In Progress. T-202 (chat UI) and T-203 (backend chat endpoint) are merged. The Product Owner started T-205 (local web security) on 2026-10-23; T-204 remains not started and requires an explicit start: `docs/PHASE-2.md`.
 
 ## Architecture
 
@@ -66,7 +66,7 @@ See:
 - `docs/ROADMAP.md`
 - `docs/PHASE-0.md`
 - `docs/PHASE-1.md`
-- `docs/PHASE-2.md` (approved specification; T-203 implementation in progress)
+- `docs/PHASE-2.md` (approved specification; T-205 security implementation in progress)
 
 Non-binding proposals awaiting owner approval (not requirements): `docs/PROPOSALS.md`
 

@@ -2,16 +2,16 @@
 
 ## Status
 
-**Approved — Implementation In Progress (T-203)**
+**Approved — Implementation In Progress (T-205)**
 
-The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. The Product Owner explicitly started T-203 on 2026-10-23; its work is on branch `feat/t-203-chat-endpoint`. T-205 and T-204 have not been started. Each task requires an explicit start from the Product Owner, and only one implementation task may be in progress at a time.
+The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. T-203 was merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`). The Product Owner explicitly started T-205 on 2026-10-23. T-204 has not been started. Only one implementation task may be in progress at a time.
 
 | Item | Value |
 |------|-------|
 | Prepared by | Implementation Engineer (Claude) |
 | Reviewers | Product Owner; System Architect and Technical Reviewer (ChatGPT) |
 | Prepared on | 2026-10-19 |
-| Last updated | 2026-10-20 (see Revision History) |
+| Last updated | 2026-10-23 (see Revision History) |
 | Baseline | `main` at `cbb3c8d` (Phase 0 and Phase 1 complete) |
 | Product Owner approval | Approved by the Product Owner on 2026-10-20; recorded in Section 14 |
 
@@ -31,6 +31,7 @@ Markers used in this document:
 | 2026-10-20 | Product Owner approved Phase 2 specification (T-201); status and approval record updated | Repository account `keng-lap` |
 | 2026-10-20 | T-201 recorded as complete. T-202 recorded as started by the Product Owner (branch `feat/t-202-chat-ui`, not merged). Approval wording and task statuses updated. Pending review | Implementation Engineer (Claude) |
 | 2026-10-23 | T-202 merge confirmed on `main`; T-203 recorded as started by the Product Owner on `feat/t-203-chat-endpoint` | Implementation Engineer |
+| 2026-10-23 | T-203 merge in PR #15 confirmed; T-205 started by the Product Owner; security implementation and verification begun | Codex |
 
 ---
 
@@ -493,7 +494,7 @@ Expected, with the default ports: `403`, `400`, `415`, `403` (the last one has n
 
 Binding to `127.0.0.1` alone does not protect the backend. Any website open in the user's browser can send requests to `localhost`, and any program on the computer can connect to a loopback port. Phase 2 is the first phase where a browser talks to the backend, so these controls are requirements for it.
 
-**Nothing in this section is implemented yet.** Implementation is task T-205, after the Product Owner approves Section 11 and the open decisions in Section 14.
+Implementation and verification for this section are task T-205. The Product Owner approved the security decisions in Section 14 before starting this task.
 
 ## 11.1 Requirements
 
@@ -695,7 +696,7 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 
 | Field | Content |
 |-------|---------|
-| Status | In progress. Explicitly started by the Product Owner on 2026-10-23. Branch `feat/t-203-chat-endpoint`; not merged |
+| Status | Complete. Merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`) |
 | Scope | `POST /api/chat` with the request rules in Section 7.2, including language selection, the deterministic localized reply in Section 7.3 and the errors 405, 422, 500 in Section 7.4. Unified error format. A static guard test (B-12). The backend remains testable without a browser |
 | Allowed changes | New module(s) under `src/backend/agent_backend/` for the endpoint; `main.py`; `tests/backend/`; documentation status |
 | Prohibited changes | Host, Origin or content-type checks (T-205); CORS middleware; any AI call; storage of messages; logging of message text; subprocess, file writing or network calls; new dependencies; frontend files |
@@ -710,7 +711,7 @@ Note: until T-205 is merged, the endpoint must not be called from a browser. T-2
 
 | Field | Content |
 |-------|---------|
-| Status | Not started. Requires an explicit start from the Product Owner |
+| Status | In progress. Explicitly started by the Product Owner on 2026-10-23; implementation and verification underway |
 | Scope | Implement the backend security controls SEC-01 to SEC-09, SEC-11, SEC-12, and the approved choices for SEC-14 to SEC-16. SEC-10 (plain-text rendering) is owned by T-202; SEC-13 (no system-changing capability) is enforced by T-203 and B-12. Verify backend controls with the applicable ST tests and mutation evidence |
 | Allowed changes | New security module and its wiring under `src/backend/agent_backend/`; `config.py` only if needed; `tests/backend/`; comments in `.env.example`; documentation status and a security verification record |
 | Prohibited changes | CORS middleware; cookies or sessions; an authentication framework; a token (not approved, D-SEC-1); new dependencies; frontend files; endpoint behavior defined in T-203 |
