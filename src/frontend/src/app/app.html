@@ -1,4 +1,91 @@
-<main>
-  <h1>{{ title() }}</h1>
-  <p>Local development environment (Phase 1). No agent functionality yet.</p>
+<main class="page-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">A</div>
+      <div>
+        <p class="eyebrow">LOCAL ASSISTANT</p>
+        <h1>{{ title }}</h1>
+      </div>
+    </div>
+    <div class="language-switch" role="group" [attr.aria-label]="language() === 'th' ? 'เลือกภาษา' : 'Choose language'">
+      <button type="button" [class.active]="language() === 'th'" [attr.aria-pressed]="language() === 'th'" (click)="setLanguage('th')">ไทย</button>
+      <button type="button" [class.active]="language() === 'en'" [attr.aria-pressed]="language() === 'en'" (click)="setLanguage('en')">EN</button>
+    </div>
+  </header>
+
+  <section class="chat-card" aria-labelledby="chat-title">
+    <div class="chat-heading">
+      <div>
+        <p class="eyebrow">{{ language() === 'th' ? 'พื้นที่ทำงานส่วนตัว' : 'YOUR PRIVATE WORKSPACE' }}</p>
+        <h2 id="chat-title">{{ language() === 'th' ? 'คุยกับ Agent' : 'Chat with your Agent' }}</h2>
+      </div>
+      <span class="status-pill"><span class="status-dot"></span>{{ language() === 'th' ? 'ทำงานในเครื่องนี้' : 'Runs locally' }}</span>
+    </div>
+
+    <div #messageLog class="message-log" role="log" aria-live="polite" aria-relevant="additions text" [attr.aria-label]="language() === 'th' ? 'ข้อความสนทนา' : 'Conversation messages'">
+      @if (entries().length === 0) {
+        <div class="empty-state">
+          <div class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path d="M24 5.5 28.6 18l12.4 6-12.4 6L24 42.5 19.4 30 7 24l12.4-6L24 5.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+              <path d="m37 4 1.7 4.3L43 10l-4.3 1.7L37 16l-1.7-4.3L31 10l4.3-1.7L37 4Z" fill="currentColor"/>
+            </svg>
+          </div>
+          <h3>{{ language() === 'th' ? 'เริ่มต้นบทสนทนา' : 'Start a conversation' }}</h3>
+          <p>{{ hint }}</p>
+          <span class="mock-note">{{ language() === 'th' ? 'โหมดตัวอย่าง · ยังไม่มีการสั่งงานคอมพิวเตอร์' : 'Preview mode · no computer actions are performed' }}</span>
+        </div>
+      } @else {
+        @for (entry of entries(); track entry.id) {
+          <article class="message-row" [class.message-row--user]="entry.kind === 'user'" [class.message-row--error]="entry.kind === 'error'">
+            @if (entry.kind !== 'user') {
+              <div class="message-avatar" [class.message-avatar--error]="entry.kind === 'error'" aria-hidden="true">{{ entry.kind === 'error' ? '!' : 'A' }}</div>
+            }
+            <div class="message-bubble">
+              <span class="message-label">{{ labelFor(entry.kind) }}</span>
+              <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
+            </div>
+            @if (entry.kind === 'user') {
+              <div class="user-avatar" aria-hidden="true">{{ language() === 'th' ? 'คุณ' : 'You' }}</div>
+            }
+          </article>
+        }
+      }
+      @if (pending()) {
+        <div class="pending-row" aria-live="polite">
+          <span class="typing-indicator" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>{{ pendingLabel }}</span>
+        </div>
+      }
+    </div>
+
+    <form class="composer" (submit)="onSubmit($event)">
+      <label for="message-input">{{ language() === 'th' ? 'ข้อความของคุณ' : 'Your message' }}</label>
+      <textarea
+        id="message-input"
+        rows="3"
+        maxlength="2000"
+        [value]="draft()"
+        [placeholder]="placeholder"
+        (input)="onInput($event)"
+        (keydown)="onKeydown($event)"
+        [attr.aria-label]="language() === 'th' ? 'ข้อความของคุณ' : 'Your message'"
+      ></textarea>
+      <div class="composer-footer">
+        <span class="composer-hint">{{ language() === 'th' ? 'Enter เพื่อส่ง · Shift + Enter เพื่อขึ้นบรรทัดใหม่' : 'Enter to send · Shift + Enter for a new line' }}</span>
+        <div class="send-controls">
+          <span class="character-count">{{ draft().length }}/2000</span>
+          <button class="send-button" type="submit" [disabled]="!canSend">
+            <span>{{ sendLabel }}</span>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 10h13M10 4l6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <span class="footer-lock" aria-hidden="true">◇</span>
+    {{ language() === 'th' ? 'ข้อมูลสนทนาอยู่ในหน้านี้เท่านั้น และจะหายไปเมื่อรีโหลด' : 'Conversation stays in this page and clears when you reload.' }}
+  </footer>
 </main>
