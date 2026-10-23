@@ -143,10 +143,10 @@ Current phase:
 
 Status:
 
-**In Progress**
+**Complete (2026-10-23)**
 
 Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
-The Phase 2 specification, `docs/PHASE-2.md`, is approved (2026-10-20). T-202, T-203 and T-205 are merged into `main`. The Product Owner started T-204 (frontend/backend integration) on 2026-10-23 on branch `feat/t-204-integration`.
+Phase 2 is complete. T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`. PR #19 records the Product Owner's report that MV-01 to MV-14 passed; PR #20 fixes test isolation from local `.env` ports. The final status and evidence are in `docs/PHASE-2-COMPLETION-REPORT.md`.
 
-No production AI Agent functionality has been implemented yet.
+No production AI Agent functionality has been implemented yet. Phase 3 is the next phase and has not started; it requires an explicit start from the Product Owner.
