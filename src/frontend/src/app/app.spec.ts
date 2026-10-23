@@ -15,6 +15,28 @@ class FakeChatApi {
   }
 }
 
+describe('App baseline', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [App],
+    }).compileComponents();
+  });
+
+  it('should create the app', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    expect(app).toBeTruthy();
+  });
+
+  it('should render title', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('h1')?.textContent).toContain('AI Agent PC Automation');
+  });
+});
+
 describe('App chat UI (T-202)', () => {
   let fixture!: ComponentFixture<App>;
   let api: FakeChatApi;
@@ -36,6 +58,15 @@ describe('App chat UI (T-202)', () => {
 
   function sendButton(): HTMLButtonElement {
     return fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+  }
+
+  function languageButton(label: 'ไทย' | 'EN'): HTMLButtonElement {
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+    const match = buttons.find((btn) => btn.textContent?.trim() === label);
+    if (!match) {
+      throw new Error(`Button "${label}" not found`);
+    }
+    return match;
   }
 
   function send(value = 'hello'): void {
@@ -119,29 +150,36 @@ describe('App chat UI (T-202)', () => {
   });
 
   it('F-08: maps validation, rejection, server, malformed reply, too-large and other errors', async () => {
-    const cases: Array<{ error: unknown; expected: string }> = [
-      { error: { status: 0 }, expected: 'Cannot reach the backend' },
-      { error: { status: 400 }, expected: 'security check' },
-      { error: { status: 403 }, expected: 'security check' },
-      { error: { status: 415 }, expected: 'security check' },
-      { error: { status: 413 }, expected: 'message is too large' },
-      { error: { status: 422 }, expected: '1 to 2000 characters' },
-      { error: { status: 500, detail: 'internal' }, expected: 'internal error' },
-      { error: { status: 502 }, expected: 'Cannot reach the backend' },
-      { error: { status: 503 }, expected: 'Cannot reach the backend' },
-      { error: { status: 504 }, expected: 'Cannot reach the backend' },
-      { error: { status: 500 }, expected: 'Cannot reach the backend' },
-      { error: { status: 404 }, expected: 'Unexpected error (HTTP 404)' },
+    const cases: Array<{ error: unknown; thai: string; english: string }> = [
+      { error: { status: 0 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
+      { error: { status: 400 }, thai: 'Backend ปฏิเสธคำขอ', english: 'security check' },
+      { error: { status: 403 }, thai: 'Backend ปฏิเสธคำขอ', english: 'security check' },
+      { error: { status: 415 }, thai: 'Backend ปฏิเสธคำขอ', english: 'security check' },
+      { error: { status: 413 }, thai: 'ข้อความมีขนาดใหญ่เกินไป', english: 'message is too large' },
+      { error: { status: 422 }, thai: 'ไม่รับข้อความนี้', english: '1 to 2000 characters' },
+      { error: { status: 500, detail: 'internal' }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
+      { error: { status: 502 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
+      { error: { status: 503 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
+      { error: { status: 504 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
+      { error: { status: 500 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
+      { error: { status: 404 }, thai: 'เกิดข้อผิดพลาดที่ไม่คาดคิด (HTTP 404)', english: 'Unexpected error (HTTP 404)' },
     ];
     await render();
     for (const item of cases) {
       api.responder = () => throwError(() => item.error);
       send('test');
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('Error');
-      expect(fixture.nativeElement.textContent).toContain(item.expected);
+      expect(fixture.nativeElement.textContent).toContain('ข้อผิดพลาด');
+      expect(fixture.nativeElement.textContent).toContain(item.thai);
       expect(sendButton().disabled).toBe(true);
+      languageButton('EN').click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('Error');
+      expect(fixture.nativeElement.textContent).toContain(item.english);
+      languageButton('ไทย').click();
+      fixture.detectChanges();
       inputText('next');
+      expect(sendButton().disabled).toBe(false);
     }
   });
 
@@ -149,12 +187,19 @@ describe('App chat UI (T-202)', () => {
     await render();
     api.responder = () => throwError(() => new TimeoutError());
     send('slow');
+    expect(fixture.nativeElement.textContent).toContain('ข้อผิดพลาด');
+    expect(fixture.nativeElement.textContent).toContain('Agent ไม่ตอบกลับภายในเวลาที่กำหนด');
+    languageButton('EN').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Error');
     expect(fixture.nativeElement.textContent).toContain('Agent did not respond in time');
+    languageButton('ไทย').click();
+    fixture.detectChanges();
     send('again');
     expect(api.calls).toHaveLength(2);
   });
 
-  it('F-10: renders user and reply HTML as literal text', async () => {
+  it('F-10 / ST-24: renders user and reply HTML as literal text', async () => {
     api.responder = () => of({ reply: '<img src=x onerror=alert(1)>' });
     await render();
     send('<script>alert(1)</script>');
@@ -190,20 +235,19 @@ describe('App chat UI (T-202)', () => {
     await TestBed.configureTestingModule({ imports: [App] }).compileComponents();
     await render();
     send('hello');
+    expect(fixture.nativeElement.textContent).toContain('ข้อผิดพลาด');
     expect(fixture.nativeElement.textContent).toContain('เชื่อมต่อ Backend ไม่ได้');
   });
 
   it('F-17/F-18: language switch updates the UI and document language', async () => {
     await render();
-    const english = Array.from(fixture.nativeElement.querySelectorAll('button')).find((button: Element) => button.textContent?.trim() === 'EN') as HTMLButtonElement;
-    english.click();
+    languageButton('EN').click();
     fixture.detectChanges();
     expect(document.documentElement.lang).toBe('en');
     expect(fixture.nativeElement.textContent).toContain('Start a conversation');
     expect(fixture.nativeElement.querySelector('textarea')?.getAttribute('placeholder')).toBe('Type your message...');
     expect(sendButton().textContent).toContain('Send');
-    const thai = Array.from(fixture.nativeElement.querySelectorAll('button')).find((button: Element) => button.textContent?.trim() === 'ไทย') as HTMLButtonElement;
-    thai.click();
+    languageButton('ไทย').click();
     fixture.detectChanges();
     expect(document.documentElement.lang).toBe('th');
     expect(fixture.nativeElement.textContent).toContain('เริ่มต้นบทสนทนา');
@@ -211,7 +255,7 @@ describe('App chat UI (T-202)', () => {
 
   it('F-19: saves and restores only the selected language', async () => {
     await render();
-    fixture.nativeElement.querySelectorAll('button')[1].click();
+    languageButton('EN').click();
     fixture.detectChanges();
     expect(localStorage.length).toBe(1);
     expect(localStorage.getItem('ai-agent-pc-automation.language')).toBe('en');
@@ -230,13 +274,36 @@ describe('App chat UI (T-202)', () => {
     await render();
     expect(fixture.nativeElement.textContent).toContain('เริ่มต้นบทสนทนา');
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
-    const english = Array.from(fixture.nativeElement.querySelectorAll('button')).find((button: Element) => button.textContent?.trim() === 'EN') as HTMLButtonElement;
-    english.click();
+    languageButton('EN').click();
     fixture.detectChanges();
     expect(document.documentElement.lang).toBe('en');
   });
 
-  it('F-21: every MSG-03 to MSG-10 error has Thai and English text', async () => {
+  it('F-21: every MSG-01 to MSG-10 text and entry labels exist in Thai and English', async () => {
+    await render();
+    // MSG-01
+    expect(fixture.nativeElement.textContent).toContain('เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน');
+    languageButton('EN').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Type a message to start');
+    languageButton('ไทย').click();
+    fixture.detectChanges();
+
+    // MSG-02
+    const pendingSubject = new Subject<unknown>();
+    api.responder = () => pendingSubject;
+    send('pending test');
+    expect(fixture.nativeElement.textContent).toContain('กำลังรอคำตอบจาก Agent');
+    languageButton('EN').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Waiting for the Agent');
+    languageButton('ไทย').click();
+    fixture.detectChanges();
+    pendingSubject.next({ reply: 'ok' });
+    pendingSubject.complete();
+    fixture.detectChanges();
+
+    // MSG-03 to MSG-10
     const cases: Array<{ error: unknown; thai: string; english: string }> = [
       { error: { status: 0 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 422 }, thai: 'ไม่รับข้อความนี้', english: '1 to 2000 characters' },
@@ -247,17 +314,14 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 413 }, thai: 'ข้อความมีขนาดใหญ่เกินไป', english: 'message is too large' },
       { error: { status: 404 }, thai: 'HTTP 404', english: 'HTTP 404' },
     ];
-    await render();
     for (const item of cases) {
       api.responder = () => item.error instanceof TimeoutError ? throwError(() => item.error) : item.error && typeof item.error === 'object' && 'malformed' in item.error ? of(item.error) : throwError(() => item.error);
       send('error case');
       expect(fixture.nativeElement.textContent).toContain(item.thai);
-      const english = Array.from(fixture.nativeElement.querySelectorAll('button')).find((button: Element) => button.textContent?.trim() === 'EN') as HTMLButtonElement;
-      english.click();
+      languageButton('EN').click();
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain(item.english);
-      const thai = Array.from(fixture.nativeElement.querySelectorAll('button')).find((button: Element) => button.textContent?.trim() === 'ไทย') as HTMLButtonElement;
-      thai.click();
+      languageButton('ไทย').click();
       fixture.detectChanges();
       inputText('again');
     }
@@ -269,8 +333,7 @@ describe('App chat UI (T-202)', () => {
     send('ข้อความของฉัน');
     api.responder = () => throwError(() => ({ status: 403 }));
     send('อีกข้อความ');
-    const english = Array.from(fixture.nativeElement.querySelectorAll('button')).find((button: Element) => button.textContent?.trim() === 'EN') as HTMLButtonElement;
-    english.click();
+    languageButton('EN').click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Error');
     expect(fixture.nativeElement.textContent).toContain('ข้อความของฉัน');
