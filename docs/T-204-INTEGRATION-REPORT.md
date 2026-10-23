@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation and automated verification are complete on branch `feat/t-204-integration`. Product Owner manual checks MV-01 to MV-14 remain pending before T-204 can be reported complete.
+Implementation and automated verification are complete on branch `feat/t-204-integration`. The Product Owner reported MV-01 to MV-14 passed on 2026-10-23. PR #18 was merged into `main` on 2026-10-23 (merge commit `94c09a37601e2cb2364a7c478940daf10e982569`).
 
 Base commit: `8ad6d46513ddb7fced10112213bad7d9e429eaeb` (main after PR #17).
 
@@ -29,4 +29,8 @@ Base commit: `8ad6d46513ddb7fced10112213bad7d9e429eaeb` (main after PR #17).
 
 ## Product Owner manual verification
 
-MV-01 to MV-14 have not been reported by the Product Owner. T-204 remains in progress until those checks are performed and recorded. ST-24 is owned by T-202; T-204 covers ST-22 through I-03.
+| ID | Result | Evidence |
+|----|--------|----------|
+| MV-01 to MV-14 | Passed | Product Owner report received 2026-10-23; individual observations were not provided |
+
+ST-24 is owned by T-202; T-204 covers ST-22 through I-03.
