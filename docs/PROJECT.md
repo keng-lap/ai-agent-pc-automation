@@ -147,6 +147,6 @@ Status:
 
 Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
-The Phase 2 specification, `docs/PHASE-2.md`, is approved (2026-10-20). T-202 (chat UI) and T-203 (backend chat endpoint) are merged into `main`. The Product Owner started T-205 (local web security) on 2026-10-23; T-204 remains not started and requires an explicit start.
+The Phase 2 specification, `docs/PHASE-2.md`, is approved (2026-10-20). T-202, T-203 and T-205 are merged into `main`; T-205 was merged by PR #16 (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`). T-204 remains not started and requires an explicit start from the Product Owner.
 
 No production AI Agent functionality has been implemented yet.

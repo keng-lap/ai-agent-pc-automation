@@ -2,9 +2,9 @@
 
 ## Status
 
-**Approved — Implementation In Progress (T-205)**
+**Approved — T-205 complete; T-204 not started**
 
-The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. T-203 was merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`). The Product Owner explicitly started T-205 on 2026-10-23. T-204 has not been started. Only one implementation task may be in progress at a time.
+The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. T-203 was merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`). T-205 was merged into `main` by PR #16 (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`) and its security verification report is recorded in `docs/T-205-SECURITY-REPORT.md`. T-204 has not been started and requires an explicit start from the Product Owner.
 
 | Item | Value |
 |------|-------|
@@ -32,6 +32,7 @@ Markers used in this document:
 | 2026-10-20 | T-201 recorded as complete. T-202 recorded as started by the Product Owner (branch `feat/t-202-chat-ui`, not merged). Approval wording and task statuses updated. Pending review | Implementation Engineer (Claude) |
 | 2026-10-23 | T-202 merge confirmed on `main`; T-203 recorded as started by the Product Owner on `feat/t-203-chat-endpoint` | Implementation Engineer |
 | 2026-10-23 | T-203 merge in PR #15 confirmed; T-205 started by the Product Owner; security implementation and verification begun | Codex |
+| 2026-10-23 | T-205 merge in PR #16 confirmed on `main` (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`); T-205 complete; T-204 remains not started | Codex |
 
 ---
 
@@ -494,7 +495,7 @@ Expected, with the default ports: `403`, `400`, `415`, `403` (the last one has n
 
 Binding to `127.0.0.1` alone does not protect the backend. Any website open in the user's browser can send requests to `localhost`, and any program on the computer can connect to a loopback port. Phase 2 is the first phase where a browser talks to the backend, so these controls are requirements for it.
 
-Implementation and verification for this section are task T-205. The Product Owner approved the security decisions in Section 14 before starting this task.
+The security controls in this section were implemented and verified under T-205. The security decisions in Section 14 were approved before the task started; evidence is in `docs/T-205-SECURITY-REPORT.md`.
 
 ## 11.1 Requirements
 
@@ -705,13 +706,13 @@ Execution order: **T-201, T-202, T-203, T-205, T-204.**
 | Tests | B-01 to B-12 plus existing tests |
 | Definition of Done | All B tests pass. `GET /health` unchanged. Static guard passes. Report delivered. Merged and verified |
 
-Note: until T-205 is merged, the endpoint must not be called from a browser. T-204 enforces this by its dependency on T-205.
+T-205 is merged and verified. T-204 may now implement browser integration, but it remains unstarted until the Product Owner explicitly starts it.
 
 ## 13.6 T-205: Local web security implementation and verification
 
 | Field | Content |
 |-------|---------|
-| Status | In progress. Explicitly started by the Product Owner on 2026-10-23; implementation and verification underway |
+| Status | Complete. Merged into `main` by PR #16 (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`). Verification evidence: `docs/T-205-SECURITY-REPORT.md` |
 | Scope | Implement the backend security controls SEC-01 to SEC-09, SEC-11, SEC-12, and the approved choices for SEC-14 to SEC-16. SEC-10 (plain-text rendering) is owned by T-202; SEC-13 (no system-changing capability) is enforced by T-203 and B-12. Verify backend controls with the applicable ST tests and mutation evidence |
 | Allowed changes | New security module and its wiring under `src/backend/agent_backend/`; `config.py` only if needed; `tests/backend/`; comments in `.env.example`; documentation status and a security verification record |
 | Prohibited changes | CORS middleware; cookies or sessions; an authentication framework; a token (not approved, D-SEC-1); new dependencies; frontend files; endpoint behavior defined in T-203 |
