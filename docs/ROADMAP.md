@@ -84,7 +84,7 @@ User can open a local web application and communicate with the Agent.
 
 ## Status
 
-**In Progress** — specification approved on 2026-10-20 (`docs/PHASE-2.md`, T-201). The Product Owner explicitly started T-202, which is not merged yet. Each remaining task requires an explicit start from the Product Owner.
+**Complete (2026-10-23)** — T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged. The Product Owner reported MV-01 to MV-14 passed (PR #19). Final test and task evidence: `docs/PHASE-2-COMPLETION-REPORT.md`.
 
 ---
 
@@ -336,7 +336,7 @@ A phase is considered complete only when:
 ```text
 Phase 0  ██████████  Complete
 Phase 1  ██████████  Complete
-Phase 2  ░░░░░░░░░░  In Progress
+Phase 2  ██████████  Complete
 Phase 3  ░░░░░░░░░░  Not Started
 Phase 4  ░░░░░░░░░░  Not Started
 Phase 5  ░░░░░░░░░░  Not Started

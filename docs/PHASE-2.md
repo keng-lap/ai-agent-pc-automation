@@ -2,16 +2,16 @@
 
 ## Status
 
-**Approved — Implementation In Progress (T-204)**
+**Complete — closed on 2026-10-23**
 
-The specification is approved (T-201 is complete). T-202 was merged into `main` in PR #13. T-203 was merged into `main` by PR #15 (merge commit `9bc931b7489735fa4d5c64df9e06d66af0b6fce8`). T-205 was merged into `main` by PR #16 (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`) and its security verification report is recorded in `docs/T-205-SECURITY-REPORT.md`. The Product Owner explicitly started T-204 on 2026-10-23 on branch `feat/t-204-integration`; automated checks are recorded in `docs/T-204-INTEGRATION-REPORT.md`, with Product Owner manual checks pending.
+T-201 was approved on 2026-10-20. T-202 merged in PR #13 (`add4b13`); T-203 in PR #15 (`9bc931b7489735fa4d5c64df9e06d66af0b6fce8`); T-205 in PR #16 (`449adb4f3e20ea0b3eecdd2766a2582df0ced036`); and T-204 in PR #18 (`94c09a37601e2cb2364a7c478940daf10e982569`). The Product Owner reported MV-01 to MV-14 passed; PR #19 records that report. PR #20 (`b338f19ff14cc4ac0ba92bcb6c8469167cb898d9`) makes backend tests use stable test ports regardless of local `.env` settings. The final completion report is `docs/PHASE-2-COMPLETION-REPORT.md`. Phase 3 has not started.
 
 | Item | Value |
 |------|-------|
 | Prepared by | Implementation Engineer (Claude) |
 | Reviewers | Product Owner; System Architect and Technical Reviewer (ChatGPT) |
 | Prepared on | 2026-10-19 |
-| Last updated | 2026-10-23 (see Revision History) |
+| Last updated | 2026-10-23 (Phase 2 closeout; see Revision History) |
 | Baseline | `main` at `cbb3c8d` (Phase 0 and Phase 1 complete) |
 | Product Owner approval | Approved by the Product Owner on 2026-10-20; recorded in Section 14 |
 
@@ -34,6 +34,7 @@ Markers used in this document:
 | 2026-10-23 | T-203 merge in PR #15 confirmed; T-205 started by the Product Owner; security implementation and verification begun | Codex |
 | 2026-10-23 | T-205 merge in PR #16 confirmed on `main` (merge commit `449adb4f3e20ea0b3eecdd2766a2582df0ced036`); T-205 complete; T-204 remains not started | Codex |
 | 2026-10-23 | T-204 explicitly started by the Product Owner on branch `feat/t-204-integration`; HTTP adapter, proxy, error handling and integration verification underway | Codex |
+| 2026-10-23 | T-204 merged by PR #18 (`94c09a37601e2cb2364a7c478940daf10e982569`); Product Owner reported MV-01 to MV-14 passed (PR #19); PR #20 fixed backend test port isolation; Phase 2 closed and completion report added | Codex |
 
 ---
 
@@ -726,7 +727,7 @@ T-205 is merged and verified. T-204 started after the Product Owner explicitly a
 
 | Field | Content |
 |-------|---------|
-| Status | In progress. Explicitly started by the Product Owner on 2026-10-23; implementation and verification underway |
+| Status | Complete. Merged into `main` by PR #18 (merge commit `94c09a37601e2cb2364a7c478940daf10e982569`). Automated and integration evidence is in `docs/T-204-INTEGRATION-REPORT.md`; Product Owner reported MV-01 to MV-14 passed (PR #19) |
 | Scope | Real `ChatApi` using `HttpClient` to `POST /api/chat`. Dev-server proxy for `/api` with the backend port from `BACKEND_PORT`. Error classification in Section 6.4 against real responses. Request timeout. Integration checks. A scripted smoke check is optional and, if added, is a new script and does not change the existing three |
 | Allowed changes | `src/frontend/proxy.conf.js` (new); `angular.json` (`proxyConfig` only); `src/frontend/src/app/**`; optional new script under `scripts/`; documentation status and the Phase 2 verification record |
 | Prohibited changes | Backend behavior changes (a defect found here goes back to its own task); CORS; new dependencies; changes to the existing scripts' behavior |
@@ -735,7 +736,7 @@ T-205 is merged and verified. T-204 started after the Product Owner explicitly a
 | Tests | F-15, F-16, F-23, I-01 to I-07, ST-22, and manual MV-01 to MV-14 on the Product Owner's machine. ST-24 is owned and reported by T-202 |
 | Definition of Done | All automated checks pass. Product Owner reports MV-01 to MV-14. Observation in Section 3 re-verified on Windows (I-02). Report delivered. Merged and verified |
 
-After T-204 is merged, Phase 2 closes with a documentation-only change (Section 15), as in Phase 0 and Phase 1.
+After PR #18 was merged, Phase 2 was closed by this documentation update. The final evidence is collected in `docs/PHASE-2-COMPLETION-REPORT.md`.
 
 ---
 
@@ -760,24 +761,21 @@ Approval of this document does not approve a decision unless the decision is ans
 
 # 15. Definition of Done (Phase 2)
 
-Phase 2 is complete only when all of these are true and evidenced:
+Phase 2 is complete. The Product Owner requested the post-merge status update and completion report on 2026-10-23 after confirming the manual checks passed.
 
-- [x] This specification is approved by the Product Owner and open decisions are answered (T-201). Approved 2026-10-20 (Pull Request #12, merge commit `638326a`)
-- [ ] T-202, T-203, T-205 and T-204 are each merged into `main`, one at a time, each with its report
-- [ ] A user can open the web application, send a message and see the mock reply (MV-01, MV-02)
-- [ ] All failure states in Section 6.3 behave as specified (MV-07, MV-08, F-08, F-09, F-16)
-- [ ] Thai and English UI behave as specified, and only the language preference is stored in the browser (F-17 to F-23, MV-13, MV-14)
-- [ ] All applicable security tests pass (ST-01 to ST-24). Mutation evidence is required for backend security controls owned by T-205; ST-22 is evidenced by T-204 and ST-24 by T-202
-- [ ] No capability to execute system-changing actions exists (B-12)
-- [ ] No new runtime dependency, AI provider, API key, database or authentication framework was added
-- [ ] Existing tests still pass and counts are not below baseline (M-7)
-- [ ] `scripts\test.ps1` passes on the Product Owner's Windows 11 machine, and manual checks MV-01 to MV-14 are reported (M-8)
-- [ ] `README.md`, `docs/PROJECT.md`, `docs/ROADMAP.md` and this document show the true status, backed by evidence
-- [ ] The completion report (Section 17) is delivered and the Product Owner has approved Phase 2
-- [ ] Phase 3 has not been started. It requires an explicit start from the Product Owner
+- [x] Specification approved and open decisions answered (T-201; PR #12, merge commit `638326a`).
+- [x] T-202, T-203, T-205 and T-204 merged into `main` (PRs #13, #15, #16 and #18) with task-specific verification records.
+- [x] The user can send a message and see the deterministic mock reply (MV-01 and MV-02; Product Owner report, PR #19).
+- [x] Failure states and recovery behavior verified (automated F-08, F-09 and F-16; Product Owner reported MV-07 and MV-08 passed).
+- [x] Thai and English UI behavior and language preference verified (automated F-17 to F-23; Product Owner reported MV-13 and MV-14 passed).
+- [x] Applicable security checks ST-01 to ST-24 passed across T-202, T-204 and T-205; T-205's backend controls have mutation evidence in `docs/T-205-SECURITY-REPORT.md`.
+- [x] B-12 confirms there is no system-changing capability. No AI provider, API key, database, authentication framework or new runtime dependency was added.
+- [x] The latest `scripts\\test.ps1` run passed on the Product Owner's Windows machine: 73 backend tests, Ruff, and 19 frontend tests. The pytest/Ruff cache warnings were non-fatal.
+- [x] Product Owner reported MV-01 to MV-14 passed on 2026-10-23; PR #19 records this aggregate result. Individual observations were not provided.
+- [x] This document, `README.md`, `docs/PROJECT.md`, and `docs/ROADMAP.md` reflect the merged status. The completion report is `docs/PHASE-2-COMPLETION-REPORT.md`.
+- [x] Phase 2 closure was requested by the Product Owner; Phase 3 has not started and requires an explicit start.
 
-Do not mark any item before it has been verified. Do not mark Phase 2 complete before the Product Owner approves.
-
+Historical Phase 0 and Phase 1 completion records remain unchanged.
 ---
 
 # 16. Git Workflow
