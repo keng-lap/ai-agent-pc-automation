@@ -55,17 +55,20 @@ This is a proposal, not an implemented control. It avoids treating a button, mod
 | D-AI-5 | Account authorization and token storage | Open; use official provider sign-in where supported and decide how tokens are stored securely on the local computer. Do not expose tokens to frontend JavaScript or commit them. |
 | D-AI-6 | Initial mode | Open; deterministic local/mock mode can be used for implementation and tests without credentials or network access. |
 
-## Intended command workflow
+## Intended task-planning and execution workflow
 
-For a request such as “Install Google Chrome,” the target behavior is:
+For a request such as “build a website,” the Agent should think through the whole task before acting and identify the required software, tools, and prerequisites—not only programs explicitly named by the user. It should distinguish what is already available from what may need installation.
 
-1. The Agent interprets the request and, when needed, researches current instructions from trustworthy sources.
-2. The Agent returns a structured plan with the proposed action, exact command/tool parameters, source, and expected effects.
-3. The backend validates the proposal against its own tool catalog and safety policy. Model-generated text is never passed directly to a shell.
-4. The UI presents the plan and exact effects. Software installation and other sensitive operations require the user's explicit approval of that specific action.
-5. The controlled executor runs only the validated, approved operation and reports the actual result.
+1. The Agent interprets the goal and creates an end-to-end plan, including prerequisites, required applications/tools, versions where relevant, dependencies, and execution order.
+2. When research is needed, it checks trustworthy current sources and records the source for each proposed install or action.
+3. The Agent returns one structured plan showing each proposed action, exact command/tool parameters, source, dependencies, expected effects, and why that item is needed.
+4. The backend validates every proposed item against its own tool catalog and safety policy. Model-generated text is never passed directly to a shell.
+5. The UI presents the complete plan before execution. Software installations and other sensitive operations require the user's explicit approval of the exact plan/actions.
+6. The controlled executor runs only validated and approved operations in dependency order, then reports the actual result and any items it could not complete.
 
-During Phases 3 and 4, step 5 must be mock/dry-run only. Real execution is enabled only after Phase 5's safety and permission system is implemented and approved, consistent with P-ORDER-1. An AI-suggested command that is unknown, unvalidated, or outside the approved tool catalog must be rejected, not executed.
+Do not install speculative or unrelated software just because it might be useful. Explain why each prerequisite is needed and let the user review the whole plan before changes are made.
+
+During Phases 3 and 4, the executor is mock/dry-run only. Real execution is enabled only after Phase 5's safety and permission system is implemented and approved, consistent with P-ORDER-1. An unknown, unvalidated, or unapproved action must be rejected, not executed.
 
 ## Safety and error requirements
 
@@ -83,7 +86,7 @@ During Phases 3 and 4, step 5 must be mock/dry-run only. Real execution is enabl
 - Product Owner approves the internal request/response and provider interface contract.
 - D-SEC-1-P3 is answered and recorded before any Agent capability is enabled.
 - Official login feasibility for each provider, data handling, model/fallback policy, token storage, and initial mode are recorded before provider integration.
-- The implementation plan splits core contracts, deterministic planning, source-backed command proposals, tool validation/mock execution, and provider adapters into reviewable tasks.
+- The implementation plan splits core contracts, end-to-end prerequisite planning, source-backed software/action proposals, tool validation/mock execution, and provider adapters into reviewable tasks.
 - No code, dependency, credential, or external call is added by this documentation task.
 
 ## Verification
