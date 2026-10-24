@@ -20,7 +20,7 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 ## In scope
 
 1. Define the request, plan, tool-call, result, and error contracts.
-2. Analyze a request and produce a structured intent and plan.
+2. Analyze a request and produce a structured intent and plan, including source-backed command proposals when research is needed.
 3. Select tools only from a backend-controlled allowlist.
 4. Execute read-only tools, if approved for the task, and mock/dry-run implementations for machine-changing tools.
 5. Return a user-readable result and safe, non-sensitive errors.
@@ -61,6 +61,7 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 - A request is validated and converted into a structured intent and plan.
 - Tool selection is constrained to a backend allowlist and invalid/unknown tools are rejected safely.
+- AI-proposed commands are validated against backend-owned tools and parameters; raw model text is never passed directly to a shell. Sensitive actions require approval of the exact action.
 - Machine-changing tools cannot cause real side effects; tests demonstrate mock/dry-run behavior.
 - The backend enforces the approved local-authorization boundary before processing Agent capabilities.
 - Success and failure responses are predictable, useful, and do not expose secrets or internal tracebacks.
