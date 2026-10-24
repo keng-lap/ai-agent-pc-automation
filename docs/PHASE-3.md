@@ -2,7 +2,7 @@
 
 ## Status
 
-**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 is complete (PR #24); T-304 is in progress.** The provider set is GPT, Claude, and Gemini, with per-run selection requested. Provider authorization, external data transfer, model choice, token storage, and real machine-changing actions remain unapproved.
+**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 is complete (PR #24), T-304 is complete (PR #25), and T-305 is in progress.** ChatGPT is the initial selected agent in local preview mode. The provider set is GPT, Claude, and Gemini, with per-run selection requested. Provider authorization, external data transfer, model choice, token storage, and real machine-changing actions remain unapproved.
 
 ## Goal
 
@@ -52,8 +52,8 @@ Until official provider authorization, data handling, and token-storage decision
 | T-301 | Approve this Phase 3 scope and safety boundary. | Complete: approved and merged in PR #22. |
 | T-302 | Define Agent request/response, plan, tool, result, and error contracts; propose local authorization behavior and record provider boundary. | Complete: approved and merged in PR #23. Provider and local authorization decisions remain open before provider-backed processing. |
 | T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | Complete: merged in PR #24; isolated from live providers and real actions. |
-| T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | In progress on `feat/t-304-allowlisted-tools`; no machine-changing side effects. |
-| T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | T-303 and T-304 complete; provider decision followed if applicable. |
+| T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | Complete: merged in PR #25; no machine-changing side effects. |
+| T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | In progress on `feat/t-305-chatgpt-agent-endpoint`; ChatGPT is selected for local preview. Live provider calls remain blocked on authorization and data-handling decisions. |
 
 Tasks should be delivered in separate reviewable branches/PRs using `<type>/<task-id>-<short-name>`. Do not begin a gated task until its stated prerequisite is merged and any required decision is recorded.
 
@@ -70,7 +70,7 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-T-301, T-302, and T-303 are merged (PRs #22, #23, and #24). T-304 is implementing allowlisted tool selection and dry-run-only execution. See `docs/T-304-REPORT.md` for verification and current limits.
+T-301 through T-304 are merged (PRs #22–#25). T-305 connects planning and dry-run tool results to `/api/chat`; ChatGPT is identified as the selected agent, but the endpoint makes no external provider call. See `docs/T-305-REPORT.md` for verification and current limits.
 
 ## References
 
