@@ -46,7 +46,7 @@ This is a proposal, not an implemented control. It avoids treating a button, mod
 |---|---|---|
 | D-SEC-1-P3 | Approve the startup-secret authorization flow above or specify another backend-enforced local authorization method. | Open; blocks enabling Agent processing. |
 | D-AI-1 | Provider set | Approved set: GPT, Claude, Gemini. |
-| D-AI-2 | Provider selection experience: select a provider in the UI per run, or configure the active provider in backend settings? | Open. |
+| D-AI-2 | Provider selection experience | Approved: the user selects GPT, Claude, or Gemini in the UI for each run. The backend validates the selected provider against its allowlist. |
 | D-AI-3 | Data handling: may messages be sent to the selected vendor, and what privacy/retention constraints apply? | Open; no external calls until decided. |
 | D-AI-4 | Models and fallback behavior | Open; choose model(s), whether automatic fallback is allowed, and how provider failures are reported. |
 | D-AI-5 | Credentials | Open; choose how API credentials are supplied and stored. Never commit keys or expose them to frontend JavaScript. |
