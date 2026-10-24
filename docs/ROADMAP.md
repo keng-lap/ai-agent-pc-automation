@@ -114,7 +114,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-In Progress — T-301 and T-302 are approved and merged (PRs #22 and #23). T-303 deterministic intent analysis and planning is underway. Provider calls and real machine-changing actions remain disabled.
+In Progress — T-301, T-302, and T-303 are merged (PRs #22, #23, and #24). T-304 allowlisted tool selection and dry-run execution is underway. Provider calls and real machine-changing actions remain disabled.
 
 ---
 

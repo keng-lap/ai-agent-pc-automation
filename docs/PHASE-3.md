@@ -2,7 +2,7 @@
 
 ## Status
 
-**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 is in progress.** The provider set is GPT, Claude, and Gemini, with per-run selection requested. Provider authorization, external data transfer, model choice, token storage, and real machine-changing actions remain unapproved.
+**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 is complete (PR #24); T-304 is in progress.** The provider set is GPT, Claude, and Gemini, with per-run selection requested. Provider authorization, external data transfer, model choice, token storage, and real machine-changing actions remain unapproved.
 
 ## Goal
 
@@ -51,8 +51,8 @@ Until official provider authorization, data handling, and token-storage decision
 |---|---|---|
 | T-301 | Approve this Phase 3 scope and safety boundary. | Complete: approved and merged in PR #22. |
 | T-302 | Define Agent request/response, plan, tool, result, and error contracts; propose local authorization behavior and record provider boundary. | Complete: approved and merged in PR #23. Provider and local authorization decisions remain open before provider-backed processing. |
-| T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | In progress on `feat/t-303-deterministic-agent`; isolated from live providers and real actions. |
-| T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | T-302 approved; no machine-changing side effects. |
+| T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | Complete: merged in PR #24; isolated from live providers and real actions. |
+| T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | In progress on `feat/t-304-allowlisted-tools`; no machine-changing side effects. |
 | T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | T-303 and T-304 complete; provider decision followed if applicable. |
 
 Tasks should be delivered in separate reviewable branches/PRs using `<type>/<task-id>-<short-name>`. Do not begin a gated task until its stated prerequisite is merged and any required decision is recorded.
@@ -70,7 +70,7 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-T-301 and T-302 are approved. T-303 is implementing deterministic planning without provider calls or real side effects; its checks and results will be recorded in the T-303 PR.
+T-301, T-302, and T-303 are merged (PRs #22, #23, and #24). T-304 is implementing allowlisted tool selection and dry-run-only execution. See `docs/T-304-REPORT.md` for verification and current limits.
 
 ## References
 
