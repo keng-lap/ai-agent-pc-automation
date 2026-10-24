@@ -149,4 +149,4 @@ Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are com
 
 Phase 2 is complete. T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`. PR #19 records the Product Owner's report that MV-01 to MV-14 passed; PR #20 fixes test isolation from local `.env` ports. The final status and evidence are in `docs/PHASE-2-COMPLETION-REPORT.md`.
 
-No production AI Agent functionality has been implemented yet. Phase 3 is the next phase and has not started; it requires an explicit start from the Product Owner.
+Phase 3 has started following the Product Owner's approval. T-301 (scope, PR #22) and T-302 (Agent contract, PR #23) are merged; T-303 is implementing deterministic intent analysis and planning. The planner is not connected to the chat endpoint and does not call a provider. Real machine-changing actions remain disabled until Phase 5 is implemented and approved.

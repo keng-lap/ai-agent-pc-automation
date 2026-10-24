@@ -114,7 +114,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-Not Started
+In Progress — T-301 and T-302 are approved and merged (PRs #22 and #23). T-303 deterministic intent analysis and planning is underway. Provider calls and real machine-changing actions remain disabled.
 
 ---
 
@@ -337,7 +337,7 @@ A phase is considered complete only when:
 Phase 0  ██████████  Complete
 Phase 1  ██████████  Complete
 Phase 2  ██████████  Complete
-Phase 3  ░░░░░░░░░░  Not Started
+Phase 3  ░░░░░░░░░░  In Progress
 Phase 4  ░░░░░░░░░░  Not Started
 Phase 5  ░░░░░░░░░░  Not Started
 Phase 6  ░░░░░░░░░░  Not Started
