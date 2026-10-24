@@ -122,6 +122,35 @@ def _canonical_software(message: str) -> str | None:
     return None
 
 
+def _trim_trailing_punctuation(value: str) -> str:
+    """Remove trailing sentence punctuation without regex."""
+    trimmed = value.rstrip()
+    while trimmed and trimmed[-1] in ".!?。！？":
+        trimmed = trimmed[:-1].rstrip()
+    return trimmed
+
+
+def _trim_known_suffix(value: str) -> str:
+    """Remove known English/Thai request suffixes without regex."""
+    trimmed = value.rstrip()
+    suffixes = ["please", "for me", "ให้หน่อย", "ที", "ด้วย"]
+    lowered = trimmed.casefold()
+    for suffix in suffixes:
+        if lowered.endswith(suffix.casefold()):
+            trimmed = trimmed[: -len(suffix)].rstrip()
+            break
+    return trimmed
+
+
+def _strip_leading_label(value: str) -> str:
+    """Remove safe leading labels like 'the program' or 'โปรแกรม'."""
+    lowered = value.casefold()
+    for prefix in ("the program ", "the app ", "โปรแกรม "):
+        if lowered.startswith(prefix):
+            return value[len(prefix) :].lstrip()
+    return value
+
+
 def _target_after_prefix(message: str, category: IntentKind) -> str | None:
     prefix_patterns = (
         (_INSTALL_PREFIX, _TH_INSTALL_PREFIX)
@@ -134,13 +163,10 @@ def _target_after_prefix(message: str, category: IntentKind) -> str | None:
         if match:
             remainder = message[match.end() :]
             break
-    remainder = re.sub(r"[.!?。！？]+\s*$", "", remainder).strip()
-    remainder = re.sub(
-        r"\s+(?:please|for me|ให้หน่อย|ที|ด้วย)$", "", remainder, flags=re.IGNORECASE
-    )
-    remainder = re.sub(
-        r"^(?:โปรแกรม|the program|the app)\s+", "", remainder, flags=re.IGNORECASE
-    )
+
+    remainder = _trim_trailing_punctuation(remainder)
+    remainder = _trim_known_suffix(remainder)
+    remainder = _strip_leading_label(remainder)
     if not remainder:
         return None
     return remainder[:120]
