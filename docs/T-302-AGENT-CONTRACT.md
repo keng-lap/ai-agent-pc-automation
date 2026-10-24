@@ -2,7 +2,7 @@
 
 ## Status
 
-**Draft for Product Owner decision.** This document defines a provider-neutral contract and proposes the local authorization boundary. No application code, provider SDK, API key, or external request is introduced by this task.
+**Approved by merge of PR #23 (2026-10-24).** This document defines the provider-neutral contract and records the requested account sign-in experience. Provider authorization, external data transfer, model selection, and token storage remain open decisions; no provider-backed request is approved by this document.
 
 ## Task
 
@@ -37,17 +37,17 @@ Contracts are conceptual at this stage; exact Python types and API serialization
 | Tool result | Status (`success`, `rejected`, `dry_run`, or `failed`), safe user-facing summary, and structured data only where allowed. Machine-changing tools remain mock/dry-run through Phase 4. |
 | Agent response | Request identifier, validated plan, execution/result summary, and safe error code when applicable. Never include secrets, provider credentials, raw traceback, or unfiltered provider response. |
 
-## Proposed local authorization decision (D-SEC-1 for Phase 3)
+## Local authorization decision (D-SEC-1 for Phase 3)
 
-**Recommendation for Product Owner approval:** before enabling Agent processing, the backend creates a random, short-lived capability secret at startup and makes it available only to the owner through the local development console. The owner enters it into the local UI to enable the Agent for that run. The backend validates the secret on every Agent request, keeps it in memory only, and invalidates it when the backend stops. Existing Host and Origin checks remain required. Do not log the secret.
+The Product Owner wants to connect to the selected AI provider using its official account sign-in/authorization flow. This is the preferred direction, but it is not yet approved as the backend-enforced local authorization method. Provider login must not be assumed to authorize unrelated PC actions.
 
-This is a proposal, not an implemented control. It avoids treating a button, model response, or caller-supplied `enabled` flag as authorization. Before implementation, confirm whether this startup-secret flow is acceptable or specify another local authorization method.
+Before enabling Agent processing through the application, record how the backend verifies the provider authorization, how tokens are protected and revoked, and what local action enables the Agent. Do not treat a UI-only toggle, model response, or caller-supplied `enabled` flag as authorization. Existing Host and Origin checks remain required.
 
 ## Decisions still needed before provider-backed requests
 
 | ID | Decision | Current state |
 |---|---|---|
-| D-SEC-1-P3 | Approve provider account authorization as the local Agent enablement flow, with a separate explicit user action to connect a provider. | Proposed; provider-specific feasibility and backend enforcement must be approved before enabling Agent processing. |
+| D-SEC-1-P3 | Define and approve the backend-enforced local Agent authorization flow. | Open; provider-specific feasibility, token handling, and the local enable action must be approved before enabling Agent processing. |
 | D-AI-1 | Provider set | Approved set: GPT, Claude, Gemini. |
 | D-AI-2 | Provider selection experience | Approved: the user selects GPT, Claude, or Gemini in the UI for each run. The backend validates the selected provider against its allowlist. |
 | D-AI-3 | Data handling: may messages be sent to the selected vendor, and what privacy/retention constraints apply? | Open; no external calls until decided. |

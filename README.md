@@ -21,9 +21,9 @@ Examples:
 
 Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete. Phase 2 adds a local web application with a chat interface. Its specification was approved by the Product Owner on 2026-10-20.
 
-No Agent or PC-automation functionality is implemented yet. Do not implement future-phase features early.
+Phase 3 is underway: T-303 is adding a deterministic planner, separate from the chat endpoint. No live provider or real PC automation is enabled. Do not implement future-phase features early.
 
-**Status:** Phase 2 is complete (2026-10-23). T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`; PR #19 records the Product Owner's report that MV-01 to MV-14 passed, and PR #20 makes backend tests independent of local `.env` ports. See `docs/PHASE-2-COMPLETION-REPORT.md`. Phase 3 has not started.
+**Status:** Phase 2 is complete (2026-10-23). T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`; PR #19 records the Product Owner's report that MV-01 to MV-14 passed, and PR #20 makes backend tests independent of local `.env` ports. See `docs/PHASE-2-COMPLETION-REPORT.md`. Phase 3 has started: T-301 and T-302 are approved; T-303 is in progress. No live provider or real machine-changing actions are enabled.
 
 ## Architecture
 
