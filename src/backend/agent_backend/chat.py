@@ -1,9 +1,11 @@
-"""Deterministic mock chat endpoint for Phase 2 (T-203)."""
+"""Chat endpoint connected to the local Agent pipeline (T-305)."""
 
 from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, field_validator
+
+from agent_backend.agent_core import AgentProvider, AgentResponse, run_agent
 
 router = APIRouter()
 
@@ -13,6 +15,7 @@ class ChatRequest(BaseModel):
 
     message: str
     language: Literal["th", "en"]
+    provider: AgentProvider = "chatgpt"
 
     @field_validator("message")
     @classmethod
@@ -23,19 +26,6 @@ class ChatRequest(BaseModel):
         return value
 
 
-def make_reply(message: str, language: Literal["th", "en"]) -> str:
-    length = len(message)
-    if language == "en":
-        return (
-            f"Message received (length: {length}). The Agent is not implemented yet "
-            "(planned for Phase 3)."
-        )
-    return (
-        f"รับข้อความแล้ว (ความยาว: {length} ตัวอักษร) Agent ยังไม่พร้อมใช้งาน "
-        "(วางแผนไว้ใน Phase 3)."
-    )
-
-
 @router.post("/api/chat")
-def chat(payload: ChatRequest) -> dict[str, str]:
-    return {"reply": make_reply(payload.message, payload.language)}
+def chat(payload: ChatRequest) -> AgentResponse:
+    return run_agent(payload.message, payload.language, payload.provider)
