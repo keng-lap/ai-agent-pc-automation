@@ -55,6 +55,18 @@ This is a proposal, not an implemented control. It avoids treating a button, mod
 | D-AI-5 | Account authorization and token storage | Open; use official provider sign-in where supported and decide how tokens are stored securely on the local computer. Do not expose tokens to frontend JavaScript or commit them. |
 | D-AI-6 | Initial mode | Open; deterministic local/mock mode can be used for implementation and tests without credentials or network access. |
 
+## Intended command workflow
+
+For a request such as “Install Google Chrome,” the target behavior is:
+
+1. The Agent interprets the request and, when needed, researches current instructions from trustworthy sources.
+2. The Agent returns a structured plan with the proposed action, exact command/tool parameters, source, and expected effects.
+3. The backend validates the proposal against its own tool catalog and safety policy. Model-generated text is never passed directly to a shell.
+4. The UI presents the plan and exact effects. Software installation and other sensitive operations require the user's explicit approval of that specific action.
+5. The controlled executor runs only the validated, approved operation and reports the actual result.
+
+During Phases 3 and 4, step 5 must be mock/dry-run only. Real execution is enabled only after Phase 5's safety and permission system is implemented and approved, consistent with P-ORDER-1. An AI-suggested command that is unknown, unvalidated, or outside the approved tool catalog must be rejected, not executed.
+
 ## Safety and error requirements
 
 - Treat provider output as untrusted; validate intent, plan, tool identifiers, and arguments on the backend.
@@ -62,6 +74,8 @@ This is a proposal, not an implemented control. It avoids treating a button, mod
 - Do not send a request to a vendor before authorization and the data-handling decision are both in force.
 - Use fixed, safe public error codes for validation, authorization, provider timeout, provider rejection, and internal failure. Keep provider details and tracebacks out of user responses.
 - Tests for the core contract must use deterministic fakes. They must not require API keys or a live network.
+- No model-generated command is executed directly; every proposed action is validated against backend-owned tools and parameters.
+- Software installation and other sensitive operations require explicit approval of that exact action.
 - No tool that changes files, processes, applications, software, or system settings may perform a real action before Phase 5 is implemented and approved.
 
 ## Completion criteria
@@ -69,7 +83,7 @@ This is a proposal, not an implemented control. It avoids treating a button, mod
 - Product Owner approves the internal request/response and provider interface contract.
 - D-SEC-1-P3 is answered and recorded before any Agent capability is enabled.
 - Official login feasibility for each provider, data handling, model/fallback policy, token storage, and initial mode are recorded before provider integration.
-- The implementation plan splits core contracts, deterministic planning, tool validation/mock execution, and provider adapters into reviewable tasks.
+- The implementation plan splits core contracts, deterministic planning, source-backed command proposals, tool validation/mock execution, and provider adapters into reviewable tasks.
 - No code, dependency, credential, or external call is added by this documentation task.
 
 ## Verification
