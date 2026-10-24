@@ -89,10 +89,35 @@ class TaskPlan(BaseModel):
     execution_mode: Literal["dry_run"] = "dry_run"
 
 
+def _is_word_boundary(text: str, index: int) -> bool:
+    """Return True when the given position is a word boundary."""
+    if index < 0 or index >= len(text):
+        return True
+    char = text[index]
+    return not (char.isalnum() or char == "_")
+
+
+def _contains_alias(text: str, alias: str) -> bool:
+    """Check for a known software alias without building a dynamic regex."""
+    if alias not in text:
+        return False
+    start = 0
+    while True:
+        index = text.find(alias, start)
+        if index == -1:
+            return False
+
+        before_ok = index == 0 or _is_word_boundary(text, index - 1)
+        after_ok = index + len(alias) == len(text) or _is_word_boundary(text, index + len(alias))
+        if before_ok and after_ok:
+            return True
+        start = index + 1
+
+
 def _canonical_software(message: str) -> str | None:
     lowered = message.casefold()
     for alias, canonical in sorted(_KNOWN_SOFTWARE.items(), key=lambda pair: -len(pair[0])):
-        if re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", lowered):
+        if _contains_alias(lowered, alias):
             return canonical
     return None
 
@@ -142,19 +167,19 @@ def _steps(language: Language, category: IntentKind, target: str | None) -> tupl
             (
                 ("ตรวจเป้าหมาย", f"ยืนยันซอฟต์แวร์ที่ร้องขอ{target_text}"),
                 ("ตรวจ prerequisite", "ตรวจว่าเครื่องมือและ dependency ที่จำเป็นมีอยู่แล้วหรือไม่"),
-                ("ค้นแหล่งข้อมูล", "ค้นคำแนะนำปัจจุบันจากแหล่งทางการและบันทึกแหล่งอ้างอิง"),
-                ("แสดงแผนทั้งหมด", "สรุปซอฟต์แวร์ ลำดับงาน คำสั่งที่เสนอ และผลกระทบให้ผู้ใช้ตรวจ"),
-                ("ขออนุมัติ", "รอผู้ใช้ยืนยันแผนและการเปลี่ยนแปลงแต่ละรายการอย่างชัดเจน"),
-                ("ทดลองแบบจำลอง", "จำลองการทำงานเท่านั้น ยังไม่มีการเปลี่ยนแปลงเครื่องจริงใน Phase 3–4"),
+                ("ค้นแหล่งข้อมูล", "ค้นคำแนะนำปัจจุบันจากแหล่งทางการและบันทึกการอ้างอิง"),
+                ("แสดงแผนทั้งหมด", "สรุปซอฟต์แวร์ ลำดับงาน คำสั่งที่เสนอ และผลกระทบเพื่อให้ผู้ใช้ตรวจสอบ"),
+                ("ขออนุมัติ", "รอผู้ใช้ยืนยันแผนและการเปลี่ยนแปลงแต่ละรายการก่อนทำงานจริง"),
+                ("ทดลองแบบจำลอง", "จำลองการทำงานเท่านั้น ยังไม่มีการเปลี่ยนแปลงเครื่องใน Phase 3–4"),
             )
             if category in ("software_install", "software_remove")
             else (
-                ("ทำความเข้าใจงาน", "แยกเป้าหมายออกเป็นงานย่อยและตรวจข้อมูลที่ยังขาด"),
+                ("ทำความเข้าใจงาน", "แยกเป้าหมายออกเป็นงานย่อยและตรวจข้อมูลที่จำเป็น"),
                 ("ตรวจ prerequisite", "ระบุโปรแกรม เครื่องมือ และ dependency ที่จำเป็น แล้วตรวจว่ามีอยู่แล้วหรือไม่"),
-                ("ค้นแหล่งข้อมูล", "ค้นแหล่งข้อมูลปัจจุบันที่น่าเชื่อถือและบันทึกแหล่งอ้างอิง"),
+                ("ค้นแหล่งข้อมูล", "ค้นแหล่งข้อมูลปัจจุบันที่น่าเชื่อถือและบันทึกการอ้างอิง"),
                 ("แสดงแผนทั้งหมด", "แสดงงานย่อย ลำดับ dependency ซอฟต์แวร์ที่จำเป็น และผลกระทบ"),
                 ("ขออนุมัติ", "รอผู้ใช้ตรวจและยืนยันก่อนเริ่มการเปลี่ยนแปลง"),
-                ("ทดลองแบบจำลอง", "จำลองการทำงานเท่านั้น ยังไม่มีการเปลี่ยนแปลงเครื่องจริงใน Phase 3–4"),
+                ("ทดลองแบบจำลอง", "จำลองการทำงานเท่านั้น ยังไม่มีการเปลี่ยนแปลงเครื่องใน Phase 3–4"),
             )
         )
         kinds: tuple[StepKind, ...] = (
