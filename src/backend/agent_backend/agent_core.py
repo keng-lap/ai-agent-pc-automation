@@ -9,7 +9,12 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from agent_backend.planner import Language, TaskPlan, create_task_plan
-from agent_backend.tools import ToolResult, execute_tool, select_tool
+from agent_backend.tools import (
+    ToolResult,
+    execute_tool,
+    select_tool,
+    validate_tool_request,
+)
 
 AgentProvider = Literal["chatgpt"]
 
@@ -34,10 +39,11 @@ def run_agent(message: str, language: Language, provider: AgentProvider) -> Agen
     plan = create_task_plan(message, language)
     try:
         tool_request = select_tool(plan.intent)
+        validated_request = validate_tool_request(plan.intent, tool_request)
     except ValueError:
         tool_result = None
     else:
-        tool_result = execute_tool(tool_request)
+        tool_result = execute_tool(validated_request)
 
     return AgentResponse(
         reply=_format_reply(plan, tool_result),
@@ -49,12 +55,17 @@ def run_agent(message: str, language: Language, provider: AgentProvider) -> Agen
 
 def _format_reply(plan: TaskPlan, tool_result: ToolResult | None) -> str:
     if plan.language == "th":
-        lines = ["เลือก ChatGPT แล้ว (โหมดจำลองในเครื่อง; ยังไม่ได้เชื่อมต่อผู้ให้บริการ)", "แผนงาน:"]
+        lines = [
+            "เลือก ChatGPT แล้ว (โหมดจำลองในเครื่อง; ยังไม่ได้เชื่อมต่อผู้ให้บริการ)",
+            "แผนงาน:",
+        ]
         lines.extend(
             f"{step.order}. {step.title}: {step.detail}" for step in plan.steps
         )
         if tool_result is not None:
-            lines.append(f"ผลจำลอง: {tool_result.summary} ต้องได้รับอนุมัติก่อนดำเนินการจริง")
+            lines.append(
+                f"ผลจำลอง: {tool_result.summary} ต้องได้รับอนุมัติก่อนดำเนินการจริง"
+            )
         else:
             lines.append("ไม่มีเครื่องมือที่อนุญาตสำหรับงานนี้ และไม่มีการเปลี่ยนแปลงเครื่อง")
         return "\n".join(lines)
@@ -65,7 +76,11 @@ def _format_reply(plan: TaskPlan, tool_result: ToolResult | None) -> str:
     ]
     lines.extend(f"{step.order}. {step.title}: {step.detail}" for step in plan.steps)
     if tool_result is not None:
-        lines.append(f"Dry-run result: {tool_result.summary} Approval is required before real execution.")
+        lines.append(
+            "Dry-run result: "
+            f"{tool_result.summary} "
+            "Approval is required before real execution."
+        )
     else:
         lines.append("No allowlisted tool applies to this task; no changes were made.")
     return "\n".join(lines)

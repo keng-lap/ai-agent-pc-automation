@@ -17,6 +17,8 @@ INVALID_REQUEST = (
     'Invalid request. Send JSON like {"message": "...", "language": "th"} '
     "with 1 to 2000 characters and language th or en."
 )
+
+
 def test_english_request_runs_local_chatgpt_agent_and_dry_run():
     response = client.post(
         "/api/chat", json={"message": "Install Google Chrome", "language": "en"}
@@ -83,7 +85,9 @@ def test_empty_or_whitespace_message_is_rejected(message):
 def test_invalid_payload_is_rejected_without_details(payload):
     if payload is None:
         response = client.post(
-            "/api/chat", content=b"null", headers={"content-type": "application/json"}
+            "/api/chat",
+            content=b"null",
+            headers={"content-type": "application/json"},
         )
     else:
         response = client.post("/api/chat", json=payload)
@@ -93,7 +97,9 @@ def test_invalid_payload_is_rejected_without_details(payload):
 
 def test_malformed_json_uses_unified_validation_error():
     response = client.post(
-        "/api/chat", content=b'{"message":', headers={"content-type": "application/json"}
+        "/api/chat",
+        content=b'{"message":',
+        headers={"content-type": "application/json"},
     )
     assert response.status_code == 422
     assert response.json() == {"detail": INVALID_REQUEST}
@@ -136,8 +142,16 @@ def test_get_chat_returns_method_not_allowed():
 def test_backend_has_no_forbidden_capability_imports():
     package_dir = Path(importlib.import_module("agent_backend").__file__).parent
     forbidden = {
-        "subprocess", "ctypes", "winreg", "multiprocessing", "shutil", "socket",
-        "urllib", "http.client", "requests", "httpx",
+        "subprocess",
+        "ctypes",
+        "winreg",
+        "multiprocessing",
+        "shutil",
+        "socket",
+        "urllib",
+        "http.client",
+        "requests",
+        "httpx",
     }
 
     def imported_names(tree):
