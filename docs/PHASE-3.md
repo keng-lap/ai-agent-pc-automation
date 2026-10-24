@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed for Product Owner review.** Phase 3 implementation has not started. This document defines the scope and sequence for starting it safely; it does not approve an AI provider, external data transfer, or real machine-changing actions.
+**Scope approved by the Product Owner on 2026-10-24 (PR #22). T-302 is in progress.** Phase 3 implementation has not started. The approved provider set is GPT, Claude, and Gemini; this does not yet approve external data transfer, a model, credentials, or real machine-changing actions.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 ## In scope
 
 1. Define the request, plan, tool-call, result, and error contracts.
-2. Analyze a request and produce a structured intent and plan.
+2. Analyze a request and produce an end-to-end structured plan, including all relevant prerequisites, software/tools, dependencies, and source-backed action proposals—not just items explicitly named by the user.
 3. Select tools only from a backend-controlled allowlist.
 4. Execute read-only tools, if approved for the task, and mock/dry-run implementations for machine-changing tools.
 5. Return a user-readable result and safe, non-sensitive errors.
@@ -29,7 +29,7 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 ## Out of scope
 
 - Real execution of actions that change files, processes, applications, software, or system settings.
-- Choosing or integrating an external AI provider, sending user text to a remote service, or adding provider credentials before the Product Owner decides the provider, privacy/data-flow policy, and secret-storage approach.
+- Integrating a provider before official account authorization, privacy/data-flow, model/fallback, and secure token-storage decisions are approved. Never scrape provider website sessions or cookies.
 - Implementing Phase 5's full permission, confirmation, and audit system early under another name.
 - Making the Agent available to non-loopback clients.
 
@@ -37,20 +37,20 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 
 | Decision | Required answer |
 |---|---|
-| AI provider and model | Provider/model, or an explicit decision to begin with a deterministic local/mock implementation. |
+| AI provider and model | Provider set and per-run UI selection approved: GPT, Claude, Gemini. Specific model, fallback behavior, and provider integration remain open. |
 | Data handling | Whether user messages may leave the computer, what data may be sent, and required retention/privacy constraints. |
-| Credentials | Where credentials are stored and how they are supplied; never commit secrets or put them in frontend code. |
-| Local authorization (D-SEC-1) | What user action authorizes Agent processing in the local application and how the backend enforces it. |
+| Account authorization | The Product Owner prefers signing in with the selected provider account. Official flow availability and secure token storage must be decided for each provider; never scrape browser sessions. |
+| Local authorization (D-SEC-1) | T-302 proposes a backend-enforced startup-secret flow; Product Owner approval is still required before enabling Agent processing. |
 | Phase 3 tool boundary | Which read-only tools, if any, are approved; all machine-changing tools remain mock/dry-run. |
 
-Until these decisions are recorded in the relevant approved phase documents, use only deterministic local/mock behavior and do not make external provider calls.
+Until official provider authorization, data handling, and token-storage decisions are recorded in approved phase documents, use only deterministic local/mock behavior and do not make external provider calls.
 
 ## Proposed task sequence
 
 | Task | Deliverable | Gate |
 |---|---|---|
-| T-301 | Approve this Phase 3 scope, decisions, and safety boundary. | Product Owner review and merge. |
-| T-302 | Define Agent request/response, plan, tool, result, and error contracts; define local authorization behavior. | T-301 merged; authorization decision recorded. |
+| T-301 | Approve this Phase 3 scope and safety boundary. | Complete: approved and merged in PR #22. |
+| T-302 | Define Agent request/response, plan, tool, result, and error contracts; propose local authorization behavior and record provider boundary. | In progress; Product Owner decisions on local authorization and provider details required. |
 | T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | T-302 approved. |
 | T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | T-302 approved; no machine-changing side effects. |
 | T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | T-303 and T-304 complete; provider decision followed if applicable. |
@@ -59,8 +59,9 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Acceptance criteria for Phase 3
 
-- A request is validated and converted into a structured intent and plan.
+- A request is validated and converted into an end-to-end plan that identifies relevant prerequisites and explains why each is needed.
 - Tool selection is constrained to a backend allowlist and invalid/unknown tools are rejected safely.
+- AI-proposed commands are validated against backend-owned tools and parameters; raw model text is never passed directly to a shell. Sensitive actions require approval of the exact action.
 - Machine-changing tools cannot cause real side effects; tests demonstrate mock/dry-run behavior.
 - The backend enforces the approved local-authorization boundary before processing Agent capabilities.
 - Success and failure responses are predictable, useful, and do not expose secrets or internal tracebacks.
@@ -69,7 +70,7 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-This is a documentation-only proposal. No implementation or tests are included in this change. Each implementation task must run its relevant checks and report the results in its PR.
+T-301 is an approved documentation scope. T-302 is a documentation-only contract proposal; no implementation or tests are included. Each implementation task must run its relevant checks and report the results in its PR.
 
 ## References
 
