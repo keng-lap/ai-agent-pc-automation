@@ -29,7 +29,7 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 ## Out of scope
 
 - Real execution of actions that change files, processes, applications, software, or system settings.
-- Integrating provider APIs or sending user text to a remote service before the Product Owner decides the provider-selection experience, privacy/data-flow policy, model/fallback behavior, and credential storage approach.
+- Integrating a provider before official account authorization, privacy/data-flow, model/fallback, and secure token-storage decisions are approved. Never scrape provider website sessions or cookies.
 - Implementing Phase 5's full permission, confirmation, and audit system early under another name.
 - Making the Agent available to non-loopback clients.
 
@@ -37,13 +37,13 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 
 | Decision | Required answer |
 |---|---|
-| AI provider and model | Provider set approved: GPT, Claude, Gemini. Specific model, selection experience, fallback behavior, and provider integration remain open. |
+| AI provider and model | Provider set and per-run UI selection approved: GPT, Claude, Gemini. Specific model, fallback behavior, and provider integration remain open. |
 | Data handling | Whether user messages may leave the computer, what data may be sent, and required retention/privacy constraints. |
-| Credentials | Where credentials are stored and how they are supplied; never commit secrets or put them in frontend code. |
+| Account authorization | The Product Owner prefers signing in with the selected provider account. Official flow availability and secure token storage must be decided for each provider; never scrape browser sessions. |
 | Local authorization (D-SEC-1) | T-302 proposes a backend-enforced startup-secret flow; Product Owner approval is still required before enabling Agent processing. |
 | Phase 3 tool boundary | Which read-only tools, if any, are approved; all machine-changing tools remain mock/dry-run. |
 
-Until these decisions are recorded in the relevant approved phase documents, use only deterministic local/mock behavior and do not make external provider calls.
+Until official provider authorization, data handling, and token-storage decisions are recorded in approved phase documents, use only deterministic local/mock behavior and do not make external provider calls.
 
 ## Proposed task sequence
 
