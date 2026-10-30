@@ -41,21 +41,32 @@ def test_agent_api_rejects_incorrect_local_token():
 
 
 def test_agent_api_rejects_duplicate_local_token_headers():
-    duplicate_token_client = TestClient(
-        app,
-        base_url=BASE_URL,
-        headers={"origin": GOOD_ORIGIN},
-    )
-    response = duplicate_token_client.post(
-        "/api/chat",
-        json={"message": "hello", "language": "en"},
-        headers=[
-            ("x-local-agent-token", "a" * 64),
-            ("x-local-agent-token", "a" * 64),
+    settings = replace(load_settings(load_env_file=False), local_agent_token="a" * 64)
+    middleware = LocalWebSecurityMiddleware(_unexpected_app, settings)
+    sent = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "method": "POST",
+        "path": "/api/chat",
+        "headers": [
+            (b"host", b"127.0.0.1:8000"),
+            (b"origin", GOOD_ORIGIN.encode()),
+            (b"content-type", b"application/json"),
+            (b"x-local-agent-token", b"a" * 64),
+            (b"x-local-agent-token", b"a" * 64),
         ],
-    )
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Local Agent authorization required."}
+    }
+
+    asyncio.run(middleware(scope, receive, send))
+    assert sent[0]["status"] == 401
 
 
 def test_health_remains_available_without_local_token():
