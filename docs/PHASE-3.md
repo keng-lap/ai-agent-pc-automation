@@ -2,7 +2,7 @@
 
 ## Status
 
-**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 (PR #24), T-304 (PR #25), and T-305 (PR #26) are merged. T-306 (local Agent authorization) is in progress on `feat/t-306-local-agent-auth`.** ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
+**T-301 through T-306 are merged (PRs #22–#27). T-306 local Agent API authorization was merged on 2026-10-30 (merge commit `4e9ebe9`). Post-merge automated and Windows 11 verification is still pending; Phase 3 remains open until that evidence is recorded.** ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
 
 ## Goal
 
@@ -54,7 +54,7 @@ Until official provider authorization, data handling, and token-storage decision
 | T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | Complete: merged in PR #24; isolated from live providers and real actions. |
 | T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | Complete: merged in PR #25; no machine-changing side effects. |
 | T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | Complete: merged in PR #26 (`4cc2a63`). Deterministic local preview only; no provider call. |
-| T-306 | Enforce D-SEC-1 local authorization on Agent API requests; generate and inject the per-installation token; add negative tests and update setup guidance. | In progress on `feat/t-306-local-agent-auth`; Product Owner approved option A on 2026-10-30. Requires review, automated CI, and local manual verification before closure. |
+| T-306 | Enforce D-SEC-1 local authorization on Agent API requests; generate and inject the per-installation token; add negative tests and update setup guidance. | Merged in PR #27 on 2026-10-30 (`4e9ebe9`). Automated tests, frontend build/proxy verification, and Windows 11 manual verification remain pending. |
 
 Tasks should be delivered in separate reviewable branches/PRs using `<type>/<task-id>-<short-name>`. Do not begin a gated task until its stated prerequisite is merged and any required decision is recorded.
 
@@ -71,7 +71,7 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-T-301 through T-305 are merged (PRs #22–#26). T-305 connects planning and dry-run tool results to `/api/chat`; the endpoint makes no external provider call. T-306 is implementing the approved local-token boundary. See `docs/T-305-REPORT.md` for T-305 verification and `docs/T-306-REPORT.md` for authorization verification when available.
+T-301 through T-306 are merged (PRs #22–#27). T-305 connects planning and dry-run tool results to `/api/chat`; the endpoint makes no external provider call. T-306 implements the approved local-token boundary. No CI status checks were reported for merge commit `4e9ebe9` at the time of this update. Run backend tests, Ruff, frontend tests/build, and Windows 11 setup/startup checks before closing Phase 3. See `docs/T-306-REPORT.md` for the verification checklist.
 
 ## References
 
