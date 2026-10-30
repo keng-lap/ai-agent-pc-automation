@@ -95,7 +95,7 @@ def test_exact_frontend_origins_are_accepted(origin):
 
 
 def test_missing_origin_is_rejected_for_post_but_allowed_for_health():
-    no_origin_client = TestClient(app, base_url=BASE_URL)
+    no_origin_client = TestClient(app, base_url=BASE_URL, headers={"x-local-agent-token": "a" * 64})
     post = no_origin_client.post(
         "/api/chat",
         json={"message": "hello", "language": "en"},
@@ -141,7 +141,7 @@ def test_oversized_body_is_rejected_before_json_parsing():
 def test_preflight_is_not_handled_and_no_cors_headers_are_sent():
     response = client.options(
         "/api/chat",
-        headers={"origin": GOOD_ORIGIN, "access-control-request-method": "POST"},
+        headers={**GOOD_HEADERS, "access-control-request-method": "POST"},
     )
     assert response.status_code == 405
     assert not any(name.lower().startswith("access-control-") for name in response.headers)
