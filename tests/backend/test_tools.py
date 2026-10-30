@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from agent_backend.planner import create_task_plan
 from agent_backend.tools import (
     ToolRequest,
+    _HANDLERS,
     execute_tool,
     list_tools,
     select_tool,
@@ -87,3 +88,8 @@ def test_dispatch_result_is_validated_and_remains_dry_run():
     assert result.status == "dry_run"
     assert result.approval_required is True
     assert "no changes were made" in result.summary
+
+
+def test_handler_dispatch_map_is_immutable():
+    with pytest.raises(TypeError):
+        _HANDLERS["software.install"] = lambda request: request
