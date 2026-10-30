@@ -96,7 +96,7 @@ describe('App chat UI (T-202)', () => {
 
   it('F-01: starts in Thai with the empty hint and disabled Send', async () => {
     await render();
-    expect(fixture.nativeElement.textContent).toContain('เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน');
+    expect(fixture.nativeElement.textContent).toContain('Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงาน');
     expect(sendButton().disabled).toBe(true);
     expect(document.documentElement.lang).toBe('th');
     expect(fixture.nativeElement.querySelector('textarea')?.getAttribute('placeholder')).toContain('พิมพ์');
@@ -334,7 +334,7 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน');
     languageButton('EN').click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Type a message to start');
+    expect(fixture.nativeElement.textContent).toContain('The Agent analyzes requests and presents a dry-run plan');
     languageButton('ไทย').click();
     fixture.detectChanges();
 
@@ -388,5 +388,60 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ข้อความของฉัน');
     expect(fixture.nativeElement.textContent).toContain('ตอบกลับภาษาไทย');
     expect(fixture.nativeElement.textContent).toContain('security check');
+  });
+});
+
+
+describe('Structured Agent response (T-404)', () => {
+  it('renders the plan, prerequisites, dry-run result and approval notice', async () => {
+    localStorage.clear();
+    const api = new FakeChatApi();
+    api.responder = () => of({
+      reply: 'Local preview',
+      provider: 'chatgpt',
+      provider_connected: false,
+      task_status: 'dry_run_completed',
+      plan: {
+        intent: { category: 'software_install', goal: 'Install Chrome', target: 'Google Chrome' },
+        language: 'th',
+        prerequisites: [
+          { id: 'software_target', order: 1, title: 'ระบุซอฟต์แวร์เป้าหมาย', reason: 'ทราบจากคำขอ', status: 'known' },
+        ],
+        steps: [
+          { order: 1, kind: 'present_plan', title: 'แสดงแผนงาน', detail: 'ตรวจสอบก่อนดำเนินการ' },
+        ],
+        approval_required: true,
+        execution_mode: 'dry_run',
+      },
+      tool_result: {
+        tool_id: 'software.install',
+        target: 'Google Chrome',
+        status: 'dry_run',
+        approval_required: true,
+        summary: 'Dry run only; no changes were made.',
+      },
+    });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    input.value = 'Install Google Chrome';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain('แผนงาน');
+    expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
+    expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
+    expect(view.textContent).toContain('จำลองเท่านั้น');
+    expect(view.textContent).toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
+    expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    fixture.destroy();
   });
 });
