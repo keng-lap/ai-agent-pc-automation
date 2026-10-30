@@ -2,16 +2,19 @@
 
 ## Purpose and operating mode
 
-This board tracks the first controlled rollout of the four-agent development workflow described in `MULTI-AGENT-PLAN.md`.
+This board tracks the controlled rollout of the four-agent development workflow described in `MULTI-AGENT-PLAN.md`.
 
-**Important:** this rollout is a coordinator-managed workflow simulation using four clearly separated roles. It does not claim that four autonomous LLM processes or a runtime orchestrator have been launched. Runtime/provider/credential decisions remain open.
+**Operating-mode clarification:** this is currently a coordinator-managed workflow simulation with four separated responsibilities. It is not four autonomous LLM processes, and no runtime multi-agent orchestrator has been implemented. Provider/runtime/credential decisions remain open.
 
-## Current baseline
+## Current repository baseline
 
 - Repository: `keng-lap/ai-agent-pc-automation`
-- Baseline branch: `main`
-- Baseline commit: `b2b029bc11e5d3ac7d9a91f8c28321d4ad5851b8`
-- Phase 3: verification evidence recorded; T-307 automated regression and final rerun remain pending.
+- Default branch: `main`
+- Baseline commit: `0aea6b77bef55f07e32611c814781ef575c0c065`
+- Baseline date: 2026-10-30
+- PR #30 (T-307), PR #31 (T-306 verification docs), and PR #32 (MA-001 rollout docs) are merged.
+- T-306 and T-307 verification evidence is recorded in `docs/T-306-REPORT.md`.
+- Phase 3 closeout is **not approved**. A4's MA-005 review found that the planner does not yet satisfy the acceptance criterion for task-specific prerequisite identification and justification. See `docs/PHASE-3-QA-REVIEW.md`.
 - Phase 4: not started.
 - All PC-changing operations remain mock/dry-run only.
 - No live AI provider calls, provider sign-in, or external data transfer are authorized.
@@ -20,50 +23,57 @@ This board tracks the first controlled rollout of the four-agent development wor
 
 | Role | Responsibility | Current assignment | Status |
 |---|---|---|---|
-| A1 — Coordinator / Product Analyst | Own task decomposition, dependencies, integration sequence, and board | MA-001 inventory and rollout coordination | In progress |
-| A2 — Backend Engineer | Own backend test/code task on an isolated branch | T-307 duplicate-token regression test | PR #30 open (draft; automated test not yet run) |
-| A3 — Frontend / UX Engineer | Own frontend verification evidence and browser-boundary review | Production build and token-leak scan | Evidence passed; recorded in T-306 report branch |
-| A4 — QA / Security Reviewer | Independently review acceptance criteria, security boundary, and evidence | Review T-307 test design and T-306 evidence | Pending review |
+| A1 — Coordinator / Product Analyst | Own task decomposition, dependencies, integration sequence, and board | MA-005 status reconciliation and follow-up task proposal | Review complete; follow-up awaits Product Owner scope approval |
+| A2 — Backend Engineer | Own backend task on an isolated branch | T-307 duplicate-token regression test | Complete; merged in PR #30 |
+| A3 — Frontend / UX Engineer | Own frontend verification and browser-boundary evidence | T-306 production build, proxy, and token-leak verification | Complete; evidence recorded in PR #31 |
+| A4 — QA / Security Reviewer | Independently review acceptance criteria, security boundary, and evidence | MA-005 Phase 3 acceptance review | Review complete; one acceptance gap identified |
 
 ## Task board
 
-| ID | Owner | Scope | Dependency | Branch | Status |
+| ID | Owner | Scope | Dependency | Branch / PR | Status |
 |---|---|---|---|---|---|
-| MA-001 | A1 + A4 | Inventory current phase, repository baseline, safety rules, and acceptance gates | None | `docs/MA-001-four-agent-rollout` | PR #32 open (draft) |
-| MA-002 | A1 | Maintain this role/task board and dependency map | MA-001 | Same documentation branch | Included in PR #32 (draft) |
-| T-307 | A2 | Add automated regression test for duplicate local-token headers; no runtime behavior change | T-306 merged | `test/T-307-duplicate-token-regression` | PR #30 open (draft) |
-| MA-003 | A3 + A4 | Record Windows 11 verification and review production bundle/token boundary | T-306 merged | `docs/T-306-verification-record` | PR #31 open (draft; Product Owner review pending) |
-| MA-004 | A1–A4 | Dry-run one bounded task through all four roles; no runtime orchestration or PC actions | MA-001 through MA-003 | To be assigned after review | Not started |
+| MA-001 | A1 + A4 | Inventory repository, phase status, safety rules, and acceptance gates | None | PR #32 | Complete; merged |
+| MA-002 | A1 | Maintain role/task board and dependency map | MA-001 | PR #32; maintained by MA-005 | Complete; merged |
+| T-307 | A2 | Add automated duplicate local-token header regression test | T-306 merged | PR #30 | Complete; merged; final Windows test rerun passed |
+| MA-003 | A3 + A4 | Record Windows 11 verification and review browser/token boundary | T-306 merged | PR #31 | Complete; merged |
+| MA-004 | A1–A4 | Dry-run one bounded documentation task through four roles; no runtime orchestration or PC actions | MA-001–MA-003 | Not assigned | Not started |
+| MA-005 | A1 + A4 | Reconcile board/plan with merged GitHub state and audit Phase 3 acceptance criteria | PRs #30–#32 merged | `docs/MA-005-refresh-board-phase3-qa-audit` | In progress; documentation PR to be reviewed |
 
 ## Dependency map
 
 ```text
-MA-001 repository and safety inventory
+MA-001 repository and safety inventory (merged)
        |
-       +------> T-307 backend regression test (A2)
+       +------> T-307 backend regression test (merged)
        |
-       +------> MA-003 verification evidence (A3)
+       +------> MA-003 Windows verification evidence (merged)
                          |
                          v
-                  A4 QA/security review
+                  MA-005 A4 acceptance review
                          |
-                         v
-                  A1 integration report
+             +-----------+------------+
+             |                        |
+       Evidence passes          Acceptance gap
+       recorded                 task required
+             |                        |
+             +-----------+------------+
                          |
-                         v
-              Product Owner review / approval
+                 A1 integration report
+                         |
+                 Product Owner review
 ```
 
-T-307 and documentation work may proceed independently because they own different files and branches. Final Phase 3 closure depends on T-307 being merged and the complete test suite being rerun.
+MA-005 identified a Phase 3 planning gap: the current deterministic planner emits generic prerequisite/research stages, but does not identify task-specific prerequisites, explain why each is required, or produce source-backed action proposals. Do not close Phase 3 until a bounded follow-up task addresses the approved acceptance criterion and A4 verifies it.
 
 ## Branch and approval controls
 
 - Every task uses `<type>/<task-id>-<short-name>`.
-- Each task owns a separate branch; no shared working tree writes.
+- Each task owns a separate branch; no shared working-tree writes.
 - Agents do not merge PRs.
 - Product Owner approval is required for every merge.
 - No branch protection, repository permission, CI setting, secret, provider, or safety-boundary changes are included.
 - Any change to approved decisions or phase scope stops for Product Owner approval.
+- The current default branch is not protected by required status checks; MA-005 does not change repository settings.
 
 ## Definition of done
 
@@ -85,11 +95,10 @@ T-307 and documentation work may proceed independently because they own differen
 
 This board does not authorize implementing an agent orchestrator, connecting a provider, or enabling real PC automation.
 
+## Merged rollout pull requests
 
-## Current pull requests
+- [PR #30 — T-307 duplicate-token regression test](https://github.com/keng-lap/ai-agent-pc-automation/pull/30) — merged; merge commit `7b12e92edaa4ffdd91946c27af6573c0fe68d69a`.
+- [PR #31 — T-306 verification evidence](https://github.com/keng-lap/ai-agent-pc-automation/pull/31) — merged; merge commit `0aea6b77bef55f07e32611c814781ef575c0c065`.
+- [PR #32 — MA-001 four-agent rollout board](https://github.com/keng-lap/ai-agent-pc-automation/pull/32) — merged; merge commit `a39e6052f3e5be0509547c70ec61ade2ac69ba24`.
 
-- [PR #30 — T-307 duplicate-token regression test](https://github.com/keng-lap/ai-agent-pc-automation/pull/30) — draft; waiting for local test execution and QA review.
-- [PR #31 — T-306 verification evidence](https://github.com/keng-lap/ai-agent-pc-automation/pull/31) — draft; documentation-only.
-- [PR #32 — MA-001 four-agent rollout board](https://github.com/keng-lap/ai-agent-pc-automation/pull/32) — draft; documentation-only.
-
-All three PRs target `main`; none has been merged. Product Owner approval remains mandatory.
+All three PRs are merged into `main`. No merge is authorized by this MA-005 documentation update.
