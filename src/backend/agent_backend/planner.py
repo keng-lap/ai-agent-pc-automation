@@ -43,12 +43,12 @@ _KNOWN_SOFTWARE = {
     "git": "Git",
 }
 
-_INSTALL_PREFIX = re.compile(r"(?:install|set\\s+up|setup)(?:\\s+(?:the\\s+)?)?", re.IGNORECASE)
+_INSTALL_PREFIX = re.compile(r"(?:install|set\s+up|setup)(?:\s+(?:the\s+)?)?", re.IGNORECASE)
 _REMOVE_PREFIX = re.compile(
-    r"(?:uninstall|remove)(?:\\s+(?:the\\s+)?)?", re.IGNORECASE
+    r"(?:uninstall|remove)(?:\s+(?:the\s+)?)?", re.IGNORECASE
 )
-_TH_INSTALL_PREFIX = re.compile(r"(?:ช่วย)?\\s*(?:ติดตั้ง|ลง)\\s*(?:โปรแกรม)?\\s*")
-_TH_REMOVE_PREFIX = re.compile(r"(?:ช่วย)?\\s*(?:ถอนการติดตั้ง|ถอน|ลบ)\\s*(?:โปรแกรม)?\\s*")
+_TH_INSTALL_PREFIX = re.compile(r"(?:ช่วย)?\s*(?:ติดตั้ง|ลง)\s*(?:โปรแกรม)?\s*")
+_TH_REMOVE_PREFIX = re.compile(r"(?:ช่วย)?\s*(?:ถอนการติดตั้ง|ถอน|ลบ)\s*(?:โปรแกรม)?\s*")
 _DEVELOPMENT_TERMS = (
     "build",
     "create",
