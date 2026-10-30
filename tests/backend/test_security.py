@@ -16,6 +16,36 @@ GOOD_ORIGIN = "http://127.0.0.1:4200"
 GOOD_HEADERS = {"origin": GOOD_ORIGIN, "x-local-agent-token": "a" * 64}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
+def test_agent_api_rejects_missing_local_token():
+    no_token_client = TestClient(app, base_url=BASE_URL, headers={"origin": GOOD_ORIGIN})
+    response = no_token_client.post(
+        "/api/chat",
+        json={"message": "hello", "language": "en"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Local Agent authorization required."}
+
+
+def test_agent_api_rejects_incorrect_local_token():
+    bad_token_client = TestClient(
+        app,
+        base_url=BASE_URL,
+        headers={"origin": GOOD_ORIGIN, "x-local-agent-token": "b" * 64},
+    )
+    response = bad_token_client.post(
+        "/api/chat",
+        json={"message": "hello", "language": "en"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Local Agent authorization required."}
+
+
+def test_health_remains_available_without_local_token():
+    no_token_client = TestClient(app, base_url=BASE_URL)
+    response = no_token_client.get("/health")
+    assert response.status_code == 200
+
+
 
 @pytest.mark.parametrize(
     "host",
