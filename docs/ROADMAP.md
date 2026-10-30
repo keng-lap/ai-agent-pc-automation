@@ -112,7 +112,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-**T-301 through T-308 are merged.** T-308 adds task-specific prerequisite records, reasons, dependency order, and explicit knowledge states (PR #35); a parser correction was merged in PR #36. The latest Product Owner Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). A4's independent final Phase 3 acceptance reassessment remains pending. Phase 3 closeout remains blocked; Phase 4 must not start until all acceptance criteria are verified and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
+**Complete — Phase 3 closeout approved by the Product Owner (2026-10-30).** T-301 through T-308 are merged. T-308 adds task-specific prerequisite records, reasons, dependency order, and explicit knowledge states (PR #35); its parser correction is merged in PR #36. A4's final reassessment marks all eight acceptance criteria met for the approved local/dry-run scope. The Product Owner-supplied Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). Live provider calls and real machine-changing actions remain disabled. Phase 4 is Not Started and requires separate explicit approval.
 
 ---
 
@@ -334,7 +334,7 @@ A phase is considered complete only when:
 Phase 0  ██████████  Complete
 Phase 1  ██████████  Complete
 Phase 2  ██████████  Complete
-Phase 3  ██████░░░░  Acceptance gap; closeout blocked
+Phase 3  ██████████  Complete (closeout approved)
 Phase 4  ░░░░░░░░░░  Not Started
 Phase 5  ░░░░░░░░░░  Not Started
 Phase 6  ░░░░░░░░░░  Not Started
