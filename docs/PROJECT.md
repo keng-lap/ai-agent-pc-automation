@@ -143,10 +143,10 @@ Current phase:
 
 Status:
 
-**Complete (2026-10-23)**
+**In Progress — T-306 merged on 2026-10-30; post-merge verification pending**
 
 Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
 
 Phase 2 is complete. T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`. PR #19 records the Product Owner's report that MV-01 to MV-14 passed; PR #20 fixes test isolation from local `.env` ports. The final status and evidence are in `docs/PHASE-2-COMPLETION-REPORT.md`.
 
-Phase 3 has started following the Product Owner's approval. T-301 (scope, PR #22), T-302 (Agent contract, PR #23), T-303 (deterministic planner, PR #24), and T-304 (allowlisted dry-run tools, PR #25) are merged. T-305 is merged in PR #26 and connects the planner and dry-run tools to the chat endpoint. T-306 local Agent API authorization is in progress under the Product Owner-approved D-SEC-1 option A. No live provider calls or real machine-changing actions are enabled. Provider authorization and data-handling decisions remain open.
+Phase 3 has started following the Product Owner's approval. T-301 (scope, PR #22), T-302 (Agent contract, PR #23), T-303 (deterministic planner, PR #24), and T-304 (allowlisted dry-run tools, PR #25) are merged. T-305 is merged in PR #26 and connects the planner and dry-run tools to the chat endpoint. T-306 local Agent API authorization was merged in PR #27 on 2026-10-30 (merge commit `4e9ebe9`), implementing the Product Owner-approved D-SEC-1 option A. Automated and Windows 11 verification remains pending; Phase 3 is not yet closed. No live provider calls or real machine-changing actions are enabled. Provider authorization and data-handling decisions remain open.
