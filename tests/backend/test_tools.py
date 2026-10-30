@@ -2,7 +2,14 @@ import pytest
 from pydantic import ValidationError
 
 from agent_backend.planner import create_task_plan
-from agent_backend.tools import ToolRequest, execute_tool, select_tool, validate_tool_request
+from agent_backend.tools import (
+    ToolRequest,
+    _HANDLERS,
+    execute_tool,
+    list_tools,
+    select_tool,
+    validate_tool_request,
+)
 
 
 @pytest.mark.parametrize(
@@ -60,3 +67,29 @@ def test_machine_changing_tool_returns_dry_run_without_execution():
     assert result.summary == (
         "Dry run only: would install Google Chrome; no changes were made."
     )
+
+
+
+def test_catalog_contains_only_static_dry_run_tools():
+    catalog = list_tools()
+
+    assert [item.id for item in catalog] == ["software.install", "software.remove"]
+    assert all(item.risk_class == "high" for item in catalog)
+    assert all(item.execution_mode == "dry_run" for item in catalog)
+    assert all(item.approval_required is True for item in catalog)
+
+
+def test_dispatch_result_is_validated_and_remains_dry_run():
+    request = ToolRequest(tool_id="software.remove", target="ExampleTool")
+
+    result = execute_tool(request)
+
+    assert result.tool_id == "software.remove"
+    assert result.status == "dry_run"
+    assert result.approval_required is True
+    assert "no changes were made" in result.summary
+
+
+def test_handler_dispatch_map_is_immutable():
+    with pytest.raises(TypeError):
+        _HANDLERS["software.install"] = lambda request: request
