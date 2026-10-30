@@ -16,7 +16,7 @@
 
 **Phase 3 closeout is not recommended yet.** T-306 local API authorization and T-307 duplicate-header regression are merged and verified. The backend tool layer is allowlisted and dry-run-only. The local chat path is deterministic and does not contact an AI provider.
 
-**One substantive acceptance gap remains:** the first Phase 3 acceptance criterion requires an end-to-end plan that identifies relevant prerequisites and explains why each is needed. The current planner emits a fixed set of generic steps; it does not identify task-specific prerequisites, verify installed software, or explain why each concrete prerequisite is necessary. T-303's report explicitly acknowledges that prerequisite discovery and source research are not implemented. Criterion 1 is therefore not met.
+**Original MA-005 finding:** the planner emitted generic steps and did not identify task-specific prerequisites or explain why each was needed. T-303's report also states that the app does not inspect the PC or browse the web. Criterion 1 was therefore not met at the MA-005 baseline.\n\n**T-308 candidate status (2026-10-30):** Draft PR #35 adds structured prerequisites for install, removal, development, and general tasks. Each item has a reason, order, dependency references, and one of three knowledge states. This is a source-level candidate, not yet an accepted closure: tests have not been run in this environment, Windows verification is pending, and A4 must reassess criterion 1 after execution evidence is available.
 
 Phase 3 should remain open until a bounded follow-up task closes this gap or the Product Owner explicitly changes the acceptance criterion through the project's decision process. Do not silently weaken the criterion.
 
@@ -24,7 +24,7 @@ Phase 3 should remain open until a bounded follow-up task closes this gap or the
 
 | # | Criterion | Result | Evidence / finding |
 |---|---|---|---|
-| 1 | Convert a request into an end-to-end plan that identifies relevant prerequisites and explains why each is needed | NOT MET | `planner.py` returns six fixed generic stages. It does not identify task-specific prerequisites or justify concrete items. `T-303-REPORT.md` says it does not inspect the PC, browse the web, or identify installed software. |
+| 1 | Convert a request into an end-to-end plan that identifies relevant prerequisites and explains why each is needed | PENDING T-308 VERIFICATION | Draft PR #35 adds category-specific prerequisite records with reasons, dependency order, and explicit knowledge states. It does not inspect the PC or browse sources. Test execution, Windows verification, and A4 acceptance reassessment remain pending. |
 | 2 | Tool selection is constrained to a backend allowlist; unknown tools are rejected safely | MET | `tools.py` defines only `software.install` and `software.remove`; strict Pydantic models reject unknown IDs and extra command fields. `test_tools.py` covers unknown tools, arbitrary command payloads, mismatched intent/target, and unsupported tasks. |
 | 3 | Proposed commands are validated against backend-owned tools/parameters; raw model text is never passed directly to a shell | MET FOR CURRENT LOCAL MODE | No provider output is accepted: `agent_core.py` runs deterministic local planning; `tools.py` accepts typed tool IDs and targets only. No shell/subprocess execution exists in the reviewed backend. This is not approval for future provider integration. |
 | 4 | Machine-changing tools cannot cause real side effects; tests demonstrate mock/dry-run behavior | MET | `execute_tool()` returns a `dry_run` result only. `test_tools.py` asserts dry-run behavior; `test_chat.py` asserts dry-run response. Backend import guard checks for forbidden OS/process/network capabilities. |
@@ -45,7 +45,7 @@ Phase 3 should remain open until a bounded follow-up task closes this gap or the
 
 ## Recommended follow-up
 
-Create a separately scoped Phase 3 follow-up task to implement and test task-specific prerequisite planning. At minimum, it should:
+T-308 is the approved follow-up task (Issue #34; implementation in Draft PR #35). Its required scope is:
 
 1. Define supported task categories and distinguish known facts, unknown facts, and items requiring discovery.
 2. For each supported task, return concrete prerequisite items with a short reason, dependency/order, and whether the item is known or requires a separately approved read-only discovery capability.
@@ -54,11 +54,11 @@ Create a separately scoped Phase 3 follow-up task to implement and test task-spe
 5. Add deterministic tests for representative English and Thai requests, missing/unknown prerequisites, dependency order, unsupported tasks, and the no-side-effect boundary.
 6. Keep all machine-changing operations dry-run/mock and do not add provider calls or external data transfer.
 
-A4 recommends that A1 prepare this task for Product Owner review. Do not start implementation until the Product Owner approves its scope. After implementation, A4 should rerun relevant tests and reassess criterion 1.
+The Product Owner approved T-308 scope on 2026-10-30. A4's source review of the candidate confirms the new schema and category-specific prerequisite sets are present, but does not certify runtime behavior. Once test and Windows evidence is available, A4 must rerun/review relevant checks and reassess criterion 1. Phase 3 closeout and Phase 4 remain blocked.
 
 ## Review limitations
 
-- A4 reviewed current source files, tests, and merged task reports through GitHub.
+- A4 reviewed current source files, tests, and merged task reports through GitHub. T-308 source review is not a substitute for running the tests.
 - A4 did not run the test suite or execute the Windows app. The 100 backend / Ruff / 21 frontend result is Product Owner-supplied evidence recorded in `T-306-REPORT.md`.
 - This review does not certify untested runtime behavior beyond the code/tests inspected.
 - This review does not authorize Phase 4, provider integration, additional permissions, or real PC actions.
