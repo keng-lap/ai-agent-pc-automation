@@ -331,7 +331,7 @@ describe('App chat UI (T-202)', () => {
   it('F-21: every MSG-01 to MSG-10 text and entry labels exist in Thai and English', async () => {
     await render();
     // MSG-01
-    expect(fixture.nativeElement.textContent).toContain('เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน');
+    expect(fixture.nativeElement.textContent).toContain('Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงาน');
     languageButton('EN').click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('The Agent analyzes requests and presents a dry-run plan');
