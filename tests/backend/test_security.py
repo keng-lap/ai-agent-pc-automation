@@ -303,6 +303,7 @@ def test_chunked_body_limit_rejects_body_without_content_length():
             (b"host", b"127.0.0.1:8000"),
             (b"origin", GOOD_ORIGIN.encode()),
             (b"content-type", b"application/json"),
+            (b"x-local-agent-token", b"a" * 64),
         ],
     }
     asyncio.run(middleware(scope, receive, send))
