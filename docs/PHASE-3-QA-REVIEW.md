@@ -14,11 +14,11 @@
 
 ## Executive result
 
-**A4 final reassessment (2026-10-30): all eight Phase 3 acceptance criteria are met for the currently approved local/dry-run scope, subject to merging this documentation reconciliation and separate Product Owner closeout approval.** T-306/T-307 local authorization and duplicate-header regression are merged. T-308 implementation PR #35 and parser correction PR #36 are merged. The backend tool layer remains allowlisted and dry-run-only; the local chat path is deterministic and does not contact an AI provider.
+**A4 final reassessment (2026-10-30): all eight Phase 3 acceptance criteria are met for the currently approved local/dry-run scope. The Product Owner approved Phase 3 closeout on 2026-10-30 after reviewing this documentation reconciliation.** T-306/T-307 local authorization and duplicate-header regression are merged. T-308 implementation PR #35 and parser correction PR #36 are merged. The backend tool layer remains allowlisted and dry-run-only; the local chat path is deterministic and does not contact an AI provider.
 
 **Original MA-005 finding:** the planner emitted generic steps and did not identify task-specific prerequisites or explain why each was needed. T-303's report also states that the app does not inspect the PC or browse the web. Criterion 1 was therefore not met at the MA-005 baseline.\n\n**T-308 verified status (2026-10-30):** PR #35 adds structured prerequisites for install, removal, development, and general tasks. Each item has a reason, order, dependency references, and one of three knowledge states. PR #36 fixes optional leading `Please` parsing for install/setup requests. A4 inspected the merged planner and tests; the Product Owner supplied a passing Windows 11 full test-script run (100 pytest, Ruff, 21 frontend tests).
 
-Phase 3 should remain open until a bounded follow-up task closes this gap or the Product Owner explicitly changes the acceptance criterion through the project's decision process. Do not silently weaken the criterion.
+**Disposition:** The original criterion 1 gap is closed by the merged T-308 implementation (PR #35) and parser correction (PR #36). The final A4 reassessment above supersedes the earlier MA-005 finding. No acceptance criterion was weakened.
 
 ## Acceptance criteria assessment
 
@@ -54,7 +54,7 @@ T-308 was the approved follow-up task (Issue #34; implementation PR #35, parser 
 5. Add deterministic tests for representative English and Thai requests, missing/unknown prerequisites, dependency order, unsupported tasks, and the no-side-effect boundary.
 6. Keep all machine-changing operations dry-run/mock and do not add provider calls or external data transfer.
 
-The Product Owner approved T-308 scope on 2026-10-30. A4 inspected the merged planner, tool allowlist, Agent core, security middleware, and relevant deterministic tests. The Product Owner supplied the latest Windows 11 test-script result: 100 pytest passed, Ruff passed, and 21 frontend tests passed. A4 did not execute the suite independently; the evidence is attributed to the Product Owner. Phase 3 closeout and Phase 4 remain blocked pending merge of this documentation PR and separate explicit Product Owner closeout approval.
+The Product Owner approved T-308 scope on 2026-10-30. A4 inspected the merged planner, tool allowlist, Agent core, security middleware, and relevant deterministic tests. The Product Owner supplied the latest Windows 11 test-script result: 100 pytest passed, Ruff passed, and 21 frontend tests passed. A4 did not execute the suite independently; the evidence is attributed to the Product Owner. Following this documentation reconciliation, the Product Owner approved Phase 3 closeout. Phase 4 remains not started and requires its own explicit start approval.
 
 ## Review limitations
 
@@ -62,4 +62,4 @@ The Product Owner approved T-308 scope on 2026-10-30. A4 inspected the merged pl
 - A4 did not run the test suite or execute the Windows app. The 100 backend / Ruff / 21 frontend result is Product Owner-supplied evidence recorded in `T-306-REPORT.md`.
 - No GitHub Actions workflow runs or commit statuses were returned for PR #36 by the available lookup; these are not counted as passing checks.
 - The review does not certify behavior beyond the code/tests inspected and the Product Owner-supplied Windows run.
-- This review does not authorize Phase 4, provider integration, additional permissions, or real PC actions.
+- Phase 3 closeout does not authorize Phase 4, provider integration, additional permissions, or real PC actions. Those remain separately gated.
