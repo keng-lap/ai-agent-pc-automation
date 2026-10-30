@@ -2,7 +2,7 @@
 
 ## Status
 
-**T-301 through T-306 are merged (PRs #22–#27). T-306 local Agent API authorization was merged on 2026-10-30 (merge commit `4e9ebe9`). Post-merge automated and Windows 11 verification is still pending; Phase 3 remains open until that evidence is recorded.** ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
+**T-301 through T-306 are merged (PRs #22–#27). T-306 implementation and Windows 11 verification are complete based on the evidence in `docs/T-306-REPORT.md`. T-307 adds an automated duplicate-token regression test; Phase 3 remains open until T-307 is merged and the final suite is rerun.** ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
 
 ## Goal
 
@@ -71,8 +71,9 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-T-301 through T-306 are merged (PRs #22–#27). T-305 connects planning and dry-run tool results to `/api/chat`; the endpoint makes no external provider call. T-306 implements the approved local-token boundary. No CI status checks were reported for merge commit `4e9ebe9` at the time of this update. Run backend tests, Ruff, frontend tests/build, and Windows 11 setup/startup checks before closing Phase 3. See `docs/T-306-REPORT.md` for the verification checklist.
-
+- Windows 11 setup/startup, backend tests (100), Ruff, frontend tests (21), production build, direct API authorization, frontend proxy, production bundle token scan, and duplicate-token manual rejection have passed. Exact evidence is recorded in `docs/T-306-REPORT.md`.
+- Current `main` commit `b2b029b` has a successful dynamic CodeQL workflow run; this does not replace the local test results.
+- T-307 adds automated duplicate-token regression coverage. Rerun the complete test script after it is merged; do not close Phase 3 or start Phase 4 before this gate is complete.
 ## References
 
 - `docs/ROADMAP.md` — Phase 3 scope and P-ORDER-1 constraint.
