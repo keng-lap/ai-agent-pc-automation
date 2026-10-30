@@ -437,6 +437,7 @@ describe('Structured Agent response (T-404)', () => {
 
     const view = fixture.nativeElement as HTMLElement;
     expect(view.textContent).toContain('แผนงาน');
+    expect(view.textContent).toContain('Install Chrome');
     expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
     expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
     expect(view.textContent).toContain('จำลองเท่านั้น');
