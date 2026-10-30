@@ -4,7 +4,7 @@
 
 **T-301 through T-308 are merged (PRs #22–#27, #30, #35, and #36).** T-306 local API authorization is implemented and verified on the Product Owner's Windows 11 PC. T-307 duplicate-token automated regression coverage is merged, and the final test-script rerun passed: backend 100 tests, Ruff, and frontend 21 tests. See `docs/T-306-REPORT.md` for the evidence.
 
-**Phase 3 closeout is not approved.** T-308 implementation PR #35 and its parser correction PR #36 are merged. The Product Owner's latest Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). A4 must now independently reassess all Phase 3 acceptance criteria using the merged source and recorded evidence. See `docs/PHASE-3-QA-REVIEW.md` and `docs/T-308-REPORT.md`. Phase 4 must not start until the Product Owner explicitly approves Phase 3 closeout.
+**Phase 3 closeout approved by the Product Owner (2026-10-30).** T-301 through T-308 are merged; the parser correction is merged; A4's final review marks all eight acceptance criteria met for the approved local/dry-run scope. The Product Owner-supplied Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). See `docs/PHASE-3-QA-REVIEW.md` and `docs/T-308-REPORT.md`. Phase 4 remains **Not Started** and requires separate explicit Product Owner approval.
 
 ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
 
@@ -81,8 +81,8 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 - T-307 automated duplicate-token regression test is merged in PR #30. The complete test script was rerun afterward and passed.
 - GitHub Actions checks on the T-307 PR head completed successfully for CodeQL, Python analysis, and JavaScript/TypeScript analysis.
 - Exact local evidence is recorded in `docs/T-306-REPORT.md`.
-- A4's MA-005 review found acceptance criterion 1 not met; see `docs/PHASE-3-QA-REVIEW.md`. T-308 is merged in PRs #35 and #36. The latest Product Owner Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). A4's independent final acceptance reassessment remains pending.
-- Phase 3 must not be marked closed and Phase 4 must not start until the planner gap is resolved, all acceptance criteria are reviewed, closeout documentation is approved, and the Product Owner explicitly approves the transition.
+- A4's initial MA-005 review found acceptance criterion 1 not met; the gap was closed by T-308 (PR #35) and its parser correction (PR #36). A4's final reassessment marks all eight criteria met; see `docs/PHASE-3-QA-REVIEW.md`.
+- The Product Owner approved Phase 3 closeout on 2026-10-30 after documentation reconciliation. Phase 4 remains Not Started and requires separate explicit approval.
 
 ## References
 
