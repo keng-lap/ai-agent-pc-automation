@@ -47,6 +47,7 @@
               @if (entry.response; as response) {
                 <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'รายละเอียดแผนงาน' : 'Task plan details'">
                   <div class="detail-heading">{{ language() === 'th' ? 'แผนงาน' : 'Task plan' }}</div>
+                  <p class="detail-meta">{{ response.plan.intent.goal }}</p>
                   <p class="detail-meta">{{ response.plan.intent.category }}@if (response.plan.intent.target) { · {{ response.plan.intent.target }} }</p>
                   <ol class="plan-steps">
                     @for (step of response.plan.steps; track step.order) {
@@ -69,9 +70,11 @@
                       <span>{{ language() === 'th' ? 'เครื่องมือ' : 'Tool' }}: {{ result.tool_id }} · {{ result.target }}</span>
                       <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงเครื่อง' : 'Dry run only — no computer changes were made' }}</span>
                       <span>{{ result.summary }}</span>
-                      <small>{{ language() === 'th' ? 'ต้องได้รับอนุมัติก่อนดำเนินการจริง' : 'Approval required before any real execution' }}</small>
                     } @else {
                       <span>{{ language() === 'th' ? 'ไม่มีเครื่องมือที่อนุญาตสำหรับงานนี้' : 'No allowlisted tool applies to this task' }}</span>
+                    }
+                    @if (response.plan.approval_required) {
+                      <small>{{ language() === 'th' ? 'ต้องได้รับอนุมัติก่อนดำเนินการจริง' : 'Approval required before any real execution' }}</small>
                     }
                     @if (!response.provider_connected) {
                       <small>{{ language() === 'th' ? 'ยังไม่เชื่อมต่อ AI Provider — ใช้การวางแผนในเครื่อง' : 'AI provider is not connected — using local planning' }}</small>
