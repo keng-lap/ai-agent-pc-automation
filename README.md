@@ -17,13 +17,13 @@ Examples:
 
 ## Current Phase
 
-**Phase 2 — Local Web Application**
+**Phase 3 — Agent Core (authorization closeout in progress)**
 
 Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete. Phase 2 adds a local web application with a chat interface. Its specification was approved by the Product Owner on 2026-10-20.
 
-Phase 3 is underway: T-303 (PR #24) and T-304 (PR #25) are merged. T-305 connects the deterministic local Agent pipeline to chat with ChatGPT selected in preview mode. No live provider or real PC automation is enabled. Do not implement future-phase features early.
+Phase 3 is underway: T-303 (PR #24) and T-304 (PR #25) are merged. T-305 is merged in PR #26. T-306 is implementing the Product Owner-approved local Agent API token boundary on `feat/t-306-local-agent-auth`. No live provider or real PC automation is enabled. Do not implement future-phase features early.
 
-**Status:** Phase 2 is complete (2026-10-23). T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`; PR #19 records the Product Owner's report that MV-01 to MV-14 passed, and PR #20 makes backend tests independent of local `.env` ports. See `docs/PHASE-2-COMPLETION-REPORT.md`. In Phase 3, T-301 and T-302 are approved, T-303 is complete (PR #24), T-304 is complete (PR #25), and T-305 is in progress. ChatGPT is selected for local preview only; provider calls and real machine-changing actions remain disabled.
+**Status:** Phase 2 is complete (2026-10-23). T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`; PR #19 records the Product Owner's report that MV-01 to MV-14 passed, and PR #20 makes backend tests independent of local `.env` ports. See `docs/PHASE-2-COMPLETION-REPORT.md`. In Phase 3, T-301 and T-302 are approved, T-303 is complete (PR #24), T-304 is complete (PR #25), and T-305 is complete (PR #26); T-306 local authorization is in progress. ChatGPT is a local-preview identifier only; provider calls and real machine-changing actions remain disabled.
 
 ## Architecture
 
