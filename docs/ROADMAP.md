@@ -114,7 +114,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-In Progress — T-301 through T-304 are merged (PRs #22–#25). T-305 connects the local Agent pipeline to chat with ChatGPT selected in preview mode. Live provider calls and real machine-changing actions remain disabled.
+In Progress — T-301 through T-305 are merged (PRs #22–#26). T-305 connects the local Agent pipeline to chat in deterministic preview mode. T-306 implements the Product Owner-approved D-SEC-1 local token boundary on `feat/t-306-local-agent-auth`. Live provider calls and real machine-changing actions remain disabled.
 
 ---
 
