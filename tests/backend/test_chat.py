@@ -31,6 +31,7 @@ def test_english_request_runs_local_chatgpt_agent_and_dry_run():
     assert body["provider"] == "chatgpt"
     assert body["provider_connected"] is False
     assert body["plan"]["intent"]["category"] == "software_install"
+    assert body["task_status"] == "dry_run_completed"
     assert body["tool_result"]["status"] == "dry_run"
     assert body["tool_result"]["target"] == "Google Chrome"
     assert "ChatGPT selected (local preview" in body["reply"]
@@ -45,6 +46,7 @@ def test_thai_request_returns_localized_plan_and_dry_run():
     assert body["provider"] == "chatgpt"
     assert body["provider_connected"] is False
     assert body["plan"]["language"] == "th"
+    assert body["task_status"] == "planned"
     assert "เลือก ChatGPT แล้ว" in body["reply"]
     assert "ไม่มีเครื่องมือที่อนุญาต" in body["reply"]
 
