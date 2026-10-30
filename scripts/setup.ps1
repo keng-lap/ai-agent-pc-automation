@@ -20,8 +20,10 @@ if (-not (Test-Path '.env')) {
 $envLines = Get-Content -LiteralPath '.env'
 $tokenLine = $envLines | Where-Object { $_ -match '^LOCAL_AGENT_TOKEN=' } | Select-Object -First 1
 if (-not $tokenLine -or $tokenLine -eq 'LOCAL_AGENT_TOKEN=') {
-    $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
-    $token = [Convert]::ToHexString($bytes).ToLowerInvariant()
+    $bytes = New-Object byte[] 32
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    $token = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
     if ($tokenLine) {
         $envLines = $envLines | ForEach-Object {
             if ($_ -match '^LOCAL_AGENT_TOKEN=') { "LOCAL_AGENT_TOKEN=$token" } else { $_ }
