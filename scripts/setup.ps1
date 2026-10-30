@@ -16,6 +16,23 @@ if (-not (Test-Path '.env')) {
     Write-Host 'Created .env from .env.example' -ForegroundColor Green
 }
 
+# Create a per-installation secret for the local Agent API. Keep it in .env only.
+$envLines = Get-Content -LiteralPath '.env'
+$tokenLine = $envLines | Where-Object { $_ -match '^LOCAL_AGENT_TOKEN=' } | Select-Object -First 1
+if (-not $tokenLine -or $tokenLine -eq 'LOCAL_AGENT_TOKEN=') {
+    $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+    $token = [Convert]::ToHexString($bytes).ToLowerInvariant()
+    if ($tokenLine) {
+        $envLines = $envLines | ForEach-Object {
+            if ($_ -match '^LOCAL_AGENT_TOKEN=') { "LOCAL_AGENT_TOKEN=$token" } else { $_ }
+        }
+        Set-Content -LiteralPath '.env' -Value $envLines -Encoding UTF8
+    } else {
+        Add-Content -LiteralPath '.env' -Value "LOCAL_AGENT_TOKEN=$token"
+    }
+    Write-Host 'Generated local Agent authorization token in .env' -ForegroundColor Green
+}
+
 $venvPython = Get-VenvPython
 if (-not (Test-Path $venvPython)) {
     Write-Host 'Creating Python virtual environment (.venv)...'
