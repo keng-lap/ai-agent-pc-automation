@@ -1,5 +1,6 @@
 """Backend-owned static tool catalog and dry-run-only dispatch (T-402)."""
 
+from types import MappingProxyType
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -107,10 +108,12 @@ def _preview_remove(request: ToolRequest) -> ToolResult:
 
 
 # Fixed code-owned dispatch map. Request data can never supply a callable/module name.
-_HANDLERS = {
-    "software.install": _preview_install,
-    "software.remove": _preview_remove,
-}
+_HANDLERS = MappingProxyType(
+    {
+        "software.install": _preview_install,
+        "software.remove": _preview_remove,
+    }
+)
 
 
 def execute_tool(request: ToolRequest) -> ToolResult:
