@@ -7,3 +7,4 @@ import os
 os.environ["BACKEND_HOST"] = "127.0.0.1"
 os.environ["BACKEND_PORT"] = "8000"
 os.environ["FRONTEND_PORT"] = "4200"
+os.environ["LOCAL_AGENT_TOKEN"] = "a".repeat(64)
