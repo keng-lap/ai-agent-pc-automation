@@ -44,6 +44,41 @@
             <div class="message-bubble">
               <span class="message-label">{{ labelFor(entry.kind) }}</span>
               <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
+              @if (entry.response; as response) {
+                <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'รายละเอียดแผนงาน' : 'Task plan details'">
+                  <div class="detail-heading">{{ language() === 'th' ? 'แผนงาน' : 'Task plan' }}</div>
+                  <p class="detail-meta">{{ response.plan.intent.category }}@if (response.plan.intent.target) { · {{ response.plan.intent.target }} }</p>
+                  <ol class="plan-steps">
+                    @for (step of response.plan.steps; track step.order) {
+                      <li><strong>{{ step.title }}</strong><span>{{ step.detail }}</span></li>
+                    }
+                  </ol>
+                  <div class="detail-heading">{{ language() === 'th' ? 'สิ่งที่ต้องตรวจสอบ' : 'Prerequisites' }}</div>
+                  <ul class="prerequisite-list">
+                    @for (item of response.plan.prerequisites; track item.id) {
+                      <li>
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.reason }}</span>
+                        <small>{{ prerequisiteLabel(item.status) }}</small>
+                      </li>
+                    }
+                  </ul>
+                  <div class="tool-preview">
+                    <strong>{{ language() === 'th' ? 'สถานะงาน' : 'Task status' }}: {{ taskStatusLabel(response.task_status) }}</strong>
+                    @if (response.tool_result; as result) {
+                      <span>{{ language() === 'th' ? 'เครื่องมือ' : 'Tool' }}: {{ result.tool_id }} · {{ result.target }}</span>
+                      <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงเครื่อง' : 'Dry run only — no computer changes were made' }}</span>
+                      <span>{{ result.summary }}</span>
+                      <small>{{ language() === 'th' ? 'ต้องได้รับอนุมัติก่อนดำเนินการจริง' : 'Approval required before any real execution' }}</small>
+                    } @else {
+                      <span>{{ language() === 'th' ? 'ไม่มีเครื่องมือที่อนุญาตสำหรับงานนี้' : 'No allowlisted tool applies to this task' }}</span>
+                    }
+                    @if (!response.provider_connected) {
+                      <small>{{ language() === 'th' ? 'ยังไม่เชื่อมต่อ AI Provider — ใช้การวางแผนในเครื่อง' : 'AI provider is not connected — using local planning' }}</small>
+                    }
+                  </div>
+                </section>
+              }
             </div>
             @if (entry.kind === 'user') {
               <div class="user-avatar" aria-hidden="true">{{ language() === 'th' ? 'คุณ' : 'You' }}</div>
