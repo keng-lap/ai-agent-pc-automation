@@ -112,7 +112,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-**Implementation and T-306/T-307 verification gates complete; Phase 3 closeout remains blocked by one acceptance gap.** A4's MA-005 review found that the planner does not identify task-specific prerequisites or explain why each is needed (acceptance criterion 1). See `docs/PHASE-3-QA-REVIEW.md`. T-301 through T-307 are merged (PRs #22–#27 and #30); Windows 11 verification is recorded in `docs/T-306-REPORT.md`. Phase 4 must not start until the gap is resolved, all acceptance criteria are reviewed, and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
+**T-301 through T-307 are merged; T-308 implementation is under review in Draft PR #35.** T-308 adds task-specific prerequisite records, reasons, dependency order, and explicit knowledge states. Test execution, Windows verification, and A4 acceptance reassessment are pending. Phase 3 closeout remains blocked; Phase 4 must not start until all acceptance criteria are verified and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
 
 ---
 
