@@ -119,7 +119,7 @@ def test_exact_frontend_origins_are_accepted(origin):
     response = client.post(
         "/api/chat",
         json={"message": "hello", "language": "en"},
-        headers={"origin": origin},
+        headers={"origin": origin, "x-local-agent-token": "a" * 64},
     )
     assert response.status_code == 200
 
@@ -244,7 +244,8 @@ def test_frontend_dev_server_binds_to_loopback():
 def test_example_configuration_has_no_token_or_secret():
     repo_root = Path(__file__).resolve().parents[2]
     example = (repo_root / ".env.example").read_text(encoding="utf-8").lower()
-    assert "token=" not in example
+    assert "local_agent_token=" in example
+    assert "local_agent_token=\n" in example
     assert "secret=" not in example
     assert "api_key=" not in example
 
