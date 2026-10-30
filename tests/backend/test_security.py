@@ -13,7 +13,7 @@ from agent_backend.security import MAX_REQUEST_BYTES, LocalWebSecurityMiddleware
 
 BASE_URL = "http://127.0.0.1:8000"
 GOOD_ORIGIN = "http://127.0.0.1:4200"
-GOOD_HEADERS = {"origin": GOOD_ORIGIN}
+GOOD_HEADERS = {"origin": GOOD_ORIGIN, "x-local-agent-token": "a" * 64}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
 
@@ -78,7 +78,7 @@ def test_foreign_or_inexact_origins_are_rejected(origin):
     response = client.post(
         "/api/chat",
         json={"message": "hello", "language": "en"},
-        headers={"origin": origin},
+        headers={"origin": origin, "x-local-agent-token": "a" * 64},
     )
     assert response.status_code == 403
     assert response.json() == {"detail": "Origin not allowed."}
@@ -123,7 +123,7 @@ def test_json_charset_parameter_is_accepted():
     response = client.post(
         "/api/chat",
         content=b'{"message":"hello","language":"en"}',
-        headers={"origin": GOOD_ORIGIN, "content-type": "application/json; charset=utf-8"},
+        headers={**GOOD_HEADERS, "content-type": "application/json; charset=utf-8"},
     )
     assert response.status_code == 200
 
@@ -132,7 +132,7 @@ def test_oversized_body_is_rejected_before_json_parsing():
     response = client.post(
         "/api/chat",
         content=b"x" * (MAX_REQUEST_BYTES + 1),
-        headers={"origin": GOOD_ORIGIN, "content-type": "application/json"},
+        headers={**GOOD_HEADERS, "content-type": "application/json"},
     )
     assert response.status_code == 413
     assert response.json() == {"detail": "Request body too large."}
