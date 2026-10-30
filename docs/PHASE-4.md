@@ -1,7 +1,7 @@
 # Phase 4 — Tool / Task System
 
 ## Status
-Planning baseline completed and merged; runtime implementation not started. Phase 3 closeout was approved by the Product Owner on 2026-10-30. The Product Owner has authorized Phase 4 planning. This plan does not authorize real PC actions, provider integration, or changes to the Phase 5 safety gate.
+Planning baseline completed; initial Runtime Code PRs #45–#47 are open for review and Windows verification. No code has been merged. Phase 3 closeout was approved by the Product Owner on 2026-10-30. The Product Owner has authorized Phase 4 planning. This plan does not authorize real PC actions, provider integration, or changes to the Phase 5 safety gate.
 
 ## Objective
 Build a predictable, backend-controlled Tool / Task layer that accepts only typed, allowlisted tool requests, validates them, produces deterministic dry-run results, and exposes understandable task/tool status to the local web UI.
@@ -55,10 +55,10 @@ Phase 4 must inspect and reuse these contracts before proposing changes. No new 
 ## Proposed task breakdown and dependencies
 | Task | Owner | Deliverable | Depends on | Gate |
 |---|---|---|---|---|
-| T-401 Tool contract/catalog | A1 + A2; A4 review | Document metadata for existing tools: stable ID, description, intent, input/output schema, risk class, execution mode, approval-required flag | Phase 3 baseline | Planning contract merged; implementation scope still requires review |
-| T-402 Registry and dispatch | A2; A4 review | Central registry, validation, deterministic dispatch; preserve allowlist and dry-run behavior | T-401 | Read-only gap analysis merged; implementation pending scoped review |
-| T-403 Task lifecycle | A1 + A2; A4 review | Request-scoped in-memory states and transitions; no database, background worker, or history persistence | T-401; coordinate with T-402 API | Lifecycle contract merged; implementation pending API decision |
-| T-404 Frontend status UX | A3; A4 review | Display selected tool, validation, dry-run preview, approval-required state; Thai default, English option | T-401 and stable T-402/T-403 API | UX specification merged; frontend source inspection/API stability still required |
+| T-401 Tool contract/catalog | A1 + A2; A4 review | Document metadata for existing tools: stable ID, description, intent, input/output schema, risk class, execution mode, approval-required flag | Phase 3 baseline | Contract documented; code metadata in PR #45 |
+| T-402 Registry and dispatch | A2; A4 review | Central registry, validation, deterministic dispatch; preserve allowlist and dry-run behavior | T-401 | Implementation PR #45 open; Windows tests pending |
+| T-403 Task lifecycle | A1 + A2; A4 review | Request-scoped in-memory states and transitions; no database, background worker, or history persistence | T-401; coordinate with T-402 API | Initial response status PR #46 open; Windows tests pending |
+| T-404 Frontend status UX | A3; A4 review | Display selected tool, validation, dry-run preview, approval-required state; Thai default, English option | T-401 and stable T-402/T-403 API | Structured UI PR #47 open; Angular tests/build pending |
 | T-405 QA/security matrix | A4 | Tests/checklist for allowlist, schemas, unknown tools, malformed requests, deterministic dry-run, status transitions, no side effects | T-401 and implementation as available | Threat model and test matrix merged; execution evidence pending implementation |
 | T-406 Integration/closeout | A1 + A4 | Reconcile docs, dependencies, test evidence, Phase 4 closeout recommendation | T-402 through T-405 | Product Owner reviews closeout |
 
@@ -69,7 +69,7 @@ Phase 4 must inspect and reuse these contracts before proposing changes. No new 
 - PR #43 — T-404 tool/task UX specification: docs/T-404-TOOL-TASK-UX-SPEC.md.
 - PR #44 — T-405 QA/security matrix: docs/T-405-QA-SECURITY-MATRIX.md.
 
-These PRs completed the documentation/planning outputs only. No Phase 4 runtime implementation has been merged and no Phase 4 runtime tests are claimed.
+These PRs completed the documentation/planning outputs only. Initial Runtime Code proposals are now open in PRs #45–#47; they are not merged and no Phase 4 runtime tests are claimed as passed.
 
 ## Parallel work plan
 - A1 finalizes T-401/T-403 contracts and dependencies.
