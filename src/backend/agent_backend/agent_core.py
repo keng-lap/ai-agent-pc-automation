@@ -17,6 +17,7 @@ from agent_backend.tools import (
 )
 
 AgentProvider = Literal["chatgpt"]
+TaskStatus = Literal["planned", "dry_run_completed"]
 
 
 class AgentResponse(BaseModel):
@@ -28,6 +29,7 @@ class AgentResponse(BaseModel):
     provider: AgentProvider = "chatgpt"
     provider_connected: Literal[False] = False
     plan: TaskPlan
+    task_status: TaskStatus = "planned"
     tool_result: ToolResult | None = None
 
 
@@ -49,6 +51,7 @@ def run_agent(message: str, language: Language, provider: AgentProvider) -> Agen
         reply=_format_reply(plan, tool_result),
         provider=provider,
         plan=plan,
+        task_status="dry_run_completed" if tool_result is not None else "planned",
         tool_result=tool_result,
     )
 
