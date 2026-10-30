@@ -1,7 +1,7 @@
 # Multi-Agent Development Workflow — Four-Agent Plan
 
 ## Current status
-Phase 3 closeout was approved by the Product Owner on 2026-10-30. The Product Owner has authorized Phase 4 planning. Phase 4 runtime implementation has not started; see docs/PHASE-4.md.
+Phase 3 closeout was approved by the Product Owner on 2026-10-30. The Product Owner has authorized Phase 4 planning. Phase 4 planning outputs T-401 through T-405 are merged (PRs #40–#44); runtime implementation has not started. See docs/PHASE-4.md.
 
 The Four-Agent process is coordinator-managed with four separated roles. It is not four autonomous LLM processes or a runtime orchestrator. No provider/runtime/credential decisions are made by this workflow.
 
@@ -49,11 +49,11 @@ Product Owner authorizes scope -> A1 defines contracts/tasks/dependencies -> A2 
 See docs/PHASE-4.md for scope, exclusions, T-401 through T-406, dependencies, and acceptance criteria.
 | Task | Owner | Deliverable | Status |
 |---|---|---|---|
-| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planned |
-| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Planned; depends on T-401 |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Planned; depends on T-401 |
-| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | Planned; depends on stable API |
-| T-405 | A4 | QA/security matrix and evidence review | Planned |
+| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning doc merged (#40); implementation pending |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Gap analysis merged (#41); implementation pending; depends on T-401 |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Contract merged (#42); implementation pending; depends on T-401 |
+| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | UX spec merged (#43); implementation pending; depends on stable API |
+| T-405 | A4 | QA/security matrix and evidence review | Matrix merged (#44); execution evidence pending |
 | T-406 | A1 + A4 | Integration and Phase 4 closeout recommendation | Blocked until T-402–T-405 complete |
 
 ## Definition of done
