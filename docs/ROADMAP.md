@@ -114,7 +114,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-In Progress — T-301 through T-306 are merged (PRs #22–#27). T-306's Windows 11 verification is recorded in `docs/T-306-REPORT.md`: backend 100 tests, Ruff, frontend 21 tests, production build, proxy authentication, bundle token scan, and duplicate-token manual rejection passed. T-307 automated duplicate-token regression coverage and final full-suite rerun remain pending. Live provider calls and real machine-changing actions remain disabled.
+**Implementation and T-306/T-307 verification gates complete; Phase 3 closeout review pending.** T-301 through T-307 are merged (PRs #22–#27 and #30). Windows 11 verification includes backend 100 tests, Ruff, frontend 21 tests, production build, proxy authentication, production bundle token scan, and duplicate-token rejection. The final `scripts/test.ps1` rerun after T-307 passed. See `docs/T-306-REPORT.md` and `docs/PHASE-3.md`. Phase 4 must not start until all Phase 3 acceptance criteria are reviewed and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
 
 ---
 
@@ -337,7 +337,7 @@ A phase is considered complete only when:
 Phase 0  ██████████  Complete
 Phase 1  ██████████  Complete
 Phase 2  ██████████  Complete
-Phase 3  ░░░░░░░░░░  In Progress
+Phase 3  ████████░░  Closeout review pending
 Phase 4  ░░░░░░░░░░  Not Started
 Phase 5  ░░░░░░░░░░  Not Started
 Phase 6  ░░░░░░░░░░  Not Started
