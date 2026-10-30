@@ -114,7 +114,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-In Progress — T-301 through T-306 are merged (PRs #22–#27). T-306 implements the Product Owner-approved D-SEC-1 local token boundary. Post-merge backend/frontend automated checks and Windows 11 manual verification remain pending. Live provider calls and real machine-changing actions remain disabled.
+In Progress — T-301 through T-306 are merged (PRs #22–#27). T-306's Windows 11 verification is recorded in `docs/T-306-REPORT.md`: backend 100 tests, Ruff, frontend 21 tests, production build, proxy authentication, bundle token scan, and duplicate-token manual rejection passed. T-307 automated duplicate-token regression coverage and final full-suite rerun remain pending. Live provider calls and real machine-changing actions remain disabled.
 
 ---
 
