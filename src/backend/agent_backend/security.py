@@ -1,6 +1,8 @@
-"""Local browser security checks for the Phase 2 API."""
+"""Local browser and Agent authorization checks for the Phase 2/3 API."""
 
 from __future__ import annotations
+
+import hmac
 
 from starlette.responses import JSONResponse
 
@@ -8,10 +10,11 @@ from .config import Settings
 
 MAX_REQUEST_BYTES = 16 * 1024
 STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+AGENT_TOKEN_HEADER = b"x-local-agent-token"
 
 
 class LocalWebSecurityMiddleware:
-    """Reject requests that do not match the approved local API boundary."""
+    """Reject requests outside the approved local API and Agent auth boundary."""
 
     def __init__(self, app, settings: Settings) -> None:
         self.app = app
@@ -28,6 +31,7 @@ class LocalWebSecurityMiddleware:
                 f"http://localhost:{settings.frontend_port}",
             }
         )
+        self.agent_token = settings.local_agent_token.encode("ascii")
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http":
@@ -55,6 +59,15 @@ class LocalWebSecurityMiddleware:
         if origin is not None and origin not in self.allowed_origins:
             await self._reject(send, 403, "Origin not allowed.")
             return
+
+        path = scope.get("path", "")
+        if path == "/api" or path.startswith("/api/"):
+            supplied_tokens = headers.get(AGENT_TOKEN_HEADER, [])
+            if len(supplied_tokens) != 1 or not hmac.compare_digest(
+                supplied_tokens[0], self.agent_token
+            ):
+                await self._reject(send, 401, "Local Agent authorization required.")
+                return
 
         method = scope["method"].upper()
         if method in STATE_CHANGING_METHODS:
