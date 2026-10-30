@@ -112,7 +112,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-**T-301 through T-307 are merged; T-308 implementation is under review in Draft PR #35.** T-308 adds task-specific prerequisite records, reasons, dependency order, and explicit knowledge states. Test execution, Windows verification, and A4 acceptance reassessment are pending. Phase 3 closeout remains blocked; Phase 4 must not start until all acceptance criteria are verified and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
+**T-301 through T-308 are merged.** T-308 adds task-specific prerequisite records, reasons, dependency order, and explicit knowledge states (PR #35); a parser correction was merged in PR #36. The latest Product Owner Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). A4's independent final Phase 3 acceptance reassessment remains pending. Phase 3 closeout remains blocked; Phase 4 must not start until all acceptance criteria are verified and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
 
 ---
 

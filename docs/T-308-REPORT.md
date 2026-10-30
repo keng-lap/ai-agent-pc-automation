@@ -2,7 +2,12 @@
 
 ## Status
 
-**Implementation submitted for review; not yet accepted or merged.** The Product Owner approved the T-308 scope on 2026-10-30. The implementation is in [Draft PR #35](https://github.com/keng-lap/ai-agent-pc-automation/pull/35), branch `feat/T-308-task-specific-prerequisites`.
+**Implementation merged; Windows 11 verification passed; final A4 Phase 3 acceptance reassessment is the remaining gate.** The Product Owner approved T-308 scope on 2026-10-30. Implementation PR #35 was merged. A4 identified a polite install-request target-parsing defect and it was corrected in PR #36, which the Product Owner explicitly approved and which was squash-merged on 2026-10-30.
+
+- PR #35 — implementation: https://github.com/keng-lap/ai-agent-pc-automation/pull/35
+- PR #36 — parser correction: https://github.com/keng-lap/ai-agent-pc-automation/pull/36
+- PR #36 merge commit: `e6d6a83b51b5b49e23db0fc592fcf35abaa83766`
+- Branch convention for this documentation follow-up: `docs/T-308-post-merge-verification`
 
 ## Scope
 
@@ -19,7 +24,8 @@ Close the Phase 3 planner gap by returning task-specific prerequisites with:
 - Development tasks: goal, scope, project location, runtime/toolchain, dependencies, and acceptance criteria.
 - General tasks: goal, context clarification, and required resources/dependencies.
 - Thai and English labels/reasons are generated deterministically.
-- Existing six planning stages remain non-executable and now report the actual prerequisite counts and discovery limitations.
+- Existing six planning stages remain non-executable and report prerequisite counts and discovery limitations.
+- PR #36 adds optional leading `Please` handling to the install/setup prefix parser so a request such as `Please install ExampleTool for me` resolves the target as `ExampleTool`.
 
 ## Safety and limitations
 
@@ -29,22 +35,26 @@ Close the Phase 3 planner gap by returning task-specific prerequisites with:
 - No shell/subprocess execution, provider call, credential handling, external data transfer, or real PC-changing operation was added.
 - Tool execution remains dry-run only. Phase 4 and Phase 5 gates are unchanged.
 
-## Verification status
+## Verification evidence
+
+**Environment:** Product Owner's Windows 11 PC; Windows PowerShell 5.1; Python 3.14.3; Node.js 26.3.0; npm 11.16.0; clean clone at `D:\\work\\aiagent\\aiagent2-clean`.
 
 | Check | Result |
 |---|---|
-| Source/diff review | Completed at source level; no machine or network side-effect path added in the changed planner |
-| New deterministic tests | Added; **not yet executed in this environment** |
-| GitHub Actions / commit status | No workflow runs or commit statuses were returned for the current PR head at the time of this report; do not interpret this as a pass |
-| Windows 11 full test script | Pending Product Owner execution |
-| A4 acceptance criterion 1 | Pending test evidence and final reassessment |
-| Phase 3 closeout | Blocked |
-| Phase 4 | Not started |
+| `.\scripts\test.ps1` — backend pytest | PASS — 100 passed |
+| Ruff | PASS — all checks passed |
+| Frontend unit tests | PASS — 21 passed |
+| Complete test script | PASS — “All checks passed.” |
+| A4 source review of PR #36 parser fix | PASS — narrow parser-only correction; regression test exists |
+| GitHub Actions / commit status for PR #36 | No checks/statuses were returned by the available GitHub lookup; **not counted as a pass** |
 
-## Next steps
+The test-script output was supplied by the Product Owner after PR #36 was merged. A4's source review confirmed the parser correction and existing regression coverage; A4 did not independently execute the Windows test script.
 
-1. Run `.\scripts\test.ps1` from the clean Windows 11 clone and report the complete result.
-2. Fix any failing tests or lint findings on this branch.
-3. A4 performs final independent acceptance reassessment.
-4. Update this report with exact evidence and move PR #35 from Draft only when all required checks are genuinely complete.
-5. Product Owner reviews and explicitly approves the PR merge. Phase 3 closeout requires a separate explicit approval; Phase 4 remains blocked until then.
+## Remaining gates
+
+1. A4 independently reassesses all Phase 3 acceptance criteria against the merged source, tests, task reports, and Product Owner-supplied Windows 11 evidence.
+2. A4 records any unmet criteria, limitations, or evidence gaps explicitly.
+3. Product Owner reviews the final A4 report and separately approves Phase 3 closeout.
+4. Phase 4 remains not started until that explicit closeout approval.
+
+**This report does not declare Phase 3 complete and does not authorize Phase 4.**

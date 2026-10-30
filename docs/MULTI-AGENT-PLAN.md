@@ -4,7 +4,7 @@
 
 **Controlled workflow definition and initial documentation rollout are merged.** The current implementation is a coordinator-managed workflow simulation with four separated roles, not four autonomous LLM processes or a runtime orchestrator. No runtime multi-agent system, provider connection, credentials, or real PC execution is authorized.
 
-The current `main` baseline is `af3006b508fea70e1e15174f54e2a2ca3da82edc` (2026-10-30). PRs #30, #31, #32, and #33 are merged.
+The current `main` baseline for this follow-up is `e6d6a83b51b5b49e23db0fc592fcf35abaa83766` (2026-10-30). PRs #30, #31, #32, #33, #35, and #36 are merged.
 
 ## Objective
 
@@ -84,13 +84,13 @@ Merge one PR at a time, then run integration checks
 | MA-002 | A1 | Task decomposition template, dependency map, four-agent responsibility matrix | Complete; PR #32 merged and board maintained in MA-005 |
 | MA-003 | A4 | Definition of done and verification evidence review | T-306/T-307 evidence recorded in PR #31; MA-005 performed Phase 3 acceptance review |
 | MA-004 | A1–A4 | Dry-run simulation of one small documentation-only task across all four roles | Not started; separate approval/scope required |
-| MA-005 | A1 + A4 | Reconcile merged GitHub state and audit Phase 3 acceptance criteria | Complete; PR #33 merged; see `docs/PHASE-3-QA-REVIEW.md` |\n| T-308 | A2 + A4 | Add structured task-specific prerequisites and deterministic tests | Implementation submitted in Draft PR #35; tests and final A4 acceptance pending |
+| MA-005 | A1 + A4 | Reconcile merged GitHub state and audit Phase 3 acceptance criteria | Complete; PR #33 merged; see `docs/PHASE-3-QA-REVIEW.md` |\n| T-308 | A2 + A4 | Add structured task-specific prerequisites and deterministic tests | Complete: PR #35 and parser fix PR #36 merged; Windows 11 test script passed; final A4 Phase 3 reassessment pending |
 
 ## Current project gate
 
 T-306 and T-307 are merged and their Windows 11 verification is recorded in `docs/T-306-REPORT.md`. The final Product Owner test-script rerun after T-307 passed (backend 100 tests, Ruff, frontend 21 tests).
 
-However, A4's MA-005 review found that the planner did not identify task-specific prerequisites or justify them. T-308 now has an implementation candidate in Draft PR #35: structured prerequisite items with reasons, dependency order, and explicit knowledge states. No local inspection or web research is claimed. Tests, Windows verification, and A4's final acceptance reassessment remain pending. Phase 3 closeout remains blocked; Phase 4 must not start before explicit Product Owner approval.
+A4's MA-005 review found that the planner did not identify task-specific prerequisites or justify them. T-308 closed the implementation gap with structured prerequisite items, reasons, dependency order, and explicit knowledge states. PR #35 and parser correction PR #36 are merged. No local inspection or web research is claimed. The latest Product Owner Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). A4's independent final Phase 3 acceptance reassessment remains pending. Phase 3 closeout remains blocked; Phase 4 must not start before explicit Product Owner approval.
 
 ## Definition of done for an agent task
 
