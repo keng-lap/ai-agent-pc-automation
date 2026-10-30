@@ -39,11 +39,12 @@ Define verification coverage for Phase 4 Tool / Task System. This is a test plan
 | QA-401-13 | API compatibility | Existing chat request/response | Existing behavior preserved unless approved | P1 |
 | QA-401-14 | Frontend | tool_result null | Clear no-allowlisted-tool state; no crash | P1 |
 | QA-401-15 | Frontend | dry_run + approval_required | Clear labels; no real execution button | P0 |
-| QA-401-16 | Localization | Thai default and English preference | Correct text and stable layout | P1 |
+| QA-401-16 | Localization | Thai default and English preference | Correct text and stable layout; empty-state text accurately describes the deterministic local Agent | P1 |
 | QA-401-17 | Security | Missing/invalid local token or Origin | Existing security behavior preserved | P0 |
 | QA-401-18 | Network | Bind address | Loopback only | P0 |
 | QA-401-19 | Secrets | Production bundle/repository scan | No token or credentials exposed | P0 |
 | QA-401-20 | Forbidden capability | Static source scan | No shell/process/network/OS inspection introduced | P0 |
+| QA-401-21 | Frontend contract | API returns plan and tool_result | Structured plan and dry-run preview are rendered; no reply-only data loss | P1 |
 
 ## Test execution policy
 - Add tests before or with implementation.
