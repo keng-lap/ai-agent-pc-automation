@@ -2,7 +2,9 @@
 
 ## Status
 
-**T-301 through T-306 are merged (PRs #22–#27). T-306 local Agent API authorization was merged on 2026-10-30 (merge commit `4e9ebe9`). Post-merge automated and Windows 11 verification is still pending; Phase 3 remains open until that evidence is recorded.** ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
+**T-301 through T-307 are merged (PRs #22–#27 and #30).** T-306 local API authorization is implemented and verified on the Product Owner's Windows 11 PC. T-307 duplicate-token automated regression coverage is merged, and the final test-script rerun passed: backend 100 tests, Ruff, and frontend 21 tests. See `docs/T-306-REPORT.md` for the evidence.
+
+Phase 3 closeout remains subject to review of every acceptance criterion and explicit Product Owner approval. ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
 
 ## Goal
 
@@ -40,7 +42,7 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 | AI provider and model | Provider set and per-run UI selection approved: GPT, Claude, Gemini. Specific model, fallback behavior, and provider integration remain open. |
 | Data handling | Whether user messages may leave the computer, what data may be sent, and required retention/privacy constraints. |
 | Account authorization | The Product Owner prefers signing in with the selected provider account. Official flow availability and secure token storage must be decided for each provider; never scrape browser sessions. |
-| Local authorization (D-SEC-1) | **Approved: option A — require a random per-installation local token for every `/api/*` request.** Store it only in ignored `.env`; the local Angular development proxy injects it server-side. The backend compares it in constant time. Missing or invalid tokens receive 401. `/health` remains available without a token. This is local API authorization, not AI-provider sign-in. |
+| Local authorization (D-SEC-1) | **Approved: option A — require a random per-installation local token for every `/api/*` request.** Store it only in ignored `.env`; the local Angular development proxy injects it server-side. The backend compares it in constant time. Missing, invalid, or duplicate tokens receive 401. `/health` remains available without a token. This is local API authorization, not AI-provider sign-in. |
 | Phase 3 tool boundary | Which read-only tools, if any, are approved; all machine-changing tools remain mock/dry-run. |
 
 Until official provider authorization, data handling, and token-storage decisions are recorded in approved phase documents, use only deterministic local/mock behavior and do not make external provider calls.
@@ -54,7 +56,8 @@ Until official provider authorization, data handling, and token-storage decision
 | T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | Complete: merged in PR #24; isolated from live providers and real actions. |
 | T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | Complete: merged in PR #25; no machine-changing side effects. |
 | T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | Complete: merged in PR #26 (`4cc2a63`). Deterministic local preview only; no provider call. |
-| T-306 | Enforce D-SEC-1 local authorization on Agent API requests; generate and inject the per-installation token; add negative tests and update setup guidance. | Merged in PR #27 on 2026-10-30 (`4e9ebe9`). Automated tests, frontend build/proxy verification, and Windows 11 manual verification remain pending. |
+| T-306 | Enforce D-SEC-1 local authorization on Agent API requests; generate and inject the per-installation token; add negative tests and update setup guidance. | Complete: merged in PR #27 (`4e9ebe9`); Windows 11 verification recorded in `docs/T-306-REPORT.md`. |
+| T-307 | Add automated regression coverage proving duplicate `X-Local-Agent-Token` headers are rejected. | Complete: merged in PR #30 (merge commit `7b12e92`); final Windows 11 test-script rerun passed. |
 
 Tasks should be delivered in separate reviewable branches/PRs using `<type>/<task-id>-<short-name>`. Do not begin a gated task until its stated prerequisite is merged and any required decision is recorded.
 
@@ -71,7 +74,11 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-T-301 through T-306 are merged (PRs #22–#27). T-305 connects planning and dry-run tool results to `/api/chat`; the endpoint makes no external provider call. T-306 implements the approved local-token boundary. No CI status checks were reported for merge commit `4e9ebe9` at the time of this update. Run backend tests, Ruff, frontend tests/build, and Windows 11 setup/startup checks before closing Phase 3. See `docs/T-306-REPORT.md` for the verification checklist.
+- Windows 11 setup/startup, final backend tests (100), Ruff, frontend tests (21), production build, direct API authorization, frontend proxy, production bundle token scan, and duplicate-token manual rejection passed.
+- T-307 automated duplicate-token regression test is merged in PR #30. The complete test script was rerun afterward and passed.
+- GitHub Actions checks on the T-307 PR head completed successfully for CodeQL, Python analysis, and JavaScript/TypeScript analysis.
+- Exact local evidence is recorded in `docs/T-306-REPORT.md`.
+- Phase 3 must not be marked closed and Phase 4 must not start until all acceptance criteria are reviewed, closeout documentation is approved, and the Product Owner explicitly approves the transition.
 
 ## References
 
