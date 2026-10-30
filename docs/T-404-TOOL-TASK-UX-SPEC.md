@@ -10,6 +10,13 @@ UX specification only. No frontend source was changed. Inspect actual Angular co
 - Thai is default; English uses the existing language preference.
 - Keep the interface compact and readable on desktop/mobile.
 
+## Existing frontend baseline
+- App component currently accepts any response with a string reply field and appends only response.reply to the conversation.
+- The view renders message text only; structured plan, prerequisites, tool_result, approval_required, and provider_connected are not yet displayed.
+- Chat entries live in the current Angular signal/session and disappear on reload; only the language preference is persisted in localStorage.
+- The empty-state hint currently says the Agent is not implemented / replies are placeholders. This should be corrected when the structured response UX is integrated, because the backend already runs a deterministic local planner and dry-run pipeline.
+- The backend main.py module docstring still calls the chat route a placeholder; it should be reconciled in a separate code/documentation review, not silently changed in this UX task.
+
 ## Existing API facts
 AgentResponse currently contains:
 - reply
@@ -77,6 +84,8 @@ Do not fabricate queued, running, completed, cancelled, or executed states until
 - No task history or chat messages are persisted.
 - UI does not expose credentials or bypass backend validation.
 - Component tests cover response variants, including no tool result and both languages.
+- UI tests assert that the structured plan and dry-run result are visible after integration.
+- Empty-state copy no longer incorrectly claims that the Agent is unimplemented.
 
 ## Dependencies
 T-404 implementation depends on T-401 metadata/display contract and stable T-402/T-403 response fields. This document does not authorize API changes.
