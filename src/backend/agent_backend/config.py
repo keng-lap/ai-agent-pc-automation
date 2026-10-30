@@ -10,12 +10,14 @@ loopback address. Any other host is rejected at startup.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+LOCAL_AGENT_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 # src/backend/agent_backend/config.py -> repository root is parents[3]
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -32,6 +34,7 @@ class Settings:
     backend_port: int
     frontend_port: int
     log_level: str
+    local_agent_token: str
 
 
 def _port(name: str, default: int) -> int:
@@ -58,10 +61,18 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
             "Changing this requires project owner approval."
         )
 
+    token = os.environ.get("LOCAL_AGENT_TOKEN", "")
+    if not LOCAL_AGENT_TOKEN_PATTERN.fullmatch(token):
+        raise ConfigError(
+            "LOCAL_AGENT_TOKEN must be a 64-character lowercase hexadecimal secret. "
+            "Run scripts\\setup.ps1 to generate it."
+        )
+
     return Settings(
         app_env=os.environ.get("APP_ENV", "development").strip(),
         backend_host=host,
         backend_port=_port("BACKEND_PORT", 8000),
         frontend_port=_port("FRONTEND_PORT", 4200),
         log_level=os.environ.get("LOG_LEVEL", "info").strip().lower(),
+        local_agent_token=token,
     )
