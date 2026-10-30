@@ -126,7 +126,10 @@ def test_unexpected_exception_returns_generic_error_and_scrubs_message(monkeypat
     error_client = TestClient(
         app,
         base_url="http://127.0.0.1:8000",
-        headers={"origin": "http://127.0.0.1:4200"},
+        headers={
+            "origin": "http://127.0.0.1:4200",
+            "x-local-agent-token": "a" * 64,
+        },
         raise_server_exceptions=False,
     )
     response = error_client.post("/api/chat", json={"message": "hello", "language": "en"})
