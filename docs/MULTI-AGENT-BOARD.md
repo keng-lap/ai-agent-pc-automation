@@ -6,12 +6,12 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 ## Repository baseline and current status
 - Repository: keng-lap/ai-agent-pc-automation
 - Default branch: main
-- Latest known main baseline before this planning branch: 7948103825fe1611e0663d7416c7aa02037d8439 (PR #38).
+- Latest main baseline after Phase 4 parallel planning docs: e1a2b7815a5bf7f3f173785f5f9d3a2726c63761 (PR #44).
 - PRs #30, #31, #32, #33, #35, #36, #37, and #38 are merged.
 - Phase 3 closeout was explicitly approved by the Product Owner on 2026-10-30; all eight A4 acceptance criteria are recorded as met for the approved local/dry-run scope.
 - Latest Product Owner-supplied Windows 11 test-script output: 100 backend tests passed, Ruff passed, 21 frontend tests passed. A4 did not independently execute this run.
 - Phase 4 planning is authorized and underway. See docs/PHASE-4.md.
-- Phase 4 runtime implementation has not started.
+- Phase 4 planning outputs T-401 through T-405 are merged (PRs #40–#44); runtime implementation has not started.
 - Machine-changing operations remain dry-run/mock until Phase 5 is implemented and explicitly approved.
 - No AI provider, provider credentials, live model calls, or external data transfer are approved.
 
@@ -26,11 +26,11 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 ## Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
 |---|---|---|---|---|
-| T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Planned |
-| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Planned |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Planned |
-| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | Planned |
-| T-405 | A4 | QA/security matrix and evidence review | T-401; implementation as available | Planned |
+| T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Planning doc merged (#40); implementation pending |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Gap analysis merged (#41); implementation pending |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Contract merged (#42); implementation pending |
+| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | UX spec merged (#43); implementation pending |
+| T-405 | A4 | QA/security matrix and evidence review | T-401; implementation as available | Matrix merged (#44); execution evidence pending |
 | T-406 | A1 + A4 | Integration/documentation closeout recommendation | T-402–T-405 | Blocked until verification |
 
 ## Parallelization and dependency rules
@@ -62,6 +62,8 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 - PR #36 — T-308 polite install request parser correction — merged.
 - PR #37 — T-308 post-merge verification documentation — merged.
 - PR #38 — MA-006 Phase 3 closeout documentation reconciliation — merged.
+- PR #39 — Phase 4 planning baseline and documentation reconciliation — merged.
+- PRs #40–#44 — parallel T-401 through T-405 planning documents — merged.
 
 ## Definition of done
 A task is complete when approved scope, tests/evidence, A4 review, documentation, and limitations are recorded. Code/runtime PRs require explicit Product Owner merge approval. Phase closeout requires explicit Product Owner approval.
