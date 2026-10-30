@@ -2,7 +2,7 @@
 
 ## Status
 
-**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 is complete (PR #24), T-304 is complete (PR #25), and T-305 is in progress.** ChatGPT is the initial selected agent in local preview mode. The provider set is GPT, Claude, and Gemini, with per-run selection requested. Provider authorization, external data transfer, model choice, token storage, and real machine-changing actions remain unapproved.
+**Scope approved in PR #22. T-302 contract approved in PR #23. T-303 (PR #24), T-304 (PR #25), and T-305 (PR #26) are merged. T-306 (local Agent authorization) is in progress on `feat/t-306-local-agent-auth`.** ChatGPT remains a deterministic local-preview identifier; no live provider is connected. Provider authorization, external data transfer, model choice, and real machine-changing actions remain unapproved.
 
 ## Goal
 
@@ -40,7 +40,7 @@ Turn a chat request into an understandable plan, select an allowed tool, execute
 | AI provider and model | Provider set and per-run UI selection approved: GPT, Claude, Gemini. Specific model, fallback behavior, and provider integration remain open. |
 | Data handling | Whether user messages may leave the computer, what data may be sent, and required retention/privacy constraints. |
 | Account authorization | The Product Owner prefers signing in with the selected provider account. Official flow availability and secure token storage must be decided for each provider; never scrape browser sessions. |
-| Local authorization (D-SEC-1) | The Product Owner prefers official provider account sign-in; the backend enforcement and token handling decision remains open before enabling Agent processing. |
+| Local authorization (D-SEC-1) | **Approved: option A — require a random per-installation local token for every `/api/*` request.** Store it only in ignored `.env`; the local Angular development proxy injects it server-side. The backend compares it in constant time. Missing or invalid tokens receive 401. `/health` remains available without a token. This is local API authorization, not AI-provider sign-in. |
 | Phase 3 tool boundary | Which read-only tools, if any, are approved; all machine-changing tools remain mock/dry-run. |
 
 Until official provider authorization, data handling, and token-storage decisions are recorded in approved phase documents, use only deterministic local/mock behavior and do not make external provider calls.
@@ -53,7 +53,8 @@ Until official provider authorization, data handling, and token-storage decision
 | T-302 | Define Agent request/response, plan, tool, result, and error contracts; propose local authorization behavior and record provider boundary. | Complete: approved and merged in PR #23. Provider and local authorization decisions remain open before provider-backed processing. |
 | T-303 | Implement deterministic intent analysis and plan generation with validation and tests. | Complete: merged in PR #24; isolated from live providers and real actions. |
 | T-304 | Implement allowlisted tool selection and mock/dry-run execution with boundary tests. | Complete: merged in PR #25; no machine-changing side effects. |
-| T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | In progress on `feat/t-305-chatgpt-agent-endpoint`; ChatGPT is selected for local preview. Live provider calls remain blocked on authorization and data-handling decisions. |
+| T-305 | Connect the Agent Core to the chat endpoint and report results/errors. | Complete: merged in PR #26 (`4cc2a63`). Deterministic local preview only; no provider call. |
+| T-306 | Enforce D-SEC-1 local authorization on Agent API requests; generate and inject the per-installation token; add negative tests and update setup guidance. | In progress on `feat/t-306-local-agent-auth`; Product Owner approved option A on 2026-10-30. Requires review, automated CI, and local manual verification before closure. |
 
 Tasks should be delivered in separate reviewable branches/PRs using `<type>/<task-id>-<short-name>`. Do not begin a gated task until its stated prerequisite is merged and any required decision is recorded.
 
@@ -70,7 +71,7 @@ Tasks should be delivered in separate reviewable branches/PRs using `<type>/<tas
 
 ## Verification
 
-T-301 through T-304 are merged (PRs #22–#25). T-305 connects planning and dry-run tool results to `/api/chat`; ChatGPT is identified as the selected agent, but the endpoint makes no external provider call. See `docs/T-305-REPORT.md` for verification and current limits.
+T-301 through T-305 are merged (PRs #22–#26). T-305 connects planning and dry-run tool results to `/api/chat`; the endpoint makes no external provider call. T-306 is implementing the approved local-token boundary. See `docs/T-305-REPORT.md` for T-305 verification and `docs/T-306-REPORT.md` for authorization verification when available.
 
 ## References
 
