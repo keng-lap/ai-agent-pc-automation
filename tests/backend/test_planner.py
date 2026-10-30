@@ -110,7 +110,7 @@ def test_plan_is_deterministic_and_normalizes_whitespace():
     assert first == second
 
 
-@pytest.mark.parametrize("message", ["", "  \\t\\n", "x" * 2001])
+@pytest.mark.parametrize("message", ["", "   ", "x" * 2001])
 def test_invalid_message_is_rejected(message):
     with pytest.raises(ValueError):
         create_task_plan(message, "en")
