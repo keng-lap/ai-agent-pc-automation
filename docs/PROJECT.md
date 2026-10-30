@@ -1,152 +1,53 @@
 # Project Definition
 
 ## 1. Project Name
-
 AI Agent PC Automation
 
 ## 2. Purpose
+Build a personal AI Agent that receives commands from a local web application and safely performs explicitly approved automation tasks on a Windows 11 PC.
 
-This project aims to build a personal AI Agent that can receive commands from a local web application and safely perform approved automation tasks on a Windows PC.
-
-The system should eventually allow a user to communicate with the AI Agent using natural language.
-
-Example:
-
-> Install Google Chrome.
-
-The Agent should understand the request, determine the required action, ask for confirmation when necessary, execute the task through a controlled tool layer, and report the result.
+The intended flow is: understand the request, produce a plan, validate a controlled tool request, obtain required approval, execute only an authorized capability, and report the result.
 
 ## 3. Target Environment
-
-Initial target environment:
-
-- Operating System: Windows 11
-- Local machine
-- Local Web Application
+- Windows 11 local machine
+- Local web application (Angular)
+- Backend API (Python / FastAPI)
 - Git / GitHub
-- AI Agent
-- Claude will participate in development
-- Frontend: Angular (TypeScript). Backend: Python (FastAPI). Selected in Phase 1; see `docs/PHASE-1.md`
+- Future AI provider integration only after explicit provider, account authorization, privacy/data-flow, and credential-storage decisions
 
-## 4. Initial Architecture
-
-```text
-+----------------+
-|      User      |
-+-------+--------+
-        |
-        v
-+----------------+
-|  Local Web App |
-+-------+--------+
-        |
-        v
-+----------------+
-|    AI Agent    |
-+-------+--------+
-        |
-        v
-+----------------+
-|  Tool / Task   |
-|     Layer      |
-+-------+--------+
-        |
-        v
-+----------------+
-|  Windows PC    |
-+----------------+
-```
+## 4. Architecture
+User -> Local Web App (loopback) -> Agent Core -> Controlled Tool / Task Layer -> Windows PC (only explicitly approved capabilities)
 
 ## 5. Core Requirements
-
-The future system should be able to:
-
-1. Receive commands from the user.
-2. Understand the user's intent.
-3. Decide what task needs to be performed.
-4. Use controlled tools to perform the task.
-5. Request confirmation for sensitive operations.
-6. Report success or failure.
-7. Keep logs of important actions.
+1. Receive natural-language requests.
+2. Analyze intent and produce an understandable plan.
+3. Select only backend-allowlisted tools.
+4. Validate tool inputs against backend-owned schemas.
+5. Require explicit confirmation for sensitive operations under the approved safety design.
+6. Report success/failure without exposing secrets.
+7. Keep auditable records only under an explicitly approved retention policy.
 8. Prevent unauthorized or dangerous operations.
 
 ## 6. Safety Requirements
+The Agent must never have unrestricted control of the computer. All automation passes through a controlled tool/task layer. Sensitive operations include software installation/removal, file deletion/modification, administrator commands, process control, and system/network/security settings.
 
-The Agent must NOT have unrestricted control of the computer.
-
-All PC automation should go through a controlled tool layer.
-
-Examples of potentially sensitive operations:
-
-- Installing software
-- Uninstalling software
-- Deleting files
-- Modifying system settings
-- Running administrator commands
-- Changing network configuration
-- Modifying security settings
-
-Sensitive operations must require explicit user approval unless a future phase defines a safe automated policy.
+The approved P-ORDER-1 option A preserves phase order: machine-changing tools remain dry-run/mock until Phase 5 Safety and Permission System is implemented and explicitly approved. No live provider calls, provider credentials, or external data transfer are currently approved. Preserve loopback binding and local API authorization.
 
 ## 7. Development Philosophy
+- Each phase has a clear objective, deliverables, tests, and safety boundary.
+- Documentation/planning may proceed when consistent with approved decisions and current scope.
+- Runtime changes require bounded tasks, tests, review, and explicit Product Owner merge approval.
+- Never silently change requirements or skip a phase.
 
-The project will be developed incrementally.
-
-Each phase must:
-
-- Have a clear objective.
-- Have defined deliverables.
-- Be tested before moving forward.
-- Be committed to Git.
-- Be documented.
-- Not implement features belonging to future phases.
-
-## 8. Role of Claude
-
-Claude will act as a development assistant/engineering agent.
-
-Claude must:
-
-1. Read the project documentation before starting work.
-2. Understand the current phase.
-3. Follow the project architecture.
-4. Avoid making assumptions about future phases.
-5. Explain significant architectural decisions.
-6. Create tests where appropriate.
-7. Update documentation when required.
-8. Use Git properly.
-9. Never silently change project requirements.
+## 8. Four-Agent Workflow
+The current Four-Agent workflow is coordinator-managed with four separated responsibilities: A1 Coordinator/Product Analyst, A2 Backend Engineer, A3 Frontend/UX Engineer, and A4 QA/Security Reviewer. It is not four autonomous LLM processes and no runtime orchestrator has been implemented. See docs/MULTI-AGENT-PLAN.md and docs/MULTI-AGENT-BOARD.md.
 
 ## 9. Source of Truth
+Primary documents: README.md, docs/PROJECT.md, docs/ROADMAP.md, docs/PHASE-0.md through the active phase document, and docs/PROPOSALS.md for unapproved proposals only.
 
-The following files are the primary project documentation:
-
-```text
-README.md
-docs/PROJECT.md
-docs/ROADMAP.md
-docs/PHASE-0.md
-docs/PHASE-1.md
-```
-
-`docs/PHASE-2.md` is the approved Phase 2 specification (Product Owner approval recorded on 2026-10-20).
-
-If there is a conflict between implementation assumptions and these documents, stop and clarify the conflict before implementing major changes.
-
-`docs/PROPOSALS.md` contains proposals that are pending project owner approval. It is not a source of truth and its contents are not requirements.
+If sources conflict, stop and reconcile documentation before implementation. Proposals are not requirements until explicitly approved.
 
 ## 10. Current Status
+**Phase 3 closeout approved 2026-10-30. Phase 4 planning authorized; runtime implementation not started.**
 
-Current phase:
-
-**Phase 3 — Agent Core**
-
-Status:
-
-**In Progress — T-306 merged on 2026-10-30; post-merge verification pending**
-
-Phase 0 (Project Foundation) and Phase 1 (Local Development Environment) are complete and merged into `main`. See `docs/PHASE-0.md` and `docs/PHASE-1.md`.
-
-Phase 2 is complete. T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged into `main`. PR #19 records the Product Owner's report that MV-01 to MV-14 passed; PR #20 fixes test isolation from local `.env` ports. The final status and evidence are in `docs/PHASE-2-COMPLETION-REPORT.md`.
-
-Phase 3 has started following the Product Owner's approval. T-301 (scope, PR #22), T-302 (Agent contract, PR #23), T-303 (deterministic planner, PR #24), and T-304 (allowlisted dry-run tools, PR #25) are merged. T-305 is merged in PR #26 and connects the planner and dry-run tools to the chat endpoint. T-306 local Agent API authorization was merged in PR #27 on 2026-10-30 (merge commit `4e9ebe9`), implementing the Product Owner-approved D-SEC-1 option A. Automated and Windows 11 verification remains pending; Phase 3 is not yet closed. No live provider calls or real machine-changing actions are enabled. Provider authorization and data-handling decisions remain open.
+See docs/PHASE-3-QA-REVIEW.md for closeout evidence and docs/PHASE-4.md for the active planning baseline. Phase 4 implementation tasks must follow dependencies and safety gates. Phase 5 remains mandatory before any real machine-changing execution.
