@@ -2,11 +2,13 @@
 
 ## Status
 
-Planning only. This document proposes a development-team workflow for building this repository. It does not add runtime agents to the Windows PC application and does not authorize provider calls, PC execution, or automatic merges.
+**Controlled workflow definition and initial documentation rollout are merged.** The current implementation is a coordinator-managed workflow simulation with four separated roles, not four autonomous LLM processes or a runtime orchestrator. No runtime multi-agent system, provider connection, credentials, or real PC execution is authorized.
+
+The current `main` baseline is `0aea6b77bef55f07e32611c814781ef575c0c065` (2026-10-30). PRs #30, #31, and #32 are merged.
 
 ## Objective
 
-Use four specialized agents concurrently to reduce development time while preserving the Product Owner's control, repository safety, phase order, and review quality.
+Use four specialized roles to reduce development time while preserving the Product Owner's control, repository safety, phase order, and review quality.
 
 ## Four roles
 
@@ -74,18 +76,21 @@ Merge one PR at a time, then run integration checks
 - Integrate in dependency order, not in the order PRs happen to finish.
 - A failed check returns to the owning agent as a bounded fix task. Do not silently patch another agent's work.
 
-## Initial rollout (no runtime code changes)
+## Initial rollout — documentation-only status
 
-| Step | Owner | Deliverable | Gate |
+| Step | Owner | Deliverable | Current status |
 |---|---|---|---|
-| MA-001 | A1 + A4 | Inventory repository, phase status, branch/PR conventions, safety constraints | Product Owner review |
-| MA-002 | A1 | Task decomposition template, dependency map, four-agent responsibility matrix | Product Owner approval |
-| MA-003 | A4 | Shared definition of done and verification evidence template | Product Owner approval |
-| MA-004 | A1 | Dry-run simulation of one small documentation-only task across all four roles | Product Owner approval before any implementation automation |
+| MA-001 | A1 + A4 | Inventory repository, phase status, branch/PR conventions, safety constraints | Complete; PR #32 merged |
+| MA-002 | A1 | Task decomposition template, dependency map, four-agent responsibility matrix | Complete; PR #32 merged and board maintained in MA-005 |
+| MA-003 | A4 | Definition of done and verification evidence review | T-306/T-307 evidence recorded in PR #31; MA-005 performed Phase 3 acceptance review |
+| MA-004 | A1–A4 | Dry-run simulation of one small documentation-only task across all four roles | Not started; separate approval/scope required |
+| MA-005 | A1 + A4 | Reconcile merged GitHub state and audit Phase 3 acceptance criteria | Documentation update in progress; see `docs/PHASE-3-QA-REVIEW.md` |
 
-## Current project-specific gate
+## Current project gate
 
-T-306 (PR #27) has merged, but Phase 3 post-merge verification is still pending. The four-agent workflow may be designed and simulated as a documentation-only development process. It must not be used to bypass Phase 3 verification or begin Phase 4 runtime implementation.
+T-306 and T-307 are merged and their Windows 11 verification is recorded in `docs/T-306-REPORT.md`. The final Product Owner test-script rerun after T-307 passed (backend 100 tests, Ruff, frontend 21 tests).
+
+However, A4's source review found that the planner currently creates generic planning stages but does not yet identify task-specific prerequisites, justify each prerequisite, or produce source-backed action proposals. This does not meet the first Phase 3 acceptance criterion as written. Phase 3 closeout remains pending until the gap is addressed and independently verified. Phase 4 runtime implementation must not start before explicit Product Owner approval of Phase 3 closeout.
 
 ## Definition of done for an agent task
 
