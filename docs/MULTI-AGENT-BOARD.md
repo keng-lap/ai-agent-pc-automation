@@ -21,7 +21,7 @@ This board tracks the first controlled rollout of the four-agent development wor
 | Role | Responsibility | Current assignment | Status |
 |---|---|---|---|
 | A1 — Coordinator / Product Analyst | Own task decomposition, dependencies, integration sequence, and board | MA-001 inventory and rollout coordination | In progress |
-| A2 — Backend Engineer | Own backend test/code task on an isolated branch | T-307 duplicate-token regression test | Branch created; PR pending |
+| A2 — Backend Engineer | Own backend test/code task on an isolated branch | T-307 duplicate-token regression test | PR #30 open (draft; automated test not yet run) |
 | A3 — Frontend / UX Engineer | Own frontend verification evidence and browser-boundary review | Production build and token-leak scan | Evidence passed; recorded in T-306 report branch |
 | A4 — QA / Security Reviewer | Independently review acceptance criteria, security boundary, and evidence | Review T-307 test design and T-306 evidence | Pending review |
 
@@ -29,10 +29,10 @@ This board tracks the first controlled rollout of the four-agent development wor
 
 | ID | Owner | Scope | Dependency | Branch | Status |
 |---|---|---|---|---|---|
-| MA-001 | A1 + A4 | Inventory current phase, repository baseline, safety rules, and acceptance gates | None | `docs/MA-001-four-agent-rollout` | In progress |
-| MA-002 | A1 | Maintain this role/task board and dependency map | MA-001 | Same documentation branch | In progress |
-| T-307 | A2 | Add automated regression test for duplicate local-token headers; no runtime behavior change | T-306 merged | `test/T-307-duplicate-token-regression` | Branch created; PR pending |
-| MA-003 | A3 + A4 | Record Windows 11 verification and review production bundle/token boundary | T-306 merged | `docs/T-306-verification-record` | Documentation branch prepared |
+| MA-001 | A1 + A4 | Inventory current phase, repository baseline, safety rules, and acceptance gates | None | `docs/MA-001-four-agent-rollout` | PR #32 open (draft) |
+| MA-002 | A1 | Maintain this role/task board and dependency map | MA-001 | Same documentation branch | Included in PR #32 (draft) |
+| T-307 | A2 | Add automated regression test for duplicate local-token headers; no runtime behavior change | T-306 merged | `test/T-307-duplicate-token-regression` | PR #30 open (draft) |
+| MA-003 | A3 + A4 | Record Windows 11 verification and review production bundle/token boundary | T-306 merged | `docs/T-306-verification-record` | PR #31 open (draft; Product Owner review pending) |
 | MA-004 | A1–A4 | Dry-run one bounded task through all four roles; no runtime orchestration or PC actions | MA-001 through MA-003 | To be assigned after review | Not started |
 
 ## Dependency map
@@ -84,3 +84,12 @@ T-307 and documentation work may proceed independently because they own differen
 - Token/cost budgets, concurrency, timeouts, retries, and cancellation.
 
 This board does not authorize implementing an agent orchestrator, connecting a provider, or enabling real PC automation.
+
+
+## Current pull requests
+
+- [PR #30 — T-307 duplicate-token regression test](https://github.com/keng-lap/ai-agent-pc-automation/pull/30) — draft; waiting for local test execution and QA review.
+- [PR #31 — T-306 verification evidence](https://github.com/keng-lap/ai-agent-pc-automation/pull/31) — draft; documentation-only.
+- [PR #32 — MA-001 four-agent rollout board](https://github.com/keng-lap/ai-agent-pc-automation/pull/32) — draft; documentation-only.
+
+All three PRs target `main`; none has been merged. Product Owner approval remains mandatory.
