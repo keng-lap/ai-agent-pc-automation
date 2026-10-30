@@ -6,11 +6,25 @@ import { ChatApi, UiLanguage } from './chat/chat-api';
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10';
 
+interface StructuredAgentResponse {
+  task_status: 'planned' | 'dry_run_completed';
+  provider_connected: false;
+  plan: {
+    intent: { category: string; goal: string; target: string | null };
+    prerequisites: Array<{ id: string; order: number; title: string; reason: string; status: string }>;
+    steps: Array<{ order: number; title: string; detail: string }>;
+    execution_mode: 'dry_run';
+    approval_required: true;
+  };
+  tool_result: { tool_id: string; target: string; status: 'dry_run'; approval_required: true; summary: string } | null;
+}
+
 interface ChatEntry {
   id: number;
   kind: EntryKind;
   text: string;
   errorCode?: ErrorCode;
+  response?: StructuredAgentResponse;
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
@@ -129,7 +143,7 @@ export class App implements AfterViewChecked {
           if (this.isReply(response)) {
             this.entries.update((entries) => [
               ...entries,
-              { id: ++this.nextEntryId, kind: 'agent', text: response.reply },
+              { id: ++this.nextEntryId, kind: 'agent', text: response.reply, response: this.isStructuredAgentResponse(response) ? response : undefined },
             ]);
           } else {
             this.appendError('MSG-08');
@@ -149,8 +163,8 @@ export class App implements AfterViewChecked {
 
   protected get hint(): string {
     return this.language() === 'th'
-      ? 'เริ่มพิมพ์ข้อความได้เลย Agent ยังไม่พร้อมใช้งาน คำตอบในตอนนี้เป็นเพียงตัวอย่างจำลอง.'
-      : 'Type a message to start. The Agent is not implemented yet, so replies are placeholders.';
+      ? 'Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงานในโหมดจำลอง โดยยังไม่มีการเปลี่ยนแปลงเครื่องคอมพิวเตอร์.'
+      : 'The Agent analyzes requests and presents a dry-run plan. No changes are made to your computer.';
   }
 
   protected get placeholder(): string {
@@ -185,6 +199,15 @@ export class App implements AfterViewChecked {
         errorCode: code,
       },
     ]);
+  }
+
+  private isStructuredAgentResponse(value: unknown): value is { reply: string } & StructuredAgentResponse {
+    if (typeof value !== 'object' || value === null) return false;
+    const item = value as Record<string, unknown>;
+    return typeof item['task_status'] === 'string'
+      && typeof item['plan'] === 'object' && item['plan'] !== null
+      && Array.isArray((item['plan'] as Record<string, unknown>)['steps'])
+      && Array.isArray((item['plan'] as Record<string, unknown>)['prerequisites']);
   }
 
   private isReply(value: unknown): value is { reply: string } {
