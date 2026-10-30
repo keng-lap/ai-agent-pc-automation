@@ -5,7 +5,7 @@ if (!Number.isInteger(backendPort) || backendPort < 1 || backendPort > 65535) {
 }
 const localAgentToken = process.env.LOCAL_AGENT_TOKEN ?? '';
 if (!/^[0-9a-f]{64}$/.test(localAgentToken)) {
-  throw new Error('LOCAL_AGENT_TOKEN is missing or invalid. Run scripts\\setup.ps1.');
+  throw new Error('LOCAL_AGENT_TOKEN is missing or invalid. Run scripts\setup.ps1.');
 }
 module.exports = {
   '/api': {
