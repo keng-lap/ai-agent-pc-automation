@@ -16,6 +16,30 @@ if (-not (Test-Path '.env')) {
     Write-Host 'Created .env from .env.example' -ForegroundColor Green
 }
 
+# Create a per-installation secret for the local Agent API. Keep it in .env only.
+$envLines = @(Get-Content -LiteralPath '.env')
+$tokenLine = $envLines | Where-Object { $_ -match '^LOCAL_AGENT_TOKEN=' } | Select-Object -First 1
+$tokenValue = if ($tokenLine) { $tokenLine.Substring('LOCAL_AGENT_TOKEN='.Length) } else { '' }
+if ($tokenValue -notmatch '^[0-9a-f]{64}$') {
+    $bytes = New-Object byte[] 32
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    $token = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
+    if ($tokenLine) {
+        $envLines = @($envLines | ForEach-Object {
+            if ($_ -match '^LOCAL_AGENT_TOKEN=') { "LOCAL_AGENT_TOKEN=$token" } else { $_ }
+        })
+        [System.IO.File]::WriteAllLines(
+            (Join-Path $script:RepoRoot '.env'),
+            [string[]]$envLines,
+            (New-Object System.Text.UTF8Encoding -ArgumentList $false)
+        )
+    } else {
+        Add-Content -LiteralPath '.env' -Value "LOCAL_AGENT_TOKEN=$token"
+    }
+    Write-Host 'Generated local Agent authorization token in .env' -ForegroundColor Green
+}
+
 $venvPython = Get-VenvPython
 if (-not (Test-Path $venvPython)) {
     Write-Host 'Creating Python virtual environment (.venv)...'

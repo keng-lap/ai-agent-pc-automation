@@ -13,8 +13,38 @@ from agent_backend.security import MAX_REQUEST_BYTES, LocalWebSecurityMiddleware
 
 BASE_URL = "http://127.0.0.1:8000"
 GOOD_ORIGIN = "http://127.0.0.1:4200"
-GOOD_HEADERS = {"origin": GOOD_ORIGIN}
+GOOD_HEADERS = {"origin": GOOD_ORIGIN, "x-local-agent-token": "a" * 64}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
+
+def test_agent_api_rejects_missing_local_token():
+    no_token_client = TestClient(app, base_url=BASE_URL, headers={"origin": GOOD_ORIGIN})
+    response = no_token_client.post(
+        "/api/chat",
+        json={"message": "hello", "language": "en"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Local Agent authorization required."}
+
+
+def test_agent_api_rejects_incorrect_local_token():
+    bad_token_client = TestClient(
+        app,
+        base_url=BASE_URL,
+        headers={"origin": GOOD_ORIGIN, "x-local-agent-token": "b" * 64},
+    )
+    response = bad_token_client.post(
+        "/api/chat",
+        json={"message": "hello", "language": "en"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Local Agent authorization required."}
+
+
+def test_health_remains_available_without_local_token():
+    no_token_client = TestClient(app, base_url=BASE_URL)
+    response = no_token_client.get("/health")
+    assert response.status_code == 200
+
 
 
 @pytest.mark.parametrize(
@@ -78,7 +108,7 @@ def test_foreign_or_inexact_origins_are_rejected(origin):
     response = client.post(
         "/api/chat",
         json={"message": "hello", "language": "en"},
-        headers={"origin": origin},
+        headers={"origin": origin, "x-local-agent-token": "a" * 64},
     )
     assert response.status_code == 403
     assert response.json() == {"detail": "Origin not allowed."}
@@ -89,13 +119,13 @@ def test_exact_frontend_origins_are_accepted(origin):
     response = client.post(
         "/api/chat",
         json={"message": "hello", "language": "en"},
-        headers={"origin": origin},
+        headers={"origin": origin, "x-local-agent-token": "a" * 64},
     )
     assert response.status_code == 200
 
 
 def test_missing_origin_is_rejected_for_post_but_allowed_for_health():
-    no_origin_client = TestClient(app, base_url=BASE_URL)
+    no_origin_client = TestClient(app, base_url=BASE_URL, headers={"x-local-agent-token": "a" * 64})
     post = no_origin_client.post(
         "/api/chat",
         json={"message": "hello", "language": "en"},
@@ -110,7 +140,7 @@ def test_missing_origin_is_rejected_for_post_but_allowed_for_health():
     [None, "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"],
 )
 def test_non_json_state_changing_requests_are_rejected(content_type):
-    headers = {"origin": GOOD_ORIGIN}
+    headers = {**GOOD_HEADERS}
     if content_type is not None:
         headers["content-type"] = content_type
     response = client.post(
@@ -123,7 +153,7 @@ def test_json_charset_parameter_is_accepted():
     response = client.post(
         "/api/chat",
         content=b'{"message":"hello","language":"en"}',
-        headers={"origin": GOOD_ORIGIN, "content-type": "application/json; charset=utf-8"},
+        headers={**GOOD_HEADERS, "content-type": "application/json; charset=utf-8"},
     )
     assert response.status_code == 200
 
@@ -132,7 +162,7 @@ def test_oversized_body_is_rejected_before_json_parsing():
     response = client.post(
         "/api/chat",
         content=b"x" * (MAX_REQUEST_BYTES + 1),
-        headers={"origin": GOOD_ORIGIN, "content-type": "application/json"},
+        headers={**GOOD_HEADERS, "content-type": "application/json"},
     )
     assert response.status_code == 413
     assert response.json() == {"detail": "Request body too large."}
@@ -141,7 +171,7 @@ def test_oversized_body_is_rejected_before_json_parsing():
 def test_preflight_is_not_handled_and_no_cors_headers_are_sent():
     response = client.options(
         "/api/chat",
-        headers={"origin": GOOD_ORIGIN, "access-control-request-method": "POST"},
+        headers={**GOOD_HEADERS, "access-control-request-method": "POST"},
     )
     assert response.status_code == 405
     assert not any(name.lower().startswith("access-control-") for name in response.headers)
@@ -196,6 +226,13 @@ def test_application_factory_fails_closed_on_invalid_ports(monkeypatch, name):
         create_app()
 
 
+def test_environment_configuration_rejects_missing_or_malformed_token(monkeypatch):
+    for token in ("", "too-short", "G" * 64):
+        monkeypatch.setenv("LOCAL_AGENT_TOKEN", token)
+        with pytest.raises(ConfigError):
+            load_settings(load_env_file=False)
+
+
 def test_environment_configuration_rejects_non_loopback_bind(monkeypatch):
     monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
     with pytest.raises(ConfigError):
@@ -214,7 +251,8 @@ def test_frontend_dev_server_binds_to_loopback():
 def test_example_configuration_has_no_token_or_secret():
     repo_root = Path(__file__).resolve().parents[2]
     example = (repo_root / ".env.example").read_text(encoding="utf-8").lower()
-    assert "token=" not in example
+    assert "local_agent_token=" in example
+    assert "local_agent_token=\n" in example
     assert "secret=" not in example
     assert "api_key=" not in example
 
@@ -265,6 +303,7 @@ def test_chunked_body_limit_rejects_body_without_content_length():
             (b"host", b"127.0.0.1:8000"),
             (b"origin", GOOD_ORIGIN.encode()),
             (b"content-type", b"application/json"),
+            (b"x-local-agent-token", b"a" * 64),
         ],
     }
     asyncio.run(middleware(scope, receive, send))

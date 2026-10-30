@@ -1,8 +1,8 @@
-# T-305 Progress Report
+# T-305 Completion Report
 
 ## Status
 
-Implementation complete on `feat/t-305-chatgpt-agent-endpoint`; awaiting review and merge. T-304 was merged in PR #25 before T-305 began.
+**Complete — merged in PR #26** (`4cc2a63ab5a805921c768afcf444e9a46d89e155`). T-304 was merged in PR #25 before T-305 began.
 
 ## Delivered
 
@@ -18,6 +18,8 @@ Implementation complete on `feat/t-305-chatgpt-agent-endpoint`; awaiting review 
 This task does not call ChatGPT or send user messages outside the machine. The ChatGPT value identifies the initial selection only. Provider account authorization, data transfer, model choice, and secure token storage remain open decisions. All machine-changing tools still return dry-run previews and do not execute.
 
 ## Verification
+
+PR #26 reports 96 backend tests passed and Ruff passed on the changed Python files. These are PR-reported results; the report does not claim an independent rerun in this closeout.
 
 Run from `src/backend`:
 
