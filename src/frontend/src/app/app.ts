@@ -153,6 +153,29 @@ export class App implements AfterViewChecked {
       });
   }
 
+  protected taskStatusLabel(status: StructuredAgentResponse['task_status']): string {
+    if (this.language() === 'th') {
+      return status === 'dry_run_completed' ? 'จำลองเสร็จแล้ว' : 'วางแผนแล้ว';
+    }
+    return status === 'dry_run_completed' ? 'Dry run completed' : 'Planned';
+  }
+
+  protected prerequisiteLabel(status: string): string {
+    const labels: Record<UiLanguage, Record<string, string>> = {
+      th: {
+        known: 'ทราบแล้ว',
+        user_confirmation_needed: 'รอการยืนยันจากผู้ใช้',
+        discovery_not_available: 'ยังตรวจสอบไม่ได้ในระยะนี้',
+      },
+      en: {
+        known: 'Known',
+        user_confirmation_needed: 'User confirmation needed',
+        discovery_not_available: 'Discovery unavailable in this phase',
+      },
+    };
+    return labels[this.language()][status] ?? status;
+  }
+
   protected labelFor(kind: EntryKind): string {
     const labels: Record<UiLanguage, Record<EntryKind, string>> = {
       th: { user: 'คุณ', agent: 'Agent', error: 'ข้อผิดพลาด' },
