@@ -2,9 +2,7 @@
 
 ## Overview
 
-The project will be developed incrementally.
-
-Each phase must be completed, tested, documented, and committed to Git before moving to the next phase.
+The project will be developed incrementally. Each phase must be completed, tested, documented, and committed to Git before moving to the next phase.
 
 ---
 
@@ -114,7 +112,7 @@ Product Owner decision (2026-10-19): the phase order does not change. Tools that
 
 ## Status
 
-**Implementation and T-306/T-307 verification gates complete; Phase 3 closeout review pending.** T-301 through T-307 are merged (PRs #22–#27 and #30). Windows 11 verification includes backend 100 tests, Ruff, frontend 21 tests, production build, proxy authentication, production bundle token scan, and duplicate-token rejection. The final `scripts/test.ps1` rerun after T-307 passed. See `docs/T-306-REPORT.md` and `docs/PHASE-3.md`. Phase 4 must not start until all Phase 3 acceptance criteria are reviewed and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
+**Implementation and T-306/T-307 verification gates complete; Phase 3 closeout remains blocked by one acceptance gap.** A4's MA-005 review found that the planner does not identify task-specific prerequisites or explain why each is needed (acceptance criterion 1). See `docs/PHASE-3-QA-REVIEW.md`. T-301 through T-307 are merged (PRs #22–#27 and #30); Windows 11 verification is recorded in `docs/T-306-REPORT.md`. Phase 4 must not start until the gap is resolved, all acceptance criteria are reviewed, and the Product Owner explicitly approves closeout. Live provider calls and real machine-changing actions remain disabled.
 
 ---
 
@@ -285,7 +283,6 @@ Potential features:
 - User preferences
 - Scheduled tasks
 - Background tasks
-- Task history
 
 ## Status
 
@@ -297,7 +294,7 @@ Not Started
 
 ## Goal
 
-Create a stable personal AI Agent suitable for daily use.
+Create a stable personal Agent suitable for daily use.
 
 ## Requirements
 
@@ -337,7 +334,7 @@ A phase is considered complete only when:
 Phase 0  ██████████  Complete
 Phase 1  ██████████  Complete
 Phase 2  ██████████  Complete
-Phase 3  ████████░░  Closeout review pending
+Phase 3  ██████░░░░  Acceptance gap; closeout blocked
 Phase 4  ░░░░░░░░░░  Not Started
 Phase 5  ░░░░░░░░░░  Not Started
 Phase 6  ░░░░░░░░░░  Not Started
