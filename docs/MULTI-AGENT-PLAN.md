@@ -1,113 +1,76 @@
 # Multi-Agent Development Workflow — Four-Agent Plan
 
-## Status
+## Current status
+Phase 3 closeout was approved by the Product Owner on 2026-10-30. The Product Owner has authorized Phase 4 planning. Phase 4 runtime implementation has not started; see docs/PHASE-4.md.
 
-**Controlled workflow definition and initial documentation rollout are merged.** The current implementation is a coordinator-managed workflow simulation with four separated roles, not four autonomous LLM processes or a runtime orchestrator. No runtime multi-agent system, provider connection, credentials, or real PC execution is authorized.
-
-The current `main` baseline for this follow-up is `e6d6a83b51b5b49e23db0fc592fcf35abaa83766` (2026-10-30). PRs #30, #31, #32, #33, #35, and #36 are merged.
+The Four-Agent process is coordinator-managed with four separated roles. It is not four autonomous LLM processes or a runtime orchestrator. No provider/runtime/credential decisions are made by this workflow.
 
 ## Objective
+Reduce development time through parallel specialist work while preserving dependencies, source-of-truth documentation, safety boundaries, and Product Owner control.
 
-Use four specialized roles to reduce development time while preserving the Product Owner's control, repository safety, phase order, and review quality.
-
-## Four roles
-
-| Agent | Responsibility | Allowed parallel work | Must not do |
+## Roles
+| Agent | Responsibility | Parallel work | Restrictions |
 |---|---|---|---|
-| A1 — Coordinator / Product Analyst | Read source-of-truth docs, split approved work into bounded tasks, map dependencies, maintain task board and integration plan | Requirements analysis, acceptance criteria, dependency mapping, progress summaries | Change scope, approve decisions, merge PRs |
-| A2 — Backend Engineer | Backend contracts, API, deterministic Agent logic, backend tests | Independent backend task on its own branch | Bypass allowlists, enable live provider or machine-changing execution without approval |
-| A3 — Frontend / UX Engineer | Angular UI, accessibility, Thai/English UX, API integration | Independent frontend task on its own branch | Put secrets in browser code or bypass backend authorization |
-| A4 — QA / Security Reviewer | Test strategy, threat modelling, test execution, diff review, regression checks | Review completed or stable changes; prepare tests and findings | Modify another agent's branch without an assigned fix task; approve/merge its own work |
+| A1 — Coordinator / Product Analyst | Requirements, task decomposition, contracts, dependencies, board, integration | Documentation, acceptance criteria, dependency mapping | Cannot change scope, make Product Owner decisions, or merge |
+| A2 — Backend Engineer | Python backend contracts, registry, validation, dispatch, tests | Independent backend tasks after contract baseline | Cannot add arbitrary command execution, live provider, or real PC actions without approval |
+| A3 — Frontend / UX Engineer | Angular UI, accessibility, Thai/English UX, API integration | UX notes and independent frontend work after API contract | No secrets in browser code; cannot bypass backend authorization |
+| A4 — QA / Security Reviewer | Threat model, test strategy, source/diff review, test evidence | Review contracts and prepare test matrix in parallel | Does not approve/merge its own work |
 
-The coordinator is a workflow role, not a privileged agent. The Product Owner remains the final decision-maker.
+The Product Owner remains final decision-maker. The coordinator is not a privileged agent.
 
-## Parallel execution rules
-
-1. Start by reading `README.md`, `docs/PROJECT.md`, `docs/ROADMAP.md`, the active phase document, and relevant task reports.
-2. Confirm the current phase and its approved scope before creating tasks.
-3. Break work into small tasks with explicit inputs, outputs, acceptance criteria, risk, and dependencies.
-4. Run parallel tasks only when their dependency sets do not overlap in a way that requires shared edits.
-5. Each implementation agent uses a separate branch and working directory/worktree. Never have two agents write to the same branch or shared working tree.
-6. Branch convention for every task, including docs: `<type>/<task-id>-<short-name>`.
-7. Agents submit PRs; they do not merge. The coordinator checks completeness and reports conflicts. The Product Owner reviews and explicitly approves every merge.
-8. If a task changes an approved decision, security boundary, data flow, provider, permission, or phase scope, stop and request Product Owner approval before implementation.
-9. Never claim tests passed unless the command was actually run and its output was inspected. Record exact commands, environment, and results.
-10. Do not start dependent tasks until their prerequisites are merged and verified.
+## Operating rules
+1. Read project definition, roadmap, active phase document, task reports, and current source before planning.
+2. Verify GitHub main and open PRs before creating branches.
+3. Break work into bounded tasks with owner, inputs, outputs, acceptance criteria, risk, and dependencies.
+4. Parallelize only tasks with independent file ownership and stable contracts.
+5. Each implementation task uses its own branch and working directory/worktree.
+6. Branch naming for every task, including docs: <type>/<task-id>-<short-name>.
+7. Integrate in dependency order, not completion order.
+8. Agents submit PRs; they do not merge. Code/runtime PRs require explicit Product Owner merge approval.
+9. Documentation/planning may be completed directly when correct, consistent with approved decisions, and within current scope. If it changes a decision, scope, safety boundary, or external data flow, stop and ask.
+10. Never claim a test passed unless it was actually run and output inspected.
+11. Do not begin dependent work before prerequisites are stable/merged.
+12. If requirements conflict, stop and surface the conflict rather than guessing.
 
 ## Safety gates
-
-- All PC-changing tools remain mock/dry-run until the approved Safety and Permission System phase is implemented and explicitly approved.
-- No raw model output may be executed as a shell command.
-- No AI-provider integration, provider sign-in, external data transfer, or live model calls without explicit Product Owner decisions.
-- Local API authorization must remain enforced. Secrets stay server-side and must never enter frontend bundles, logs, PR diffs, or committed files.
-- Agents receive only the minimum repository/tool permissions needed for their task.
+- All PC-changing tools remain dry-run/mock until Phase 5 Safety and Permission System is implemented and explicitly approved.
+- No arbitrary shell/PowerShell/command execution; no raw model text passed to a command interpreter.
+- No PC inspection or read-only discovery without separate proposal and approval.
+- No AI-provider integration, provider sign-in, credentials, live model calls, or external data transfer without explicit decisions.
+- Preserve loopback binding and local API authorization.
+- Secrets remain server-side and must not enter frontend bundles, logs, PR diffs, or committed files.
+- Do not persist chat messages/history or task history.
 - No agent may change branch protection, repository permissions, secrets, or CI settings without explicit approval.
 
-## Task lifecycle
+## Workflow
+Product Owner authorizes scope -> A1 defines contracts/tasks/dependencies -> A2 and A3 analyze independent work -> A4 reviews threat model/test plan -> contract gate -> A2/A3 implement in parallel -> A4 reviews -> A1 checks integration -> Product Owner approves each code merge -> integrate in dependency order and test.
 
-```text
-Product Owner approves scope
-        |
-        v
-A1 decomposes work and dependencies
-        |
-        v
-A2 / A3 implement independent tasks in parallel
-        |
-        v
-A4 reviews tests, security, and regressions
-        |
-        v
-A1 checks integration readiness and reports
-        |
-        v
-Product Owner reviews and approves each merge
-        |
-        v
-Merge one PR at a time, then run integration checks
-```
-
-## Dependency and conflict policy
-
-- One task owns one set of files wherever practical.
-- If two tasks need the same contract or file, A1 must sequence them or create a prior contract task.
-- API/schema changes are agreed before frontend implementation depends on them.
-- A4 may prepare tests in parallel only against an approved contract; otherwise it records test proposals rather than guessing behavior.
-- Integrate in dependency order, not in the order PRs happen to finish.
-- A failed check returns to the owning agent as a bounded fix task. Do not silently patch another agent's work.
-
-## Initial rollout — documentation-only status
-
-| Step | Owner | Deliverable | Current status |
+## Phase 4 rollout
+See docs/PHASE-4.md for scope, exclusions, T-401 through T-406, dependencies, and acceptance criteria.
+| Task | Owner | Deliverable | Status |
 |---|---|---|---|
-| MA-001 | A1 + A4 | Inventory repository, phase status, branch/PR conventions, safety constraints | Complete; PR #32 merged |
-| MA-002 | A1 | Task decomposition template, dependency map, four-agent responsibility matrix | Complete; PR #32 merged and board maintained in MA-005 |
-| MA-003 | A4 | Definition of done and verification evidence review | T-306/T-307 evidence recorded in PR #31; MA-005 performed Phase 3 acceptance review |
-| MA-004 | A1–A4 | Dry-run simulation of one small documentation-only task across all four roles | Not started; separate approval/scope required |
-| MA-005 | A1 + A4 | Reconcile merged GitHub state and audit Phase 3 acceptance criteria | Complete; PR #33 merged; see `docs/PHASE-3-QA-REVIEW.md` |\n| T-308 | A2 + A4 | Add structured task-specific prerequisites and deterministic tests | Complete: PR #35 and parser fix PR #36 merged; Windows 11 test script passed; final A4 Phase 3 reassessment pending |
+| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planned |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Planned; depends on T-401 |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Planned; depends on T-401 |
+| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | Planned; depends on stable API |
+| T-405 | A4 | QA/security matrix and evidence review | Planned |
+| T-406 | A1 + A4 | Integration and Phase 4 closeout recommendation | Blocked until T-402–T-405 complete |
 
-## Current project gate
-
-T-306 and T-307 are merged and their Windows 11 verification is recorded in `docs/T-306-REPORT.md`. The final Product Owner test-script rerun after T-307 passed (backend 100 tests, Ruff, frontend 21 tests).
-
-A4's MA-005 review found that the planner did not identify task-specific prerequisites or justify them. T-308 closed the implementation gap with structured prerequisite items, reasons, dependency order, and explicit knowledge states. PR #35 and parser correction PR #36 are merged. No local inspection or web research is claimed. The latest Product Owner Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). A4's independent final Phase 3 acceptance reassessment remains pending. Phase 3 closeout remains blocked; Phase 4 must not start before explicit Product Owner approval.
-
-## Definition of done for an agent task
-
-- Task scope and acceptance criteria trace to an approved project document.
-- Branch follows the repository convention.
-- Changes are limited to the assigned task.
-- Tests/checks are run where feasible; unavailable checks are explicitly marked pending.
+## Definition of done
+- Task scope traces to approved project documentation.
+- Branch follows repository convention.
+- Changes stay within assigned task and approved phase scope.
+- Tests are added/updated and run; unrun checks are marked pending.
 - No secrets or unrelated files are included.
-- PR description includes summary, evidence, limitations, and safety impact.
-- Product Owner has explicitly approved the merge.
+- A4 review records correctness, security, tests, and limitations.
+- Code/runtime PR has explicit Product Owner merge approval.
+- Phase closeout is explicitly approved by Product Owner.
 
 ## Open decisions
+- Runtime/orchestration framework for four autonomous agents.
+- Local processes vs containers vs remote workers.
+- Credential and GitHub permission isolation.
+- Coordinator implementation approach.
+- Token/cost budgets, concurrency, timeouts, retries, and cancellation.
 
-- Which orchestration runtime will host the four development agents.
-- Whether agents will be local processes, containers, or remote workers.
-- How credentials and GitHub permissions will be isolated.
-- Whether the coordinator is deterministic code or an LLM-backed agent.
-- Token/cost budgets, concurrency limits, timeout, retry, and cancellation policy.
-
-These decisions remain open. This document does not select a provider or authorize credential provisioning.
+This plan does not select a provider, provision credentials, implement an orchestrator, or authorize real PC automation.
