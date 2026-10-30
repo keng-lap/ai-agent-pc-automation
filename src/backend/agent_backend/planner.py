@@ -43,7 +43,7 @@ _KNOWN_SOFTWARE = {
     "git": "Git",
 }
 
-_INSTALL_PREFIX = re.compile(r"(?:install|set\s+up|setup)(?:\s+(?:the\s+)?)?", re.IGNORECASE)
+_INSTALL_PREFIX = re.compile(r"(?:please\s+)?(?:install|set\s+up|setup)(?:\s+(?:the\s+)?)?", re.IGNORECASE)
 _REMOVE_PREFIX = re.compile(
     r"(?:uninstall|remove)(?:\s+(?:the\s+)?)?", re.IGNORECASE
 )
