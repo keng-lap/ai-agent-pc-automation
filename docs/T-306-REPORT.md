@@ -2,9 +2,9 @@
 
 ## Status
 
-**Merged in PR #27 on 2026-10-30** (merge commit `4e9ebe937e3a40764e22b2062ff2dfd314e58a8b`). Product Owner approved D-SEC-1 option A on 2026-10-30.
+**Implementation and Product Owner Windows 11 verification complete.** T-306 was merged in PR #27 on 2026-10-30 (merge commit `4e9ebe937e3a40764e22b2062ff2dfd314e58a8b`). T-307's duplicate-token automated regression test was merged in PR #30 on 2026-10-30 (merge commit `7b12e92edaa4ffdd91946c27af6573c0fe68d69a`). The final Windows 11 test-script rerun after T-307 passed.
 
-Implementation and Product Owner Windows 11 verification are complete. A dedicated automated regression test for duplicate token headers is being added in T-307; Phase 3 remains open until that test is merged and the final suite is rerun.
+Product Owner approved D-SEC-1 option A on 2026-10-30.
 
 ## Approved decision
 
@@ -17,7 +17,7 @@ Require a random per-installation 256-bit token on every `/api/*` request. Keep 
 - Setup generates 32 random bytes and stores the hex token in local `.env`.
 - The development launcher validates the token before starting the services.
 - The Angular development proxy injects the token server-side.
-- Existing backend tests cover missing/invalid tokens and Host, Origin, content-type, request-size, and health checks.
+- Backend tests cover missing/invalid tokens, duplicate token headers, and Host, Origin, content-type, request-size, and health checks.
 - No AI provider integration or real PC-changing execution is introduced.
 
 ## Verification evidence
@@ -27,8 +27,8 @@ Require a random per-installation 256-bit token on every `/api/*` request. Keep 
 | Check | Result |
 |---|---|
 | `scripts/setup.ps1` | PASS |
-| `scripts/test.ps1` backend pytest | PASS — 100 tests |
-| Ruff | PASS |
+| Final `scripts/test.ps1` after T-307 merge — backend pytest | PASS — 100 tests |
+| Ruff | PASS — all checks passed |
 | Frontend unit tests | PASS — 21 tests |
 | Frontend production build | PASS |
 | Development backend and frontend startup | PASS |
@@ -38,16 +38,18 @@ Require a random per-installation 256-bit token on every `/api/*` request. Keep 
 | Frontend proxy `POST /api/chat` with allowed Origin | PASS — API response received |
 | Production bundle token scan | PASS — token not found |
 | Duplicate token header manual test | PASS — rejected with 401 |
+| T-307 automated duplicate-token regression | PASS — merged in PR #30 |
 | Agent Planner browser flow | PASS — deterministic local preview; no tool allowed and no PC changes |
 
 The first direct PowerShell proxy probe returned 403 because it omitted the required `Origin` header. Repeating the same request with `Origin: http://127.0.0.1:4200` succeeded. This is expected enforcement, not a proxy defect.
 
-The GitHub Actions run associated with current `main` commit `b2b029bc11e5d3ac7d9a91f8c28321d4ad5851b8` reports success for the dynamic CodeQL workflow. This is not a substitute for the local pytest/Ruff/frontend test results.
+After PR #30 merged, the Product Owner reran `scripts/test.ps1` on the clean clone. Final output: backend pytest 100 passed, Ruff all checks passed, frontend 21 tests passed, and the script reported “All checks passed.”
 
-## Remaining regression gate
+GitHub Actions checks on the T-307 PR head completed successfully for CodeQL, Python analysis, and JavaScript/TypeScript analysis. The PR #30 merge is recorded above.
 
-- T-307 adds a backend automated regression test proving duplicate `X-Local-Agent-Token` headers receive 401. The implementation already rejects duplicate headers; the manual Windows 11 test confirmed this behavior.
-- After T-307 is merged, rerun `scripts/test.ps1` on the clean clone and record the final result before closing Phase 3.
+## Remaining Phase 3 work
+
+The T-307 duplicate-token regression gate is complete. The documented T-306/T-307 verification work is complete; overall Phase 3 closeout still requires review of the complete Phase 3 acceptance criteria and Product Owner approval. Do not start Phase 4 until Phase 3 closeout is explicitly approved and merged.
 
 ## Safety boundary
 
