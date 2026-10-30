@@ -40,6 +40,24 @@ def test_agent_api_rejects_incorrect_local_token():
     assert response.json() == {"detail": "Local Agent authorization required."}
 
 
+def test_agent_api_rejects_duplicate_local_token_headers():
+    duplicate_token_client = TestClient(
+        app,
+        base_url=BASE_URL,
+        headers={"origin": GOOD_ORIGIN},
+    )
+    response = duplicate_token_client.post(
+        "/api/chat",
+        json={"message": "hello", "language": "en"},
+        headers=[
+            ("x-local-agent-token", "a" * 64),
+            ("x-local-agent-token", "a" * 64),
+        ],
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Local Agent authorization required."}
+
+
 def test_health_remains_available_without_local_token():
     no_token_client = TestClient(app, base_url=BASE_URL)
     response = no_token_client.get("/health")
