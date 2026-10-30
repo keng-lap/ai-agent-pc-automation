@@ -226,6 +226,13 @@ def test_application_factory_fails_closed_on_invalid_ports(monkeypatch, name):
         create_app()
 
 
+def test_environment_configuration_rejects_missing_or_malformed_token(monkeypatch):
+    for token in ("", "too-short", "G" * 64):
+        monkeypatch.setenv("LOCAL_AGENT_TOKEN", token)
+        with pytest.raises(ConfigError):
+            load_settings(load_env_file=False)
+
+
 def test_environment_configuration_rejects_non_loopback_bind(monkeypatch):
     monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
     with pytest.raises(ConfigError):
