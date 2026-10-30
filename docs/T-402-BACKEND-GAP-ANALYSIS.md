@@ -29,6 +29,13 @@ No source code was changed and no runtime tests were run as part of this analysi
 - agent_core.run_agent() composes planner, selection, validation, and dry-run handler.
 - Provider connection is explicitly false. No provider call is made.
 
+### Frontend source review (follow-up)
+- src/frontend/src/app/app.ts validates only that the response has a string reply field, then stores that reply as a single Agent chat entry.
+- src/frontend/src/app/app.html renders chat text; it does not currently render plan steps, prerequisites, tool_result, approval_required, or provider_connected as structured UI.
+- Chat entries are held in an Angular signal for the current page session; only language preference is written to localStorage.
+- The empty-state hint still says the Agent is not ready / replies are placeholders, which is stale relative to the current deterministic backend pipeline.
+- src/backend/agent_backend/main.py also has a module docstring describing the chat route as a placeholder that does not invoke an Agent, which conflicts with the current chat.py -> run_agent path. This is documentation drift, not a runtime behavior finding.
+
 ### Tests
 - Tests cover allowlisted selection for install/remove.
 - Tests reject unknown tool IDs and arbitrary extra command fields.
@@ -50,6 +57,7 @@ No source code was changed and no runtime tests were run as part of this analysi
 | Frontend mapping | AgentResponse exposes plan and optional tool_result | Verify frontend mapping and current UI state before adapter changes | Medium |
 
 ## Recommended implementation approach (not authorization to code)
+9. T-404 should integrate with the existing chat view rather than invent a second workflow surface; render structured fields only after backend contract stability.
 1. Keep ToolRequest and ToolResult constraints unless a demonstrated requirement needs change.
 2. Add metadata around the existing allowlist rather than create a plugin architecture.
 3. If a registry is introduced, make it static, backend-owned, immutable, and closed by default.
