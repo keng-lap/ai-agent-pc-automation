@@ -32,7 +32,7 @@ def test_thai_install_request_has_localized_prerequisites():
 
     assert plan.intent.category == "software_install"
     assert plan.intent.target == "Google Chrome"
-    assert plan.prerequisites[0].title == "Identify software target"
+    assert plan.prerequisites[0].title == "ระบุซอฟต์แวร์เป้าหมาย"
     assert plan.prerequisites[2].status == "discovery_not_available"
     assert "ยังไม่มี" in plan.steps[-1].detail or "ไม่มีคำสั่งจริง" in plan.steps[-1].detail
 
