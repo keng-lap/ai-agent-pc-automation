@@ -2,7 +2,13 @@ import pytest
 from pydantic import ValidationError
 
 from agent_backend.planner import create_task_plan
-from agent_backend.tools import ToolRequest, execute_tool, list_tools, select_tool, validate_tool_request
+from agent_backend.tools import (
+    ToolRequest,
+    execute_tool,
+    list_tools,
+    select_tool,
+    validate_tool_request,
+)
 
 
 @pytest.mark.parametrize(
