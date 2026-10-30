@@ -1,345 +1,71 @@
 # Project Roadmap
 
-## Overview
-
-The project will be developed incrementally. Each phase must be completed, tested, documented, and committed to Git before moving to the next phase.
-
----
-
-# Phase 0 — Foundation
-
-## Goal
-
-Prepare the project foundation.
-
-## Tasks
-
-- Create Git repository
-- Create project structure
-- Create project documentation
-- Define architecture
-- Define development rules
-- Define safety principles
-- Define Claude working rules
-
-## Deliverables
-
-- README.md
-- PROJECT.md
-- ROADMAP.md
-- PHASE-0.md
-- Git repository
-
-## Status
-
-**Complete** — see `docs/PHASE-0.md`, Section 7.
-
----
-
-# Phase 1 — Local Development Environment
-
-## Goal
-
-Prepare the development environment.
-
-## Tasks
-
-- Select programming language
-- Select backend framework
-- Select frontend framework
-- Define local development workflow
-- Create basic application structure
-- Configure environment variables
-- Create development scripts
-
-## Deliverables
-
-A runnable local development environment.
-
-## Status
-
-**Complete** — see `docs/PHASE-1.md`, Section 7.
-
----
-
-# Phase 2 — Local Web Application
-
-## Goal
-
-Create the user interface for communicating with the Agent.
-
-## Tasks
-
-- Build local web application
-- Create chat interface
-- Send user commands to backend
-- Display Agent responses
-- Add basic error handling
-
-## Deliverables
-
-User can open a local web application and communicate with the Agent.
-
-## Status
-
-**Complete (2026-10-23)** — T-202 (PR #13), T-203 (PR #15), T-205 (PR #16), and T-204 (PR #18) are merged. The Product Owner reported MV-01 to MV-14 passed (PR #19). Final test and task evidence: `docs/PHASE-2-COMPLETION-REPORT.md`.
-
----
-
-# Phase 3 — Agent Core
-
-## Goal
-
-Create the AI Agent core.
-
-## Tasks
-
-- Receive user command
-- Analyze intent
-- Create task plan
-- Select appropriate tool
-- Execute controlled tool
-- Return result
-- Handle errors
-
-## Deliverables
-
-A basic working AI Agent.
-
-## Safety Constraint (P-ORDER-1, option A)
-
-Product Owner decision (2026-10-19): the phase order does not change. Tools that can modify the machine are dry-run or mock only until the Safety and Permission System (Phase 5) is implemented and approved. See `docs/PROPOSALS.md`.
-
-## Status
-
-**Complete — Phase 3 closeout approved by the Product Owner (2026-10-30).** T-301 through T-308 are merged. T-308 adds task-specific prerequisite records, reasons, dependency order, and explicit knowledge states (PR #35); its parser correction is merged in PR #36. A4's final reassessment marks all eight acceptance criteria met for the approved local/dry-run scope. The Product Owner-supplied Windows 11 test-script run passed (100 backend tests, Ruff, 21 frontend tests). Live provider calls and real machine-changing actions remain disabled. Phase 4 is Not Started and requires separate explicit approval.
-
----
-
-# Phase 4 — Tool / Task System
-
-## Goal
-
-Create a controlled system for PC automation.
-
-## Initial Tools
-
-Potential tools include:
-
-- System information
-- File operations
-- Process management
-- Application detection
-- Software installation
-- Software removal
-- Command execution
-
-Tools must have explicit permissions and validation.
-
-## Deliverables
-
-A controlled tool execution layer.
-
-## Safety Constraint (P-ORDER-1, option A)
-
-Product Owner decision (2026-10-19): the phase order does not change. Tools that can modify the machine are dry-run or mock only until the Safety and Permission System (Phase 5) is implemented and approved. See `docs/PROPOSALS.md`.
-
-## Status
-
-Not Started
-
----
-
-# Phase 5 — Safety and Permission System
-
-## Goal
-
-Prevent unsafe or unintended actions.
-
-## Tasks
-
-- Classify commands by risk
-- Add confirmation mechanism
-- Add permission levels
-- Validate tool parameters
-- Add command restrictions
-- Add audit logging
-
-## Deliverables
-
-A safer Agent capable of handling sensitive PC operations.
-
-## Status
-
-Not Started
-
----
-
-# Phase 6 — Real PC Automation
-
-## Goal
-
-Enable useful real-world automation.
-
-## Example Tasks
-
-User:
-
-> Install Chrome.
-
-Agent:
-
-```text
-Task detected:
-Install Google Chrome
-
-Risk level:
-Medium
-
-Action:
-Installation requires confirmation.
-
-Proceed?
-```
-
-User:
-
-> Yes.
-
-Agent executes the approved installation and reports the result.
-
-## Deliverables
-
-Working PC automation workflows.
-
-## Status
-
-Not Started
-
----
-
-# Phase 7 — Monitoring and Logging
-
-## Goal
-
-Make the system observable and debuggable.
-
-## Tasks
-
-- Agent logs
-- Tool execution logs
-- Error logs
-- Task history
-- Execution time
-- Success/failure status
-
-## Deliverables
-
-A traceable Agent system.
-
-## Status
-
-Not Started
-
----
-
-# Phase 8 — Reliability
-
-## Goal
-
-Improve reliability for everyday use.
-
-## Tasks
-
-- Retry handling
-- Timeout handling
-- Recovery mechanisms
-- Better error messages
-- Task state management
-- Idempotent operations where possible
-
-## Deliverables
-
-A more reliable personal Agent.
-
-## Status
-
-Not Started
-
----
-
-# Phase 9 — Advanced Agent
-
-## Goal
-
-Improve Agent intelligence and autonomy.
-
-Potential features:
-
-- Multi-step planning
-- Task decomposition
-- Tool selection
-- Context memory
-- User preferences
-- Scheduled tasks
-- Background tasks
-
-## Status
-
-Not Started
-
----
-
-# Phase 10 — Production-Ready Personal Agent
-
-## Goal
-
-Create a stable personal Agent suitable for daily use.
-
-## Requirements
-
-- Stable architecture
-- Security controls
-- Permission system
-- Logging
-- Error recovery
-- Automated testing
-- Documentation
-- Backup/recovery strategy
-
-## Status
-
-Not Started
-
----
-
-# Development Rule
-
-Never skip a phase without explicitly reviewing the reason.
-
-A phase is considered complete only when:
-
-1. Implementation is complete.
-2. Tests pass.
-3. Documentation is updated.
-4. Git changes are committed.
-5. The project is pushed to GitHub.
-6. The next phase is explicitly started.
-
----
-
-# Current Position
-
-```text
-Phase 0  ██████████  Complete
-Phase 1  ██████████  Complete
-Phase 2  ██████████  Complete
-Phase 3  ██████████  Complete (closeout approved)
-Phase 4  ░░░░░░░░░░  Not Started
-Phase 5  ░░░░░░░░░░  Not Started
-Phase 6  ░░░░░░░░░░  Not Started
-Phase 7  ░░░░░░░░░░  Not Started
-Phase 8  ░░░░░░░░░░  Not Started
-Phase 9  ░░░░░░░░░░  Not Started
-Phase 10 ░░░░░░░░░░  Not Started
-```
+The project is developed incrementally. Each phase has a defined scope, safety boundary, verification evidence, and explicit Product Owner closeout. The approved phase order is preserved.
+
+## Phase 0 — Foundation
+**Complete.** See docs/PHASE-0.md.
+
+## Phase 1 — Local Development Environment
+**Complete.** See docs/PHASE-1.md.
+
+## Phase 2 — Local Web Application
+**Complete (2026-10-23).** T-202, T-203, T-205, and T-204 are merged. The Product Owner reported MV-01 to MV-14 passed. See docs/PHASE-2-COMPLETION-REPORT.md.
+
+## Phase 3 — Agent Core
+**Complete — Product Owner closeout approved 2026-10-30.** T-301 through T-308 are merged. T-308 adds task-specific prerequisite records and deterministic tests (PR #35); PR #36 fixes polite install request parsing. A4's final reassessment marks all eight acceptance criteria met for the approved local/dry-run scope. Product Owner-supplied Windows 11 test-script evidence: 100 backend tests passed, Ruff passed, 21 frontend tests passed. A4 did not independently execute this Windows run. See docs/PHASE-3-QA-REVIEW.md, docs/T-308-REPORT.md, and docs/PHASE-3.md.
+
+## Phase 4 — Tool / Task System
+**Status: Planning authorized; runtime implementation not started.** The Product Owner authorized Phase 4 planning after Phase 3 closeout. Detailed plan: docs/PHASE-4.md.
+
+Goal: formalize a backend-controlled tool catalog, validation/dispatch boundary, request-scoped task lifecycle, and clear dry-run status UX.
+
+Proposed tasks:
+- T-401 — Tool contract/catalog for existing dry-run tools.
+- T-402 — Central registry, validation, deterministic dispatch.
+- T-403 — Request-scoped in-memory task lifecycle; no history persistence.
+- T-404 — Thai-default bilingual tool/task status UX.
+- T-405 — QA/security matrix and evidence.
+- T-406 — Integration and Phase 4 closeout recommendation.
+
+Safety boundary: no real installation/removal, shell execution, file/process/system changes, PC inspection, provider integration, credentials, or external data transfer. All machine-changing paths remain mock/dry-run until Phase 5 is complete and explicitly approved.
+
+## Phase 5 — Safety and Permission System
+**Not Started.** Mandatory safety gate before real machine-changing operations. Scope includes risk classification, explicit confirmation, permission levels, parameter validation, command restrictions, and audit controls.
+
+## Phase 6 — Real PC Automation
+**Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
+
+## Phase 7 — Monitoring and Logging
+**Not Started.** Future observability scope must respect data minimization and explicit retention decisions.
+
+## Phase 8 — Reliability
+**Not Started.**
+
+## Phase 9 — Advanced Agent
+**Not Started.** Multi-step planning, memory, scheduled/background tasks, and autonomy require separate privacy, safety, and architecture decisions.
+
+## Phase 10 — Production-Ready Personal Agent
+**Not Started.**
+
+## Development and approval rules
+- Never skip or reorder phases without an explicit Product Owner decision.
+- Documentation/planning can proceed without per-document approval when consistent with approved decisions and current scope.
+- Runtime/code changes require bounded tasks, tests, review, and explicit Product Owner merge approval.
+- No real PC-changing action before Phase 5 is complete and explicitly approved.
+- No provider integration or external data transfer without explicit decisions on provider, account authorization, data handling, and secure credential storage.
+- Phase closeout requires evidence and explicit Product Owner approval.
+
+## Current position
+| Phase | Status |
+|---|---|
+| 0 | Complete |
+| 1 | Complete |
+| 2 | Complete |
+| 3 | Complete — closeout approved |
+| 4 | Planning authorized; implementation not started |
+| 5 | Not Started |
+| 6 | Not Started |
+| 7 | Not Started |
+| 8 | Not Started |
+| 9 | Not Started |
+| 10 | Not Started |
