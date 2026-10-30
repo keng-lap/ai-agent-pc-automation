@@ -140,7 +140,7 @@ def test_missing_origin_is_rejected_for_post_but_allowed_for_health():
     [None, "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"],
 )
 def test_non_json_state_changing_requests_are_rejected(content_type):
-    headers = {"origin": GOOD_ORIGIN}
+    headers = {**GOOD_HEADERS}
     if content_type is not None:
         headers["content-type"] = content_type
     response = client.post(
