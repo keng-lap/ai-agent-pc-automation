@@ -11,7 +11,10 @@ from agent_backend.main import app
 client = TestClient(
     app,
     base_url="http://127.0.0.1:8000",
-    headers={"origin": "http://127.0.0.1:4200"},
+    headers={
+        "origin": "http://127.0.0.1:4200",
+        "x-local-agent-token": "a" * 64,
+    },
 )
 INVALID_REQUEST = (
     'Invalid request. Send JSON like {"message": "...", "language": "th"} '
