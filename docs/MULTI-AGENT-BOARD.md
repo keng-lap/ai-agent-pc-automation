@@ -11,7 +11,7 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 - Phase 3 closeout was explicitly approved by the Product Owner on 2026-10-30; all eight A4 acceptance criteria are recorded as met for the approved local/dry-run scope.
 - Latest Product Owner-supplied Windows 11 test-script output: 100 backend tests passed, Ruff passed, 21 frontend tests passed. A4 did not independently execute this run.
 - Phase 4 planning is authorized and underway. See docs/PHASE-4.md.
-- Phase 4 planning outputs T-401 through T-405 are merged (PRs #40–#44); runtime implementation has not started.
+- Phase 4 planning outputs T-401 through T-405 are merged (PRs #40–#44). Initial implementation PRs #45–#47 are open; none is merged and Windows verification is pending.
 - Machine-changing operations remain dry-run/mock until Phase 5 is implemented and explicitly approved.
 - No AI provider, provider credentials, live model calls, or external data transfer are approved.
 
@@ -26,10 +26,10 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 ## Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
 |---|---|---|---|---|
-| T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Planning doc merged (#40); implementation pending |
-| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Gap analysis merged (#41); implementation pending |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Contract merged (#42); implementation pending |
-| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | UX spec merged (#43); implementation pending |
+| T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Contract merged (#40); code PR #45 open |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Code PR #45 open; tests pending |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Code PR #46 open; tests pending |
+| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | Code PR #47 open; tests/build pending |
 | T-405 | A4 | QA/security matrix and evidence review | T-401; implementation as available | Matrix merged (#44); execution evidence pending |
 | T-406 | A1 + A4 | Integration/documentation closeout recommendation | T-402–T-405 | Blocked until verification |
 
