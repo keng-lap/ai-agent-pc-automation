@@ -28,7 +28,7 @@ if (-not $tokenLine -or $tokenLine -eq 'LOCAL_AGENT_TOKEN=') {
         $envLines = $envLines | ForEach-Object {
             if ($_ -match '^LOCAL_AGENT_TOKEN=') { "LOCAL_AGENT_TOKEN=$token" } else { $_ }
         }
-        Set-Content -LiteralPath '.env' -Value $envLines -Encoding UTF8
+        [System.IO.File]::WriteAllLines((Join-Path $script:RepoRoot '.env'), $envLines, (New-Object System.Text.UTF8Encoding($false)))
     } else {
         Add-Content -LiteralPath '.env' -Value "LOCAL_AGENT_TOKEN=$token"
     }
