@@ -46,7 +46,10 @@ The Product Owner remains final decision-maker. The coordinator is not a privile
 Product Owner authorizes scope -> A1 defines contracts/tasks/dependencies -> A2 and A3 analyze independent work -> A4 reviews threat model/test plan -> contract gate -> A2/A3 implement in parallel -> A4 reviews -> A1 checks integration -> Product Owner approves each code merge -> integrate in dependency order and test.
 
 ## Phase 4 closeout
-Phase 4 is closed by Product Owner approval on 2026-11-02. PRs #45–#47 are merged and Windows verification passed. See docs/PHASE-4.md.\n\n## Phase 5 rollout\nSee docs/PHASE-5.md for the authorized planning baseline, four-role workstreams, task dependencies, and safety gates. Planning only; no runtime implementation is authorized.
+Phase 4 is closed by Product Owner approval on 2026-11-02. PRs #45–#47 are merged and Windows verification passed. See docs/PHASE-4.md.
+
+## Phase 5 rollout
+See docs/PHASE-5.md for the authorized planning baseline, four-role workstreams, task dependencies, and safety gates. Planning only; no runtime implementation is authorized.
 | Task | Owner | Deliverable | Status |
 |---|---|---|---|
 | T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning and implementation complete; PRs #40 and #45 merged |
