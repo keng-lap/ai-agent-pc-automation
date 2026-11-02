@@ -15,9 +15,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .chat import router as chat_router
 from .config import load_settings
 from .security import LocalWebSecurityMiddleware
+from .policy import validate_policy_configuration
 
 
 def create_app(settings=None) -> FastAPI:
+    validate_policy_configuration()
     settings = settings or load_settings()
     docs_enabled = settings.app_env == "development"
     application = FastAPI(
