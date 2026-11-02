@@ -58,6 +58,9 @@ def validate_policy_configuration() -> None:
         "R2": ("P2", "deny"),
         "R3": ("P3", "deny"),
     }
+    if dict(_RULE_BY_RISK) != {rule.risk: rule for rule in POLICY_MATRIX}:
+        raise PolicyConfigurationError("Policy lookup does not match the approved matrix")
+
     for rule in POLICY_MATRIX:
         if (rule.permission, rule.outcome) != expected_pairs[rule.risk]:
             raise PolicyConfigurationError("Policy matrix contains an invalid permission mapping")
