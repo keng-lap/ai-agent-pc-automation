@@ -48,6 +48,6 @@ Primary documents: README.md, docs/PROJECT.md, docs/ROADMAP.md, docs/PHASE-0.md 
 If sources conflict, stop and reconcile documentation before implementation. Proposals are not requirements until explicitly approved.
 
 ## 10. Current Status
-**Phase 3 closeout approved 2026-10-30. Phase 4 planning authorized; runtime implementation not started.**
+**Phase 4 closeout approved 2026-11-02. Phase 5 planning authorized 2026-11-02; runtime implementation is not yet authorized.**
 
-See docs/PHASE-3-QA-REVIEW.md for closeout evidence and docs/PHASE-4.md for the active planning baseline. Phase 4 implementation tasks must follow dependencies and safety gates. Phase 5 remains mandatory before any real machine-changing execution.
+See docs/PHASE-4.md for Phase 4 closeout scope and docs/PHASE-5.md for the active safety-planning baseline. Phase 5 does not authorize real machine-changing execution; Phase 6 and each individual capability require separate authorization.

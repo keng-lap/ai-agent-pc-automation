@@ -3,13 +3,13 @@
 Personal AI Agent for safely automating approved tasks on a local Windows 11 PC through a local web application.
 
 ## Current project status
-**Phase 4 — Tool / Task System: planning authorized; runtime implementation not started.**
+**Phase 4 — Tool / Task System: CLOSED (Product Owner approval, 2026-11-02). Phase 5 — Safety and Permission System: planning authorized (2026-11-02).**
 
-- Phase 0–2 are complete.
-- Phase 3 Agent Core closeout was explicitly approved by the Product Owner on 2026-10-30. All eight A4 acceptance criteria are recorded as met for the approved local/dry-run scope.
-- Phase 4 planning is authorized. See docs/PHASE-4.md.
+- Phase 0–3 are complete.
+- Phase 4 implementation PRs #45–#47 are merged. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5.
+- Phase 5 planning baseline: docs/PHASE-5.md. Runtime implementation is not yet authorized.
 - The Four-Agent workflow is coordinator-managed with four separated roles; it is not four autonomous LLM processes or a runtime orchestrator.
-- Machine-changing tools remain mock/dry-run until Phase 5 Safety and Permission System is complete and explicitly approved.
+- Machine-changing tools remain mock/dry-run. Phase 5 does not enable real execution; Phase 6 and each capability require separate authorization.
 - No AI provider, provider credentials, live model calls, or external data transfer are approved.
 
 ## Project goal

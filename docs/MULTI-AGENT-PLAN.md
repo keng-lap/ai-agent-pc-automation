@@ -1,7 +1,7 @@
 # Multi-Agent Development Workflow — Four-Agent Plan
 
 ## Current status
-Phase 3 closeout was approved by the Product Owner on 2026-10-30. The Product Owner has authorized Phase 4 planning. Phase 4 planning outputs T-401 through T-405 are merged (PRs #40–#44); runtime implementation has not started. See docs/PHASE-4.md.
+Phase 4 closeout was approved by the Product Owner on 2026-11-02. Implementation PRs #45–#47 are merged; Product Owner Windows 11 verification passed (75 backend tests, Ruff, 22 frontend tests), recorded at commit 8233af5. Phase 5 planning was authorized on 2026-11-02; see docs/PHASE-5.md. No Phase 5 runtime implementation or real PC execution is authorized yet.
 
 The Four-Agent process is coordinator-managed with four separated roles. It is not four autonomous LLM processes or a runtime orchestrator. No provider/runtime/credential decisions are made by this workflow.
 
@@ -45,16 +45,21 @@ The Product Owner remains final decision-maker. The coordinator is not a privile
 ## Workflow
 Product Owner authorizes scope -> A1 defines contracts/tasks/dependencies -> A2 and A3 analyze independent work -> A4 reviews threat model/test plan -> contract gate -> A2/A3 implement in parallel -> A4 reviews -> A1 checks integration -> Product Owner approves each code merge -> integrate in dependency order and test.
 
-## Phase 4 rollout
-See docs/PHASE-4.md for scope, exclusions, T-401 through T-406, dependencies, and acceptance criteria.
+## Phase 4 closeout
+Phase 4 is closed by Product Owner approval on 2026-11-02. PRs #45–#47 are merged and Windows verification passed. See docs/PHASE-4.md.
+
+## Phase 5 rollout
+See docs/PHASE-5.md for the authorized planning baseline, four-role workstreams, task dependencies, and safety gates. Planning only; no runtime implementation is authorized.
+
+### Archived Phase 4 task history
 | Task | Owner | Deliverable | Status |
 |---|---|---|---|
-| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning doc merged (#40); implementation pending |
-| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Gap analysis merged (#41); implementation pending; depends on T-401 |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Contract merged (#42); implementation pending; depends on T-401 |
-| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | UX spec merged (#43); implementation pending; depends on stable API |
-| T-405 | A4 | QA/security matrix and evidence review | Matrix merged (#44); execution evidence pending |
-| T-406 | A1 + A4 | Integration and Phase 4 closeout recommendation | Blocked until T-402–T-405 complete |
+| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning and implementation complete; PRs #40 and #45 merged |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Gap analysis and implementation complete; PR #45 merged |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Contract and implementation complete; PR #46 merged |
+| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | UX spec and implementation complete; PR #47 merged |
+| T-405 | A4 | QA/security matrix and evidence review | Matrix merged (#44); Windows verification passed |
+| T-406 | A1 + A4 | Integration and Phase 4 closeout recommendation | Complete — Product Owner closeout approved 2026-11-02 |
 
 ## Definition of done
 - Task scope traces to approved project documentation.
