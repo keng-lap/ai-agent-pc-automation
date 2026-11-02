@@ -58,7 +58,7 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 | P5-503 | A1 + A2 | Confirmation lifecycle and exact-action binding contract — docs/P5-503-CONFIRMATION-CONTRACT.md | P5-502 | Proposal drafted; Product Owner review pending |
 | P5-504 | A2 + A4 | Backend enforcement architecture and fail-closed design — docs/P5-504-BACKEND-ENFORCEMENT-ARCHITECTURE.md | P5-502, P5-503 | Proposal drafted; Product Owner review pending |
 | P5-505 | A3 + A1 | Thai-default bilingual confirmation UX/API contract — docs/P5-505-DRY-RUN-UX-API-CONTRACT.md | P5-503 | Proposal drafted; Product Owner review pending |
-| P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal | P5-501, P5-502 | Planned |
+| P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal — docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md | P5-501, P5-502 | Proposal drafted; Product Owner review pending |
 | P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan | P5-502 through P5-506 | Planned |
 | P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet | P5-501 through P5-507 | Planned |
 
