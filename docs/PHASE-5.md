@@ -54,19 +54,19 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 | Task | Owner | Deliverable | Depends on | Status |
 |---|---|---|---|---|
 | P5-501 | A4 | Threat model and current security-boundary audit — docs/P5-501-THREAT-MODEL.md | Existing Phase 2–4 baseline | Complete — read-only review; no code/tests run |
-| P5-502 | A1 + A4 | Risk classification and permission-level proposal — docs/P5-502-RISK-PERMISSION-PROPOSAL.md | P5-501 | Proposal drafted; Product Owner review pending |
-| P5-503 | A1 + A2 | Confirmation lifecycle and exact-action binding contract — docs/P5-503-CONFIRMATION-CONTRACT.md | P5-502 | Proposal drafted; Product Owner review pending |
-| P5-504 | A2 + A4 | Backend enforcement architecture and fail-closed design — docs/P5-504-BACKEND-ENFORCEMENT-ARCHITECTURE.md | P5-502, P5-503 | Proposal drafted; Product Owner review pending |
-| P5-505 | A3 + A1 | Thai-default bilingual confirmation UX/API contract — docs/P5-505-DRY-RUN-UX-API-CONTRACT.md | P5-503 | Proposal drafted; Product Owner review pending |
-| P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal — docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md | P5-501, P5-502 | Proposal drafted; Product Owner review pending |
-| P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan — docs/P5-507-QA-SECURITY-MATRIX.md | P5-502 through P5-506 | Proposal drafted; Product Owner review pending |
-| P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet — docs/P5-508-INTEGRATED-DESIGN-DECISION-PACKET.md | P5-501 through P5-507 | Proposal drafted; Product Owner review pending |
+| P5-502 | A1 + A4 | Risk classification and permission-level proposal — docs/P5-502-RISK-PERMISSION-PROPOSAL.md | P5-501 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
+| P5-503 | A1 + A2 | Confirmation lifecycle and exact-action binding contract — docs/P5-503-CONFIRMATION-CONTRACT.md | P5-502 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
+| P5-504 | A2 + A4 | Backend enforcement architecture and fail-closed design — docs/P5-504-BACKEND-ENFORCEMENT-ARCHITECTURE.md | P5-502, P5-503 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
+| P5-505 | A3 + A1 | Thai-default bilingual confirmation UX/API contract — docs/P5-505-DRY-RUN-UX-API-CONTRACT.md | P5-503 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
+| P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal — docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md | P5-501, P5-502 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
+| P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan — docs/P5-507-QA-SECURITY-MATRIX.md | P5-502 through P5-506 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
+| P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet — docs/P5-508-INTEGRATED-DESIGN-DECISION-PACKET.md | P5-501 through P5-507 | All 12 PO decisions recorded; runtime start not authorized |
 
 P5-501 read-only threat model is complete: docs/P5-501-THREAT-MODEL.md. It confirms that the existing local API token is not human identity or proof of action consent.\n\nParallel work is limited to independent read-only analysis. Contracts must be reconciled before any implementation task is proposed. No dependent task may bypass an unresolved decision.
 
-## Design questions that remain open
+## Approved design decisions and remaining gates
 
-The following details are not silently decided by this planning baseline:
+All 12 P5-508 decisions were explicitly approved by the Product Owner on 2026-10-30 using the recommended safe defaults. The detailed decision register is in `docs/P5-508-INTEGRATED-DESIGN-DECISION-PACKET.md`. P5-502 through P5-507 must now be reconciled to that baseline. This approval permits bounded planning/task decomposition only; it does not authorize runtime implementation. D-P5-12 requires a separate explicit instruction.
 
 1. Risk classes, thresholds, and the exact mapping from tool/action to risk.
 2. Permission levels, their scope, and whether permissions are per action, per session, or another bounded unit.
@@ -77,7 +77,7 @@ The following details are not silently decided by this planning baseline:
 7. How permission revocation, application restart, token rotation, clock changes, and concurrent requests behave.
 8. Which actions remain permanently unsupported or require separate Phase 6 authorization.
 
-Any decision that changes data retention, local exposure, provider/data flow, or the approved safety boundary must be brought to the Product Owner before implementation.
+Any proposed change to the approved data-retention, local-exposure, provider/data-flow, or safety boundary must return to the Product Owner before implementation.
 
 ## Acceptance criteria for the Phase 5 design
 
