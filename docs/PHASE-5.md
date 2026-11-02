@@ -31,6 +31,7 @@ The AI model, planner, frontend, and client request must never grant permission 
 
 - A random per-installation 256-bit local API token is stored in ignored `.env`, injected by the Angular development proxy server-side, and checked by the backend using constant-time comparison.
 - Missing, invalid, or duplicate `X-Local-Agent-Token` headers are rejected for `/api/*`; `/health` remains unauthenticated by design.
+- The local API token authorizes requests from the local development proxy; it does **not** identify a human user or count as explicit approval for a sensitive action.
 - Backend middleware validates Host and Origin, rejects state-changing requests without Origin, requires JSON for state-changing requests, and enforces a 16 KiB request limit.
 - The tool catalog is backend-owned and immutable. It currently contains only `software.install` and `software.remove`, both high-risk and dry-run-only.
 - Tool request/result models are strict and frozen; dispatch uses a fixed handler map.
