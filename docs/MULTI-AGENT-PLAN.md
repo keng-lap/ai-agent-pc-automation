@@ -50,6 +50,8 @@ Phase 4 is closed by Product Owner approval on 2026-11-02. PRs #45–#47 are mer
 
 ## Phase 5 rollout
 See docs/PHASE-5.md for the authorized planning baseline, four-role workstreams, task dependencies, and safety gates. Planning only; no runtime implementation is authorized.
+
+### Archived Phase 4 task history
 | Task | Owner | Deliverable | Status |
 |---|---|---|---|
 | T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning and implementation complete; PRs #40 and #45 merged |
