@@ -49,12 +49,12 @@ Product Owner authorizes scope -> A1 defines contracts/tasks/dependencies -> A2 
 Phase 4 is closed by Product Owner approval on 2026-11-02. PRs #45–#47 are merged and Windows verification passed. See docs/PHASE-4.md.\n\n## Phase 5 rollout\nSee docs/PHASE-5.md for the authorized planning baseline, four-role workstreams, task dependencies, and safety gates. Planning only; no runtime implementation is authorized.
 | Task | Owner | Deliverable | Status |
 |---|---|---|---|
-| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning doc merged (#40); implementation pending |
-| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Gap analysis merged (#41); implementation pending; depends on T-401 |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Contract merged (#42); implementation pending; depends on T-401 |
-| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | UX spec merged (#43); implementation pending; depends on stable API |
-| T-405 | A4 | QA/security matrix and evidence review | Matrix merged (#44); execution evidence pending |
-| T-406 | A1 + A4 | Integration and Phase 4 closeout recommendation | Blocked until T-402–T-405 complete |
+| T-401 | A1 + A2; A4 review | Tool catalog/contract for existing dry-run tools | Planning and implementation complete; PRs #40 and #45 merged |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch | Gap analysis and implementation complete; PR #45 merged |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence | Contract and implementation complete; PR #46 merged |
+| T-404 | A3; A4 review | Tool/task status UX, Thai default and English option | UX spec and implementation complete; PR #47 merged |
+| T-405 | A4 | QA/security matrix and evidence review | Matrix merged (#44); Windows verification passed |
+| T-406 | A1 + A4 | Integration and Phase 4 closeout recommendation | Complete — Product Owner closeout approved 2026-11-02 |
 
 ## Definition of done
 - Task scope traces to approved project documentation.
