@@ -58,11 +58,11 @@ Phase 4 must inspect and reuse these contracts before proposing changes. No new 
 ## Proposed task breakdown and dependencies
 | Task | Owner | Deliverable | Depends on | Gate |
 |---|---|---|---|---|
-| T-401 Tool contract/catalog | A1 + A2; A4 review | Document metadata for existing tools: stable ID, description, intent, input/output schema, risk class, execution mode, approval-required flag | Phase 3 baseline | Contract documented; code metadata in PR #45 |
+| T-401 Tool contract/catalog | A1 + A2; A4 review | Document metadata for existing tools: stable ID, description, intent, input/output schema, risk class, execution mode, approval-required flag | Phase 3 baseline | Complete — contract PR #40 and code metadata in PR #45 merged |
 | T-402 Registry and dispatch | A2; A4 review | Central registry, validation, deterministic dispatch; preserve allowlist and dry-run behavior | T-401 | Complete — PR #45 merged; Windows tests passed |
 | T-403 Task lifecycle | A1 + A2; A4 review | Request-scoped in-memory states and transitions; no database, background worker, or history persistence | T-401; coordinate with T-402 API | Complete — PR #46 merged; Windows tests passed |
 | T-404 Frontend status UX | A3; A4 review | Display selected tool, validation, dry-run preview, approval-required state; Thai default, English option | T-401 and stable T-402/T-403 API | Complete — PR #47 merged; 22 frontend tests passed |
-| T-405 QA/security matrix | A4 | Tests/checklist for allowlist, schemas, unknown tools, malformed requests, deterministic dry-run, status transitions, no side effects | T-401 and implementation as available | Threat model and test matrix merged; execution evidence pending implementation |
+| T-405 QA/security matrix | A4 | Tests/checklist for allowlist, schemas, unknown tools, malformed requests, deterministic dry-run, status transitions, no side effects | T-401 and implementation as available | Complete — matrix merged (#44); focused Windows verification passed (75 backend tests, Ruff, 22 frontend tests) |
 | T-406 Integration/closeout | A1 + A4 | Reconcile docs, dependencies, test evidence, Phase 4 closeout recommendation | T-402 through T-405 | Complete — Product Owner closeout approved 2026-11-02 |
 
 ## Parallel planning outputs merged
