@@ -22,7 +22,13 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 | A3 — Frontend / UX Engineer | Thai-default bilingual UX and API integration | UX flow notes; T-404 after API contract |
 | A4 — QA / Security Reviewer | Threat model, test matrix, source/diff review, evidence | Contract review and T-405 test matrix/security review |
 
-## Phase 4 closeout\nPhase 4 is complete. PRs #45–#47 are merged; the Product Owner's focused Windows verification passed. See docs/PHASE-4.md.\n\n## Phase 5 planning board\nSee docs/PHASE-5.md for P5-501 through P5-508, dependencies, workstream assignments, and the planning-only safety boundary.\n\n## Archived Phase 4 task board
+## Phase 4 closeout
+Phase 4 is complete. PRs #45–#47 are merged; the Product Owner's focused Windows verification passed. See docs/PHASE-4.md.
+
+## Phase 5 planning board
+See docs/PHASE-5.md for P5-501 through P5-508, dependencies, workstream assignments, and the planning-only safety boundary.
+
+## Archived Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
 |---|---|---|---|---|
 | T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Complete — contract PR #40 and implementation PR #45 merged |
