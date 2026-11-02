@@ -60,7 +60,7 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 | P5-505 | A3 + A1 | Thai-default bilingual confirmation UX/API contract — docs/P5-505-DRY-RUN-UX-API-CONTRACT.md | P5-503 | Proposal drafted; Product Owner review pending |
 | P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal — docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md | P5-501, P5-502 | Proposal drafted; Product Owner review pending |
 | P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan — docs/P5-507-QA-SECURITY-MATRIX.md | P5-502 through P5-506 | Proposal drafted; Product Owner review pending |
-| P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet | P5-501 through P5-507 | Planned |
+| P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet — docs/P5-508-INTEGRATED-DESIGN-DECISION-PACKET.md | P5-501 through P5-507 | Proposal drafted; Product Owner review pending |
 
 P5-501 read-only threat model is complete: docs/P5-501-THREAT-MODEL.md. It confirms that the existing local API token is not human identity or proof of action consent.\n\nParallel work is limited to independent read-only analysis. Contracts must be reconciled before any implementation task is proposed. No dependent task may bypass an unresolved decision.
 
