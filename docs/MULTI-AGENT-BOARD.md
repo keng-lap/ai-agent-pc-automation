@@ -6,13 +6,12 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 ## Repository baseline and current status
 - Repository: keng-lap/ai-agent-pc-automation
 - Default branch: main
-- Latest main baseline after Phase 4 parallel planning docs: e1a2b7815a5bf7f3f173785f5f9d3a2726c63761 (PR #44).
-- PRs #30, #31, #32, #33, #35, #36, #37, and #38 are merged.
-- Phase 3 closeout was explicitly approved by the Product Owner on 2026-10-30; all eight A4 acceptance criteria are recorded as met for the approved local/dry-run scope.
-- Latest Product Owner-supplied Windows 11 test-script output: 100 backend tests passed, Ruff passed, 21 frontend tests passed. A4 did not independently execute this run.
-- Phase 4 planning is authorized and underway. See docs/PHASE-4.md.
-- Phase 4 planning outputs T-401 through T-405 are merged (PRs #40–#44). Initial implementation PRs #45–#47 are open; none is merged and Windows verification is pending.
-- Machine-changing operations remain dry-run/mock until Phase 5 is implemented and explicitly approved.
+- Latest main baseline at Phase 4 closeout: 8233af5a9f29a61a20d86a1662c88dd0274578f9.
+- Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02.
+- Phase 4 implementation PRs #45–#47 are merged. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed.
+- Phase 5 planning was authorized by the Product Owner on 2026-11-02. Planning baseline: docs/PHASE-5.md.
+- No Phase 5 runtime implementation, permission grant, or real PC execution is authorized yet.
+- Machine-changing operations remain dry-run/mock until Phase 5 is complete and explicitly approved; Phase 6 and each capability require separate authorization.
 - No AI provider, provider credentials, live model calls, or external data transfer are approved.
 
 ## Roles
@@ -23,15 +22,15 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 | A3 — Frontend / UX Engineer | Thai-default bilingual UX and API integration | UX flow notes; T-404 after API contract |
 | A4 — QA / Security Reviewer | Threat model, test matrix, source/diff review, evidence | Contract review and T-405 test matrix/security review |
 
-## Phase 4 task board
+## Phase 4 closeout\nPhase 4 is complete. PRs #45–#47 are merged; the Product Owner's focused Windows verification passed. See docs/PHASE-4.md.\n\n## Phase 5 planning board\nSee docs/PHASE-5.md for P5-501 through P5-508, dependencies, workstream assignments, and the planning-only safety boundary.\n\n## Archived Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
 |---|---|---|---|---|
 | T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Contract merged (#40); code PR #45 open |
-| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Code PR #45 open; tests pending |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Code PR #46 open; tests pending |
-| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | Code PR #47 open; tests/build pending |
-| T-405 | A4 | QA/security matrix and evidence review | T-401; implementation as available | Matrix merged (#44); execution evidence pending |
-| T-406 | A1 + A4 | Integration/documentation closeout recommendation | T-402–T-405 | Blocked until verification |
+| T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Complete — PR #45 merged; Windows verification passed |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Complete — PR #46 merged; tests pending |
+| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | Complete — PR #47 merged; tests/build pending |
+| T-405 | A4 | QA/security matrix and evidence review | T-401; implementation as available | Matrix merged (#44); Windows verification evidence recorded |
+| T-406 | A1 + A4 | Integration/documentation closeout recommendation | T-402–T-405 | Complete — Product Owner closeout approved 2026-11-02 |
 
 ## Parallelization and dependency rules
 - A1 finalizes contracts and dependencies first.
