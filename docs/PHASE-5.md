@@ -53,7 +53,7 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 
 | Task | Owner | Deliverable | Depends on | Status |
 |---|---|---|---|---|
-| P5-501 | A4 | Threat model and current security-boundary audit | Existing Phase 2–4 baseline | In progress |
+| P5-501 | A4 | Threat model and current security-boundary audit — docs/P5-501-THREAT-MODEL.md | Existing Phase 2–4 baseline | Complete — read-only review; no code/tests run |
 | P5-502 | A1 + A4 | Risk classification and permission-level proposal | P5-501 | Planned |
 | P5-503 | A1 + A2 | Confirmation lifecycle and exact-action binding contract | P5-502 | Planned |
 | P5-504 | A2 + A4 | Backend enforcement architecture and fail-closed design | P5-502, P5-503 | Planned |
@@ -62,7 +62,7 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 | P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan | P5-502 through P5-506 | Planned |
 | P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet | P5-501 through P5-507 | Planned |
 
-Parallel work is limited to independent read-only analysis. Contracts must be reconciled before any implementation task is proposed. No dependent task may bypass an unresolved decision.
+P5-501 read-only threat model is complete: docs/P5-501-THREAT-MODEL.md. It confirms that the existing local API token is not human identity or proof of action consent.\n\nParallel work is limited to independent read-only analysis. Contracts must be reconciled before any implementation task is proposed. No dependent task may bypass an unresolved decision.
 
 ## Design questions that remain open
 
