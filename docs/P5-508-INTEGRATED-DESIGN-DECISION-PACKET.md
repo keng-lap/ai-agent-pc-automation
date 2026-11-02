@@ -4,7 +4,7 @@
 
 **Product Owner decisions recorded — all 12 decisions approved on 2026-10-30. Documentation only.** This packet consolidates P5-501 through P5-507 and records the approved design baseline.
 
-It is not Phase 5 completion, does not approve the individual proposals, and does not authorize runtime implementation, tests, PC inspection, downloads, provider calls, external transfer, installation, removal, or execution.
+It is not Phase 5 completion or approval of runtime implementation. It records the approved design decisions, but does not authorize tests, PC inspection, downloads, provider calls, external transfer, installation, removal, or execution.
 
 Current permission remains P1 — dry-run / plan and report only. P2 inspection and P3 machine-changing execution remain disabled. Phase 6 is not authorized. Existing `software.install` and `software.remove` tools remain dry-run/mock only.
 
@@ -29,11 +29,11 @@ The approved design baseline is: backend-owned policy; fixed catalog; strict val
 |---|---|---|
 | P5-501 | `docs/P5-501-THREAT-MODEL.md` | Complete — read-only audit |
 | P5-502 | `docs/P5-502-RISK-PERMISSION-PROPOSAL.md` | Proposal drafted; PO decision approved |
-| P5-503 | `docs/P5-503-CONFIRMATION-CONTRACT.md` | Proposal drafted; PO review pending |
-| P5-504 | `docs/P5-504-BACKEND-ENFORCEMENT-ARCHITECTURE.md` | Proposal drafted; PO review pending |
-| P5-505 | `docs/P5-505-DRY-RUN-UX-API-CONTRACT.md` | Proposal drafted; PO review pending |
-| P5-506 | `docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md` | Proposal drafted; PO review pending |
-| P5-507 | `docs/P5-507-QA-SECURITY-MATRIX.md` | Proposal drafted; PO review pending |
+| P5-503 | `docs/P5-503-CONFIRMATION-CONTRACT.md` | Proposal drafted; PO decision approved |
+| P5-504 | `docs/P5-504-BACKEND-ENFORCEMENT-ARCHITECTURE.md` | Proposal drafted; PO decision approved |
+| P5-505 | `docs/P5-505-DRY-RUN-UX-API-CONTRACT.md` | Proposal drafted; PO decision approved |
+| P5-506 | `docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md` | Proposal drafted; PO decision approved |
+| P5-507 | `docs/P5-507-QA-SECURITY-MATRIX.md` | Proposal drafted; PO decision approved |
 | P5-508 | This integrated decision packet | Approved design baseline |
 
 ## 3. Integrated target architecture
@@ -49,7 +49,7 @@ Cross-cutting constraints:
 - A P1 acknowledgement, if approved, is only an acknowledgement of a specific displayed dry-run plan. It is not identity proof or execution consent.
 - A changed plan invalidates the prior review reference.
 - No execute/install/remove endpoint or UI control exists in P1.
-- Thai is the default UI language; English is selectable. Thai is the default UI language; English is selectable.
+- Thai is the default UI language; English is selectable.
 - Audit collection must not become chat/task history. Durable logging is not approved.
 
 This is a target contract, not a claim that the current code already implements this pipeline.
@@ -58,7 +58,7 @@ This is a target contract, not a claim that the current code already implements 
 
 ### 4.1 Risk and permission
 
-P5-502 proposes R0–R3 and P0–P3, with P1 as the only active permission. Confirm the exact mapping for the fixed catalog, and confirm that R2/P2 and R3/P3 are hard-denied with no environment-variable or client override.
+Approved: adopt R0–R3 and P0–P3; P1 is the only active permission. R2/R3 and P2/P3 are hard-denied, with no client or environment-variable override.
 
 ### 4.2 Confirmation
 
@@ -128,8 +128,7 @@ This packet is based on the planning documents in GitHub main. The planning work
 
 ## 9. Product Owner response
 
-The Product Owner may approve, revise, or defer each decision in Section 5. The design decisions are now recorded as approved. P5-502 through P5-507 must be reconciled to this baseline. Bounded task decomposition is permitted as planning work. No runtime implementation may begin until a separate explicit PO instruction. P1 dry-run/mock remains the only permitted mode; P2/P3 and Phase 6 remain disabled/not authorized.
-
+The Product Owner has approved the decisions in Section 5. P5-502 through P5-507 must be reconciled to this baseline. Bounded task decomposition is permitted as planning work. No runtime implementation may begin until a separate explicit PO instruction. P1 dry-run/mock remains the only permitted mode; P2/P3 and Phase 6 remain disabled/not authorized.
 
 
 ## 10. Approval record
