@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**Integrated planning packet for Product Owner review. Documentation only.** This packet consolidates P5-501 through P5-507 and identifies decisions required before any runtime implementation can be proposed.
+**Product Owner decisions recorded — all 12 decisions approved on 2026-10-30. Documentation only.** This packet consolidates P5-501 through P5-507 and records the approved design baseline.
 
 It is not Phase 5 completion, does not approve the individual proposals, and does not authorize runtime implementation, tests, PC inspection, downloads, provider calls, external transfer, installation, removal, or execution.
 
@@ -19,22 +19,22 @@ The planning set now covers:
 - Audit event, privacy, retention, and access (P5-506).
 - QA/security matrix and evidence plan (P5-507).
 
-The proposals share a consistent core: backend-owned policy; fixed catalog; strict validation; fail-closed dispatch; no arbitrary commands; no provider; no chat/task history; dry-run only; explicit per-program plan; and no implication that acknowledgement authorizes execution.
+The approved design baseline is: backend-owned policy; fixed catalog; strict validation; fail-closed dispatch; no arbitrary commands; no provider; no chat/task history; dry-run only; explicit per-program plan; and no implication that acknowledgement authorizes execution.
 
-**Assessment:** the documentation planning deliverables are drafted, but the design is not yet decision-complete. There are unresolved Product Owner choices, and some contracts must be reconciled after those choices. No runtime work should start merely because this packet exists.
+**Assessment:** all 12 Product Owner design decisions are approved and recorded below. Contract reconciliation and bounded implementation-task decomposition may proceed as documentation/planning work. Runtime implementation is still NOT authorized; a separate explicit Product Owner instruction is required.
 
 ## 2. Document inventory
 
 | Task | Document | Planning status |
 |---|---|---|
 | P5-501 | `docs/P5-501-THREAT-MODEL.md` | Complete — read-only audit |
-| P5-502 | `docs/P5-502-RISK-PERMISSION-PROPOSAL.md` | Proposal drafted; PO review pending |
+| P5-502 | `docs/P5-502-RISK-PERMISSION-PROPOSAL.md` | Proposal drafted; PO decision approved |
 | P5-503 | `docs/P5-503-CONFIRMATION-CONTRACT.md` | Proposal drafted; PO review pending |
 | P5-504 | `docs/P5-504-BACKEND-ENFORCEMENT-ARCHITECTURE.md` | Proposal drafted; PO review pending |
 | P5-505 | `docs/P5-505-DRY-RUN-UX-API-CONTRACT.md` | Proposal drafted; PO review pending |
 | P5-506 | `docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md` | Proposal drafted; PO review pending |
 | P5-507 | `docs/P5-507-QA-SECURITY-MATRIX.md` | Proposal drafted; PO review pending |
-| P5-508 | This integrated decision packet | Proposal drafted; PO review pending |
+| P5-508 | This integrated decision packet | Approved design baseline |
 
 ## 3. Integrated target architecture
 
@@ -49,7 +49,7 @@ Cross-cutting constraints:
 - A P1 acknowledgement, if approved, is only an acknowledgement of a specific displayed dry-run plan. It is not identity proof or execution consent.
 - A changed plan invalidates the prior review reference.
 - No execute/install/remove endpoint or UI control exists in P1.
-- Thai is the default UI language; English is selectable. The exact language choice remains subject to the P5-505 PO decision.
+- Thai is the default UI language; English is selectable. Thai is the default UI language; English is selectable.
 - Audit collection must not become chat/task history. Durable logging is not approved.
 
 This is a target contract, not a claim that the current code already implements this pipeline.
@@ -62,7 +62,7 @@ P5-502 proposes R0–R3 and P0–P3, with P1 as the only active permission. Conf
 
 ### 4.2 Confirmation
 
-P5-503 proposes exact immutable action binding, expiry, one-time use, cancellation, restart invalidation, and concurrency-safe consumption. The proposed 10-minute expiry is a proposal, not an approved value. P5-505 treats acknowledgement as optional. PO must decide whether acknowledgement exists at all in the current P1 workflow.
+P5-503 proposes exact immutable action binding, expiry, one-time use, cancellation, restart invalidation, and concurrency-safe consumption. Approved: 10-minute expiry for any review reference. P5-505 treats acknowledgement as optional. Approved: no acknowledgement step is required in the current P1 workflow; displaying the dry-run report is sufficient. If an acknowledgement is later proposed, it remains informational only and requires a separately reviewed change.
 
 ### 4.3 UX/API
 
@@ -70,7 +70,7 @@ P5-505 proposes illustrative routes and response fields, not a final API. Route 
 
 ### 4.4 Audit/privacy
 
-P5-506 offers three alternatives: A) bounded ephemeral in-memory events cleared on restart, B) minimal durable local security log, or C) no event collection beyond safe errors. Option B changes the retention boundary and requires explicit approval of duration, size, rotation, access, deletion, and export rules. Recommendation is A or C for the current privacy-minimal P1 stage; no choice is assumed.
+P5-506 offers three alternatives: A) bounded ephemeral in-memory events cleared on restart, B) minimal durable local security log, or C) no event collection beyond safe errors. Option B changes the retention boundary and requires explicit approval of duration, size, rotation, access, deletion, and export rules. Approved: option A — bounded ephemeral in-memory events cleared on restart. Durable logging (option B) is not approved.
 
 ### 4.5 Test evidence
 
@@ -78,22 +78,22 @@ P5-507 defines 35 proposed cases. None of these cases has been executed by this 
 
 ## 5. Product Owner decision register
 
-Please decide each item explicitly. "Approve the packet" should not be interpreted as silently resolving all options unless the PO states that intention.
+The Product Owner explicitly approved all 12 decisions on 2026-10-30, using the proposed safe defaults. The table records the binding decisions:
 
-| ID | Decision required | Proposed safe default | Current status |
+| ID | Decision | Approved decision / status | Status |
 |---|---|---|---|
-| D-P5-01 | Adopt risk classes R0–R3 and backend mapping | Adopt proposal, with R2/R3 denied | Pending |
-| D-P5-02 | Adopt permission levels P0–P3 | P1 only active; P2/P3 hard-denied | Pending |
-| D-P5-03 | Confirmation expiry | 10 minutes for a review reference | Pending |
-| D-P5-04 | Restart and replay behavior | Invalidate pending references on restart; one-time atomic consumption | Pending |
-| D-P5-05 | Exact plan binding | Bind to complete immutable per-program plan and parameters; any change invalidates reference | Pending |
-| D-P5-06 | P1 acknowledgement | Optional; safest simplest path is show report without acknowledgement unless a clear product need exists | Pending |
-| D-P5-07 | UX/API | Thai default, English selectable; approve fields and reconcile routes before implementation | Pending |
-| D-P5-08 | Audit collection | A (bounded ephemeral memory cleared on restart) or C (no event collection); do not choose durable B by default | Pending |
-| D-P5-09 | Audit schema | Allowlisted metadata only; no prompt, plan body, secrets, raw parameters, or machine inventory | Pending |
-| D-P5-10 | Audit failure behavior | Policy evaluation failure denies; optional diagnostics failure must not trigger unsafe fallback | Pending |
-| D-P5-11 | Implementation decomposition | Create bounded implementation tasks only after decisions are resolved and contracts reconciled | Pending |
-| D-P5-12 | Phase 5 runtime start | Require a separate explicit PO instruction after planning approval | Not authorized |
+| D-P5-01 | Adopt risk classes R0–R3 and backend mapping | Approved — adopt proposal; R2/R3 denied | Approved |
+| D-P5-02 | Adopt permission levels P0–P3 | Approved — P1 only active; P2/P3 hard-denied | Approved |
+| D-P5-03 | Confirmation expiry | Approved — 10 minutes for a review reference | Approved |
+| D-P5-04 | Restart and replay behavior | Approved — invalidate pending references on restart; one-time atomic consumption | Approved |
+| D-P5-05 | Exact plan binding | Approved — bind complete immutable per-program plan and parameters; any change invalidates reference | Approved |
+| D-P5-06 | P1 acknowledgement | Approved — no acknowledgement required for current P1 report; any future acknowledgement is informational only | Approved |
+| D-P5-07 | UX/API | Approved — Thai default, English selectable; reconcile API routes/contracts before implementation | Approved |
+| D-P5-08 | Audit collection | Approved — A: bounded ephemeral in-memory events cleared on restart; durable B is not approved | Approved |
+| D-P5-09 | Audit schema | Approved — allowlisted metadata only; no prompt, plan body, secrets, raw parameters, or machine inventory | Approved |
+| D-P5-10 | Audit failure behavior | Approved — policy evaluation failure denies; diagnostics failure never triggers unsafe fallback | Approved |
+| D-P5-11 | Implementation decomposition | Approved — create bounded implementation tasks after contracts are reconciled | Approved |
+| D-P5-12 | Phase 5 runtime start | Not authorized — separate explicit PO instruction still required | Not authorized |
 
 ## 6. Recommended implementation sequencing — not authorized
 
@@ -128,9 +128,10 @@ This packet is based on the planning documents in GitHub main. The planning work
 
 ## 9. Product Owner response
 
-The Product Owner may approve, revise, or defer each decision in Section 5. Until explicit decisions are recorded:
-- All P5-502 through P5-507 proposals remain pending review.
-- No runtime implementation may begin.
-- P1 dry-run/mock remains the only permitted mode.
-- P2/P3 and Phase 6 remain disabled/not authorized.
+The Product Owner may approve, revise, or defer each decision in Section 5. The design decisions are now recorded as approved. P5-502 through P5-507 must be reconciled to this baseline. Bounded task decomposition is permitted as planning work. No runtime implementation may begin until a separate explicit PO instruction. P1 dry-run/mock remains the only permitted mode; P2/P3 and Phase 6 remain disabled/not authorized.
 
+
+
+## 10. Approval record
+
+On 2026-10-30, the Product Owner explicitly confirmed: “ทั้ง 12 ข้อเลย” — approving all 12 decisions using the recommended safe defaults. This approval resolves D-P5-01 through D-P5-11 as recorded above. D-P5-12 remains a separate gate: runtime implementation has not been authorized.
