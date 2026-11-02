@@ -25,10 +25,10 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 ## Phase 4 closeout\nPhase 4 is complete. PRs #45–#47 are merged; the Product Owner's focused Windows verification passed. See docs/PHASE-4.md.\n\n## Phase 5 planning board\nSee docs/PHASE-5.md for P5-501 through P5-508, dependencies, workstream assignments, and the planning-only safety boundary.\n\n## Archived Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
 |---|---|---|---|---|
-| T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Contract merged (#40); code PR #45 open |
+| T-401 | A1 + A2; A4 review | Tool contract/catalog for existing dry-run tools only | Phase 3 baseline | Complete — contract PR #40 and implementation PR #45 merged |
 | T-402 | A2; A4 review | Central registry, validation, deterministic dispatch; no new capability | T-401 | Complete — PR #45 merged; Windows verification passed |
-| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Complete — PR #46 merged; tests pending |
-| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | Complete — PR #47 merged; tests/build pending |
+| T-403 | A1 + A2; A4 review | Request-scoped in-memory task lifecycle; no persistence/history | T-401 | Complete — PR #46 merged; 75 backend tests passed |
+| T-404 | A3; A4 review | Tool/task status and dry-run UX; Thai default, English option | T-401; T-402/T-403 API | Complete — PR #47 merged; 22 frontend tests passed |
 | T-405 | A4 | QA/security matrix and evidence review | T-401; implementation as available | Matrix merged (#44); Windows verification evidence recorded |
 | T-406 | A1 + A4 | Integration/documentation closeout recommendation | T-402–T-405 | Complete — Product Owner closeout approved 2026-11-02 |
 
