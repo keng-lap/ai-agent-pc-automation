@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from agent_backend.config import ConfigError, load_settings
 from agent_backend.main import app, create_app
+from agent_backend.providers import gemini
 from agent_backend.security import MAX_REQUEST_BYTES, LocalWebSecurityMiddleware
 from fastapi.testclient import TestClient
 
