@@ -10,7 +10,6 @@ from agent_backend.tools import (
     select_tool,
     validate_tool_request,
 )
-from pydantic import ValidationError
 
 
 @pytest.mark.parametrize(
