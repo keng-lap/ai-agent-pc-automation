@@ -2,6 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
 import { ChatApi, UiLanguage } from './chat/chat-api';
+import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10';
@@ -66,7 +67,7 @@ function readStoredLanguage(): UiLanguage {
 
 @Component({
   selector: 'app-root',
-  imports: [],
+  imports: [GeminiSettingsComponent],
   styleUrl: './app.css',
   templateUrl: './app.html',
 })
@@ -186,8 +187,8 @@ export class App implements AfterViewChecked {
 
   protected get hint(): string {
     return this.language() === 'th'
-      ? 'Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงานในโหมดจำลอง โดยยังไม่มีการเปลี่ยนแปลงเครื่องคอมพิวเตอร์.'
-      : 'The Agent analyzes requests and presents a dry-run plan. No changes are made to your computer.';
+      ? 'เชื่อมต่อ Gemini เพื่อสนทนาได้โดยตรง โดยไม่มีการสั่งงานคอมพิวเตอร์ในขั้นตอนนี้.'
+      : 'Chat with Gemini directly. Computer actions are not enabled in this MVP.';
   }
 
   protected get placeholder(): string {
