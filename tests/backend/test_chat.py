@@ -1,5 +1,4 @@
 import pytest
-from agent_backend import chat as chat_module
 from agent_backend.main import app
 from agent_backend.providers import gemini
 from fastapi.testclient import TestClient
