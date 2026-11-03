@@ -5,7 +5,7 @@ import { ChatApi, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
-type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10';
+type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11';
 
 interface StructuredAgentResponse {
   task_status: 'planned' | 'dry_run_completed';
@@ -30,7 +30,7 @@ interface ChatEntry {
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
 const MAX_MESSAGE_LENGTH = 2000;
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 60_000;
 
 const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
   th: {
@@ -42,6 +42,7 @@ const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
     'MSG-08': 'Backend ส่งคำตอบในรูปแบบที่ไม่คาดคิด',
     'MSG-09': 'ข้อความมีขนาดใหญ่เกินไป',
     'MSG-10': 'เกิดข้อผิดพลาดที่ไม่คาดคิด (HTTP {status})',
+    'MSG-11': 'กรุณาตั้งค่า Gemini API Key ก่อนเริ่มสนทนา',
   },
   en: {
     'MSG-03': 'Cannot reach the backend. Check that it is running (scripts\\dev.ps1).',
@@ -52,6 +53,7 @@ const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
     'MSG-08': 'The backend sent an unexpected response.',
     'MSG-09': 'The message is too large.',
     'MSG-10': 'Unexpected error (HTTP {status}).',
+    'MSG-11': 'Please configure your Gemini API key before chatting.',
   },
 };
 
@@ -258,11 +260,13 @@ export class App implements AfterViewChecked {
     if (typeof error !== 'object' || error === null || !('status' in error)) return 'MSG-03';
 
     const status = Number((error as { status: unknown }).status);
-    if (status === 0 || status === 502 || status === 503 || status === 504) return 'MSG-03';
+    if (status === 409) return 'MSG-11';
+    if (status === 0 || status === 503 || status === 504) return 'MSG-03';
     if (status === 400 || status === 403 || status === 415) return 'MSG-05';
     if (status === 413) return 'MSG-09';
     if (status === 422) return 'MSG-04';
     if (status === 200) return 'MSG-08';
+    if (status === 502) return 'MSG-06';
     if (status >= 500 && status <= 599) {
       return this.hasBackendDetail(error) ? 'MSG-06' : 'MSG-03';
     }
