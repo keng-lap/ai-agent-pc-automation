@@ -349,7 +349,7 @@ describe('App chat UI (T-202)', () => {
   it('F-21: every MSG-01 to MSG-11 text and entry labels exist in Thai and English', async () => {
     await render();
     // MSG-01
-    expect(fixture.nativeElement.textContent).toContain('Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงาน');
+    expect(fixture.nativeElement.textContent).toContain('เชื่อมต่อ Gemini เพื่อสนทนาได้โดยตรง');
     languageButton('EN').click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Chat with Gemini directly');
@@ -370,7 +370,7 @@ describe('App chat UI (T-202)', () => {
     pendingSubject.complete();
     fixture.detectChanges();
 
-    // MSG-03 to MSG-10
+    // MSG-03 to MSG-11
     const cases: Array<{ error: unknown; thai: string; english: string }> = [
       { error: { status: 0 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 422 }, thai: 'ไม่รับข้อความนี้', english: '1 to 2000 characters' },
