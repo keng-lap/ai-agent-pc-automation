@@ -40,7 +40,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 - Documentation/planning can proceed without per-document approval when consistent with approved decisions and current scope.
 - Runtime/code changes require bounded tasks, tests, review, and explicit Product Owner merge approval.
 - No real PC-changing action before Phase 5 is complete and explicitly approved.
-- No provider integration or external data transfer without explicit decisions on provider, account authorization, data handling, and secure credential storage.
+- T-601 separately authorizes Gemini text-only chat (2026-11-03): current message only, no chat-history transfer or function/tool calling, and API key in backend memory only. Any broader provider integration or external data flow still requires explicit Product Owner decisions.
 - Phase closeout requires evidence and explicit Product Owner approval.
 
 ## Current position
