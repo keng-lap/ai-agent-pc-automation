@@ -15,6 +15,13 @@ GOOD_ORIGIN = "http://127.0.0.1:4200"
 GOOD_HEADERS = {"origin": GOOD_ORIGIN, "x-local-agent-token": "a" * 64}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
+
+@pytest.fixture(autouse=True)
+def configure_mock_gemini(monkeypatch):
+    monkeypatch.setattr(gemini, "_api_key", "mock-gemini-key-123456789")
+    monkeypatch.setattr(gemini, "generate_reply", lambda _message: "mock Gemini reply")
+    monkeypatch.setattr(gemini, "test_connection", lambda: None)
+
 def test_agent_api_rejects_missing_local_token():
     no_token_client = TestClient(app, base_url=BASE_URL, headers={"origin": GOOD_ORIGIN})
     response = no_token_client.post(
