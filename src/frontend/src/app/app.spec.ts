@@ -15,6 +15,18 @@ class FakeChatApi {
     this.calls.push({ message, language });
     return this.responder(message, language);
   }
+
+  getGeminiStatus(): Observable<{ configured: boolean; model: string }> {
+    return of({ configured: false, model: 'gemini-3.1-flash-lite' });
+  }
+
+  saveGeminiKey(_apiKey: string): Observable<{ configured: boolean; model: string }> {
+    return of({ configured: true, model: 'gemini-3.1-flash-lite' });
+  }
+
+  testGeminiConnection(): Observable<{ connected: boolean; model: string }> {
+    return of({ connected: true, model: 'gemini-3.1-flash-lite' });
+  }
 }
 
 describe('App baseline', () => {
@@ -22,6 +34,7 @@ describe('App baseline', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [{ provide: ChatApi, useClass: FakeChatApi }],
     }).compileComponents();
   });
 
