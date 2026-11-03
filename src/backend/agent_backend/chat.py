@@ -56,7 +56,7 @@ def test_gemini_connection() -> dict[str, object]:
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     try:
         gemini.test_connection()
-    except Exception:
+    except Exception:  # noqa: BLE001 - sanitize all SDK and transport errors
         raise HTTPException(status_code=502, detail="Gemini connection test failed.") from None
     return {"connected": True, "model": gemini.MODEL_NAME}
 
@@ -67,7 +67,7 @@ def chat(payload: ChatRequest) -> dict[str, object]:
         raise HTTPException(status_code=409, detail="Configure Gemini API key first.")
     try:
         reply = gemini.generate_reply(payload.message)
-    except Exception:
+    except Exception:  # noqa: BLE001 - sanitize all SDK and transport errors
         raise HTTPException(status_code=502, detail="Gemini request failed.") from None
     return {
         "reply": reply,
