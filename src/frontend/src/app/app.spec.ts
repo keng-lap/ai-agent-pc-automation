@@ -60,6 +60,10 @@ describe('App chat UI (T-202)', () => {
   async function render(): Promise<void> {
     fixture = TestBed.createComponent(App);
     fixture.detectChanges();
+    if (httpTestingController) {
+      const statusRequest = httpTestingController.expectOne('/api/settings/gemini');
+      statusRequest.flush({ configured: false, model: 'gemini-3.1-flash-lite' });
+    }
     await fixture.whenStable();
     fixture.detectChanges();
   }
@@ -109,7 +113,7 @@ describe('App chat UI (T-202)', () => {
 
   it('F-01: starts in Thai with the empty hint and disabled Send', async () => {
     await render();
-    expect(fixture.nativeElement.textContent).toContain('Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงาน');
+    expect(fixture.nativeElement.textContent).toContain('เชื่อมต่อ Gemini เพื่อสนทนาได้โดยตรง');
     expect(sendButton().disabled).toBe(true);
     expect(document.documentElement.lang).toBe('th');
     expect(fixture.nativeElement.querySelector('textarea')?.getAttribute('placeholder')).toContain('พิมพ์');
@@ -178,7 +182,8 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 500, detail: 'internal' }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
       { error: { status: 501, error: { detail: 'internal' } }, thai: 'Backend', english: 'internal error' },
       { error: { status: 500, error: { detail: 42 } }, thai: 'Backend', english: 'Cannot reach the backend' },
-      { error: { status: 502 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
+      { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
+      { error: { status: 409 }, thai: 'กรุณาตั้งค่า Gemini API Key', english: 'configure your Gemini API key' },
       { error: { status: 503 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 504 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 500 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
@@ -341,13 +346,13 @@ describe('App chat UI (T-202)', () => {
     expect(document.documentElement.lang).toBe('en');
   });
 
-  it('F-21: every MSG-01 to MSG-10 text and entry labels exist in Thai and English', async () => {
+  it('F-21: every MSG-01 to MSG-11 text and entry labels exist in Thai and English', async () => {
     await render();
     // MSG-01
     expect(fixture.nativeElement.textContent).toContain('Agent จะช่วยวิเคราะห์คำขอและแสดงแผนงาน');
     languageButton('EN').click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('The Agent analyzes requests and presents a dry-run plan');
+    expect(fixture.nativeElement.textContent).toContain('Chat with Gemini directly');
     languageButton('ไทย').click();
     fixture.detectChanges();
 
@@ -375,6 +380,8 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 200, malformed: true }, thai: 'รูปแบบที่ไม่คาดคิด', english: 'unexpected response' },
       { error: { status: 413 }, thai: 'ข้อความมีขนาดใหญ่เกินไป', english: 'message is too large' },
       { error: { status: 404 }, thai: 'HTTP 404', english: 'HTTP 404' },
+      { error: { status: 409 }, thai: 'กรุณาตั้งค่า Gemini API Key', english: 'configure your Gemini API key' },
+      { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
     ];
     for (const item of cases) {
       api.responder = () => item.error instanceof TimeoutError ? throwError(() => item.error) : item.error && typeof item.error === 'object' && 'malformed' in item.error ? of(item.error) : throwError(() => item.error);
