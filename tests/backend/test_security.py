@@ -221,12 +221,10 @@ def test_foreign_origin_precedes_method_routing():
 def test_openapi_get_routes_match_allow_list_and_api_routes_are_post_only():
     paths = app.openapi()["paths"]
     get_routes = {path for path, operations in paths.items() if "get" in operations}
-    assert get_routes == {"/health"}
-    assert all(
-        set(operations) == {"post"}
-        for path, operations in paths.items()
-        if path.startswith("/api/")
-    )
+    assert get_routes == {"/health", "/api/settings/gemini"}
+    assert set(paths["/api/chat"]) == {"post"}
+    assert set(paths["/api/settings/gemini"]) == {"get", "put"}
+    assert set(paths["/api/settings/gemini/test"]) == {"post"}
 
 
 def test_response_has_no_cors_headers_or_cookies():
@@ -302,6 +300,7 @@ def test_runtime_dependencies_remain_unchanged():
         "fastapi>=0.143",
         "uvicorn>=0.54",
         "python-dotenv>=1.2",
+        "google-genai>=1.0.0",
     ]
 
 
