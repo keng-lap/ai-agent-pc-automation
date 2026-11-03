@@ -1,7 +1,8 @@
 import pytest
+from fastapi.testclient import TestClient
+
 from agent_backend.main import app
 from agent_backend.providers import gemini
-from fastapi.testclient import TestClient
 
 client = TestClient(
     app,
