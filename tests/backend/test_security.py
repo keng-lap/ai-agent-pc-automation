@@ -5,15 +5,24 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+
 from agent_backend.config import ConfigError, load_settings
 from agent_backend.main import app, create_app
+from agent_backend.providers import gemini
 from agent_backend.security import MAX_REQUEST_BYTES, LocalWebSecurityMiddleware
-from fastapi.testclient import TestClient
 
 BASE_URL = "http://127.0.0.1:8000"
 GOOD_ORIGIN = "http://127.0.0.1:4200"
 GOOD_HEADERS = {"origin": GOOD_ORIGIN, "x-local-agent-token": "a" * 64}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
+
+
+@pytest.fixture(autouse=True)
+def configure_mock_gemini(monkeypatch):
+    monkeypatch.setattr(gemini, "_api_key", "mock-gemini-key-123456789")
+    monkeypatch.setattr(gemini, "generate_reply", lambda _message: "mock Gemini reply")
+    monkeypatch.setattr(gemini, "test_connection", lambda: None)
 
 def test_agent_api_rejects_missing_local_token():
     no_token_client = TestClient(app, base_url=BASE_URL, headers={"origin": GOOD_ORIGIN})
@@ -213,12 +222,10 @@ def test_foreign_origin_precedes_method_routing():
 def test_openapi_get_routes_match_allow_list_and_api_routes_are_post_only():
     paths = app.openapi()["paths"]
     get_routes = {path for path, operations in paths.items() if "get" in operations}
-    assert get_routes == {"/health"}
-    assert all(
-        set(operations) == {"post"}
-        for path, operations in paths.items()
-        if path.startswith("/api/")
-    )
+    assert get_routes == {"/health", "/api/settings/gemini"}
+    assert set(paths["/api/chat"]) == {"post"}
+    assert set(paths["/api/settings/gemini"]) == {"get", "put"}
+    assert set(paths["/api/settings/gemini/test"]) == {"post"}
 
 
 def test_response_has_no_cors_headers_or_cookies():
@@ -294,6 +301,7 @@ def test_runtime_dependencies_remain_unchanged():
         "fastapi>=0.143",
         "uvicorn>=0.54",
         "python-dotenv>=1.2",
+        "google-genai>=1.0.0",
     ]
 
 

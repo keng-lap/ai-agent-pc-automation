@@ -22,7 +22,7 @@ The AI model, planner, frontend, and client request must never grant permission 
 - No file, registry, process, application, network, or system-setting inspection/change as part of planning or verification.
 - Preserve loopback-only binding (D-SEC-5) and local API authorization (D-SEC-1).
 - Preserve Host/Origin checks, JSON-only state-changing requests, rejection of state-changing requests without Origin, development-only API docs, and the 16 KiB request-body limit (D-SEC-2 through D-SEC-4).
-- No provider integration, provider sign-in, live model calls, credentials, or external data transfer.
+- Exception: the Product Owner separately authorized T-601 Gemini text-chat MVP on 2026-11-03. It sends only the current message to Gemini, stores the API key in backend process memory only, and does not enable provider tool/function calling or PC actions. This exception does not authorize any other provider, chat-history transfer, or broader external data flow.
 - Do not persist chat messages, chat history, or task history. Audit design must respect data minimization and must not silently introduce content retention.
 - Documentation/planning may proceed when consistent with approved decisions. Runtime changes require bounded tasks, tests, A4 review, and explicit Product Owner merge approval.
 - Branch convention: `<type>/<task-id>-<short-name>`.
