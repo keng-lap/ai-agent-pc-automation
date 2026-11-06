@@ -42,7 +42,7 @@ This document is the planning baseline and does not itself authorize runtime wor
 | I6 / P5-515 — Negative, abuse, and regression verification | A4 | Update and execute relevant P5-507 matrix using synthetic fixtures, fake clock, spy handlers; verify existing HTTP protections | I1–I5 | Actual commands, exit codes, outputs, SHA, environment and limitations recorded; zero real side-effect capability | Not started — after I1–I5 |
 | I7 / P5-516 — Independent security review and Phase 5 evidence pack | A4 independent reviewer | Review implementation diffs, test evidence, threat-model coverage, policy/dispatch boundaries, privacy and regression | I1–I6 | A4 review findings resolved or explicitly documented; no self-review | Not started — independent review |
 
-Task IDs and ordering define the approved backlog. Runtime work requires separate explicit Product Owner authorization for each task; P5-510 is complete and P5-511 is currently authorized. No real machine-changing action is authorized.
+Task IDs and ordering define the approved backlog. P5-510 through P5-513 are complete. The Product Owner explicitly authorized P5-514 on 2026-11-07; P5-515 and P5-516 still require separate authorization. No real machine-changing action is authorized.
 
 ## 4. Dependency order and parallel lanes
 
