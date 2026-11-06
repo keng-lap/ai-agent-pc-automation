@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { ChatApi, ConversationHistory, UiLanguage } from './chat/chat-api';
+import { ChatApi, ConversationHistory, PlanReviewResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
@@ -29,6 +29,8 @@ interface ChatEntry {
   diagnosticStage?: string;
   diagnosticTrace?: string;
   response?: StructuredAgentResponse;
+  review?: PlanReviewResponse;
+  planError?: boolean;
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
@@ -137,6 +139,7 @@ export class App implements AfterViewChecked {
   protected readonly draft = signal('');
   protected readonly entries = signal<ChatEntry[]>([]);
   protected readonly pending = signal(false);
+  protected readonly planning = signal(false);
   protected readonly restoring = signal(false);
   protected readonly clearing = signal(false);
   protected readonly conversationNotice = signal('');
@@ -209,10 +212,26 @@ export class App implements AfterViewChecked {
       .subscribe({
         next: (response: unknown) => {
           if (this.isReply(response)) {
+            const entryId = ++this.nextEntryId;
             this.entries.update((entries) => [
               ...entries,
-              { id: ++this.nextEntryId, kind: 'agent', text: response.reply, response: this.isStructuredAgentResponse(response) ? response : undefined },
+              { id: entryId, kind: 'agent', text: response.reply, response: this.isStructuredAgentResponse(response) ? response : undefined },
             ]);
+            this.planning.set(true);
+            defer(() => this.chatApi.createPlan(message, languageAtSend))
+              .pipe(
+                timeout({ first: REQUEST_TIMEOUT_MS }),
+                take(1),
+                finalize(() => this.planning.set(false)),
+              )
+              .subscribe({
+                next: (review: PlanReviewResponse) => this.entries.update((entries) =>
+                  entries.map((entry) => entry.id === entryId ? { ...entry, review } : entry),
+                ),
+                error: () => this.entries.update((entries) =>
+                  entries.map((entry) => entry.id === entryId ? { ...entry, planError: true } : entry),
+                ),
+              });
           } else {
             this.appendError('MSG-08');
           }
@@ -260,6 +279,24 @@ export class App implements AfterViewChecked {
     return status === 'dry_run_completed' ? 'Dry run completed' : 'Planned';
   }
 
+  protected programStatusLabel(status: string): string {
+    const labels: Record<UiLanguage, Record<string, string>> = {
+      th: {
+        PLANNED: 'วางแผนแล้ว',
+        NEEDS_CLARIFICATION: 'ต้องการข้อมูลเพิ่มเติม',
+        BLOCKED: 'ถูกระงับ',
+        UNSUPPORTED: 'ไม่รองรับ',
+      },
+      en: {
+        PLANNED: 'Planned',
+        NEEDS_CLARIFICATION: 'Needs clarification',
+        BLOCKED: 'Blocked',
+        UNSUPPORTED: 'Unsupported',
+      },
+    };
+    return labels[this.language()][status] ?? status;
+  }
+
   protected prerequisiteLabel(status: string): string {
     const labels: Record<UiLanguage, Record<string, string>> = {
       th: {
@@ -303,7 +340,7 @@ export class App implements AfterViewChecked {
   }
 
   protected get canSend(): boolean {
-    return !this.pending() && !this.restoring() && !this.clearing()
+    return !this.pending() && !this.planning() && !this.restoring() && !this.clearing()
       && this.draft().trim().length > 0 && this.draft().length <= MAX_MESSAGE_LENGTH;
   }
 
@@ -312,7 +349,7 @@ export class App implements AfterViewChecked {
   }
 
   protected get newChatDisabled(): boolean {
-    return this.pending() || this.restoring() || this.clearing();
+    return this.pending() || this.planning() || this.restoring() || this.clearing();
   }
 
   protected get storageNotice(): string {
