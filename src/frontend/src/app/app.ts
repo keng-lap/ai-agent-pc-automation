@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { ChatApi, UiLanguage } from './chat/chat-api';
+import { ChatApi, ConversationHistory, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
@@ -32,8 +32,10 @@ interface ChatEntry {
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
+const CONVERSATION_STORAGE_KEY = 'ai-agent-pc-automation.conversation-id';
 const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
   th: {
@@ -94,6 +96,29 @@ function readStoredLanguage(): UiLanguage {
   }
 }
 
+function readStoredConversationId(): string | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const saved = window.sessionStorage.getItem(CONVERSATION_STORAGE_KEY);
+    if (!saved) return null;
+    if (UUID_PATTERN.test(saved)) return saved;
+    window.sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function writeStoredConversationId(conversationId: string): void {
+  try {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(CONVERSATION_STORAGE_KEY, conversationId);
+    }
+  } catch {
+    // Keep the conversation usable when browser storage is blocked or unavailable.
+  }
+}
+
 @Component({
   selector: 'app-root',
   imports: [GeminiSettingsComponent],
@@ -112,9 +137,21 @@ export class App implements AfterViewChecked {
   protected readonly draft = signal('');
   protected readonly entries = signal<ChatEntry[]>([]);
   protected readonly pending = signal(false);
+  protected readonly restoring = signal(false);
+  protected readonly clearing = signal(false);
+  protected readonly conversationNotice = signal('');
+  private readonly conversationId = signal('');
 
   constructor() {
     this.document.documentElement.lang = this.language();
+    const storedConversationId = readStoredConversationId();
+    const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
+    this.conversationId.set(conversationId);
+    if (storedConversationId) {
+      this.restoreConversation(conversationId);
+    } else {
+      writeStoredConversationId(conversationId);
+    }
   }
 
   ngAfterViewChecked(): void {
@@ -152,9 +189,10 @@ export class App implements AfterViewChecked {
 
   protected send(): void {
     const message = this.draft().trim();
-    if (!message || message.length > MAX_MESSAGE_LENGTH || this.pending()) return;
+    if (!message || message.length > MAX_MESSAGE_LENGTH || !this.canSend) return;
 
     const languageAtSend = this.language();
+    const conversationId = this.conversationId();
     this.entries.update((entries) => [
       ...entries,
       { id: ++this.nextEntryId, kind: 'user', text: message },
@@ -162,7 +200,7 @@ export class App implements AfterViewChecked {
     this.draft.set('');
     this.pending.set(true);
 
-    defer(() => this.chatApi.sendMessage(message, languageAtSend))
+    defer(() => this.chatApi.sendMessage(message, languageAtSend, conversationId))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
         take(1),
@@ -186,6 +224,32 @@ export class App implements AfterViewChecked {
           this.getProviderDiagnostic(error, 'stage'),
           this.getProviderDiagnostic(error, 'trace'),
         ),
+      });
+  }
+
+  protected startNewChat(): void {
+    if (this.pending() || this.restoring() || this.clearing()) return;
+    const conversationId = this.conversationId();
+    this.clearing.set(true);
+    this.conversationNotice.set('');
+    defer(() => this.chatApi.clearConversation(conversationId))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.clearing.set(false)),
+      )
+      .subscribe({
+        next: () => {
+          this.entries.set([]);
+          const nextConversationId = globalThis.crypto.randomUUID();
+          this.conversationId.set(nextConversationId);
+          writeStoredConversationId(nextConversationId);
+        },
+        error: () => {
+          this.conversationNotice.set(this.language() === 'th'
+            ? 'ล้างบทสนทนาไม่ได้ โปรดลองอีกครั้ง'
+            : 'Could not clear the conversation. Please try again.');
+        },
       });
   }
 
@@ -239,7 +303,22 @@ export class App implements AfterViewChecked {
   }
 
   protected get canSend(): boolean {
-    return !this.pending() && this.draft().trim().length > 0 && this.draft().length <= MAX_MESSAGE_LENGTH;
+    return !this.pending() && !this.restoring() && !this.clearing()
+      && this.draft().trim().length > 0 && this.draft().length <= MAX_MESSAGE_LENGTH;
+  }
+
+  protected get newChatLabel(): string {
+    return this.language() === 'th' ? 'เริ่มแชตใหม่' : 'New chat';
+  }
+
+  protected get newChatDisabled(): boolean {
+    return this.pending() || this.restoring() || this.clearing();
+  }
+
+  protected get storageNotice(): string {
+    return this.language() === 'th'
+      ? 'ระบบเก็บบริบท 10 คู่ล่าสุดไว้ในหน่วยความจำ Backend ชั่วคราว และส่งบริบทนี้ให้ Gemini; รีสตาร์ต Backend หรือไม่มีการใช้งาน 1 ชั่วโมงจะล้างข้อมูล'
+      : 'The backend temporarily keeps the 10 most recent exchanges in memory and sends this context to Gemini. Restarting the backend or 1 hour of inactivity clears it.';
   }
 
   protected errorText(entry: ChatEntry): string {
@@ -273,6 +352,54 @@ export class App implements AfterViewChecked {
         diagnosticTrace,
       },
     ]);
+  }
+
+  private restoreConversation(conversationId: string): void {
+    this.restoring.set(true);
+    defer(() => this.chatApi.getConversation(conversationId))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.restoring.set(false)),
+      )
+      .subscribe({
+        next: (history: ConversationHistory) => {
+          if (!this.isConversationHistory(history)) {
+            this.conversationNotice.set(this.language() === 'th'
+              ? 'Backend ส่งประวัติสนทนาในรูปแบบที่ไม่คาดคิด'
+              : 'The backend returned an unexpected conversation history.');
+            return;
+          }
+          this.entries.set(history.messages.map((message) => ({
+            id: ++this.nextEntryId,
+            kind: message.role === 'user' ? 'user' : 'agent',
+            text: message.text,
+          })));
+        },
+        error: (error: unknown) => {
+          if (this.getStatus(error) === 404) {
+            this.conversationId.set(globalThis.crypto.randomUUID());
+            writeStoredConversationId(this.conversationId());
+            this.conversationNotice.set(this.language() === 'th'
+              ? 'บริบทเดิมหมดอายุหรือ Backend ถูกเริ่มใหม่แล้ว เริ่มบทสนทนาใหม่'
+              : 'The previous context expired or the backend restarted. A new conversation has started.');
+            return;
+          }
+          this.conversationNotice.set(this.language() === 'th'
+            ? 'โหลดประวัติสนทนาไม่ได้ โปรดลองรีโหลดหรือตรวจสอบ Backend'
+            : 'Could not load conversation history. Check the backend and try again.');
+        },
+      });
+  }
+
+  private isConversationHistory(value: unknown): value is ConversationHistory {
+    if (typeof value !== 'object' || value === null || !('messages' in value)) return false;
+    const messages = (value as { messages: unknown }).messages;
+    return Array.isArray(messages) && messages.every((message) =>
+      typeof message === 'object' && message !== null
+      && 'role' in message && (message.role === 'user' || message.role === 'assistant')
+      && 'text' in message && typeof message.text === 'string',
+    );
   }
 
   private isStructuredAgentResponse(value: unknown): value is { reply: string } & StructuredAgentResponse {

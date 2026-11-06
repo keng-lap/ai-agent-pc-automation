@@ -70,7 +70,7 @@ def _safe_sdk_trace(exc: Exception) -> list[str]:
     return trace[-4:]
 
 
-def _generate_content(contents: str) -> types.GenerateContentResponse:
+def _generate_content(contents: str | list[types.Content]) -> types.GenerateContentResponse:
     try:
         client = _client()
     except RuntimeError as exc:
@@ -136,5 +136,5 @@ def test_connection() -> None:
     _response_text(_generate_content("Reply with the single word OK."))
 
 
-def generate_reply(message: str) -> str:
-    return _response_text(_generate_content(message))
+def generate_reply(contents: str | list[types.Content]) -> str:
+    return _response_text(_generate_content(contents))

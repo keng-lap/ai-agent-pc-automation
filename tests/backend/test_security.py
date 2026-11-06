@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from agent_backend import chat as chat_module
 from agent_backend.config import ConfigError, load_settings
 from agent_backend.main import app, create_app
 from agent_backend.providers import gemini
@@ -15,6 +16,11 @@ from agent_backend.security import MAX_REQUEST_BYTES, LocalWebSecurityMiddleware
 BASE_URL = "http://127.0.0.1:8000"
 GOOD_ORIGIN = "http://127.0.0.1:4200"
 GOOD_HEADERS = {"origin": GOOD_ORIGIN, "x-local-agent-token": "a" * 64}
+CHAT_PAYLOAD = {
+    "conversation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "message": "hello",
+    "language": "en",
+}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
 
@@ -23,6 +29,7 @@ def configure_mock_gemini(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", "mock-gemini-key-123456789")
     monkeypatch.setattr(gemini, "generate_reply", lambda _message: "mock Gemini reply")
     monkeypatch.setattr(gemini, "test_connection", lambda: None)
+    chat_module._conversation_store.clear()
 
 def test_agent_api_rejects_missing_local_token():
     no_token_client = TestClient(app, base_url=BASE_URL, headers={"origin": GOOD_ORIGIN})
@@ -155,7 +162,7 @@ def test_foreign_or_inexact_origins_are_rejected(origin):
 def test_exact_frontend_origins_are_accepted(origin):
     response = client.post(
         "/api/chat",
-        json={"message": "hello", "language": "en"},
+        json=CHAT_PAYLOAD,
         headers={"origin": origin, "x-local-agent-token": "a" * 64},
     )
     assert response.status_code == 200
@@ -189,7 +196,10 @@ def test_non_json_state_changing_requests_are_rejected(content_type):
 def test_json_charset_parameter_is_accepted():
     response = client.post(
         "/api/chat",
-        content=b'{"message":"hello","language":"en"}',
+        content=(
+            b'{"conversation_id":"123e4567-e89b-42d3-a456-426614174000",'
+            b'"message":"hello","language":"en"}'
+        ),
         headers={**GOOD_HEADERS, "content-type": "application/json; charset=utf-8"},
     )
     assert response.status_code == 200
@@ -222,14 +232,15 @@ def test_foreign_origin_precedes_method_routing():
 def test_openapi_get_routes_match_allow_list_and_api_routes_are_post_only():
     paths = app.openapi()["paths"]
     get_routes = {path for path, operations in paths.items() if "get" in operations}
-    assert get_routes == {"/health", "/api/settings/gemini"}
+    assert get_routes == {"/health", "/api/settings/gemini", "/api/chat/{conversation_id}"}
     assert set(paths["/api/chat"]) == {"post"}
+    assert set(paths["/api/chat/{conversation_id}"]) == {"get", "delete"}
     assert set(paths["/api/settings/gemini"]) == {"get", "put"}
     assert set(paths["/api/settings/gemini/test"]) == {"post"}
 
 
 def test_response_has_no_cors_headers_or_cookies():
-    response = client.post("/api/chat", json={"message": "hello", "language": "en"})
+    response = client.post("/api/chat", json=CHAT_PAYLOAD)
     assert response.status_code == 200
     assert not any(name.lower().startswith("access-control-") for name in response.headers)
     assert "set-cookie" not in response.headers
@@ -309,7 +320,7 @@ def test_no_message_content_is_logged(caplog):
     caplog.set_level(0)
     private_text = "private message must never be logged"
     response = client.post(
-        "/api/chat", json={"message": private_text, "language": "en"}
+        "/api/chat", json={**CHAT_PAYLOAD, "message": private_text}
     )
     assert response.status_code == 200
     assert private_text not in caplog.text

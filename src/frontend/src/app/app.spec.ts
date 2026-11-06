@@ -8,14 +8,31 @@ import { App } from './app';
 import { ChatApi, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
-  calls: Array<{ message: string; language: UiLanguage }> = [];
+  calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
+  restoredConversationIds: string[] = [];
+  clearedConversationIds: string[] = [];
+  history: { messages: Array<{ role: 'user' | 'assistant'; text: string }> } = { messages: [] };
+  historyError: unknown;
+  clearError: unknown;
   configured = false;
   testError: unknown;
   responder: (message: string, language: UiLanguage) => Observable<unknown> = () => of({ reply: 'Mock reply' });
 
-  sendMessage(message: string, language: UiLanguage): Observable<unknown> {
-    this.calls.push({ message, language });
+  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
+    this.calls.push({ message, language, conversationId });
     return this.responder(message, language);
+  }
+
+  getConversation(conversationId: string): Observable<unknown> {
+    this.restoredConversationIds.push(conversationId);
+    if (this.historyError !== undefined) return throwError(() => this.historyError);
+    return of(this.history);
+  }
+
+  clearConversation(conversationId: string): Observable<void> {
+    this.clearedConversationIds.push(conversationId);
+    if (this.clearError !== undefined) return throwError(() => this.clearError);
+    return of(undefined);
   }
 
   getGeminiStatus(): Observable<{ configured: boolean; model: string }> {
@@ -36,6 +53,7 @@ class FakeChatApi {
 describe('App baseline', () => {
   beforeEach(async () => {
     localStorage.clear();
+    sessionStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useClass: FakeChatApi }],
@@ -101,6 +119,7 @@ describe('App chat UI (T-202)', () => {
 
   beforeEach(async () => {
     localStorage.clear();
+    sessionStorage.clear();
     api = new FakeChatApi();
     await TestBed.configureTestingModule({
       imports: [App],
@@ -169,7 +188,8 @@ describe('App chat UI (T-202)', () => {
   it('F-03/F-04: sends trimmed text, shows user and Agent entries, and clears the composer', async () => {
     await render();
     send('  hello Agent  ');
-    expect(api.calls).toEqual([{ message: 'hello Agent', language: 'th' }]);
+    expect(api.calls).toHaveLength(1);
+    expect(api.calls[0]).toMatchObject({ message: 'hello Agent', language: 'th' });
     expect(fixture.nativeElement.textContent).toContain('hello Agent');
     expect(fixture.nativeElement.textContent).toContain('Mock reply');
     expect(fixture.nativeElement.textContent).toContain('คุณ');
@@ -302,16 +322,59 @@ describe('App chat UI (T-202)', () => {
     expect(log.scrollTop).toBe(log.scrollHeight);
   });
 
-  it('F-13: does not store messages or chat history in browser storage', async () => {
+  it('stores only the conversation ID in session storage, never chat messages', async () => {
     await render();
     send('private test message');
     expect(localStorage.length).toBe(0);
     expect(localStorage.getItem('private test message')).toBeNull();
+    expect(sessionStorage.length).toBe(1);
+    expect(sessionStorage.getItem('private test message')).toBeNull();
+    expect(sessionStorage.getItem('ai-agent-pc-automation.conversation-id')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
   });
 
-  it('F-15: the HTTP ChatApi posts the message and selected language to /api/chat', async () => {
+  it('restores backend history after refresh using only the session-stored ID', async () => {
+    const conversationId = '123e4567-e89b-42d3-a456-426614174000';
+    sessionStorage.setItem('ai-agent-pc-automation.conversation-id', conversationId);
+    api.history = {
+      messages: [
+        { role: 'user', text: 'previous question' },
+        { role: 'assistant', text: 'previous answer' },
+      ],
+    };
+    await render();
+    expect(api.restoredConversationIds).toEqual([conversationId]);
+    expect(fixture.nativeElement.textContent).toContain('previous question');
+    expect(fixture.nativeElement.textContent).toContain('previous answer');
+    expect(sessionStorage.length).toBe(1);
+  });
+
+  it('starts a new conversation and clears the previous backend history', async () => {
+    await render();
+    send('old message');
+    const oldConversationId = sessionStorage.getItem('ai-agent-pc-automation.conversation-id');
+    const newChatButton = fixture.nativeElement.querySelector('.new-chat-button') as HTMLButtonElement;
+    newChatButton.click();
+    fixture.detectChanges();
+    expect(api.clearedConversationIds).toEqual([oldConversationId]);
+    expect(fixture.nativeElement.textContent).not.toContain('old message');
+    expect(sessionStorage.getItem('ai-agent-pc-automation.conversation-id')).not.toBe(oldConversationId);
+  });
+
+  it('replaces an expired conversation ID after backend restart', async () => {
+    const expiredId = '123e4567-e89b-42d3-a456-426614174000';
+    sessionStorage.setItem('ai-agent-pc-automation.conversation-id', expiredId);
+    api.historyError = { status: 404 };
+    await render();
+    expect(fixture.nativeElement.textContent).toContain('บริบทเดิมหมดอายุ');
+    expect(sessionStorage.getItem('ai-agent-pc-automation.conversation-id')).not.toBe(expiredId);
+  });
+
+  it('F-15: the HTTP ChatApi posts the message, language and conversation ID', async () => {
     await TestBed.resetTestingModule();
     localStorage.clear();
+    sessionStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -323,15 +386,31 @@ describe('App chat UI (T-202)', () => {
     send('hello');
     const request = httpTestingController.expectOne('/api/chat');
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ message: 'hello', language: 'en' });
+    expect(request.request.body).toEqual({
+      conversation_id: sessionStorage.getItem('ai-agent-pc-automation.conversation-id'),
+      message: 'hello',
+      language: 'en',
+    });
     request.flush({ reply: 'Mock reply' });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Mock reply');
+
+    const conversationId = sessionStorage.getItem('ai-agent-pc-automation.conversation-id')!;
+    TestBed.inject(ChatApi).getConversation(conversationId).subscribe();
+    const historyRequest = httpTestingController.expectOne(`/api/chat/${conversationId}`);
+    expect(historyRequest.request.method).toBe('GET');
+    historyRequest.flush({ messages: [] });
+    TestBed.inject(ChatApi).clearConversation(conversationId).subscribe();
+    const clearRequest = httpTestingController.expectOne(`/api/chat/${conversationId}`);
+    expect(clearRequest.request.method).toBe('DELETE');
+    expect(clearRequest.request.body).toEqual({});
+    clearRequest.flush(null);
   });
 
   it('F-23: the request keeps the language selected when Send was pressed', async () => {
     await TestBed.resetTestingModule();
     localStorage.clear();
+    sessionStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -340,14 +419,14 @@ describe('App chat UI (T-202)', () => {
     await render();
     send('Thai request');
     const thaiRequest = httpTestingController.expectOne('/api/chat');
-    expect(thaiRequest.request.body).toEqual({ message: 'Thai request', language: 'th' });
+    expect(thaiRequest.request.body).toMatchObject({ message: 'Thai request', language: 'th' });
     languageButton('EN').click();
     fixture.detectChanges();
     thaiRequest.flush({ reply: 'Thai reply' });
     fixture.detectChanges();
     send('English request');
     const englishRequest = httpTestingController.expectOne('/api/chat');
-    expect(englishRequest.request.body).toEqual({ message: 'English request', language: 'en' });
+    expect(englishRequest.request.body).toMatchObject({ message: 'English request', language: 'en' });
     englishRequest.flush({ reply: 'English reply' });
   });
 
@@ -460,6 +539,7 @@ describe('App chat UI (T-202)', () => {
 describe('Structured Agent response (T-404)', () => {
   it('renders the plan, prerequisites, dry-run result and approval notice', async () => {
     localStorage.clear();
+    sessionStorage.clear();
     const api = new FakeChatApi();
     api.responder = () => of({
       reply: 'Local preview',

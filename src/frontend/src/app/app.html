@@ -21,8 +21,17 @@
         <p class="eyebrow">{{ language() === 'th' ? 'พื้นที่ทำงานส่วนตัว' : 'YOUR PRIVATE WORKSPACE' }}</p>
         <h2 id="chat-title">{{ language() === 'th' ? 'คุยกับ Agent' : 'Chat with your Agent' }}</h2>
       </div>
-      <span class="status-pill"><span class="status-dot"></span>{{ language() === 'th' ? 'ทำงานในเครื่องนี้' : 'Runs locally' }}</span>
+      <div class="chat-actions">
+        <span class="status-pill"><span class="status-dot"></span>{{ language() === 'th' ? 'ทำงานในเครื่องนี้' : 'Runs locally' }}</span>
+        <button class="new-chat-button" type="button" [disabled]="newChatDisabled" (click)="startNewChat()">
+          {{ clearing() ? (language() === 'th' ? 'กำลังล้าง...' : 'Clearing...') : newChatLabel }}
+        </button>
+      </div>
     </div>
+
+    @if (conversationNotice()) {
+      <p class="conversation-notice" role="status">{{ conversationNotice() }}</p>
+    }
 
     <div #messageLog class="message-log" role="log" aria-live="polite" aria-relevant="additions text" [attr.aria-label]="language() === 'th' ? 'ข้อความสนทนา' : 'Conversation messages'">
       @if (entries().length === 0) {
@@ -126,6 +135,6 @@
 
   <footer class="page-footer">
     <span class="footer-lock" aria-hidden="true">◇</span>
-    {{ language() === 'th' ? 'ข้อมูลสนทนาอยู่ในหน้านี้เท่านั้น และจะหายไปเมื่อรีโหลด' : 'Conversation stays in this page and clears when you reload.' }}
+    {{ storageNotice }}
   </footer>
 </main>
