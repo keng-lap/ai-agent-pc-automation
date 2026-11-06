@@ -36,7 +36,7 @@ The AI model, planner, frontend, and client request must never grant permission 
 - The tool catalog is backend-owned and immutable. It currently contains only `software.install` and `software.remove`, both high-risk and dry-run-only.
 - Tool request/result models are strict and frozen; dispatch uses a fixed handler map.
 - Gemini text-only chat is separately authorized under T-601, including temporary backend-memory context. Provider tool/function calling, tool dispatch through Gemini, and PC actions remain disabled.
-- Phase 4 UI shows plan, prerequisites, dry-run result, and approval-required information. It has no execute/approve-and-execute control.
+- The P5-514 UI shows the original request, backend-owned interpretation, explicit per-program dry-run details, unresolved questions, and a no-change notice. P1 has no acknowledgement, approval, cancel, execute, install, or remove control.
 
 ## Workstreams (coordinator-managed four-role workflow)
 
