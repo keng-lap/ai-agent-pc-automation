@@ -172,6 +172,8 @@ def create_dry_run_plan(
     if not _is_utc(created_at):
         raise ValueError("creation time must be timezone-aware UTC")
     items = tuple(programs)
+    if any(not isinstance(item, ProgramPlan) for item in items):
+        raise TypeError("programs must contain validated ProgramPlan instances")
     if not items or len(items) > MAX_PLAN_ITEMS:
         raise ValueError("a plan must contain between 1 and 50 program items")
     digest = _digest_for(
