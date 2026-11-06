@@ -1,9 +1,10 @@
 import httpx2
 import pytest
-from agent_backend.main import app
-from agent_backend.providers import gemini
 from fastapi.testclient import TestClient
 from google.genai import errors
+
+from agent_backend.main import app
+from agent_backend.providers import gemini
 
 client = TestClient(
     app,
