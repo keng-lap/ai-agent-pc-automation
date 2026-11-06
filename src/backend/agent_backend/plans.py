@@ -10,7 +10,7 @@ import hashlib
 import json
 import threading
 from collections.abc import Callable, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import uuid4
 
@@ -93,7 +93,7 @@ class DryRunPlan(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_envelope(self) -> "DryRunPlan":
+    def validate_envelope(self) -> DryRunPlan:
         if not _is_utc(self.created_at) or not _is_utc(self.expires_at):
             raise ValueError("plan timestamps must be timezone-aware UTC values")
         if self.expires_at != self.created_at + PLAN_TTL:
@@ -190,7 +190,7 @@ def create_dry_run_plan(
     now: datetime | None = None,
 ) -> DryRunPlan:
     """Build a new server-identified plan from validated, explicit program items."""
-    created_at = now or datetime.now(timezone.utc)
+    created_at = now or datetime.now(UTC)
     if not _is_utc(created_at):
         raise ValueError("creation time must be timezone-aware UTC")
     from agent_backend.policy import require_tool_allowed
