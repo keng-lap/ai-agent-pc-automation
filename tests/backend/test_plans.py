@@ -127,6 +127,11 @@ def test_unknown_fields_and_non_contract_statuses_are_rejected():
         )
 
 
+def test_unvalidated_program_payload_is_rejected():
+    with pytest.raises(TypeError, match="validated ProgramPlan"):
+        create_dry_run_plan("software.install", [{"program": "Chrome"}], now=NOW)
+
+
 def test_duplicate_program_names_and_empty_plan_are_rejected():
     with pytest.raises(ValueError, match="unique"):
         create_dry_run_plan(
