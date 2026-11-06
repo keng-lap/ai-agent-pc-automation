@@ -141,6 +141,16 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
             dry_run_plan = _plan_store.create(tool_id, programs)
             tool_request = ToolRequest(tool_id=tool_id, target=programs[0].program)
             tool_result = execute_tool(tool_request)
+            if payload.language == "th":
+                action = "ติดตั้ง" if tool_id == "software.install" else "ถอนการติดตั้ง"
+                tool_result = tool_result.model_copy(
+                    update={
+                        "summary": (
+                            f"จำลองเท่านั้น: จะ{action} {programs[0].program}; "
+                            "ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
+                        )
+                    }
+                )
         except PlanCapacityError:
             raise HTTPException(status_code=503, detail="Plan capacity reached.") from None
         except ValueError:
