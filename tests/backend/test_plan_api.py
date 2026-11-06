@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from agent_backend.main import app
+
 client = TestClient(
     app,
     base_url="http://127.0.0.1:8000",
