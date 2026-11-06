@@ -225,8 +225,8 @@ class PlanStore:
             return plan
 
     def get(self, plan_id: str) -> DryRunPlan:
-        now = self._clock()
         with self._lock:
+            now = self._clock()
             self._observe_clock(now)
             plan = self._plans.get(plan_id)
             if plan is None:
