@@ -34,4 +34,4 @@ For `เตรียมเครื่องพัฒนา Java`, the determini
 
 Tests have been added for Java plan creation, plan retrieval, rejection of client-supplied policy fields, invalid language, and absence of acknowledgement/execution routes. Frontend tests cover the Java review card and the plan API request.
 
-The GitHub Actions CI result is pending PR creation. No local test run is claimed because this execution environment could not reach GitHub to clone the repository. The CI workflow remains the authoritative verification gate for Ruff, backend tests, frontend tests, and the frontend build.
+**GitHub Actions CI passed** on PR #65 (run #50, commit `41fda86dde7e25daab2ca7bb92980e4b9e5fb1d`): 181 backend tests passed, Ruff reported all checks passed, 29 frontend tests passed, and the frontend production build passed. No local test run is claimed because this execution environment could not reach GitHub to clone the repository. CI run: https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42309151393.
