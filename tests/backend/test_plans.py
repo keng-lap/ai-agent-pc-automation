@@ -8,6 +8,7 @@ from agent_backend.plans import (
     PLAN_TTL,
     DryRunPlan,
     PlanCapacityError,
+    PlanClockError,
     PlanExpiredError,
     PlanIntegrityError,
     PlanNotFoundError,
@@ -162,6 +163,18 @@ def test_store_returns_plan_until_expiry_then_rejects_it():
         store.get(plan.plan_id)
     with pytest.raises(PlanNotFoundError):
         store.get(plan.plan_id)
+
+
+def test_clock_rollback_invalidates_all_plans_and_fails_closed():
+    clock_value = [NOW]
+    store = PlanStore(clock=lambda: clock_value[0])
+    plan = store.create("software.install", [program()])
+    clock_value[0] = NOW - timedelta(seconds=1)
+
+    with pytest.raises(PlanClockError):
+        store.get(plan.plan_id)
+    with pytest.raises(PlanClockError):
+        store.create("software.install", [program()])
 
 
 def test_new_store_cannot_recover_a_plan_from_a_previous_process():
