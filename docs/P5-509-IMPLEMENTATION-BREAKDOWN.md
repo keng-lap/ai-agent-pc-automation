@@ -4,7 +4,7 @@
 
 **Documentation/planning deliverable.** The Product Owner approved all 12 P5-508 decisions on 2026-10-30 using the recommended safe defaults. This document translates those decisions into a bounded implementation backlog and resolves conflicts in P5-502 through P5-507.
 
-This document does **not** authorize runtime implementation. D-P5-12 remains a separate gate and requires a new, explicit Product Owner instruction. No code, tests, PC inspection, provider calls, downloads, external transfer, installation, removal, or execution are authorized by this planning task.
+This document is the planning baseline and does not itself authorize runtime work. The Product Owner separately authorized P5-512 on 2026-11-07; its bounded implementation is tracked in PR #63. That authorization does not authorize P5-513–P5-516, Phase 6, or real PC actions.
 
 ## 1. Binding design baseline
 
@@ -36,7 +36,7 @@ This document does **not** authorize runtime implementation. D-P5-12 remains a s
 |---|---|---|---|---|---|
 | I1 / P5-510 — Static policy model and startup validation | A2 + A4 | Immutable versioned R0–R3/P0–P3 matrix; fixed catalog mapping; startup consistency checks; hard deny P2/P3 | P5-509 | Missing/duplicate/unknown policy fails closed; no caller override; unit tests | Complete — merged in PR #58 |
 | I2 / P5-511 — Central policy decision and final dispatch guard | A2 + A4 | Insert backend policy decision point and final guard immediately before fixed handler dispatch; typed deny reasons | I1 | Spy handler proves every invalid/denied path is blocked; only P1 dry-run handlers reachable | Complete — merged in PR #61 (commit 2875399) |
-| I3 / P5-512 — Immutable dry-run plan/report contract | A2 + A3 | Strict per-program plan schema, canonicalization/versioned digest, 10-minute backend expiry, restart invalidation; no acknowledgement state | I1, I2 | Exact material fields affect identity; mutation yields new identity; no prompt/secret persisted | Not started — separate authorization required |
+| I3 / P5-512 — Immutable dry-run plan/report contract | A2 + A3 | Strict per-program plan schema, canonicalization/versioned digest, 10-minute backend expiry, restart invalidation; no acknowledgement state | I1, I2 | Exact material fields affect identity; mutation yields new identity; no prompt/secret persisted | In progress — draft PR #63; CI and PO review pending |
 | I4 / P5-513 — Ephemeral audit event sink | A2 + A4 | Allowlisted event schema; max 500 in-memory events; oldest-first eviction; restart clears; no durable sink | I1, I2 | Reject forbidden fields; bounded memory; optional sink failure cannot cause unsafe fallback | Not started — separate authorization required |
 | I5 / P5-514 — Thai-default bilingual UX and API integration | A3 + A2 | Reconcile existing routes; display request, interpretation, every program, uncertainty, status, dry-run/no-change notice; English selectable | I3 | No acknowledgement/execute controls or endpoints; accessible mobile/desktop rendering | Not started — separate authorization required |
 | I6 / P5-515 — Negative, abuse, and regression verification | A4 | Update and execute relevant P5-507 matrix using synthetic fixtures, fake clock, spy handlers; verify existing HTTP protections | I1–I5 | Actual commands, exit codes, outputs, SHA, environment and limitations recorded; zero real side-effect capability | Not started — after I1–I5 |
@@ -74,4 +74,4 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 
 I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is complete and merged in PR #61 (commit 2875399). Its implementation and verification used synthetic inputs and dry-run handlers only; no machine-changing operation was performed.
 
-**Current gate:** P5-511 is complete. P5-512 through P5-516 are not started. Each subsequent runtime task requires a separate explicit Product Owner instruction and code PR approval before merge. Phase 6 and real PC execution remain unauthorized.
+**Current gate:** P5-511 is complete. P5-512 was separately authorized on 2026-11-07 and is in draft PR #63, awaiting CI evidence and explicit PO review/merge approval. P5-513 through P5-516 remain not started and require separate authorization. Phase 6 and real PC execution remain unauthorized.
