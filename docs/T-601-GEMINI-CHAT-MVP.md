@@ -50,6 +50,10 @@ Authorized by the Product Owner on 2026-11-03. This is a bounded provider integr
 - GitHub Actions runs automated backend and frontend checks for the pull request. This is cloud CI, not a publicly hosted interactive server.
 - Real Gemini smoke testing requires the Product Owner to enter a newly created API key in the local Settings UI after running the branch.
 
+### Product Owner smoke-test record — 2026-11-07
+
+The Product Owner confirmed that a real API key was entered through the local Settings UI, Test Connection succeeded, and a chat message received a Gemini reply. This is a manual real-provider smoke test; it is not a claim about GitHub CI or a public cloud deployment. No credential value is recorded here.
+
 ## Out of scope
 
 - Multi-agent orchestration.
