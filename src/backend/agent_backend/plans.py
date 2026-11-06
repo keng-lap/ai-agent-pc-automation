@@ -179,6 +179,9 @@ def create_dry_run_plan(
     created_at = now or datetime.now(timezone.utc)
     if not _is_utc(created_at):
         raise ValueError("creation time must be timezone-aware UTC")
+    from agent_backend.policy import require_tool_allowed
+
+    require_tool_allowed(tool_id)
     items = tuple(programs)
     if any(not isinstance(item, ProgramPlan) for item in items):
         raise TypeError("programs must contain validated ProgramPlan instances")
