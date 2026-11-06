@@ -1,5 +1,7 @@
 """Gemini chat and provider settings endpoints for the local MVP."""
 
+import logging
+import re
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -8,6 +10,25 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from agent_backend.providers import gemini
 
 router = APIRouter()
+_ERROR_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+
+
+def _provider_error_detail(exc: Exception) -> dict[str, str]:
+    if isinstance(exc, gemini.GeminiProviderError):
+        detail = {"code": exc.code}
+        if exc.error_type:
+            detail["error_type"] = exc.error_type
+        if exc.stage:
+            detail["stage"] = exc.stage
+        if exc.trace:
+            detail["trace"] = ",".join(exc.trace)
+        return detail
+
+    error_type = type(exc).__name__
+    if not _ERROR_TYPE_PATTERN.fullmatch(error_type):
+        error_type = "Exception"
+    logging.getLogger(__name__).warning("Gemini request failed (%s)", error_type)
+    return {"code": "unknown", "error_type": error_type, "stage": "provider"}
 
 
 class ChatRequest(BaseModel):
@@ -56,8 +77,10 @@ def test_gemini_connection() -> dict[str, object]:
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     try:
         gemini.test_connection()
-    except Exception:  # noqa: BLE001 - sanitize all SDK and transport errors
-        raise HTTPException(status_code=502, detail="Gemini connection test failed.") from None
+    except gemini.GeminiProviderError as exc:
+        raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
+    except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
+        raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
     return {"connected": True, "model": gemini.MODEL_NAME}
 
 
@@ -67,8 +90,10 @@ def chat(payload: ChatRequest) -> dict[str, object]:
         raise HTTPException(status_code=409, detail="Configure Gemini API key first.")
     try:
         reply = gemini.generate_reply(payload.message)
-    except Exception:  # noqa: BLE001 - sanitize all SDK and transport errors
-        raise HTTPException(status_code=502, detail="Gemini request failed.") from None
+    except gemini.GeminiProviderError as exc:
+        raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
+    except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
+        raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
     return {
         "reply": reply,
         "provider": "gemini",

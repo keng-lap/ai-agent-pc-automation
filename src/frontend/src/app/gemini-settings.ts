@@ -95,10 +95,58 @@ export class GeminiSettingsComponent {
         this.message.set('เชื่อมต่อ Gemini สำเร็จ พร้อมใช้งาน Chat');
         this.busy.set(false);
       },
-      error: () => {
-        this.message.set('ทดสอบไม่สำเร็จ ตรวจสอบ API Key, quota และการเชื่อมต่อ');
+      error: (error: unknown) => {
+        this.message.set(this.testErrorMessage(error));
         this.busy.set(false);
       },
     });
+  }
+
+  private testErrorMessage(error: unknown): string {
+    if (typeof error !== 'object' || error === null || !('error' in error)) {
+      return 'ทดสอบไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend';
+    }
+    const body = (error as { error: unknown }).error;
+    if (typeof body !== 'object' || body === null || !('detail' in body)) {
+      return 'ทดสอบไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend';
+    }
+    const detail = (body as { detail: unknown }).detail;
+    if (typeof detail !== 'object' || detail === null || !('code' in detail)) {
+      return 'ทดสอบไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend';
+    }
+    const messages: Record<string, string> = {
+      key_or_access: 'Gemini ปฏิเสธ API Key หรือไม่มีสิทธิ์ใช้ API นี้ ตรวจสอบ Key และโปรเจกต์',
+      quota_exceeded: 'โควตา Gemini เต็มหรือเกินขีดจำกัด ตรวจสอบ Quota และ Billing',
+      model_unavailable: 'ไม่พบโมเดล Gemini ที่กำหนด ตรวจสอบชื่อโมเดลหรือสิทธิ์ใช้งาน',
+      provider_unavailable: 'บริการ Gemini ขัดข้องชั่วคราว โปรดลองใหม่ภายหลัง',
+      request_rejected: 'Gemini ปฏิเสธคำขอ ตรวจสอบการตั้งค่า API',
+      network_error: 'ติดต่อ Gemini ไม่ได้ ตรวจสอบอินเทอร์เน็ตหรือ Firewall',
+      request_timeout: 'คำขอไปยัง Gemini หมดเวลา โปรดลองใหม่',
+      invalid_response: 'Gemini ส่งคำตอบที่อ่านไม่ได้กลับมา',
+      empty_response: 'Gemini ไม่ได้ส่งข้อความตอบกลับ อาจถูกกรองหรือไม่มีข้อความ',
+      google_cloud_auth_missing: 'Gemini SDK พยายามใช้ Google Cloud credentials แต่ไม่พบ token ตรวจสอบว่าปิด GOOGLE_GENAI_USE_VERTEXAI',
+      sdk_runtime_error: 'Gemini SDK เกิดข้อผิดพลาดภายใน',
+      unknown: 'Gemini ตอบกลับด้วยข้อผิดพลาดที่ยังระบุสาเหตุไม่ได้',
+    };
+    const code = (detail as { code: unknown }).code;
+    const message = typeof code === 'string'
+      ? messages[code] ?? 'ทดสอบไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Gemini'
+      : 'ทดสอบไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Gemini';
+    const errorType = (detail as { error_type?: unknown }).error_type;
+    if ((code === 'unknown' || code === 'sdk_runtime_error')
+      && typeof errorType === 'string'
+      && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(errorType)) {
+      const stage = (detail as { stage?: unknown }).stage;
+      const trace = (detail as { trace?: unknown }).trace;
+      const diagnostics = [errorType];
+      if (typeof stage === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(stage)) {
+        diagnostics.push(stage);
+      }
+      if (typeof trace === 'string' && /^[A-Za-z0-9_.,-]{1,256}$/.test(trace)) {
+        diagnostics.push(trace);
+      }
+      return `${message} (${diagnostics.join(' · ')})`;
+    }
+    return message;
   }
 }

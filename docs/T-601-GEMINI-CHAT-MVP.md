@@ -27,7 +27,7 @@ Authorized by the Product Owner on 2026-11-03. This is a bounded provider integr
 - No prior messages, chat history, local files, PC state, tool catalog, or local-agent token is sent.
 - No function calling, tool calling, or PC action is enabled.
 - Each request is stateless.
-- Provider errors are returned as generic messages; upstream error details and API keys are not returned to the browser or written to application logs.
+- Provider errors are returned as sanitized categories (key/access, quota, model availability, provider availability, network, timeout, invalid/empty response, or rejected request); unclassified failures may include only the exception type, operation stage, and Google SDK module/function names. Raw upstream error details and API keys are not returned to the browser or written to application logs.
 - Users should not submit secrets or sensitive personal information. Gemini API Free Tier data handling may differ from paid-tier terms; review Google's current terms and pricing before use.
 
 ## Credential handling
