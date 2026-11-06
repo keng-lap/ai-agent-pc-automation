@@ -239,6 +239,7 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/settings/gemini/test"]) == {"post"}
     assert set(paths["/api/plans"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}"]) == {"get"}
+    assert set(paths["/api/plans/{plan_id}/refine"]) == {"post"}
 
 
 def test_response_has_no_cors_headers_or_cookies():
