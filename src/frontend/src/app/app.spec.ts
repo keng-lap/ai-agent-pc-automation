@@ -728,8 +728,9 @@ describe('Structured Agent response (T-404)', () => {
     clarification.value = 'JDK 21 LTS';
     clarification.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    const refineButton = Array.from(fixture.nativeElement.querySelectorAll('button'))
-      .find((button: Element) => button.textContent?.includes('ส่งคำตอบและปรับแผน')) as HTMLButtonElement;
+    const refineButton = (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[])
+      .find((button) => button.textContent?.includes('ส่งคำตอบและปรับแผน'));
+    if (!refineButton) throw new Error('Plan refinement button was not rendered');
     refineButton.click();
     fixture.detectChanges();
     await fixture.whenStable();
