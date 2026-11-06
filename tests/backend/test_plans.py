@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -19,7 +19,7 @@ from agent_backend.plans import (
 )
 
 
-NOW = datetime(2026, 11, 7, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 7, 0, 0, tzinfo=UTC)
 
 
 def program(**changes):
