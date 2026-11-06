@@ -74,4 +74,4 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 
 I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is complete and merged in PR #61 (commit 2875399). Its implementation and verification used synthetic inputs and dry-run handlers only; no machine-changing operation was performed.
 
-**Current gate:** P5-511 is complete. P5-512 was separately authorized on 2026-11-07 and is in draft PR #63, awaiting CI evidence and explicit PO review/merge approval. P5-513 through P5-516 remain not started and require separate authorization. Phase 6 and real PC execution remain unauthorized.
+**Current gate:** P5-510 through P5-513 are complete and merged (PRs #58, #61, #63, and #64). P5-514 is authorized and in progress on `feat/P5-514-thai-default-ux-api-integration`. P5-515 and P5-516 remain not started and require separate authorization. Phase 6 and real PC execution remain unauthorized.
