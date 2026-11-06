@@ -106,12 +106,3 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .program-review small { color: var(--muted); font-size: 10px; }
 .plan-review { min-width: 0; }
 .plan-review .detail-meta { overflow-wrap: anywhere; }
-
-
-.clarification-form { display: grid; gap: 8px; margin: 14px 0; padding: 13px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-raised); }
-.clarification-form label { color: var(--ink); font-size: 12px; font-weight: 700; }
-.clarification-form textarea { width: 100%; min-height: 64px; resize: vertical; padding: 10px 11px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: var(--surface); font: inherit; font-size: 13px; line-height: 1.5; }
-.clarification-form textarea:focus { outline: 2px solid #7568e5; outline-offset: 1px; }
-.clarification-button { justify-self: start; min-height: 36px; padding: 0 13px; border: 0; border-radius: 9px; color: #fff; background: #6558c8; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.clarification-button:disabled { cursor: not-allowed; opacity: .5; }
-.clarification-form small { color: #a34d52; font-size: 11px; }
