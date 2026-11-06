@@ -51,7 +51,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | P5-510 complete; P5-511 complete; P5-512 authorized/in progress (draft PR #63); P5-513–P5-516 not started; real execution not authorized |
+| 5 | P5-510–P5-513 complete; P5-514 authorized/in progress; P5-515–P5-516 not started; real execution not authorized |
 | 6 | Not Started |
 | 7 | Not Started |
 | 8 | Not Started |
