@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -73,7 +72,7 @@ def test_equivalent_plan_content_has_same_digest_but_distinct_opaque_ids():
 )
 def test_every_material_program_field_changes_digest(change):
     original = program()
-    changed = replace(original, **change)
+    changed = original.model_copy(update=change)
 
     first = create_dry_run_plan("software.install", [original], now=NOW)
     second = create_dry_run_plan("software.install", [changed], now=NOW)
