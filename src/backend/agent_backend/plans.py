@@ -220,7 +220,7 @@ class PlanStore:
     """Thread-safe, bounded, process-local plan references; never persisted."""
 
     def __init__(self, clock: Callable[[], datetime] | None = None) -> None:
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._plans: dict[str, DryRunPlan] = {}
         self._last_seen_at: datetime | None = None
         self._clock_invalid = False
