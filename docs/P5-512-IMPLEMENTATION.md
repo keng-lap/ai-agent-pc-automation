@@ -7,7 +7,7 @@
 ## Scope delivered in this task
 
 - Strict, frozen Pydantic models for a complete, ordered per-program plan.
-- Only the existing fixed tool IDs are accepted: `software.install` and `software.remove`.
+- Only the existing fixed tool IDs are accepted: `software.install` and `software.remove`; the backend policy guard is evaluated before a plan is created.
 - Controlled item statuses are exactly `PLANNED`, `NEEDS_CLARIFICATION`, `BLOCKED`, and `UNSUPPORTED`.
 - Server-owned schema/tool-contract versions, risk `R1`, permission `P1`, and `dry_run` mode.
 - Opaque server-generated plan ID and a canonical SHA-256 digest.
