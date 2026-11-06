@@ -120,8 +120,13 @@ def test_unknown_fields_and_non_contract_statuses_are_rejected():
     with pytest.raises(ValidationError):
         program(status="INSTALLED")
     base_plan = create_dry_run_plan("software.install", [program()], now=NOW)
-    with pytest.raises(ValidationError):
-        DryRunPlan.model_validate({**base_plan.model_dump(), "prompt": "Install Chrome"})
+    for forbidden_field, value in (
+        ("prompt", "Install Chrome"),
+        ("secret", "never-store-this"),
+        ("acknowledged", True),
+    ):
+        with pytest.raises(ValidationError):
+            DryRunPlan.model_validate({**base_plan.model_dump(), forbidden_field: value})
     with pytest.raises(ValidationError):
         DryRunPlan.model_validate(
             {**base_plan.model_dump(), "live_checks_performed": True}
