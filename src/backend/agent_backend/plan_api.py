@@ -55,6 +55,26 @@ class PlanReviewResponse(BaseModel):
     tool_result: ToolResult | None
     questions: tuple[str, ...]
     notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
+    refined_from_plan_id: str | None = None
+    clarification: str | None = None
+
+
+class PlanRefinementRequest(BaseModel):
+    """A bounded clarification; it cannot carry policy or execution metadata."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    request: str = Field(min_length=1, max_length=2000)
+    clarification: str = Field(min_length=1, max_length=500)
+    language: Literal["th", "en"] = "th"
+
+    @field_validator("request", "clarification")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("text must not be empty")
+        return normalized
 
 
 def _programs_for_review(
@@ -179,3 +199,148 @@ def get_plan_review(plan_id: str) -> DryRunPlan:
         raise HTTPException(status_code=410, detail="Plan expired.") from None
     except PlanNotFoundError:
         raise HTTPException(status_code=404, detail="Plan not found.") from None
+
+
+def _java_refinement_programs(
+    clarification: str, language: Literal["th", "en"]
+) -> tuple[ProgramPlan, ...]:
+    """Extract only a small, explicit Java toolchain allowlist from user text."""
+    version_match = re.search(
+        r"\\b(?:jdk|java)\\s*(?:version\\s*)?(8|11|17|21|25)(?:\\s*lts)?\\b",
+        clarification,
+        re.IGNORECASE,
+    )
+    if version_match is None:
+        version_match = re.search(r"\\b(8|11|17|21|25)\\s*lts\\b", clarification, re.IGNORECASE)
+    version = f"{version_match.group(1)} LTS" if version_match else None
+
+    ide_aliases = (
+        (("intellij idea", "intellij"), "IntelliJ IDEA"),
+        (("visual studio code", "vs code", "vscode"), "Visual Studio Code"),
+        (("eclipse",), "Eclipse"),
+        (("netbeans", "net beans"), "Apache NetBeans"),
+    )
+    selected_ide = next(
+        (
+            canonical
+            for aliases, canonical in ide_aliases
+            if any(re.search(rf"(?<![a-z]){re.escape(alias)}(?![a-z])", clarification, re.IGNORECASE) for alias in aliases)
+        ),
+        None,
+    )
+
+    jdk = ProgramPlan(
+        order=1,
+        program="JDK",
+        version=version or ("ยังไม่ได้ระบุ" if language == "th" else "Not specified"),
+        purpose=(
+            "ชุดพัฒนาและคอมไพเลอร์สำหรับภาษา Java"
+            if language == "th"
+            else "Java development kit and compiler"
+        ),
+        reason=(
+            "ระบุเวอร์ชันจากคำตอบเพิ่มเติมของผู้ใช้"
+            if version and language == "th"
+            else "JDK version was explicitly supplied by the user"
+            if version
+            else "ยังไม่ได้รับเวอร์ชัน JDK จากผู้ใช้"
+            if language == "th"
+            else "The user has not supplied a JDK version"
+        ),
+        source="ยังไม่ได้ตรวจสอบ" if language == "th" else "Not checked",
+        impact="ยังไม่ได้ตรวจสอบ" if language == "th" else "Unknown / not checked",
+        status="PLANNED" if version else "NEEDS_CLARIFICATION",
+    )
+    programs = [jdk]
+    if selected_ide:
+        programs.append(
+            ProgramPlan(
+                order=2,
+                program=selected_ide,
+                version="ไม่ระบุเวอร์ชัน" if language == "th" else "Not specified",
+                purpose="IDE ที่ผู้ใช้เลือก" if language == "th" else "IDE explicitly selected by the user",
+                reason="ผู้ใช้ระบุ IDE นี้ในคำตอบเพิ่มเติม" if language == "th" else "Explicitly selected in the user's clarification",
+                source="ยังไม่ได้ตรวจสอบ" if language == "th" else "Not checked",
+                impact="ยังไม่ได้ตรวจสอบ" if language == "th" else "Unknown / not checked",
+                status="PLANNED",
+            )
+        )
+    return tuple(programs)
+
+
+def _java_refinement_questions(
+    programs: tuple[ProgramPlan, ...], language: Literal["th", "en"]
+) -> tuple[str, ...]:
+    questions: list[str] = []
+    jdk = programs[0]
+    if jdk.status == "NEEDS_CLARIFICATION":
+        questions.append(
+            "ต้องการ JDK เวอร์ชันใด เช่น 21 LTS?"
+            if language == "th"
+            else "Which JDK version do you want, for example 21 LTS?"
+        )
+    if len(programs) == 1:
+        questions.append(
+            "ต้องการใช้ IDE ใด เช่น IntelliJ IDEA, Eclipse หรือ VS Code?"
+            if language == "th"
+            else "Which IDE do you want, such as IntelliJ IDEA, Eclipse, or VS Code?"
+        )
+    return tuple(questions)
+
+
+@router.post("/api/plans/{plan_id}/refine", response_model=PlanReviewResponse)
+def refine_plan_review(plan_id: str, payload: PlanRefinementRequest) -> PlanReviewResponse:
+    """Create a new immutable plan from a valid Java plan and explicit clarification."""
+    if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
+        raise HTTPException(status_code=404, detail="Plan not found.")
+    try:
+        previous_plan = _plan_store.get(plan_id)
+    except PlanExpiredError:
+        raise HTTPException(status_code=410, detail="Plan expired.") from None
+    except PlanNotFoundError:
+        raise HTTPException(status_code=404, detail="Plan not found.") from None
+
+    task_plan = create_task_plan(payload.request, payload.language)
+    intent = task_plan.intent
+    if intent.category == "development_task" and re.search(r"\\bjava\\b", payload.request, re.IGNORECASE):
+        intent = intent.model_copy(update={"target": "Java"})
+        task_plan = task_plan.model_copy(update={"intent": intent})
+    baseline = _programs_for_review(intent, payload.language)
+    if (
+        baseline is None
+        or intent.category != "development_task"
+        or intent.target != "Java"
+        or previous_plan.tool_id != "software.install"
+        or previous_plan.programs != baseline[1]
+    ):
+        raise HTTPException(status_code=409, detail="Plan does not match the supplied original request.")
+
+    programs = _java_refinement_programs(payload.clarification, payload.language)
+    try:
+        new_plan = _plan_store.create("software.install", programs)
+        tool_result = execute_tool(ToolRequest(tool_id="software.install", target="JDK"))
+    except PlanCapacityError:
+        raise HTTPException(status_code=503, detail="Plan capacity reached.") from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Clarification could not be applied.") from None
+
+    action_list = ", ".join(
+        f"{item.program} {item.version}" if item.program == "JDK" else item.program
+        for item in programs
+    )
+    summary = (
+        f"จำลองเท่านั้น: เตรียมรายการ {action_list}; ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
+        if payload.language == "th"
+        else f"Dry run only: would prepare {action_list}; no computer changes were made."
+    )
+    tool_result = tool_result.model_copy(update={"summary": summary})
+    return PlanReviewResponse(
+        request=payload.request,
+        interpretation=intent,
+        task_plan=task_plan,
+        dry_run_plan=new_plan,
+        tool_result=tool_result,
+        questions=_java_refinement_questions(programs, payload.language),
+        refined_from_plan_id=plan_id,
+        clarification=payload.clarification,
+    )
