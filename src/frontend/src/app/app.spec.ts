@@ -5,7 +5,7 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import { TimeoutError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
-import { ChatApi, UiLanguage } from './chat/chat-api';
+import { ChatApi, PlanReviewResponse, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
@@ -17,10 +17,23 @@ class FakeChatApi {
   configured = false;
   testError: unknown;
   responder: (message: string, language: UiLanguage) => Observable<unknown> = () => of({ reply: 'Mock reply' });
+  planResponder: (message: string, language: UiLanguage) => Observable<PlanReviewResponse> = (message) => of({
+    request: message,
+    interpretation: { category: 'general_task', goal: message, target: null },
+    task_plan: { steps: [], prerequisites: [] },
+    dry_run_plan: null,
+    tool_result: null,
+    questions: [],
+    notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+  });
 
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
     this.calls.push({ message, language, conversationId });
     return this.responder(message, language);
+  }
+
+  createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
+    return this.planResponder(message, language);
   }
 
   getConversation(conversationId: string): Observable<unknown> {
@@ -392,6 +405,18 @@ describe('App chat UI (T-202)', () => {
       language: 'en',
     });
     request.flush({ reply: 'Mock reply' });
+    const planRequest = httpTestingController.expectOne('/api/plans');
+    expect(planRequest.request.method).toBe('POST');
+    expect(planRequest.request.body).toEqual({ request: 'hello', language: 'en' });
+    planRequest.flush({
+      request: 'hello',
+      interpretation: { category: 'general_task', goal: 'hello', target: null },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: null,
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Mock reply');
 
@@ -423,11 +448,33 @@ describe('App chat UI (T-202)', () => {
     languageButton('EN').click();
     fixture.detectChanges();
     thaiRequest.flush({ reply: 'Thai reply' });
+    const thaiPlanRequest = httpTestingController.expectOne('/api/plans');
+    expect(thaiPlanRequest.request.body).toEqual({ request: 'Thai request', language: 'th' });
+    thaiPlanRequest.flush({
+      request: 'Thai request',
+      interpretation: { category: 'general_task', goal: 'Thai request', target: null },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: null,
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
     fixture.detectChanges();
     send('English request');
     const englishRequest = httpTestingController.expectOne('/api/chat');
     expect(englishRequest.request.body).toMatchObject({ message: 'English request', language: 'en' });
     englishRequest.flush({ reply: 'English reply' });
+    const englishPlanRequest = httpTestingController.expectOne('/api/plans');
+    expect(englishPlanRequest.request.body).toEqual({ request: 'English request', language: 'en' });
+    englishPlanRequest.flush({
+      request: 'English request',
+      interpretation: { category: 'general_task', goal: 'English request', target: null },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: null,
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
   });
 
   it('F-17/F-18: language switch updates the UI and document language', async () => {
@@ -586,7 +633,7 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
     expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
     expect(view.textContent).toContain('จำลองเท่านั้น');
-    expect(view.textContent).toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
+    expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     fixture.destroy();
   });
