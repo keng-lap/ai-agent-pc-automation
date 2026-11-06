@@ -229,7 +229,7 @@ def test_foreign_origin_precedes_method_routing():
     assert response.status_code == 403
 
 
-def test_openapi_read_routes_match_allow_list_and_state_changing_routes_are_post_only():
+def test_openapi_read_routes_and_methods_match_allow_list():
     paths = app.openapi()["paths"]
     get_routes = {path for path, operations in paths.items() if "get" in operations}
     assert get_routes == {"/health", "/api/settings/gemini", "/api/chat/{conversation_id}", "/api/plans/{plan_id}"}
