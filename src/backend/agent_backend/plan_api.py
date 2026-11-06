@@ -206,12 +206,14 @@ def _java_refinement_programs(
 ) -> tuple[ProgramPlan, ...]:
     """Extract only a small, explicit Java toolchain allowlist from user text."""
     version_match = re.search(
-        r"\b(?:jdk|java)\s*(?:version\s*)?(8|11|17|21|25)(?:\s*lts)?\\b",
+        r"\b(?:jdk|java)\s*(?:version\s*)?(8|11|17|21|25)(?:\s*lts)?\b",
         clarification,
         re.IGNORECASE,
     )
     if version_match is None:
-        version_match = re.search(r"\b(8|11|17|21|25)\s*lts\\b", clarification, re.IGNORECASE)
+        version_match = re.search(
+            r"\b(8|11|17|21|25)\s*lts\b", clarification, re.IGNORECASE
+        )
     version = f"{version_match.group(1)} LTS" if version_match else None
 
     ide_aliases = (
@@ -313,7 +315,7 @@ def refine_plan_review(plan_id: str, payload: PlanRefinementRequest) -> PlanRevi
 
     task_plan = create_task_plan(payload.request, payload.language)
     intent = task_plan.intent
-    if intent.category == "development_task" and re.search(r"\bjava\\b", payload.request, re.IGNORECASE):
+    if intent.category == "development_task" and re.search(r"\bjava\b", payload.request, re.IGNORECASE):
         intent = intent.model_copy(update={"target": "Java"})
         task_plan = task_plan.model_copy(update={"intent": intent})
     baseline = _programs_for_review(intent, payload.language)
