@@ -19,7 +19,7 @@ This document is the planning baseline and does not itself authorize runtime wor
 9. Audit fields and event types are strict allowlists. No prompts, full plans, secrets, raw parameters, machine inventory, raw exception text, or stack traces.
 10. Mandatory policy evaluation failure denies before dispatch. Optional diagnostics failure must not create a permissive fallback or cause unbounded/raw logging.
 11. Implementation must be split into bounded tasks with dependencies and acceptance criteria.
-12. Runtime start remains unauthorized until a separate explicit PO instruction.
+12. Runtime implementation is authorized only per explicitly approved bounded task; the 2026-11-07 authorization applies to P5-512 only and does not authorize later tasks.
 
 ## 2. Reconciliation of P5-502 through P5-507
 
