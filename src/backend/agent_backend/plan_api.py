@@ -20,7 +20,7 @@ from agent_backend.plans import (
     PlanStore,
     ProgramPlan,
 )
-from agent_backend.tools import ToolRequest, ToolResult, execute_tool, select_tool
+from agent_backend.tools import ToolRequest, ToolResult, execute_tool
 
 router = APIRouter()
 _plan_store = PlanStore()
