@@ -37,7 +37,7 @@ The digest deliberately excludes the random plan ID and timestamps. A new plan w
 
 ## Verification
 
-Tests are added in `tests/backend/test_plans.py` for immutability, strict schema rejection, all material-field digest binding, ordering, expiry, restart invalidation, clock rollback, tamper detection, and bounded capacity.
+Tests are added in `tests/backend/test_plans.py` for policy denial, strict schema rejection, JSON-array normalization, immutability, all material-field digest binding, ordering, expiry, restart invalidation, clock rollback, tamper detection, and bounded capacity.
 
 **No test or CI pass is claimed in this document until the corresponding GitHub Actions result is available.** The Product Owner must review the runtime diff and explicitly approve PR #63 before merge.
 
