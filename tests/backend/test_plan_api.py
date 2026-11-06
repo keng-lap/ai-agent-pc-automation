@@ -27,6 +27,7 @@ def test_java_development_request_returns_explicit_dry_run_plan_without_machine_
     assert body["dry_run_plan"]["programs"][0]["program"] == "JDK"
     assert body["dry_run_plan"]["programs"][0]["status"] == "NEEDS_CLARIFICATION"
     assert body["tool_result"]["status"] == "dry_run"
+    assert "ไม่มีการเปลี่ยนแปลง" in body["tool_result"]["summary"]
     assert body["questions"] == [
         "ต้องการ JDK เวอร์ชันใด (เช่น 21 LTS)?",
         "ต้องการใช้ IDE ใด หรือให้แนะนำตัวเลือกก่อน?",
