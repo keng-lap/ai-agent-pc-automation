@@ -121,7 +121,11 @@ class PlanClockError(RuntimeError):
 
 
 def _is_utc(value: datetime) -> bool:
-    return value.tzinfo is not None and value.utcoffset() == timedelta(0)
+    return (
+        isinstance(value, datetime)
+        and value.tzinfo is not None
+        and value.utcoffset() == timedelta(0)
+    )
 
 
 def _canonical_identity(
