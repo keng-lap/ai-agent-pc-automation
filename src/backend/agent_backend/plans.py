@@ -116,6 +116,10 @@ class PlanCapacityError(RuntimeError):
     """The bounded in-memory plan store is full."""
 
 
+class PlanClockError(RuntimeError):
+    """The backend clock became invalid or moved backwards."""
+
+
 def _is_utc(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() == timedelta(0)
 
@@ -197,6 +201,8 @@ class PlanStore:
     def __init__(self, clock: Callable[[], datetime] | None = None) -> None:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._plans: dict[str, DryRunPlan] = {}
+        self._last_seen_at: datetime | None = None
+        self._clock_invalid = False
         self._lock = threading.RLock()
 
     def create(
@@ -205,9 +211,8 @@ class PlanStore:
         programs: Sequence[ProgramPlan],
     ) -> DryRunPlan:
         now = self._clock()
-        if not _is_utc(now):
-            raise ValueError("plan store clock must return timezone-aware UTC")
         with self._lock:
+            self._observe_clock(now)
             self._remove_expired(now)
             if len(self._plans) >= MAX_ACTIVE_PLANS:
                 raise PlanCapacityError("active plan capacity reached")
@@ -217,9 +222,8 @@ class PlanStore:
 
     def get(self, plan_id: str) -> DryRunPlan:
         now = self._clock()
-        if not _is_utc(now):
-            raise ValueError("plan store clock must return timezone-aware UTC")
         with self._lock:
+            self._observe_clock(now)
             plan = self._plans.get(plan_id)
             if plan is None:
                 raise PlanNotFoundError("plan reference not found")
@@ -235,6 +239,17 @@ class PlanStore:
                 self._plans.pop(plan_id, None)
                 raise PlanIntegrityError("stored plan integrity check failed")
             return plan
+
+    def _observe_clock(self, now: datetime) -> None:
+        if self._clock_invalid:
+            raise PlanClockError("plan store clock is invalid; restart is required")
+        if not _is_utc(now) or (
+            self._last_seen_at is not None and now < self._last_seen_at
+        ):
+            self._plans.clear()
+            self._clock_invalid = True
+            raise PlanClockError("plan store clock is invalid or moved backwards")
+        self._last_seen_at = now
 
     def _remove_expired(self, now: datetime) -> None:
         expired = [
