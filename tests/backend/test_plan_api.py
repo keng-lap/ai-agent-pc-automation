@@ -34,7 +34,7 @@ def test_java_development_request_returns_explicit_dry_run_plan_without_machine_
     assert body["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
 
 
-def test_plan_can_be_read_by_opaque_id_and_expires_from_process_store():
+def test_plan_can_be_read_by_opaque_id_from_process_store():
     created = client.post(
         "/api/plans",
         json={"request": "Install Google Chrome", "language": "en"},
