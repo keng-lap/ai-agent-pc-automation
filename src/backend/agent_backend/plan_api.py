@@ -206,12 +206,12 @@ def _java_refinement_programs(
 ) -> tuple[ProgramPlan, ...]:
     """Extract only a small, explicit Java toolchain allowlist from user text."""
     version_match = re.search(
-        r"\\b(?:jdk|java)\\s*(?:version\\s*)?(8|11|17|21|25)(?:\\s*lts)?\\b",
+        r"\b(?:jdk|java)\s*(?:version\s*)?(8|11|17|21|25)(?:\s*lts)?\\b",
         clarification,
         re.IGNORECASE,
     )
     if version_match is None:
-        version_match = re.search(r"\\b(8|11|17|21|25)\\s*lts\\b", clarification, re.IGNORECASE)
+        version_match = re.search(r"\b(8|11|17|21|25)\s*lts\\b", clarification, re.IGNORECASE)
     version = f"{version_match.group(1)} LTS" if version_match else None
 
     ide_aliases = (
@@ -224,7 +224,14 @@ def _java_refinement_programs(
         (
             canonical
             for aliases, canonical in ide_aliases
-            if any(re.search(rf"(?<![a-z]){re.escape(alias)}(?![a-z])", clarification, re.IGNORECASE) for alias in aliases)
+            if any(
+                re.search(
+                    rf"(?<![a-z]){re.escape(alias)}(?![a-z])",
+                    clarification,
+                    re.IGNORECASE,
+                )
+                for alias in aliases
+            )
         ),
         None,
     )
@@ -259,7 +266,11 @@ def _java_refinement_programs(
                 program=selected_ide,
                 version="ไม่ระบุเวอร์ชัน" if language == "th" else "Not specified",
                 purpose="IDE ที่ผู้ใช้เลือก" if language == "th" else "IDE explicitly selected by the user",
-                reason="ผู้ใช้ระบุ IDE นี้ในคำตอบเพิ่มเติม" if language == "th" else "Explicitly selected in the user's clarification",
+                reason=(
+                    "ผู้ใช้ระบุ IDE นี้ในคำตอบเพิ่มเติม"
+                    if language == "th"
+                    else "Explicitly selected in the user's clarification"
+                ),
                 source="ยังไม่ได้ตรวจสอบ" if language == "th" else "Not checked",
                 impact="ยังไม่ได้ตรวจสอบ" if language == "th" else "Unknown / not checked",
                 status="PLANNED",
@@ -302,7 +313,7 @@ def refine_plan_review(plan_id: str, payload: PlanRefinementRequest) -> PlanRevi
 
     task_plan = create_task_plan(payload.request, payload.language)
     intent = task_plan.intent
-    if intent.category == "development_task" and re.search(r"\\bjava\\b", payload.request, re.IGNORECASE):
+    if intent.category == "development_task" and re.search(r"\bjava\\b", payload.request, re.IGNORECASE):
         intent = intent.model_copy(update={"target": "Java"})
         task_plan = task_plan.model_copy(update={"intent": intent})
     baseline = _programs_for_review(intent, payload.language)
