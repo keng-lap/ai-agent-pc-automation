@@ -128,7 +128,7 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
     """Create a deterministic plan review and optional P1 dry-run report."""
     task_plan = create_task_plan(payload.request, payload.language)
     intent = task_plan.intent
-    if intent.category == "development_task" and re.search(r"\\bjava\\b", payload.request, re.IGNORECASE):
+    if intent.category == "development_task" and re.search(r"\bjava\b", payload.request, re.IGNORECASE):
         intent = intent.model_copy(update={"target": "Java"})
         task_plan = task_plan.model_copy(update={"intent": intent})
     dry_run_plan = None
