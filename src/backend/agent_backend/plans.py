@@ -49,6 +49,13 @@ class ProgramPlan(BaseModel):
     impact: str = Field(default="Unknown / not checked", min_length=1, max_length=240)
     status: PlanItemStatus
 
+    @field_validator("dependencies", mode="before")
+    @classmethod
+    def normalize_dependencies(cls, value):
+        if isinstance(value, list):
+            return tuple(value)
+        return value
+
     @field_validator("dependencies")
     @classmethod
     def validate_dependencies(cls, value: tuple[str, ...]) -> tuple[str, ...]:
@@ -77,6 +84,13 @@ class DryRunPlan(BaseModel):
     created_at: datetime
     expires_at: datetime
     plan_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("programs", mode="before")
+    @classmethod
+    def normalize_programs(cls, value):
+        if isinstance(value, list):
+            return tuple(value)
+        return value
 
     @model_validator(mode="after")
     def validate_envelope(self) -> "DryRunPlan":
