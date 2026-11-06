@@ -247,7 +247,7 @@ export class App implements AfterViewChecked {
   }
 
   protected startNewChat(): void {
-    if (this.pending() || this.restoring() || this.clearing()) return;
+    if (this.pending() || this.planning() || this.restoring() || this.clearing()) return;
     const conversationId = this.conversationId();
     this.clearing.set(true);
     this.conversationNotice.set('');
