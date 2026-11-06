@@ -11,6 +11,18 @@ class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
   restoredConversationIds: string[] = [];
   clearedConversationIds: string[] = [];
+  refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
+  refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
+    request,
+    interpretation: { category: 'development_task', goal: request, target: 'Java' },
+    task_plan: { steps: [], prerequisites: [] },
+    dry_run_plan: null,
+    tool_result: null,
+    questions: [],
+    notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    refined_from_plan_id: 'a'.repeat(32),
+    clarification,
+  });
   history: { messages: Array<{ role: 'user' | 'assistant'; text: string }> } = { messages: [] };
   historyError: unknown;
   clearError: unknown;
@@ -34,6 +46,11 @@ class FakeChatApi {
 
   createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
     return this.planResponder(message, language);
+  }
+
+  refinePlan(planId: string, request: string, clarification: string, language: UiLanguage): Observable<PlanReviewResponse> {
+    this.refineCalls.push({ planId, request, clarification, language });
+    return this.refineResponder(planId, request, clarification, language);
   }
 
   getConversation(conversationId: string): Observable<unknown> {
@@ -635,6 +652,99 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('จำลองเท่านั้น');
     expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    fixture.destroy();
+  });
+
+
+
+  it('submits a clarification and replaces the review with a new immutable plan', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    const originalPlanId = 'a'.repeat(32);
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'development_task', goal: message, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: originalPlanId,
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1, program: 'JDK', version: 'ยังไม่ได้ระบุ',
+          purpose: 'Java development kit', reason: 'ต้องระบุเวอร์ชัน',
+          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
+          dependencies: [], dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ',
+          status: 'NEEDS_CLARIFICATION',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น' },
+      questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    api.refineResponder = (_planId, request, clarification) => of({
+      request,
+      interpretation: { category: 'development_task', goal: request, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'b'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:05:00Z',
+        programs: [{
+          order: 1, program: 'JDK', version: '21 LTS',
+          purpose: 'Java development kit', reason: 'ระบุเวอร์ชันแล้ว',
+          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
+          dependencies: [], dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ', status: 'PLANNED',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลง' },
+      questions: ['ต้องการ IDE ใด?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      refined_from_plan_id: originalPlanId,
+      clarification,
+    });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const composer = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    composer.value = 'เตรียมเครื่องพัฒนา Java';
+    composer.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const clarification = fixture.nativeElement.querySelector('.clarification-form textarea') as HTMLTextAreaElement;
+    expect(clarification).toBeTruthy();
+    clarification.value = 'JDK 21 LTS';
+    clarification.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const refineButton = Array.from(fixture.nativeElement.querySelectorAll('button'))
+      .find((button: Element) => button.textContent?.includes('ส่งคำตอบและปรับแผน')) as HTMLButtonElement;
+    refineButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.refineCalls).toEqual([{
+      planId: originalPlanId,
+      request: 'เตรียมเครื่องพัฒนา Java',
+      clarification: 'JDK 21 LTS',
+      language: 'th',
+    }]);
+    expect(fixture.nativeElement.textContent).toContain('21 LTS');
+    expect(fixture.nativeElement.textContent).toContain('ข้อมูลที่เพิ่มจากคุณ');
+    expect(fixture.nativeElement.textContent).toContain('สร้างแผนฉบับใหม่แล้ว');
+    expect(fixture.nativeElement.querySelector('button[aria-label*="execute"]')).toBeNull();
     fixture.destroy();
   });
 
