@@ -97,6 +97,11 @@
                   <div class="detail-heading">{{ language() === 'th' ? 'สิ่งที่ Agent เข้าใจ' : 'Agent interpretation' }}</div>
                   <p class="detail-meta">{{ review.interpretation.goal }}</p>
                   <p class="detail-meta">{{ review.interpretation.category }}@if (review.interpretation.target) { · {{ review.interpretation.target }} }</p>
+                  @if (review.clarification) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'ข้อมูลที่เพิ่มจากคุณ' : 'Your clarification' }}</div>
+                    <p class="detail-meta">{{ review.clarification }}</p>
+                    <p class="detail-meta">{{ language() === 'th' ? 'สร้างแผนฉบับใหม่แล้ว โดยเก็บแผนเดิมไว้ไม่แก้ทับ' : 'A new plan was created; the previous immutable plan was not overwritten.' }}</p>
+                  }
 
                   <div class="detail-heading">{{ language() === 'th' ? 'แผนงานและรายการโปรแกรม' : 'Plan and proposed programs' }}</div>
                   @if (review.dry_run_plan; as dryRun) {
@@ -134,6 +139,29 @@
                         <li><span>{{ question }}</span></li>
                       }
                     </ul>
+                  }
+
+                  @if (review.dry_run_plan && review.questions.length) {
+                    <div class="clarification-form">
+                      <label [for]="'clarification-' + entry.id">{{ language() === 'th' ? 'ตอบคำถามเพื่อปรับแผน' : 'Answer to refine this plan' }}</label>
+                      <textarea
+                        [id]="'clarification-' + entry.id"
+                        rows="2"
+                        maxlength="500"
+                        [value]="entry.clarificationDraft ?? ''"
+                        [placeholder]="language() === 'th' ? 'เช่น JDK 21 LTS และ IntelliJ IDEA' : 'e.g. JDK 21 LTS and IntelliJ IDEA'"
+                        (input)="onClarificationInput(entry.id, $event)"
+                      ></textarea>
+                      <button
+                        class="clarification-button"
+                        type="button"
+                        [disabled]="planning() || !(entry.clarificationDraft ?? '').trim()"
+                        (click)="refinePlan(entry)"
+                      >{{ planning() ? (language() === 'th' ? 'กำลังปรับแผน…' : 'Updating plan…') : (language() === 'th' ? 'ส่งคำตอบและปรับแผน' : 'Submit and refine plan') }}</button>
+                      @if (entry.refineError) {
+                        <small role="alert">{{ language() === 'th' ? 'ปรับแผนไม่สำเร็จ แผนอาจหมดอายุ โปรดลองสร้างคำขอใหม่' : 'Could not refine the plan. It may have expired; submit a new request.' }}</small>
+                      }
+                    </div>
                   }
 
                   <div class="tool-preview">
