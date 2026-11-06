@@ -1,9 +1,6 @@
 from fastapi.testclient import TestClient
 
 from agent_backend.main import app
-from agent_backend.plans import PlanNotFoundError
-from agent_backend.plan_api import _plan_store
-
 client = TestClient(
     app,
     base_url="http://127.0.0.1:8000",
