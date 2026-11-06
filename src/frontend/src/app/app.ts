@@ -336,7 +336,9 @@ export class App implements AfterViewChecked {
   }
 
   protected get pendingLabel(): string {
-    return this.language() === 'th' ? 'กำลังรอคำตอบจาก Agent…' : 'Waiting for the Agent…';
+    return this.language() === 'th'
+      ? (this.planning() ? 'กำลังจัดทำแผนงาน…' : 'กำลังรอคำตอบจาก Agent…')
+      : (this.planning() ? 'Preparing the task plan…' : 'Waiting for the Agent…');
   }
 
   protected get canSend(): boolean {
