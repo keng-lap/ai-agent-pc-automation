@@ -2,7 +2,7 @@
 
 ## Status
 
-**Planning authorized by the Product Owner on 2026-11-02.** This document establishes the planning baseline only. No runtime implementation, permission grant, real PC action, or Phase 6 execution is authorized by starting Phase 5.
+**Planning authorized by the Product Owner on 2026-11-02.** Runtime work is authorized only per explicitly approved bounded task: I1 / P5-510 is complete and merged in PR #58; I2 / P5-511 is authorized and in progress. These task approvals do not authorize real PC actions, Phase 6 execution, or any subsequent runtime task.
 
 Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The corresponding repository status documents are being reconciled in this planning change.
 
@@ -61,7 +61,7 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 | P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal — docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md | P5-501, P5-502 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
 | P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan — docs/P5-507-QA-SECURITY-MATRIX.md | P5-502 through P5-506 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
 | P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet — docs/P5-508-INTEGRATED-DESIGN-DECISION-PACKET.md | P5-501 through P5-507 | All 12 PO decisions approved and recorded |
-| P5-509 | A1 + A2 + A3 + A4 | Approved design reconciliation and bounded runtime task breakdown — docs/P5-509-IMPLEMENTATION-BREAKDOWN.md | P5-508 | Planning complete; runtime start not authorized |
+| P5-509 | A1 + A2 + A3 + A4 | Approved design reconciliation and bounded runtime task breakdown — docs/P5-509-IMPLEMENTATION-BREAKDOWN.md | P5-508 | Planning complete; P5-510 complete; P5-511 authorized/in progress |
 
 P5-501 read-only threat model is complete: docs/P5-501-THREAT-MODEL.md. It confirms that the existing local API token is not human identity or proof of action consent.\n\nParallel work is limited to independent read-only analysis. Contracts must be reconciled before any implementation task is proposed. No dependent task may bypass an unresolved decision.
 
@@ -96,7 +96,7 @@ Any proposed change to the approved data-retention, local-exposure, provider/dat
 
 ## Phase 5 implementation gate
 
-After the planning tasks are reviewed, implementation must be split into bounded tasks and branches. Each runtime task requires explicit Product Owner authorization before work begins and explicit approval before its code PR is merged.
+After the planning tasks are reviewed, implementation must be split into bounded tasks and branches. Each runtime task requires explicit Product Owner authorization before work begins and explicit approval before its code PR is merged. Authorization for one task does not authorize the next task.
 
 All implementation and verification during Phase 5 must use mocks/dry-runs. Completing Phase 5 does not automatically enable real execution. Phase 6 and each individual tool still require separate authorization.
 

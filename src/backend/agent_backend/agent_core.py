@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from agent_backend.planner import Language, TaskPlan, create_task_plan
+from agent_backend.policy import require_tool_allowed
 from agent_backend.tools import (
     ToolResult,
     execute_tool,
@@ -45,6 +46,7 @@ def run_agent(message: str, language: Language, provider: AgentProvider) -> Agen
     except ValueError:
         tool_result = None
     else:
+        require_tool_allowed(validated_request.tool_id)
         tool_result = execute_tool(validated_request)
 
     return AgentResponse(

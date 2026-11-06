@@ -1,5 +1,4 @@
 import pytest
-
 from agent_backend import policy
 from agent_backend.tools import TOOL_CATALOG
 
@@ -24,6 +23,26 @@ def test_current_tool_catalog_is_mapped_only_to_p1_dry_run():
         assert rule.permission == "P1"
         assert rule.outcome == "allow_dry_run"
         assert definition.execution_mode == "dry_run"
+
+
+def test_policy_decision_allows_only_catalogued_p1_dry_run_tools():
+    for definition in TOOL_CATALOG:
+        decision = policy.decide_tool_policy(definition.id)
+        assert decision.allowed is True
+        assert decision.deny_reason is None
+        assert decision.rule is not None
+        assert decision.rule.permission == "P1"
+        assert decision.rule.outcome == "allow_dry_run"
+
+
+def test_unknown_tool_has_a_typed_deny_decision():
+    decision = policy.decide_tool_policy("shell.run")
+
+    assert decision.allowed is False
+    assert decision.deny_reason == "unknown_tool"
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        policy.require_tool_allowed("shell.run")
+    assert raised.value.reason == "unknown_tool"
 
 
 def test_policy_matrix_rejects_missing_or_duplicate_risk(monkeypatch):
@@ -51,8 +70,9 @@ def test_catalog_policy_mismatch_fails_closed(monkeypatch):
 
 
 def test_unknown_tool_policy_fails_closed():
-    with pytest.raises((ValueError, policy.PolicyConfigurationError)):
+    with pytest.raises(policy.PolicyDeniedError) as raised:
         policy.policy_for_tool("shell.run")
+    assert raised.value.reason == "unknown_tool"
 
 
 def test_static_policy_definitions_are_immutable():

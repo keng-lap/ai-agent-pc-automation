@@ -117,9 +117,12 @@ _HANDLERS = MappingProxyType(
 
 
 def execute_tool(request: ToolRequest) -> ToolResult:
-    """Dispatch only to a fixed dry-run handler and validate its typed result."""
+    """Apply the final policy guard before fixed-handler dispatch."""
+    from agent_backend.policy import PolicyDeniedError, require_tool_allowed
+
     handler = _HANDLERS.get(request.tool_id)
     if handler is None:
-        raise ValueError("No registered handler is available for this tool")
+        raise PolicyDeniedError("handler_unavailable")
+    require_tool_allowed(request.tool_id)
     result = handler(request)
     return ToolResult.model_validate(result.model_dump())

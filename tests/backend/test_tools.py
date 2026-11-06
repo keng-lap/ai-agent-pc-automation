@@ -1,6 +1,5 @@
 import pytest
-from pydantic import ValidationError
-
+from agent_backend import agent_core, policy, tools
 from agent_backend.planner import create_task_plan
 from agent_backend.tools import (
     _HANDLERS,
@@ -10,6 +9,7 @@ from agent_backend.tools import (
     select_tool,
     validate_tool_request,
 )
+from pydantic import ValidationError
 
 
 @pytest.mark.parametrize(
@@ -93,3 +93,82 @@ def test_dispatch_result_is_validated_and_remains_dry_run():
 def test_handler_dispatch_map_is_immutable():
     with pytest.raises(TypeError):
         _HANDLERS["software.install"] = lambda request: request
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ["risk_denied", "permission_denied", "execution_mode_denied"],
+)
+def test_denied_policy_never_reaches_a_spy_handler(monkeypatch, reason):
+    handler_calls = []
+
+    def spy_handler(request):
+        handler_calls.append(request)
+
+    monkeypatch.setattr(
+        "agent_backend.tools._HANDLERS",
+        {"software.install": spy_handler},
+    )
+
+    def deny(_tool_id):
+        raise policy.PolicyDeniedError(reason)
+
+    monkeypatch.setattr(policy, "require_tool_allowed", deny)
+    request = ToolRequest(tool_id="software.install", target="Example")
+
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        execute_tool(request)
+
+    assert raised.value.reason == reason
+    assert handler_calls == []
+
+
+def test_unknown_constructed_tool_never_reaches_a_spy_handler(monkeypatch):
+    handler_calls = []
+    request = ToolRequest.model_construct(tool_id="shell.run", target="whoami")
+    monkeypatch.setattr(
+        tools,
+        "_HANDLERS",
+        {"shell.run": lambda item: handler_calls.append(item)},
+    )
+
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        execute_tool(request)
+
+    assert raised.value.reason == "unknown_tool"
+    assert handler_calls == []
+
+
+def test_invalid_policy_configuration_never_reaches_a_spy_handler(monkeypatch):
+    handler_calls = []
+    monkeypatch.setattr(policy, "_TOOL_POLICY", {})
+    monkeypatch.setattr(
+        tools,
+        "_HANDLERS",
+        {"software.install": lambda item: handler_calls.append(item)},
+    )
+    request = ToolRequest(tool_id="software.install", target="Example")
+
+    with pytest.raises(policy.PolicyConfigurationError):
+        execute_tool(request)
+
+    assert handler_calls == []
+
+
+def test_agent_core_policy_decision_denies_before_dispatch(monkeypatch):
+    handler_calls = []
+
+    def deny(_tool_id):
+        raise policy.PolicyDeniedError("permission_denied")
+
+    monkeypatch.setattr(agent_core, "require_tool_allowed", deny)
+    monkeypatch.setattr(
+        "agent_backend.tools._HANDLERS",
+        {"software.install": lambda item: handler_calls.append(item)},
+    )
+
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        agent_core.run_agent("Install Example", "en", "chatgpt")
+
+    assert raised.value.reason == "permission_denied"
+    assert handler_calls == []

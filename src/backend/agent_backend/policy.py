@@ -4,11 +4,18 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
 
-from agent_backend.tools import TOOL_CATALOG, ToolId
+from agent_backend.tools import TOOL_CATALOG
 
 RiskLevel = Literal["R0", "R1", "R2", "R3"]
 PermissionLevel = Literal["P0", "P1", "P2", "P3"]
 PolicyOutcome = Literal["allow_informational", "allow_dry_run", "deny"]
+PolicyDenyReason = Literal[
+    "unknown_tool",
+    "risk_denied",
+    "permission_denied",
+    "execution_mode_denied",
+    "handler_unavailable",
+]
 
 POLICY_VERSION = "phase5-policy-v1"
 
@@ -20,6 +27,23 @@ class PolicyRule:
     risk: RiskLevel
     permission: PermissionLevel
     outcome: PolicyOutcome
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyDecision:
+    """A backend-derived allow or deny result for a registered tool."""
+
+    allowed: bool
+    rule: PolicyRule | None = None
+    deny_reason: PolicyDenyReason | None = None
+
+
+class PolicyDeniedError(RuntimeError):
+    """Raised when a tool request is denied by the backend policy."""
+
+    def __init__(self, reason: PolicyDenyReason) -> None:
+        self.reason = reason
+        super().__init__(reason)
 
 
 # A tuple and read-only mapping prevent runtime mutation by callers.
@@ -85,13 +109,39 @@ def validate_policy_configuration() -> None:
             raise PolicyConfigurationError("Tool catalog metadata is inconsistent with Phase 5")
 
 
-def policy_for_tool(tool_id: ToolId) -> PolicyRule:
-    """Return the fixed P1 dry-run rule; never accept policy from a caller."""
+def decide_tool_policy(tool_id: str) -> PolicyDecision:
+    """Evaluate a tool against backend-owned policy; callers cannot supply a grant."""
     validate_policy_configuration()
     mapping = _TOOL_POLICY.get(tool_id)
     if mapping is None:
-        raise PolicyConfigurationError("Unknown tool has no policy")
-    rule = _RULE_BY_RISK.get(mapping[0])
-    if rule is None or rule.permission != mapping[1] or rule.outcome != "allow_dry_run":
-        raise PolicyConfigurationError("Tool policy is not allowed")
-    return rule
+        return PolicyDecision(allowed=False, deny_reason="unknown_tool")
+
+    risk, permission, mode = mapping
+    rule = _RULE_BY_RISK.get(risk)
+    if rule is None or rule.permission != permission:
+        raise PolicyConfigurationError("Tool policy does not match the approved matrix")
+    if rule.outcome == "deny":
+        return PolicyDecision(allowed=False, rule=rule, deny_reason="risk_denied")
+    if permission != "P1":
+        return PolicyDecision(allowed=False, rule=rule, deny_reason="permission_denied")
+    if rule.outcome != "allow_dry_run" or mode != "dry_run":
+        return PolicyDecision(allowed=False, rule=rule, deny_reason="execution_mode_denied")
+    return PolicyDecision(allowed=True, rule=rule)
+
+
+def require_tool_allowed(tool_id: str) -> PolicyDecision:
+    """Fail closed with a typed reason unless static policy allows P1 dry-run."""
+    decision = decide_tool_policy(tool_id)
+    if not decision.allowed:
+        if decision.deny_reason is None:
+            raise PolicyConfigurationError("Denied policy result has no typed reason")
+        raise PolicyDeniedError(decision.deny_reason)
+    return decision
+
+
+def policy_for_tool(tool_id: str) -> PolicyRule:
+    """Return the fixed rule for a tool only when policy permits its dry-run."""
+    decision = require_tool_allowed(tool_id)
+    if decision.rule is None:
+        raise PolicyConfigurationError("Allowed policy result has no rule")
+    return decision.rule
