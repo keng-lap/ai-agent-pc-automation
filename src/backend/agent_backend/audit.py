@@ -11,7 +11,7 @@ from collections import deque
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 AuditEventType = Literal[
     "policy.allowed",
@@ -75,7 +75,7 @@ class AuditEventSink:
         """Record optional diagnostics without changing the caller's safe path."""
         try:
             self.record(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 - optional audit must never break the safe path
             return False
         return True
 
