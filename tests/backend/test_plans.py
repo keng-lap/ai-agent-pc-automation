@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+from agent_backend import policy
 from agent_backend.plans import (
     MAX_ACTIVE_PLANS,
     PLAN_TTL,
@@ -131,6 +132,18 @@ def test_unknown_fields_and_non_contract_statuses_are_rejected():
         DryRunPlan.model_validate(
             {**base_plan.model_dump(), "live_checks_performed": True}
         )
+
+
+def test_policy_denial_blocks_plan_creation(monkeypatch):
+    def deny(_tool_id):
+        raise policy.PolicyDeniedError("permission_denied")
+
+    monkeypatch.setattr(policy, "require_tool_allowed", deny)
+
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        create_dry_run_plan("software.install", [program()], now=NOW)
+
+    assert raised.value.reason == "permission_denied"
 
 
 def test_unvalidated_program_payload_is_rejected():
