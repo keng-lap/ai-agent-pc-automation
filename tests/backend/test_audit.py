@@ -10,28 +10,22 @@ from agent_backend.audit import (
     make_audit_event,
 )
 
-NOW = datetime(2026, 11, 7, 0, 0, tzinfo=UTC)
-
 
 def event(index=0):
     return make_audit_event(
         event_type="plan.created",
         tool_id="software.install",
         outcome="allowed",
-        occurred_at=NOW,
-    ).model_copy(update={"occurred_at": datetime.fromtimestamp(index, UTC)})
+        occurred_at=datetime.fromtimestamp(index, UTC),
+    )
 
 
 def test_event_schema_is_strict_and_immutable():
     item = event()
     with pytest.raises(ValidationError):
-        AuditEvent.model_validate(
-            {**item.model_dump(), "prompt": "install Chrome"}
-        )
+        AuditEvent.model_validate({**item.model_dump(), "prompt": "install Chrome"})
     with pytest.raises(ValidationError):
-        AuditEvent.model_validate(
-            {**item.model_dump(), "token": "secret"}
-        )
+        AuditEvent.model_validate({**item.model_dump(), "token": "secret"})
     with pytest.raises(ValidationError):
         item.outcome = "denied"
 
@@ -90,8 +84,9 @@ def test_sink_rejects_invalid_capacity(capacity):
 def test_optional_diagnostics_failure_is_non_blocking():
     sink = AuditEventSink()
 
-    assert sink.record_optional({**event().model_dump(), "raw_parameters": {"x": 1}})
-    is False
+    assert sink.record_optional(
+        {**event().model_dump(), "raw_parameters": {"x": 1}}
+    ) is False
     assert sink.snapshot() == ()
 
 
