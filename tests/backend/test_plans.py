@@ -9,6 +9,7 @@ from agent_backend.plans import (
     DryRunPlan,
     PlanCapacityError,
     PlanExpiredError,
+    PlanIntegrityError,
     PlanNotFoundError,
     PlanStore,
     ProgramPlan,
@@ -42,6 +43,10 @@ def test_plan_is_immutable_and_explicitly_dry_run_only():
     assert plan.mode == "dry_run"
     assert plan.risk_class == "R1"
     assert plan.required_permission == "P1"
+    assert plan.live_checks_performed is False
+    assert plan.report_notice == "DRY_RUN_ONLY_NO_CHANGES_MADE"
+    assert plan.programs[0].source_verification == "NOT_CHECKED"
+    assert plan.programs[0].dependencies_verification == "NOT_CHECKED"
     assert plan.expires_at - plan.created_at == PLAN_TTL
     assert plan.programs[0].program == "Google Chrome"
     with pytest.raises(ValidationError):
@@ -113,12 +118,12 @@ def test_unknown_fields_and_non_contract_statuses_are_rejected():
         ProgramPlan.model_validate({**program().model_dump(), "command": "whoami"})
     with pytest.raises(ValidationError):
         program(status="INSTALLED")
+    base_plan = create_dry_run_plan("software.install", [program()], now=NOW)
+    with pytest.raises(ValidationError):
+        DryRunPlan.model_validate({**base_plan.model_dump(), "prompt": "Install Chrome"})
     with pytest.raises(ValidationError):
         DryRunPlan.model_validate(
-            {
-                **create_dry_run_plan("software.install", [program()], now=NOW).model_dump(),
-                "prompt": "Install Chrome",
-            }
+            {**base_plan.model_dump(), "live_checks_performed": True}
         )
 
 
@@ -167,8 +172,6 @@ def test_store_rejects_tampered_plan_and_removes_reference():
     store = PlanStore(clock=lambda: NOW)
     plan = store.create("software.install", [program()])
     store._plans[plan.plan_id] = plan.model_copy(update={"plan_digest": "0" * 64})
-
-    from agent_backend.plans import PlanIntegrityError
 
     with pytest.raises(PlanIntegrityError):
         store.get(plan.plan_id)
