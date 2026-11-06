@@ -42,7 +42,9 @@ class ProgramPlan(BaseModel):
     purpose: str = Field(min_length=1, max_length=240)
     reason: str = Field(min_length=1, max_length=500)
     source: str = Field(default="Not checked", min_length=1, max_length=160)
+    source_verification: Literal["NOT_CHECKED"] = "NOT_CHECKED"
     dependencies: tuple[str, ...] = Field(default=(), max_length=20)
+    dependencies_verification: Literal["NOT_CHECKED"] = "NOT_CHECKED"
     disk_space_estimate: str | None = Field(default=None, max_length=80)
     impact: str = Field(default="Unknown / not checked", min_length=1, max_length=240)
     status: PlanItemStatus
@@ -69,6 +71,8 @@ class DryRunPlan(BaseModel):
     risk_class: Literal["R1"] = "R1"
     required_permission: Literal["P1"] = "P1"
     mode: Literal["dry_run"] = "dry_run"
+    live_checks_performed: Literal[False] = False
+    report_notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
     programs: tuple[ProgramPlan, ...] = Field(min_length=1, max_length=MAX_PLAN_ITEMS)
     created_at: datetime
     expires_at: datetime
@@ -130,6 +134,8 @@ def _canonical_identity(
         "risk_class": "R1",
         "required_permission": "P1",
         "mode": "dry_run",
+        "live_checks_performed": False,
+        "report_notice": "DRY_RUN_ONLY_NO_CHANGES_MADE",
         "programs": [item.model_dump(mode="json") for item in programs],
     }
     return json.dumps(
