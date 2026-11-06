@@ -637,4 +637,65 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     fixture.destroy();
   });
+
+  it('renders a Java dry-run plan, clarification questions, and no execution action', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    api.responder = () => of({ reply: 'ควรเริ่มจาก JDK และเลือก IDE ที่ต้องการ' });
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'development_task', goal: message, target: 'Java' },
+      task_plan: {
+        steps: [{ order: 1, kind: 'present_plan', title: 'แสดงแผน', detail: 'ตรวจสอบรายการก่อน' }],
+        prerequisites: [{ id: 'runtime_toolchain', order: 1, title: 'เลือก JDK', reason: 'ต้องระบุเวอร์ชัน', status: 'user_confirmation_needed' }],
+      },
+      dry_run_plan: {
+        plan_id: 'a'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1,
+          program: 'JDK',
+          version: 'ยังไม่ได้ระบุ',
+          purpose: 'ชุดพัฒนา Java',
+          reason: 'จำเป็นสำหรับคอมไพล์และรัน Java',
+          source: 'ยังไม่ได้ตรวจสอบ',
+          source_verification: 'NOT_CHECKED',
+          dependencies: [],
+          dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null,
+          impact: 'ยังไม่ได้ตรวจสอบ',
+          status: 'NEEDS_CLARIFICATION',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'would install JDK; no changes were made' },
+      questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    input.value = 'เตรียมเครื่องพัฒนา Java';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain('คำขอที่ได้รับ');
+    expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
+    expect(view.textContent).toContain('JDK');
+    expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
+    expect(view.textContent).toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
+    expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
+    fixture.destroy();
+  });
 });
