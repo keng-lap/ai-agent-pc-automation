@@ -35,7 +35,7 @@ This document does **not** authorize runtime implementation. D-P5-12 remains a s
 | Task | Owner lane | Scope | Dependencies | Acceptance gate | Status |
 |---|---|---|---|---|---|
 | I1 / P5-510 — Static policy model and startup validation | A2 + A4 | Immutable versioned R0–R3/P0–P3 matrix; fixed catalog mapping; startup consistency checks; hard deny P2/P3 | P5-509 | Missing/duplicate/unknown policy fails closed; no caller override; unit tests | Complete — merged in PR #58 |
-| I2 / P5-511 — Central policy decision and final dispatch guard | A2 + A4 | Insert backend policy decision point and final guard immediately before fixed handler dispatch; typed deny reasons | I1 | Spy handler proves every invalid/denied path is blocked; only P1 dry-run handlers reachable | Authorized/in progress |
+| I2 / P5-511 — Central policy decision and final dispatch guard | A2 + A4 | Insert backend policy decision point and final guard immediately before fixed handler dispatch; typed deny reasons | I1 | Spy handler proves every invalid/denied path is blocked; only P1 dry-run handlers reachable | Complete — merged in PR #61 (commit 2875399) |
 | I3 / P5-512 — Immutable dry-run plan/report contract | A2 + A3 | Strict per-program plan schema, canonicalization/versioned digest, 10-minute backend expiry, restart invalidation; no acknowledgement state | I1, I2 | Exact material fields affect identity; mutation yields new identity; no prompt/secret persisted | Not started — separate authorization required |
 | I4 / P5-513 — Ephemeral audit event sink | A2 + A4 | Allowlisted event schema; max 500 in-memory events; oldest-first eviction; restart clears; no durable sink | I1, I2 | Reject forbidden fields; bounded memory; optional sink failure cannot cause unsafe fallback | Not started — separate authorization required |
 | I5 / P5-514 — Thai-default bilingual UX and API integration | A3 + A2 | Reconcile existing routes; display request, interpretation, every program, uncertainty, status, dry-run/no-change notice; English selectable | I3 | No acknowledgement/execute controls or endpoints; accessible mobile/desktop rendering | Not started — separate authorization required |
@@ -72,6 +72,6 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 
 ## 6. Evidence and current status
 
-I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is explicitly authorized and in progress on a bounded branch. Its implementation and verification remain limited to synthetic inputs and dry-run handlers; no machine-changing operation is authorized.
+I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is complete and merged in PR #61 (commit 2875399). Its implementation and verification used synthetic inputs and dry-run handlers only; no machine-changing operation was performed.
 
-**Current gate:** P5-511 is the only currently authorized in-progress runtime task. Each subsequent runtime task requires a separate explicit Product Owner instruction and code PR approval before merge. Phase 6 and real PC execution remain unauthorized.
+**Current gate:** P5-511 is complete. P5-512 through P5-516 are not started. Each subsequent runtime task requires a separate explicit Product Owner instruction and code PR approval before merge. Phase 6 and real PC execution remain unauthorized.
