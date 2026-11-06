@@ -10,12 +10,13 @@ Authorized by the Product Owner on 2026-11-03. This is a bounded provider integr
 2. Paste a Gemini API key and select Save.
 3. Select Test Connection to make a real Gemini API request.
 4. Send a message in Chat and display Gemini's text reply.
+5. Continue the conversation with recent context, including after a page refresh in the same tab. Select New chat to clear it.
 
 ## API and model
 
 - Provider: Google Gemini Developer API.
 - Python SDK: `google-genai`.
-- SDK call: `client.models.generate_content(model="gemini-3.1-flash-lite", contents=message)`.
+- SDK call: `client.models.generate_content(model="gemini-3.1-flash-lite", contents=messages)`.
 - Model: `gemini-3.1-flash-lite`.
 - Official SDK documentation: https://googleapis.github.io/python-genai/
 - API key guidance: https://ai.google.dev/gemini-api/docs/api-key
@@ -23,10 +24,13 @@ Authorized by the Product Owner on 2026-11-03. This is a bounded provider integr
 
 ## Data boundary
 
-- Only the current message text is sent to Gemini.
-- No prior messages, chat history, local files, PC state, tool catalog, or local-agent token is sent.
+- The current message and up to 10 preceding user/assistant pairs from this conversation are sent to Gemini.
+- Chat history is held in backend process memory only. It is not written to disk or stored in browser storage; the current conversation ID alone is stored in `sessionStorage` to restore the history after a page refresh in that tab.
+- The backend keeps at most 128 conversations and expires conversations after 1 hour of inactivity. Restarting the backend clears all conversation history. New chat deletes the current conversation from backend memory.
+- The backend returns history to the browser on refresh. Failed Gemini requests do not add a question or answer to stored history.
+- No local files, PC state, tool catalog, or local-agent token is sent to Gemini.
 - No function calling, tool calling, or PC action is enabled.
-- Each request is stateless.
+- Context is isolated by conversation ID; concurrent requests for one conversation are serialized.
 - Provider errors are returned as sanitized categories (key/access, quota, model availability, provider availability, network, timeout, invalid/empty response, or rejected request); unclassified failures may include only the exception type, operation stage, and Google SDK module/function names. Raw upstream error details and API keys are not returned to the browser or written to application logs.
 - Users should not submit secrets or sensitive personal information. Gemini API Free Tier data handling may differ from paid-tier terms; review Google's current terms and pricing before use.
 
@@ -51,5 +55,5 @@ Authorized by the Product Owner on 2026-11-03. This is a bounded provider integr
 - Multi-agent orchestration.
 - Windows automation or real machine-changing actions.
 - Function calling, tool calling, and arbitrary commands.
-- Chat-history persistence or sending previous turns to Gemini.
+- Durable chat-history persistence.
 - Public Cloud deployment or changing the local security boundary.
