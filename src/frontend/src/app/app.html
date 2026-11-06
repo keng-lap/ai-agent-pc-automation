@@ -156,7 +156,7 @@
           </article>
         }
       }
-      @if (pending()) {
+      @if (pending() || planning()) {
         <div class="pending-row" aria-live="polite">
           <span class="typing-indicator" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>{{ pendingLabel }}</span>
