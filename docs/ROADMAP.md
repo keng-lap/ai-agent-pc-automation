@@ -18,7 +18,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 **Complete — Product Owner closeout approved 2026-11-02.** T-402, T-403, and T-404 runtime implementation merged in PRs #45–#47. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5. See docs/PHASE-4.md.
 
 ## Phase 5 — Safety and Permission System
-**Planning authorized 2026-11-02; P5-510 and P5-511 complete (merged in PRs #58 and #61).** Runtime authorization is per bounded task. Phase 5 remains a mandatory safety gate before real machine-changing operations and does not authorize Phase 6 execution. Next runtime tasks (P5-512 through P5-516) each require separate Product Owner authorization before work begins. See docs/PHASE-5.md.
+**Planning authorized 2026-11-02; P5-510 and P5-511 complete (PRs #58 and #61). P5-512 separately authorized 2026-11-07 and in draft PR #63, pending CI and PO review.** P5-513–P5-516 each require separate authorization. Phase 5 remains a mandatory safety gate; Phase 6 and real machine-changing execution remain unauthorized. See docs/PHASE-5.md.
 
 ## Phase 6 — Real PC Automation
 **Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
@@ -51,7 +51,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | P5-510 complete (PR #58); P5-511 complete (PR #61); P5-512–P5-516 not started — separate PO authorization required; real execution not authorized |
+| 5 | P5-510 complete; P5-511 complete; P5-512 authorized/in progress (draft PR #63); P5-513–P5-516 not started; real execution not authorized |
 | 6 | Not Started |
 | 7 | Not Started |
 | 8 | Not Started |
