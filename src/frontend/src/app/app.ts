@@ -31,6 +31,8 @@ interface ChatEntry {
   response?: StructuredAgentResponse;
   review?: PlanReviewResponse;
   planError?: boolean;
+  clarificationDraft?: string;
+  refineError?: boolean;
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
@@ -243,6 +245,43 @@ export class App implements AfterViewChecked {
           this.getProviderDiagnostic(error, 'stage'),
           this.getProviderDiagnostic(error, 'trace'),
         ),
+      });
+  }
+
+
+  protected onClarificationInput(entryId: number, event: Event): void {
+    const value = (event.target as HTMLTextAreaElement).value;
+    this.entries.update((entries) => entries.map((entry) =>
+      entry.id === entryId ? { ...entry, clarificationDraft: value.slice(0, 500), refineError: false } : entry,
+    ));
+  }
+
+  protected refinePlan(entry: ChatEntry): void {
+    const review = entry.review;
+    const clarification = entry.clarificationDraft?.trim() ?? '';
+    const planId = review?.dry_run_plan?.plan_id;
+    if (!review || !planId || !clarification || clarification.length > 500 || this.planning()) return;
+
+    const languageAtSend = this.language();
+    this.planning.set(true);
+    this.entries.update((entries) => entries.map((item) =>
+      item.id === entry.id ? { ...item, refineError: false } : item,
+    ));
+    defer(() => this.chatApi.refinePlan(planId, review.request, clarification, languageAtSend))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (refined: PlanReviewResponse) => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id
+            ? { ...item, review: refined, clarificationDraft: '', refineError: false }
+            : item,
+        )),
+        error: () => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id ? { ...item, refineError: true } : item,
+        )),
       });
   }
 
