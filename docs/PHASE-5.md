@@ -4,7 +4,7 @@
 
 **Planning authorized by the Product Owner on 2026-11-02.** I1 / P5-510 is complete and merged in PR #58; I2 / P5-511 is complete and merged in PR #61 (commit 2875399). The Product Owner separately authorized I3 / P5-512 on 2026-11-07; its draft implementation is in PR #63 and awaits CI evidence and explicit PO code-review/merge approval. P5-513 through P5-516 remain not started and each require separate authorization. No real PC action or Phase 6 execution is authorized.
 
-Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The corresponding repository status documents are being reconciled in this planning change.
+Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The repository status documents record this verification evidence.
 
 ## Objective
 
