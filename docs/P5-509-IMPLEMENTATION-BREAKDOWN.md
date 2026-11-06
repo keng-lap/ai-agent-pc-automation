@@ -4,7 +4,7 @@
 
 **Documentation/planning deliverable.** The Product Owner approved all 12 P5-508 decisions on 2026-10-30 using the recommended safe defaults. This document translates those decisions into a bounded implementation backlog and resolves conflicts in P5-502 through P5-507.
 
-This document is the planning baseline and does not itself authorize runtime work. The Product Owner separately authorized P5-512 on 2026-11-07; its bounded implementation is tracked in PR #63. That authorization does not authorize P5-513–P5-516, Phase 6, or real PC actions.
+This document is the planning baseline and does not itself authorize runtime work. P5-512 was completed and merged in PR #63; P5-513 was completed and merged in PR #64. The Product Owner explicitly authorized P5-514 on 2026-11-07; implementation is in progress on `feat/P5-514-thai-default-ux-api-integration`. This authorization does not authorize P5-515, P5-516, Phase 6, or real PC actions.
 
 ## 1. Binding design baseline
 
