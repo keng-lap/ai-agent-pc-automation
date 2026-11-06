@@ -8,6 +8,42 @@ export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
 
+export interface PlanReviewProgram {
+  order: number;
+  program: string;
+  version: string;
+  purpose: string;
+  reason: string;
+  source: string;
+  source_verification: 'NOT_CHECKED';
+  dependencies: string[];
+  dependencies_verification: 'NOT_CHECKED';
+  disk_space_estimate: string | null;
+  impact: string;
+  status: 'PLANNED' | 'NEEDS_CLARIFICATION' | 'BLOCKED' | 'UNSUPPORTED';
+}
+
+export interface PlanReviewResponse {
+  request: string;
+  interpretation: { category: string; goal: string; target: string | null };
+  task_plan: {
+    steps: Array<{ order: number; kind: string; title: string; detail: string }>;
+    prerequisites: Array<{ id: string; order: number; title: string; reason: string; status: string }>;
+  };
+  dry_run_plan: {
+    plan_id: string;
+    mode: 'dry_run';
+    live_checks_performed: false;
+    expires_at: string;
+    programs: PlanReviewProgram[];
+  } | null;
+  tool_result: { status: 'dry_run'; summary: string } | null;
+  questions: string[];
+  notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE';
+  refined_from_plan_id?: string | null;
+  clarification?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatApi {
   private readonly http = inject(HttpClient);
@@ -18,6 +54,26 @@ export class ChatApi {
       message,
       language,
     });
+  }
+
+  createPlan(request: string, language: UiLanguage): Observable<PlanReviewResponse> {
+    return this.http.post<PlanReviewResponse>('/api/plans', { request, language });
+  }
+
+  getPlan(planId: string): Observable<PlanReviewResponse['dry_run_plan']> {
+    return this.http.get<PlanReviewResponse['dry_run_plan']>(`/api/plans/${encodeURIComponent(planId)}`);
+  }
+
+  refinePlan(
+    planId: string,
+    request: string,
+    clarification: string,
+    language: UiLanguage,
+  ): Observable<PlanReviewResponse> {
+    return this.http.post<PlanReviewResponse>(
+      `/api/plans/${encodeURIComponent(planId)}/refine`,
+      { request, clarification, language },
+    );
   }
 
   getConversation(conversationId: string): Observable<ConversationHistory> {

@@ -84,14 +84,98 @@
                     } @else {
                       <span>{{ language() === 'th' ? 'ไม่มีเครื่องมือที่อนุญาตสำหรับงานนี้' : 'No allowlisted tool applies to this task' }}</span>
                     }
-                    @if (response.plan.approval_required) {
-                      <small>{{ language() === 'th' ? 'ต้องได้รับอนุมัติก่อนดำเนินการจริง' : 'Approval required before any real execution' }}</small>
-                    }
                     @if (!response.provider_connected) {
                       <small>{{ language() === 'th' ? 'ยังไม่เชื่อมต่อ AI Provider — ใช้การวางแผนในเครื่อง' : 'AI provider is not connected — using local planning' }}</small>
                     }
                   </div>
                 </section>
+              }
+              @if (entry.review; as review) {
+                <section class="agent-details plan-review" [attr.aria-label]="language() === 'th' ? 'แผนตรวจสอบก่อนดำเนินการ' : 'Plan review'">
+                  <div class="detail-heading">{{ language() === 'th' ? 'คำขอที่ได้รับ' : 'Request received' }}</div>
+                  <p class="detail-meta">{{ review.request }}</p>
+                  <div class="detail-heading">{{ language() === 'th' ? 'สิ่งที่ Agent เข้าใจ' : 'Agent interpretation' }}</div>
+                  <p class="detail-meta">{{ review.interpretation.goal }}</p>
+                  <p class="detail-meta">{{ review.interpretation.category }}@if (review.interpretation.target) { · {{ review.interpretation.target }} }</p>
+                  @if (review.clarification) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'ข้อมูลที่เพิ่มจากคุณ' : 'Your clarification' }}</div>
+                    <p class="detail-meta">{{ review.clarification }}</p>
+                    <p class="detail-meta">{{ language() === 'th' ? 'สร้างแผนฉบับใหม่แล้ว โดยเก็บแผนเดิมไว้ไม่แก้ทับ' : 'A new plan was created; the previous immutable plan was not overwritten.' }}</p>
+                  }
+
+                  <div class="detail-heading">{{ language() === 'th' ? 'แผนงานและรายการโปรแกรม' : 'Plan and proposed programs' }}</div>
+                  @if (review.dry_run_plan; as dryRun) {
+                    @for (program of dryRun.programs; track program.order) {
+                      <article class="program-review">
+                        <strong>{{ program.order }}. {{ program.program }}</strong>
+                        <span>{{ language() === 'th' ? 'เวอร์ชัน' : 'Version' }}: {{ program.version }}</span>
+                        <span>{{ language() === 'th' ? 'เหตุผล' : 'Reason' }}: {{ program.reason }}</span>
+                        <span>{{ language() === 'th' ? 'แหล่งติดตั้ง' : 'Source' }}: {{ program.source }}</span>
+                        <span>{{ language() === 'th' ? 'Dependencies' : 'Dependencies' }}: {{ program.dependencies.length ? program.dependencies.join(', ') : (language() === 'th' ? 'ยังไม่ได้ตรวจสอบ' : 'Not checked') }}</span>
+                        <span>{{ language() === 'th' ? 'พื้นที่ดิสก์' : 'Disk space' }}: {{ program.disk_space_estimate ?? (language() === 'th' ? 'ยังไม่ได้ตรวจสอบ' : 'Not checked') }}</span>
+                        <span>{{ language() === 'th' ? 'ผลกระทบ' : 'Impact' }}: {{ program.impact }}</span>
+                        <small>{{ language() === 'th' ? 'สถานะ' : 'Status' }}: {{ programStatusLabel(program.status) }}</small>
+                      </article>
+                    }
+                  } @else {
+                    <p class="detail-meta">{{ language() === 'th' ? 'ยังไม่สามารถระบุรายการโปรแกรมได้ ต้องขอข้อมูลเพิ่มเติมก่อน' : 'No program list can be proposed yet; more information is needed.' }}</p>
+                  }
+
+                  <div class="detail-heading">{{ language() === 'th' ? 'สิ่งที่ต้องตรวจสอบ' : 'Prerequisites' }}</div>
+                  <ul class="prerequisite-list">
+                    @for (item of review.task_plan.prerequisites; track item.id) {
+                      <li>
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.reason }}</span>
+                        <small>{{ prerequisiteLabel(item.status) }}</small>
+                      </li>
+                    }
+                  </ul>
+
+                  @if (review.questions.length) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'คำถามเพิ่มเติม' : 'Questions' }}</div>
+                    <ul class="prerequisite-list">
+                      @for (question of review.questions; track question) {
+                        <li><span>{{ question }}</span></li>
+                      }
+                    </ul>
+                  }
+
+                  @if (review.dry_run_plan && review.questions.length) {
+                    <div class="clarification-form composer">
+                      <label [for]="'clarification-' + entry.id">{{ language() === 'th' ? 'ตอบคำถามเพื่อปรับแผน' : 'Answer to refine this plan' }}</label>
+                      <textarea
+                        [id]="'clarification-' + entry.id"
+                        rows="2"
+                        maxlength="500"
+                        [value]="entry.clarificationDraft ?? ''"
+                        [placeholder]="language() === 'th' ? 'เช่น JDK 21 LTS และ IntelliJ IDEA' : 'e.g. JDK 21 LTS and IntelliJ IDEA'"
+                        (input)="onClarificationInput(entry.id, $event)"
+                      ></textarea>
+                      <button
+                        class="send-button"
+                        type="button"
+                        [disabled]="planning() || !(entry.clarificationDraft ?? '').trim()"
+                        (click)="refinePlan(entry)"
+                      >{{ planning() ? (language() === 'th' ? 'กำลังปรับแผน…' : 'Updating plan…') : (language() === 'th' ? 'ส่งคำตอบและปรับแผน' : 'Submit and refine plan') }}</button>
+                      @if (entry.refineError) {
+                        <small role="alert">{{ language() === 'th' ? 'ปรับแผนไม่สำเร็จ แผนอาจหมดอายุ โปรดลองสร้างคำขอใหม่' : 'Could not refine the plan. It may have expired; submit a new request.' }}</small>
+                      }
+                    </div>
+                  }
+
+                  <div class="tool-preview">
+                    <strong>{{ language() === 'th' ? 'ผลการจำลอง' : 'Dry-run result' }}</strong>
+                    <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง' : 'Dry-run only — no changes made.' }}</span>
+                    @if (review.tool_result; as result) {
+                      <span>{{ result.summary }}</span>
+                    }
+                    <small>{{ language() === 'th' ? 'ไม่มีการตรวจสอบเครื่อง แหล่งดาวน์โหลด เวอร์ชัน หรือ Dependencies แบบสด' : 'No live machine, download source, version, or dependency checks were performed.' }}</small>
+                  </div>
+                </section>
+              }
+              @if (entry.planError) {
+                <p class="conversation-notice" role="status">{{ language() === 'th' ? 'Gemini ตอบแล้ว แต่ Backend สร้างแผนตรวจสอบไม่ได้' : 'Gemini replied, but the backend could not create the plan review.' }}</p>
               }
             </div>
             @if (entry.kind === 'user') {
@@ -100,7 +184,7 @@
           </article>
         }
       }
-      @if (pending()) {
+      @if (pending() || planning()) {
         <div class="pending-row" aria-live="polite">
           <span class="typing-indicator" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>{{ pendingLabel }}</span>

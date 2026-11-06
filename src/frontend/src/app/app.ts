@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { ChatApi, ConversationHistory, UiLanguage } from './chat/chat-api';
+import { ChatApi, ConversationHistory, PlanReviewResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
@@ -29,6 +29,10 @@ interface ChatEntry {
   diagnosticStage?: string;
   diagnosticTrace?: string;
   response?: StructuredAgentResponse;
+  review?: PlanReviewResponse;
+  planError?: boolean;
+  clarificationDraft?: string;
+  refineError?: boolean;
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
@@ -137,6 +141,7 @@ export class App implements AfterViewChecked {
   protected readonly draft = signal('');
   protected readonly entries = signal<ChatEntry[]>([]);
   protected readonly pending = signal(false);
+  protected readonly planning = signal(false);
   protected readonly restoring = signal(false);
   protected readonly clearing = signal(false);
   protected readonly conversationNotice = signal('');
@@ -209,10 +214,26 @@ export class App implements AfterViewChecked {
       .subscribe({
         next: (response: unknown) => {
           if (this.isReply(response)) {
+            const entryId = ++this.nextEntryId;
             this.entries.update((entries) => [
               ...entries,
-              { id: ++this.nextEntryId, kind: 'agent', text: response.reply, response: this.isStructuredAgentResponse(response) ? response : undefined },
+              { id: entryId, kind: 'agent', text: response.reply, response: this.isStructuredAgentResponse(response) ? response : undefined },
             ]);
+            this.planning.set(true);
+            defer(() => this.chatApi.createPlan(message, languageAtSend))
+              .pipe(
+                timeout({ first: REQUEST_TIMEOUT_MS }),
+                take(1),
+                finalize(() => this.planning.set(false)),
+              )
+              .subscribe({
+                next: (review: PlanReviewResponse) => this.entries.update((entries) =>
+                  entries.map((entry) => entry.id === entryId ? { ...entry, review } : entry),
+                ),
+                error: () => this.entries.update((entries) =>
+                  entries.map((entry) => entry.id === entryId ? { ...entry, planError: true } : entry),
+                ),
+              });
           } else {
             this.appendError('MSG-08');
           }
@@ -227,8 +248,45 @@ export class App implements AfterViewChecked {
       });
   }
 
+
+  protected onClarificationInput(entryId: number, event: Event): void {
+    const value = (event.target as HTMLTextAreaElement).value;
+    this.entries.update((entries) => entries.map((entry) =>
+      entry.id === entryId ? { ...entry, clarificationDraft: value.slice(0, 500), refineError: false } : entry,
+    ));
+  }
+
+  protected refinePlan(entry: ChatEntry): void {
+    const review = entry.review;
+    const clarification = entry.clarificationDraft?.trim() ?? '';
+    const planId = review?.dry_run_plan?.plan_id;
+    if (!review || !planId || !clarification || clarification.length > 500 || this.planning()) return;
+
+    const languageAtSend = this.language();
+    this.planning.set(true);
+    this.entries.update((entries) => entries.map((item) =>
+      item.id === entry.id ? { ...item, refineError: false } : item,
+    ));
+    defer(() => this.chatApi.refinePlan(planId, review.request, clarification, languageAtSend))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (refined: PlanReviewResponse) => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id
+            ? { ...item, review: refined, clarificationDraft: '', refineError: false }
+            : item,
+        )),
+        error: () => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id ? { ...item, refineError: true } : item,
+        )),
+      });
+  }
+
   protected startNewChat(): void {
-    if (this.pending() || this.restoring() || this.clearing()) return;
+    if (this.pending() || this.planning() || this.restoring() || this.clearing()) return;
     const conversationId = this.conversationId();
     this.clearing.set(true);
     this.conversationNotice.set('');
@@ -258,6 +316,24 @@ export class App implements AfterViewChecked {
       return status === 'dry_run_completed' ? 'จำลองเสร็จแล้ว' : 'วางแผนแล้ว';
     }
     return status === 'dry_run_completed' ? 'Dry run completed' : 'Planned';
+  }
+
+  protected programStatusLabel(status: string): string {
+    const labels: Record<UiLanguage, Record<string, string>> = {
+      th: {
+        PLANNED: 'วางแผนแล้ว',
+        NEEDS_CLARIFICATION: 'ต้องการข้อมูลเพิ่มเติม',
+        BLOCKED: 'ถูกระงับ',
+        UNSUPPORTED: 'ไม่รองรับ',
+      },
+      en: {
+        PLANNED: 'Planned',
+        NEEDS_CLARIFICATION: 'Needs clarification',
+        BLOCKED: 'Blocked',
+        UNSUPPORTED: 'Unsupported',
+      },
+    };
+    return labels[this.language()][status] ?? status;
   }
 
   protected prerequisiteLabel(status: string): string {
@@ -299,11 +375,13 @@ export class App implements AfterViewChecked {
   }
 
   protected get pendingLabel(): string {
-    return this.language() === 'th' ? 'กำลังรอคำตอบจาก Agent…' : 'Waiting for the Agent…';
+    return this.language() === 'th'
+      ? (this.planning() ? 'กำลังจัดทำแผนงาน…' : 'กำลังรอคำตอบจาก Agent…')
+      : (this.planning() ? 'Preparing the task plan…' : 'Waiting for the Agent…');
   }
 
   protected get canSend(): boolean {
-    return !this.pending() && !this.restoring() && !this.clearing()
+    return !this.pending() && !this.planning() && !this.restoring() && !this.clearing()
       && this.draft().trim().length > 0 && this.draft().length <= MAX_MESSAGE_LENGTH;
   }
 
@@ -312,7 +390,7 @@ export class App implements AfterViewChecked {
   }
 
   protected get newChatDisabled(): boolean {
-    return this.pending() || this.restoring() || this.clearing();
+    return this.pending() || this.planning() || this.restoring() || this.clearing();
   }
 
   protected get storageNotice(): string {

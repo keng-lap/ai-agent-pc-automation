@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .chat import router as chat_router
 from .config import load_settings
+from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 
@@ -28,6 +29,7 @@ def create_app(settings=None) -> FastAPI:
     )
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(chat_router)
+    application.include_router(plan_router)
     return application
 
 

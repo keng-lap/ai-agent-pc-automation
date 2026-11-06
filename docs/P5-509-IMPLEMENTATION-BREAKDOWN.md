@@ -4,7 +4,7 @@
 
 **Documentation/planning deliverable.** The Product Owner approved all 12 P5-508 decisions on 2026-10-30 using the recommended safe defaults. This document translates those decisions into a bounded implementation backlog and resolves conflicts in P5-502 through P5-507.
 
-This document is the planning baseline and does not itself authorize runtime work. The Product Owner separately authorized P5-512 on 2026-11-07; its bounded implementation is tracked in PR #63. That authorization does not authorize P5-513–P5-516, Phase 6, or real PC actions.
+This document is the planning baseline and does not itself authorize runtime work. P5-512 was completed and merged in PR #63; P5-513 was completed and merged in PR #64. The Product Owner explicitly authorized P5-514 on 2026-11-07; implementation is in progress on `feat/P5-514-thai-default-ux-api-integration`. This authorization does not authorize P5-515, P5-516, Phase 6, or real PC actions.
 
 ## 1. Binding design baseline
 
@@ -19,7 +19,7 @@ This document is the planning baseline and does not itself authorize runtime wor
 9. Audit fields and event types are strict allowlists. No prompts, full plans, secrets, raw parameters, machine inventory, raw exception text, or stack traces.
 10. Mandatory policy evaluation failure denies before dispatch. Optional diagnostics failure must not create a permissive fallback or cause unbounded/raw logging.
 11. Implementation must be split into bounded tasks with dependencies and acceptance criteria.
-12. Runtime implementation is authorized only per explicitly approved bounded task; the 2026-11-07 authorization applies to P5-512 only and does not authorize later tasks.
+12. Runtime implementation is authorized only per explicitly approved bounded task. P5-512 and P5-513 are complete; the Product Owner separately authorized P5-514 on 2026-11-07. This does not authorize P5-515, P5-516, Phase 6, or real PC actions.
 
 ## 2. Reconciliation of P5-502 through P5-507
 
@@ -36,13 +36,13 @@ This document is the planning baseline and does not itself authorize runtime wor
 |---|---|---|---|---|---|
 | I1 / P5-510 — Static policy model and startup validation | A2 + A4 | Immutable versioned R0–R3/P0–P3 matrix; fixed catalog mapping; startup consistency checks; hard deny P2/P3 | P5-509 | Missing/duplicate/unknown policy fails closed; no caller override; unit tests | Complete — merged in PR #58 |
 | I2 / P5-511 — Central policy decision and final dispatch guard | A2 + A4 | Insert backend policy decision point and final guard immediately before fixed handler dispatch; typed deny reasons | I1 | Spy handler proves every invalid/denied path is blocked; only P1 dry-run handlers reachable | Complete — merged in PR #61 (commit 2875399) |
-| I3 / P5-512 — Immutable dry-run plan/report contract | A2 + A3 | Strict per-program plan schema, canonicalization/versioned digest, 10-minute backend expiry, restart invalidation; no acknowledgement state | I1, I2 | Exact material fields affect identity; mutation yields new identity; no prompt/secret persisted | In progress — draft PR #63; CI and PO review pending |
-| I4 / P5-513 — Ephemeral audit event sink | A2 + A4 | Allowlisted event schema; max 500 in-memory events; oldest-first eviction; restart clears; no durable sink | I1, I2 | Reject forbidden fields; bounded memory; optional sink failure cannot cause unsafe fallback | Not started — separate authorization required |
-| I5 / P5-514 — Thai-default bilingual UX and API integration | A3 + A2 | Reconcile existing routes; display request, interpretation, every program, uncertainty, status, dry-run/no-change notice; English selectable | I3 | No acknowledgement/execute controls or endpoints; accessible mobile/desktop rendering | Not started — separate authorization required |
+| I3 / P5-512 — Immutable dry-run plan/report contract | A2 + A3 | Strict per-program plan schema, canonicalization/versioned digest, 10-minute backend expiry, restart invalidation; no acknowledgement state | I1, I2 | Exact material fields affect identity; mutation yields new identity; no prompt/secret persisted | Complete — merged in PR #63 |
+| I4 / P5-513 — Ephemeral audit event sink | A2 + A4 | Allowlisted event schema; max 500 in-memory events; oldest-first eviction; restart clears; no durable sink | I1, I2 | Reject forbidden fields; bounded memory; optional sink failure cannot cause unsafe fallback | Complete — merged in PR #64 |
+| I5 / P5-514 — Thai-default bilingual UX and API integration | A3 + A2 | Reconcile existing routes; display request, interpretation, every program, uncertainty, status, dry-run/no-change notice; bounded clarification creates a new immutable plan; English selectable | I3 | No acknowledgement/execute controls or endpoints; accessible mobile/desktop rendering | Authorized 2026-11-07 — in progress on `feat/P5-514-thai-default-ux-api-integration` |
 | I6 / P5-515 — Negative, abuse, and regression verification | A4 | Update and execute relevant P5-507 matrix using synthetic fixtures, fake clock, spy handlers; verify existing HTTP protections | I1–I5 | Actual commands, exit codes, outputs, SHA, environment and limitations recorded; zero real side-effect capability | Not started — after I1–I5 |
 | I7 / P5-516 — Independent security review and Phase 5 evidence pack | A4 independent reviewer | Review implementation diffs, test evidence, threat-model coverage, policy/dispatch boundaries, privacy and regression | I1–I6 | A4 review findings resolved or explicitly documented; no self-review | Not started — independent review |
 
-Task IDs and ordering define the approved backlog. Runtime work requires separate explicit Product Owner authorization for each task; P5-510 is complete and P5-511 is currently authorized. No real machine-changing action is authorized.
+Task IDs and ordering define the approved backlog. P5-510 through P5-513 are complete. The Product Owner explicitly authorized P5-514 on 2026-11-07; P5-515 and P5-516 still require separate authorization. No real machine-changing action is authorized.
 
 ## 4. Dependency order and parallel lanes
 
@@ -74,4 +74,4 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 
 I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is complete and merged in PR #61 (commit 2875399). Its implementation and verification used synthetic inputs and dry-run handlers only; no machine-changing operation was performed.
 
-**Current gate:** P5-511 is complete. P5-512 was separately authorized on 2026-11-07 and is in draft PR #63, awaiting CI evidence and explicit PO review/merge approval. P5-513 through P5-516 remain not started and require separate authorization. Phase 6 and real PC execution remain unauthorized.
+**Current gate:** P5-510 through P5-513 are complete and merged (PRs #58, #61, #63, and #64). P5-514 is authorized and in progress on `feat/P5-514-thai-default-ux-api-integration`. P5-515 and P5-516 remain not started and require separate authorization. Phase 6 and real PC execution remain unauthorized.

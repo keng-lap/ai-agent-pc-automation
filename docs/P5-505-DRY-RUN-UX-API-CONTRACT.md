@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposal for Product Owner review. Documentation only.** This document defines a Thai-default, bilingual UX/API proposal for reviewing an exact installation plan and its dry-run report. It does not authorize runtime implementation, machine inspection, downloads, installation, removal, or execution.
+**Historical proposal; implementation authority is superseded by P5-509.** This document defines the original Thai-default bilingual UX/API proposal. For the current P1 workflow, follow the reconciled binding decisions in `docs/P5-509-IMPLEMENTATION-BREAKDOWN.md`: displaying the dry-run report is sufficient; acknowledgement, decline/cancel, approval, execute, install, and remove controls/endpoints are not implemented. This document does not authorize machine inspection, downloads, installation, removal, or execution.
 
 Current permission remains P1 — Dry-run / plan and report only. P2 machine inspection and P3 machine-changing execution remain disabled. Acknowledgement is informational only and is never execution authorization.
 

@@ -100,3 +100,9 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .plan-steps li span, .prerequisite-list li span { color: var(--muted); }
 .prerequisite-list li small, .tool-preview small { color: var(--muted); font-size: 10px; }
 .tool-preview { display: grid; gap: 6px; margin-top: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-raised); font-size: 11px; line-height: 1.55; }
+
+.program-review { display: grid; gap: 5px; margin: 9px 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-raised); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.program-review strong { font-size: 12px; }
+.program-review small { color: var(--muted); font-size: 10px; }
+.plan-review { min-width: 0; }
+.plan-review .detail-meta { overflow-wrap: anywhere; }

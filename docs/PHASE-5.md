@@ -2,7 +2,7 @@
 
 ## Status
 
-**Planning authorized by the Product Owner on 2026-11-02.** I1 / P5-510 is complete and merged in PR #58; I2 / P5-511 is complete and merged in PR #61 (commit 2875399). The Product Owner separately authorized I3 / P5-512 on 2026-11-07; its draft implementation is in PR #63 and awaits CI evidence and explicit PO code-review/merge approval. P5-513 through P5-516 remain not started and each require separate authorization. No real PC action or Phase 6 execution is authorized.
+**Planning authorized by the Product Owner on 2026-11-02.** I1 / P5-510 and I2 / P5-511 are complete (PRs #58 and #61). I3 / P5-512 is complete and merged in PR #63; I4 / P5-513 is complete and merged in PR #64. The Product Owner explicitly authorized I5 / P5-514 on 2026-11-07; implementation is in progress on `feat/P5-514-thai-default-ux-api-integration`. P5-515 verification and P5-516 independent review remain not started and require separate authorization. No real PC action or Phase 6 execution is authorized.
 
 Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The repository status documents record this verification evidence.
 
@@ -36,7 +36,7 @@ The AI model, planner, frontend, and client request must never grant permission 
 - The tool catalog is backend-owned and immutable. It currently contains only `software.install` and `software.remove`, both high-risk and dry-run-only.
 - Tool request/result models are strict and frozen; dispatch uses a fixed handler map.
 - Gemini text-only chat is separately authorized under T-601, including temporary backend-memory context. Provider tool/function calling, tool dispatch through Gemini, and PC actions remain disabled.
-- Phase 4 UI shows plan, prerequisites, dry-run result, and approval-required information. It has no execute/approve-and-execute control.
+- The P5-514 UI shows the original request, backend-owned interpretation, explicit per-program dry-run details, unresolved questions, and a no-change notice. P1 has no acknowledgement, approval, cancel, execute, install, or remove control.
 
 ## Workstreams (coordinator-managed four-role workflow)
 
@@ -61,7 +61,7 @@ These are parallel **planning and review lanes**, not four autonomous LLM proces
 | P5-506 | A1 + A4 | Audit event model, privacy, retention, and access proposal — docs/P5-506-AUDIT-PRIVACY-RETENTION-PROPOSAL.md | P5-501, P5-502 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
 | P5-507 | A4 | QA/security matrix, abuse tests, and acceptance evidence plan — docs/P5-507-QA-SECURITY-MATRIX.md | P5-502 through P5-506 | Proposal drafted; PO decisions approved; reconcile to P5-508 |
 | P5-508 | A1 + A4 | Integrated Phase 5 design review and Product Owner decision packet — docs/P5-508-INTEGRATED-DESIGN-DECISION-PACKET.md | P5-501 through P5-507 | All 12 PO decisions approved and recorded |
-| P5-509 | A1 + A2 + A3 + A4 | Approved design reconciliation and bounded runtime task breakdown — docs/P5-509-IMPLEMENTATION-BREAKDOWN.md | P5-508 | Planning complete; P5-510 complete (PR #58); P5-511 complete (PR #61); P5-512 authorized/in progress (PR #63); P5-513–P5-516 not started |
+| P5-509 | A1 + A2 + A3 + A4 | Approved design reconciliation and bounded runtime task breakdown — docs/P5-509-IMPLEMENTATION-BREAKDOWN.md | P5-508 | Planning complete; P5-510–P5-513 complete (PRs #58, #61, #63, #64); P5-514 authorized/in progress; P5-515–P5-516 not started |
 
 P5-501 read-only threat model is complete: docs/P5-501-THREAT-MODEL.md. It confirms that the existing local API token is not human identity or proof of action consent.\n\nParallel work is limited to independent read-only analysis. Contracts must be reconciled before any implementation task is proposed. No dependent task may bypass an unresolved decision.
 

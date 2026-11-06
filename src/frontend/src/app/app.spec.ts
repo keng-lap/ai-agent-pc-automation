@@ -5,22 +5,52 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import { TimeoutError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
-import { ChatApi, UiLanguage } from './chat/chat-api';
+import { ChatApi, PlanReviewResponse, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
   restoredConversationIds: string[] = [];
   clearedConversationIds: string[] = [];
+  refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
+  refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
+    request,
+    interpretation: { category: 'development_task', goal: request, target: 'Java' },
+    task_plan: { steps: [], prerequisites: [] },
+    dry_run_plan: null,
+    tool_result: null,
+    questions: [],
+    notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    refined_from_plan_id: 'a'.repeat(32),
+    clarification,
+  });
   history: { messages: Array<{ role: 'user' | 'assistant'; text: string }> } = { messages: [] };
   historyError: unknown;
   clearError: unknown;
   configured = false;
   testError: unknown;
   responder: (message: string, language: UiLanguage) => Observable<unknown> = () => of({ reply: 'Mock reply' });
+  planResponder: (message: string, language: UiLanguage) => Observable<PlanReviewResponse> = (message) => of({
+    request: message,
+    interpretation: { category: 'general_task', goal: message, target: null },
+    task_plan: { steps: [], prerequisites: [] },
+    dry_run_plan: null,
+    tool_result: null,
+    questions: [],
+    notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+  });
 
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
     this.calls.push({ message, language, conversationId });
     return this.responder(message, language);
+  }
+
+  createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
+    return this.planResponder(message, language);
+  }
+
+  refinePlan(planId: string, request: string, clarification: string, language: UiLanguage): Observable<PlanReviewResponse> {
+    this.refineCalls.push({ planId, request, clarification, language });
+    return this.refineResponder(planId, request, clarification, language);
   }
 
   getConversation(conversationId: string): Observable<unknown> {
@@ -392,6 +422,18 @@ describe('App chat UI (T-202)', () => {
       language: 'en',
     });
     request.flush({ reply: 'Mock reply' });
+    const planRequest = httpTestingController.expectOne('/api/plans');
+    expect(planRequest.request.method).toBe('POST');
+    expect(planRequest.request.body).toEqual({ request: 'hello', language: 'en' });
+    planRequest.flush({
+      request: 'hello',
+      interpretation: { category: 'general_task', goal: 'hello', target: null },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: null,
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Mock reply');
 
@@ -423,11 +465,33 @@ describe('App chat UI (T-202)', () => {
     languageButton('EN').click();
     fixture.detectChanges();
     thaiRequest.flush({ reply: 'Thai reply' });
+    const thaiPlanRequest = httpTestingController.expectOne('/api/plans');
+    expect(thaiPlanRequest.request.body).toEqual({ request: 'Thai request', language: 'th' });
+    thaiPlanRequest.flush({
+      request: 'Thai request',
+      interpretation: { category: 'general_task', goal: 'Thai request', target: null },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: null,
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
     fixture.detectChanges();
     send('English request');
     const englishRequest = httpTestingController.expectOne('/api/chat');
     expect(englishRequest.request.body).toMatchObject({ message: 'English request', language: 'en' });
     englishRequest.flush({ reply: 'English reply' });
+    const englishPlanRequest = httpTestingController.expectOne('/api/plans');
+    expect(englishPlanRequest.request.body).toEqual({ request: 'English request', language: 'en' });
+    englishPlanRequest.flush({
+      request: 'English request',
+      interpretation: { category: 'general_task', goal: 'English request', target: null },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: null,
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
   });
 
   it('F-17/F-18: language switch updates the UI and document language', async () => {
@@ -586,8 +650,163 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
     expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
     expect(view.textContent).toContain('จำลองเท่านั้น');
-    expect(view.textContent).toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
+    expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    fixture.destroy();
+  });
+
+
+
+  it('submits a clarification and replaces the review with a new immutable plan', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    const originalPlanId = 'a'.repeat(32);
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'development_task', goal: message, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: originalPlanId,
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1, program: 'JDK', version: 'ยังไม่ได้ระบุ',
+          purpose: 'Java development kit', reason: 'ต้องระบุเวอร์ชัน',
+          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
+          dependencies: [], dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ',
+          status: 'NEEDS_CLARIFICATION',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น' },
+      questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    api.refineResponder = (_planId, request, clarification) => of({
+      request,
+      interpretation: { category: 'development_task', goal: request, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'b'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:05:00Z',
+        programs: [{
+          order: 1, program: 'JDK', version: '21 LTS',
+          purpose: 'Java development kit', reason: 'ระบุเวอร์ชันแล้ว',
+          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
+          dependencies: [], dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ', status: 'PLANNED',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลง' },
+      questions: ['ต้องการ IDE ใด?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      refined_from_plan_id: originalPlanId,
+      clarification,
+    });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const composer = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    composer.value = 'เตรียมเครื่องพัฒนา Java';
+    composer.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const clarification = fixture.nativeElement.querySelector('.clarification-form textarea') as HTMLTextAreaElement;
+    expect(clarification).toBeTruthy();
+    clarification.value = 'JDK 21 LTS';
+    clarification.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const refineButton = (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[])
+      .find((button) => button.textContent?.includes('ส่งคำตอบและปรับแผน'));
+    if (!refineButton) throw new Error('Plan refinement button was not rendered');
+    refineButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.refineCalls).toEqual([{
+      planId: originalPlanId,
+      request: 'เตรียมเครื่องพัฒนา Java',
+      clarification: 'JDK 21 LTS',
+      language: 'th',
+    }]);
+    expect(fixture.nativeElement.textContent).toContain('21 LTS');
+    expect(fixture.nativeElement.textContent).toContain('ข้อมูลที่เพิ่มจากคุณ');
+    expect(fixture.nativeElement.textContent).toContain('สร้างแผนฉบับใหม่แล้ว');
+    expect(fixture.nativeElement.querySelector('button[aria-label*="execute"]')).toBeNull();
+    fixture.destroy();
+  });
+
+  it('renders a Java dry-run plan, clarification questions, and no execution action', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    api.responder = () => of({ reply: 'ควรเริ่มจาก JDK และเลือก IDE ที่ต้องการ' });
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'development_task', goal: message, target: 'Java' },
+      task_plan: {
+        steps: [{ order: 1, kind: 'present_plan', title: 'แสดงแผน', detail: 'ตรวจสอบรายการก่อน' }],
+        prerequisites: [{ id: 'runtime_toolchain', order: 1, title: 'เลือก JDK', reason: 'ต้องระบุเวอร์ชัน', status: 'user_confirmation_needed' }],
+      },
+      dry_run_plan: {
+        plan_id: 'a'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1,
+          program: 'JDK',
+          version: 'ยังไม่ได้ระบุ',
+          purpose: 'ชุดพัฒนา Java',
+          reason: 'จำเป็นสำหรับคอมไพล์และรัน Java',
+          source: 'ยังไม่ได้ตรวจสอบ',
+          source_verification: 'NOT_CHECKED',
+          dependencies: [],
+          dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null,
+          impact: 'ยังไม่ได้ตรวจสอบ',
+          status: 'NEEDS_CLARIFICATION',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'would install JDK; no changes were made' },
+      questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    input.value = 'เตรียมเครื่องพัฒนา Java';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain('คำขอที่ได้รับ');
+    expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
+    expect(view.textContent).toContain('JDK');
+    expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
+    expect(view.textContent).toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
+    expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
   });
 });
