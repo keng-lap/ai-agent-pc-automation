@@ -55,6 +55,23 @@ def test_plan_is_immutable_and_explicitly_dry_run_only():
         plan.mode = "execute"
 
 
+def test_json_array_inputs_are_normalized_to_immutable_tuples():
+    item_data = program().model_dump()
+    item_data["dependencies"] = ["JRE"]
+    item = ProgramPlan.model_validate(item_data)
+    assert item.dependencies == ("JRE",)
+
+    plan = create_dry_run_plan("software.install", [item], now=NOW)
+    plan_data = plan.model_dump()
+    plan_data["programs"] = [
+        {**plan_data["programs"][0], "dependencies": ["JRE"]}
+    ]
+    parsed = DryRunPlan.model_validate(plan_data)
+
+    assert isinstance(parsed.programs, tuple)
+    assert isinstance(parsed.programs[0].dependencies, tuple)
+
+
 def test_equivalent_plan_content_has_same_digest_but_distinct_opaque_ids():
     first = create_dry_run_plan("software.install", [program()], now=NOW)
     second = create_dry_run_plan("software.install", [program()], now=NOW)
