@@ -1,10 +1,7 @@
-"""FastAPI application for the local web application.
-
-The chat route returns a deterministic placeholder only. It does not invoke an
-Agent, execute tools, or perform PC automation.
-"""
+"""FastAPI application for local Gemini chat without PC automation."""
 
 import logging
+import re
 import traceback
 
 from fastapi import FastAPI, Request
@@ -41,6 +38,23 @@ INVALID_REQUEST = (
     'Invalid request. Send JSON like {"message": "...", "language": "th"} '
     "with 1 to 2000 characters and language th or en."
 )
+SAFE_GEMINI_ERROR_CODES = frozenset(
+    {
+        "key_or_access",
+        "quota_exceeded",
+        "model_unavailable",
+        "provider_unavailable",
+        "request_rejected",
+        "request_timeout",
+        "network_error",
+        "invalid_response",
+        "empty_response",
+        "google_cloud_auth_missing",
+        "sdk_runtime_error",
+        "unknown",
+    }
+)
+SAFE_ERROR_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
 @app.exception_handler(RequestValidationError)
@@ -58,6 +72,38 @@ async def http_error_handler(
         detail = "Method Not Allowed"
     elif exc.status_code == 404:
         detail = "Not Found"
+    elif (
+        exc.status_code == 502
+        and request.url.path in {"/api/chat", "/api/settings/gemini/test"}
+        and isinstance(exc.detail, dict)
+        and set(exc.detail).issubset({"code", "error_type", "stage", "trace"})
+        and "code" in exc.detail
+        and isinstance(exc.detail["code"], str)
+        and exc.detail["code"] in SAFE_GEMINI_ERROR_CODES
+        and (
+            "error_type" not in exc.detail
+            or (
+                isinstance(exc.detail["error_type"], str)
+                and SAFE_ERROR_TYPE_PATTERN.fullmatch(exc.detail["error_type"])
+            )
+        )
+        and (
+            "stage" not in exc.detail
+            or (
+                isinstance(exc.detail["stage"], str)
+                and SAFE_ERROR_TYPE_PATTERN.fullmatch(exc.detail["stage"])
+            )
+        )
+        and (
+            "trace" not in exc.detail
+            or (
+                isinstance(exc.detail["trace"], str)
+                and len(exc.detail["trace"]) <= 256
+                and re.fullmatch(r"[A-Za-z0-9_.,-]+", exc.detail["trace"])
+            )
+        )
+    ):
+        detail = exc.detail
     else:
         detail = "Internal server error."
     return JSONResponse(status_code=exc.status_code, content={"detail": detail})

@@ -9,6 +9,8 @@ import { ChatApi, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage }> = [];
+  configured = false;
+  testError: unknown;
   responder: (message: string, language: UiLanguage) => Observable<unknown> = () => of({ reply: 'Mock reply' });
 
   sendMessage(message: string, language: UiLanguage): Observable<unknown> {
@@ -17,14 +19,16 @@ class FakeChatApi {
   }
 
   getGeminiStatus(): Observable<{ configured: boolean; model: string }> {
-    return of({ configured: false, model: 'gemini-3.1-flash-lite' });
+    return of({ configured: this.configured, model: 'gemini-3.1-flash-lite' });
   }
 
   saveGeminiKey(_apiKey: string): Observable<{ configured: boolean; model: string }> {
+    this.configured = true;
     return of({ configured: true, model: 'gemini-3.1-flash-lite' });
   }
 
   testGeminiConnection(): Observable<{ connected: boolean; model: string }> {
+    if (this.testError !== undefined) return throwError(() => this.testError);
     return of({ connected: true, model: 'gemini-3.1-flash-lite' });
   }
 }
@@ -125,6 +129,43 @@ describe('App chat UI (T-202)', () => {
     expect(sendButton().disabled).toBe(true);
   });
 
+  it('shows a safe Gemini quota reason when the connection test fails', async () => {
+    api.configured = true;
+    api.testError = { status: 502, error: { detail: { code: 'quota_exceeded' } } };
+    await render();
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+    buttons.find((button) => button.textContent?.includes('ทดสอบการเชื่อมต่อ'))?.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('โควตา Gemini เต็มหรือเกินขีดจำกัด');
+  });
+
+  it('shows only the safe error type for an unclassified Gemini failure', async () => {
+    await render();
+    api.responder = () => throwError(() => ({
+      status: 502,
+      error: { detail: { code: 'unknown', error_type: 'RuntimeError' } },
+    }));
+    send();
+    expect(fixture.nativeElement.textContent).toContain('(RuntimeError)');
+    expect(fixture.nativeElement.textContent).not.toContain('sensitive');
+  });
+
+  it('shows the safe SDK error type when Gemini reports an SDK runtime error', async () => {
+    await render();
+    api.responder = () => throwError(() => ({
+      status: 502,
+      error: { detail: {
+        code: 'sdk_runtime_error',
+        error_type: 'RuntimeError',
+        stage: 'provider_request',
+        trace: 'models.generate_content',
+      } },
+    }));
+    send();
+    expect(fixture.nativeElement.textContent).toContain('Gemini SDK เกิดข้อผิดพลาดภายใน');
+    expect(fixture.nativeElement.textContent).toContain('(RuntimeError · provider_request · models.generate_content)');
+  });
+
   it('F-03/F-04: sends trimmed text, shows user and Agent entries, and clears the composer', async () => {
     await render();
     send('  hello Agent  ');
@@ -183,6 +224,10 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 501, error: { detail: 'internal' } }, thai: 'Backend', english: 'internal error' },
       { error: { status: 500, error: { detail: 42 } }, thai: 'Backend', english: 'Cannot reach the backend' },
       { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
+      { error: { status: 502, error: { detail: { code: 'key_or_access' } } }, thai: 'Gemini ปฏิเสธ API Key', english: 'Gemini rejected the API key' },
+      { error: { status: 502, error: { detail: { code: 'quota_exceeded' } } }, thai: 'โควตา Gemini เต็ม', english: 'Gemini quota is exhausted' },
+      { error: { status: 502, error: { detail: { code: 'model_unavailable' } } }, thai: 'ไม่พบโมเดล Gemini', english: 'configured Gemini model is unavailable' },
+      { error: { status: 502, error: { detail: { code: 'provider_unavailable' } } }, thai: 'บริการ Gemini ขัดข้อง', english: 'Gemini is temporarily unavailable' },
       { error: { status: 409 }, thai: 'กรุณาตั้งค่า Gemini API Key', english: 'configure your Gemini API key' },
       { error: { status: 503 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 504 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },

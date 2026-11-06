@@ -5,7 +5,7 @@ import { ChatApi, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
-type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11';
+type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11' | 'MSG-12' | 'MSG-13' | 'MSG-14' | 'MSG-15' | 'MSG-16' | 'MSG-17' | 'MSG-18' | 'MSG-19' | 'MSG-20' | 'MSG-21' | 'MSG-22' | 'MSG-23';
 
 interface StructuredAgentResponse {
   task_status: 'planned' | 'dry_run_completed';
@@ -25,6 +25,9 @@ interface ChatEntry {
   kind: EntryKind;
   text: string;
   errorCode?: ErrorCode;
+  diagnosticType?: string;
+  diagnosticStage?: string;
+  diagnosticTrace?: string;
   response?: StructuredAgentResponse;
 }
 
@@ -43,6 +46,18 @@ const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
     'MSG-09': 'ข้อความมีขนาดใหญ่เกินไป',
     'MSG-10': 'เกิดข้อผิดพลาดที่ไม่คาดคิด (HTTP {status})',
     'MSG-11': 'กรุณาตั้งค่า Gemini API Key ก่อนเริ่มสนทนา',
+    'MSG-12': 'Gemini ปฏิเสธ API Key หรือไม่มีสิทธิ์ใช้ API นี้ ตรวจสอบ Key และการตั้งค่าโปรเจกต์',
+    'MSG-13': 'โควตา Gemini เต็มหรือเกินขีดจำกัด โปรดตรวจสอบ Quota และ Billing',
+    'MSG-14': 'ไม่พบโมเดล Gemini ที่กำหนด โปรดตรวจสอบชื่อโมเดลหรือสิทธิ์ใช้งาน',
+    'MSG-15': 'บริการ Gemini ขัดข้องชั่วคราว โปรดลองใหม่ภายหลัง',
+    'MSG-16': 'Gemini ปฏิเสธคำขอ โปรดตรวจสอบการตั้งค่า API และลองใหม่',
+    'MSG-17': 'Gemini ตอบกลับด้วยข้อผิดพลาดที่ยังระบุสาเหตุไม่ได้ โปรดลองใหม่',
+    'MSG-18': 'Gemini ติดต่อไม่ได้ โปรดตรวจสอบอินเทอร์เน็ตหรือ Firewall',
+    'MSG-19': 'คำขอไปยัง Gemini หมดเวลา โปรดลองใหม่',
+    'MSG-20': 'Gemini ส่งคำตอบที่อ่านไม่ได้กลับมา',
+    'MSG-21': 'Gemini ไม่ได้ส่งข้อความตอบกลับ อาจถูกกรองหรือไม่มีข้อความ',
+    'MSG-22': 'Gemini SDK พยายามใช้ Google Cloud credentials แต่ไม่พบ token โปรดปิดการตั้งค่า Vertex AI ใน Environment',
+    'MSG-23': 'Gemini SDK เกิดข้อผิดพลาดภายใน โปรดส่งชนิดข้อผิดพลาดให้ผู้ดูแล',
   },
   en: {
     'MSG-03': 'Cannot reach the backend. Check that it is running (scripts\\dev.ps1).',
@@ -54,6 +69,18 @@ const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
     'MSG-09': 'The message is too large.',
     'MSG-10': 'Unexpected error (HTTP {status}).',
     'MSG-11': 'Please configure your Gemini API key before chatting.',
+    'MSG-12': 'Gemini rejected the API key or access. Check the key and project settings.',
+    'MSG-13': 'Gemini quota is exhausted or exceeded. Check your quota and billing.',
+    'MSG-14': 'The configured Gemini model is unavailable. Check the model name or access.',
+    'MSG-15': 'Gemini is temporarily unavailable. Please try again later.',
+    'MSG-16': 'Gemini rejected the request. Check the API configuration and try again.',
+    'MSG-17': 'Gemini returned an unclassified error. Please try again.',
+    'MSG-18': 'Could not reach Gemini. Check your internet connection or firewall.',
+    'MSG-19': 'The request to Gemini timed out. Please try again.',
+    'MSG-20': 'Gemini returned a response that could not be read.',
+    'MSG-21': 'Gemini returned no text. The response may have been filtered or empty.',
+    'MSG-22': 'The Gemini SDK tried to use Google Cloud credentials but found no token. Disable the Vertex AI environment setting.',
+    'MSG-23': 'The Gemini SDK encountered an internal error. Share the error type with the maintainer.',
   },
 };
 
@@ -152,7 +179,13 @@ export class App implements AfterViewChecked {
             this.appendError('MSG-08');
           }
         },
-        error: (error: unknown) => this.appendError(this.classifyError(error), this.getStatus(error)),
+        error: (error: unknown) => this.appendError(
+          this.classifyError(error),
+          this.getStatus(error),
+          this.getProviderErrorType(error),
+          this.getProviderDiagnostic(error, 'stage'),
+          this.getProviderDiagnostic(error, 'trace'),
+        ),
       });
   }
 
@@ -212,10 +245,22 @@ export class App implements AfterViewChecked {
   protected errorText(entry: ChatEntry): string {
     if (!entry.errorCode) return entry.text;
     const template = MESSAGES[this.language()][entry.errorCode];
-    return template.replace('{status}', entry.text || 'unknown');
+    const message = template.replace('{status}', entry.text || 'unknown');
+    if (entry.errorCode === 'MSG-17' || entry.errorCode === 'MSG-23') {
+      const diagnostics = [entry.diagnosticType, entry.diagnosticStage, entry.diagnosticTrace]
+        .filter((value): value is string => !!value);
+      return diagnostics.length ? `${message} (${diagnostics.join(' · ')})` : message;
+    }
+    return message;
   }
 
-  private appendError(code: ErrorCode, status?: number): void {
+  private appendError(
+    code: ErrorCode,
+    status?: number,
+    diagnosticType?: string,
+    diagnosticStage?: string,
+    diagnosticTrace?: string,
+  ): void {
     this.entries.update((entries) => [
       ...entries,
       {
@@ -223,6 +268,9 @@ export class App implements AfterViewChecked {
         kind: 'error',
         text: status === undefined ? '' : String(status),
         errorCode: code,
+        diagnosticType,
+        diagnosticStage,
+        diagnosticTrace,
       },
     ]);
   }
@@ -266,10 +314,51 @@ export class App implements AfterViewChecked {
     if (status === 413) return 'MSG-09';
     if (status === 422) return 'MSG-04';
     if (status === 200) return 'MSG-08';
-    if (status === 502) return 'MSG-06';
+    if (status === 502) return this.providerErrorCode(error) ?? 'MSG-06';
     if (status >= 500 && status <= 599) {
       return this.hasBackendDetail(error) ? 'MSG-06' : 'MSG-03';
     }
     return 'MSG-10';
+  }
+
+  private providerErrorCode(error: unknown): ErrorCode | undefined {
+    if (typeof error !== 'object' || error === null || !('error' in error)) return undefined;
+    const body = (error as { error: unknown }).error;
+    if (typeof body !== 'object' || body === null || !('detail' in body)) return undefined;
+    const detail = (body as { detail: unknown }).detail;
+    if (typeof detail !== 'object' || detail === null || !('code' in detail)) return undefined;
+    const codes: Record<string, ErrorCode> = {
+      key_or_access: 'MSG-12',
+      quota_exceeded: 'MSG-13',
+      model_unavailable: 'MSG-14',
+      provider_unavailable: 'MSG-15',
+      request_rejected: 'MSG-16',
+      unknown: 'MSG-17',
+      network_error: 'MSG-18',
+      request_timeout: 'MSG-19',
+      invalid_response: 'MSG-20',
+      empty_response: 'MSG-21',
+      google_cloud_auth_missing: 'MSG-22',
+      sdk_runtime_error: 'MSG-23',
+    };
+    const code = (detail as { code: unknown }).code;
+    return typeof code === 'string' ? codes[code] : undefined;
+  }
+
+  private getProviderErrorType(error: unknown): string | undefined {
+    return this.getProviderDiagnostic(error, 'error_type');
+  }
+
+  private getProviderDiagnostic(error: unknown, key: 'error_type' | 'stage' | 'trace'): string | undefined {
+    if (typeof error !== 'object' || error === null || !('error' in error)) return undefined;
+    const body = (error as { error: unknown }).error;
+    if (typeof body !== 'object' || body === null || !('detail' in body)) return undefined;
+    const detail = (body as { detail: unknown }).detail;
+    if (typeof detail !== 'object' || detail === null || !(key in detail)) return undefined;
+    const value = (detail as Record<string, unknown>)[key];
+    const pattern = key === 'trace'
+      ? /^[A-Za-z0-9_.,-]{1,256}$/
+      : /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+    return typeof value === 'string' && pattern.test(value) ? value : undefined;
   }
 }

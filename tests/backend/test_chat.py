@@ -1,8 +1,9 @@
+import httpx2
 import pytest
-from fastapi.testclient import TestClient
-
 from agent_backend.main import app
 from agent_backend.providers import gemini
+from fastapi.testclient import TestClient
+from google.genai import errors
 
 client = TestClient(
     app,
@@ -37,6 +38,19 @@ def test_save_key_keeps_it_out_of_response(monkeypatch):
     assert response.json()["configured"] is True
     assert "api_key" not in response.json()
     assert gemini.is_configured()
+
+
+def test_gemini_client_explicitly_uses_developer_api(monkeypatch):
+    calls = []
+
+    class Client:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(gemini.genai, "Client", Client)
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    gemini._client()
+    assert calls == [{"api_key": "test-gemini-api-key-123456789", "vertexai": False}]
 
 
 @pytest.mark.parametrize("api_key", ["", "too-short", "x" * 513])
@@ -107,6 +121,159 @@ def test_upstream_error_is_not_exposed(monkeypatch):
     )
     assert response.status_code == 502
     assert "sensitive upstream detail" not in response.text
+    assert response.json() == {
+        "detail": {
+            "code": "unknown",
+            "error_type": "RuntimeError",
+            "stage": "provider",
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    ("exception", "code"),
+    [
+        (httpx2.TimeoutException("sensitive transport detail"), "request_timeout"),
+        (httpx2.ConnectError("sensitive transport detail"), "network_error"),
+        (errors.UnknownApiResponseError("sensitive response detail"), "invalid_response"),
+    ],
+)
+def test_transport_errors_return_safe_categories(monkeypatch, exception, code):
+    class FailingModels:
+        def generate_content(self, **_kwargs):
+            raise exception
+
+    class FailingClient:
+        models = FailingModels()
+
+    monkeypatch.setattr(gemini, "_client", lambda: FailingClient())
+    with pytest.raises(gemini.GeminiProviderError) as raised:
+        gemini.generate_reply("hello")
+    assert raised.value.code == code
+    assert "sensitive" not in str(raised.value)
+
+
+def test_missing_google_cloud_token_is_classified(monkeypatch):
+    class FailingModels:
+        def generate_content(self, **_kwargs):
+            raise RuntimeError("Could not resolve API token from the environment")
+
+    class FailingClient:
+        models = FailingModels()
+
+    monkeypatch.setattr(gemini, "_client", lambda: FailingClient())
+    with pytest.raises(gemini.GeminiProviderError) as raised:
+        gemini.generate_reply("hello")
+    assert raised.value.code == "google_cloud_auth_missing"
+    assert raised.value.error_type is None
+
+
+def test_unclassified_sdk_runtime_error_exposes_no_message(monkeypatch):
+    class FailingModels:
+        def generate_content(self, **_kwargs):
+            raise RuntimeError("sensitive runtime detail")
+
+    class FailingClient:
+        models = FailingModels()
+
+    monkeypatch.setattr(gemini, "_client", lambda: FailingClient())
+    with pytest.raises(gemini.GeminiProviderError) as raised:
+        gemini.generate_reply("hello")
+    assert raised.value.code == "sdk_runtime_error"
+    assert raised.value.error_type == "RuntimeError"
+    assert "sensitive runtime detail" not in str(raised.value)
+
+
+def test_sdk_runtime_error_includes_only_sanitized_trace(monkeypatch):
+    class FailingModels:
+        def generate_content(self, **_kwargs):
+            raise RuntimeError("sensitive runtime detail")
+
+    class FailingClient:
+        models = FailingModels()
+
+    monkeypatch.setattr(gemini, "_client", lambda: FailingClient())
+    with pytest.raises(gemini.GeminiProviderError) as raised:
+        gemini.generate_reply("hello")
+    assert raised.value.stage == "provider_request"
+    assert raised.value.trace == []
+
+
+def test_empty_provider_reply_has_safe_category():
+    class EmptyResponse:
+        text = None
+
+    with pytest.raises(gemini.GeminiProviderError) as raised:
+        gemini._response_text(EmptyResponse())
+    assert raised.value.code == "empty_response"
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (403, "key_or_access"),
+        (404, "model_unavailable"),
+        (429, "quota_exceeded"),
+        (503, "provider_unavailable"),
+        (400, "request_rejected"),
+    ],
+)
+def test_gemini_api_errors_return_safe_categories(monkeypatch, status, code):
+    gemini.save_api_key("test-gemini-api-key-123456789")
+
+    class FailingModels:
+        def generate_content(self, **_kwargs):
+            raise errors.ClientError(
+                status,
+                {"error": {"message": "sensitive upstream detail", "status": "FAILED"}},
+            )
+
+    class FailingClient:
+        models = FailingModels()
+
+    monkeypatch.setattr(gemini, "_client", lambda: FailingClient())
+    with pytest.raises(gemini.GeminiProviderError) as raised:
+        gemini.generate_reply("hello")
+    assert raised.value.code == code
+    assert "sensitive upstream detail" not in str(raised.value)
+
+
+def test_connection_error_returns_safe_category(monkeypatch):
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(
+        gemini,
+        "test_connection",
+        lambda: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
+    )
+    response = client.post("/api/settings/gemini/test", json={})
+    assert response.status_code == 502
+    assert response.json() == {"detail": {"code": "quota_exceeded"}}
+
+
+def test_connection_error_returns_safe_stage_and_trace(monkeypatch):
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(
+        gemini,
+        "test_connection",
+        lambda: (_ for _ in ()).throw(
+            gemini.GeminiProviderError(
+                "sdk_runtime_error",
+                "RuntimeError",
+                "provider_request",
+                ["_api_client.request"],
+            )
+        ),
+    )
+    response = client.post("/api/settings/gemini/test", json={})
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": {
+            "code": "sdk_runtime_error",
+            "error_type": "RuntimeError",
+            "stage": "provider_request",
+            "trace": "_api_client.request",
+        }
+    }
 
 
 def test_invalid_chat_payload_is_rejected():
