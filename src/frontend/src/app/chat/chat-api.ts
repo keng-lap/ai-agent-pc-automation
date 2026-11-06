@@ -40,6 +40,8 @@ export interface PlanReviewResponse {
   tool_result: { status: 'dry_run'; summary: string } | null;
   questions: string[];
   notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE';
+  refined_from_plan_id?: string | null;
+  clarification?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -60,6 +62,18 @@ export class ChatApi {
 
   getPlan(planId: string): Observable<PlanReviewResponse['dry_run_plan']> {
     return this.http.get<PlanReviewResponse['dry_run_plan']>(`/api/plans/${encodeURIComponent(planId)}`);
+  }
+
+  refinePlan(
+    planId: string,
+    request: string,
+    clarification: string,
+    language: UiLanguage,
+  ): Observable<PlanReviewResponse> {
+    return this.http.post<PlanReviewResponse>(
+      `/api/plans/${encodeURIComponent(planId)}/refine`,
+      { request, clarification, language },
+    );
   }
 
   getConversation(conversationId: string): Observable<ConversationHistory> {
