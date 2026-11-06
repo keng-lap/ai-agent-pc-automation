@@ -18,7 +18,6 @@ from agent_backend.plans import (
     create_dry_run_plan,
 )
 
-
 NOW = datetime(2026, 11, 7, 0, 0, tzinfo=UTC)
 
 
