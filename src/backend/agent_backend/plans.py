@@ -214,8 +214,8 @@ class PlanStore:
         tool_id: PlanToolId,
         programs: Sequence[ProgramPlan],
     ) -> DryRunPlan:
-        now = self._clock()
         with self._lock:
+            now = self._clock()
             self._observe_clock(now)
             self._remove_expired(now)
             if len(self._plans) >= MAX_ACTIVE_PLANS:
