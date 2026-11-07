@@ -76,14 +76,8 @@
                     }
                   </ul>
                   <div class="tool-preview">
-                    <strong>{{ language() === 'th' ? 'สถานะงาน' : 'Task status' }}: {{ taskStatusLabel(response.task_status) }}</strong>
-                    @if (response.tool_result; as result) {
-                      <span>{{ language() === 'th' ? 'เครื่องมือ' : 'Tool' }}: {{ result.tool_id }} · {{ result.target }}</span>
-                      <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงเครื่อง' : 'Dry run only — no computer changes were made' }}</span>
-                      <span>{{ result.summary }}</span>
-                    } @else {
-                      <span>{{ language() === 'th' ? 'ไม่มีเครื่องมือที่อนุญาตสำหรับงานนี้' : 'No allowlisted tool applies to this task' }}</span>
-                    }
+                    <strong>{{ language() === 'th' ? 'สถานะงาน: รอการตรวจสอบแผนและอนุมัติ' : 'Task status: awaiting plan review and approval' }}</strong>
+                    <span>{{ language() === 'th' ? 'ข้อความจากแชตไม่สามารถอนุมัติหรือเริ่ม Dry Run ได้ ต้องอนุมัติผ่านแผนตรวจสอบเท่านั้น' : 'A chat response cannot approve or start a dry run. Approval must use the plan-review control.' }}</span>
                     @if (!response.provider_connected) {
                       <small>{{ language() === 'th' ? 'ยังไม่เชื่อมต่อ AI Provider — ใช้การวางแผนในเครื่อง' : 'AI provider is not connected — using local planning' }}</small>
                     }
