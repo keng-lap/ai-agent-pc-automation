@@ -171,7 +171,7 @@
                     <div class="installer-actions">
                       <p>{{ language() === 'th' ? 'ตรวจสอบรายการแล้วกดอนุมัติเพื่อจำลองการติดตั้ง' : 'Review the list, then approve to simulate the installation.' }}</p>
                       <button class="send-button installer-approve-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
-                        {{ planning() ? (language() === 'th' ? 'กำลังตรวจสอบ…' : 'Checking…') : (language() === 'th' ? 'อนุมัติและจำลอง (Dry Run)' : 'Approve & Run Dry Run') }}
+                        {{ planning() ? (language() === 'th' ? 'กำลังตรวจสอบ…' : 'Checking…') : (language() === 'th' ? 'อนุมัติให้จำลอง (Dry Run)' : 'Approve & Run Dry Run') }}
                       </button>
                       @if (entry.approvalError) {
                         <small class="installer-error" role="alert">{{ language() === 'th' ? 'Dry Run ไม่ผ่าน โปรดลองอีกครั้งหรือตรวจสอบรายละเอียด' : 'Dry run failed. Try again or review the details.' }}</small>
@@ -179,7 +179,7 @@
                     </div>
                   } @else {
                     <div class="installer-actions installer-actions--blocked">
-                      <strong>{{ language() === 'th' ? 'ยังไม่พร้อมจำลอง' : 'Not ready to simulate' }}</strong>
+                      <strong>{{ language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready to simulate' }}</strong>
                       <span>{{ language() === 'th' ? 'กรุณาระบุข้อมูลที่จำเป็นก่อน' : 'Provide the required information first.' }}</span>
                     </div>
                   }
