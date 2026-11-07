@@ -23,6 +23,8 @@ export interface PlanReviewProgram {
   status: 'PLANNED' | 'NEEDS_CLARIFICATION' | 'BLOCKED' | 'UNSUPPORTED';
 }
 
+export interface PlanApprovalResponse { plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE'; }
+
 export interface PlanReviewResponse {
   request: string;
   interpretation: { category: string; goal: string; target: string | null };
@@ -38,6 +40,7 @@ export interface PlanReviewResponse {
     programs: PlanReviewProgram[];
   } | null;
   tool_result: { status: 'dry_run'; summary: string } | null;
+  approved: boolean;
   questions: string[];
   notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE';
   refined_from_plan_id?: string | null;
@@ -62,6 +65,13 @@ export class ChatApi {
 
   getPlan(planId: string): Observable<PlanReviewResponse['dry_run_plan']> {
     return this.http.get<PlanReviewResponse['dry_run_plan']>(`/api/plans/${encodeURIComponent(planId)}`);
+  }
+
+  approvePlan(planId: string): Observable<PlanApprovalResponse> {
+    return this.http.post<PlanApprovalResponse>(
+      `/api/plans/${encodeURIComponent(planId)}/approve`,
+      {},
+    );
   }
 
   refinePlan(
