@@ -104,10 +104,22 @@ def test_plans_endpoint_rejects_client_supplied_authority_and_execution_fields()
     assert response.status_code == 422
 
 
-def test_p1_plan_requires_approval_and_has_no_execute_route():
+def test_p1_plan_requires_approval_and_has_no_execute_route(monkeypatch):
+    from agent_backend import plan_api
+
+    calls = []
+    original_dry_run = plan_api.execute_tool
+
+    def spy_dry_run(request):
+        calls.append(request)
+        return original_dry_run(request)
+
+    monkeypatch.setattr(plan_api, "execute_tool", spy_dry_run)
     created = client.post("/api/plans", json=PLAN_PAYLOAD)
     assert created.status_code == 200
     plan_id = created.json()["dry_run_plan"]["plan_id"]
+    assert created.json()["approved"] is False
+    assert calls == []
 
     for method, path in (
         ("post", f"/api/plans/{plan_id}/acknowledgement"),
@@ -118,7 +130,11 @@ def test_p1_plan_requires_approval_and_has_no_execute_route():
         response = getattr(client, method)(path, json={})
         assert response.status_code == 404
 
-    assert client.post(f"/api/plans/{plan_id}/approve", json={}).status_code == 409
+    approved = client.post(f"/api/plans/{plan_id}/approve", json={})
+    assert approved.status_code == 200
+    assert approved.json()["approved"] is True
+    assert approved.json()["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
+    assert len(calls) == 1
 
 
 def test_plan_reference_is_opaque_and_unknown_reference_fails_closed():
