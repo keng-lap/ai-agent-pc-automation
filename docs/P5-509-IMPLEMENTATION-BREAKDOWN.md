@@ -39,10 +39,10 @@ This document is the planning baseline and does not itself authorize runtime wor
 | I3 / P5-512 — Immutable dry-run plan/report contract | A2 + A3 | Strict per-program plan schema, canonicalization/versioned digest, 10-minute backend expiry, restart invalidation; no acknowledgement state | I1, I2 | Exact material fields affect identity; mutation yields new identity; no prompt/secret persisted | Complete — merged in PR #63 |
 | I4 / P5-513 — Ephemeral audit event sink | A2 + A4 | Allowlisted event schema; max 500 in-memory events; oldest-first eviction; restart clears; no durable sink | I1, I2 | Reject forbidden fields; bounded memory; optional sink failure cannot cause unsafe fallback | Complete — merged in PR #64 |
 | I5 / P5-514 — Thai-default bilingual UX and API integration | A3 + A2 | Reconcile existing routes; display request, interpretation, every program, uncertainty, status, dry-run/no-change notice; bounded clarification creates a new immutable plan; English selectable | I3 | No acknowledgement/execute controls or endpoints; accessible mobile/desktop rendering | Complete — merged in PR #65 (commit `463457b`) |
-| I6 / P5-515 — Negative, abuse, and regression verification | A4 | Update and execute relevant P5-507 matrix using synthetic fixtures, fake clock, spy handlers; verify existing HTTP protections | I1–I5 | Actual commands, exit codes, outputs, SHA, environment and limitations recorded; zero real side-effect capability | In progress — initial test increment merged PR #66; CI passed; evidence/matrix reconciliation tracked in `docs/P5-515-VERIFICATION-EVIDENCE.md` |
+| I6 / P5-515 — Negative, abuse, and regression verification | A4 | Update and execute relevant P5-507 matrix using synthetic fixtures, fake clock, spy handlers; verify existing HTTP protections | I1–I5 | Actual commands, exit codes, outputs, SHA, environment and limitations recorded; zero real side-effect capability | Complete — Product Owner closeout approved 2026-11-08; 33 Covered / 2 Partial / 0 Not covered; see `docs/P5-515-CLOSEOUT-REPORT.md` |
 | I7 / P5-516 — Independent security review and Phase 5 evidence pack | A4 independent reviewer | Review implementation diffs, test evidence, threat-model coverage, policy/dispatch boundaries, privacy and regression | I1–I6 | A4 review findings resolved or explicitly documented; no self-review | Complete — report and residual findings recorded in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md` |
 
-Task IDs and ordering define the approved backlog. P5-510 through P5-514 are complete. P5-515 closeout is approved. P5-516 independent review is complete; findings and residual gates are documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. P5-517 approval-gated P1 Dry Run is separately authorized and merged in PR #99. No real machine-changing action is authorized.
+Task IDs and ordering define the approved backlog. P5-510 through P5-514 are complete. P5-515 closeout is approved. P5-516 independent review is complete; findings and residual gates are documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. P5-517 approval-gated P1 Dry Run is merged in PR #99 (merge commit `2e3c926`). No real machine-changing action is authorized.
 
 ## 4. Dependency order and parallel lanes
 
@@ -62,7 +62,7 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 - P2 inspection and P3 execution remain hard-denied.
 - No arbitrary shell/PowerShell/CMD/script/process execution.
 - No filesystem, registry, process, installed-software, network, or system-setting inspection.
-- No provider, live model, package source lookup, package manager, credentials, or external transfer.
+- No provider call from plan creation, policy, audit, or tool dispatch. The separately approved T-601 Gemini chat flow may send the current bounded conversation context to Google; no package/source lookup, package manager, or credential transfer is permitted.
 - No chat/task history; no durable audit; no prompts/full plan in audit events.
 - Preserve loopback-only binding, local API token semantics, Host/Origin, JSON-only state-changing requests, and 16 KiB body limit.
 - Backend is the authority; model/frontend/client never grant permission.
@@ -74,7 +74,7 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 
 I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is complete and merged in PR #61 (commit 2875399). Its implementation and verification used synthetic inputs and dry-run handlers only; no machine-changing operation was performed.
 
-**Current gate:** P5-510 through P5-514 are complete and merged (PRs #58, #61, #63, #64, and #65). P5-515 is authorized and in progress; PR #66 is merged and merge-commit CI run `42355435380` passed. Remaining P5-515 work is evidence/matrix reconciliation and review of existing test coverage. P5-516 independent review is complete; see `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md` for findings and residual gates. Phase 6 and real PC execution remain unauthorized.
+**Current gate:** P5-510 through P5-514 are complete and merged (PRs #58, #61, #63, #64, and #65). P5-515 closeout was approved on 2026-11-08 (PR #106). P5-516 independent review is complete; see `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md` for findings and residual gates. P5-517 approval-gated P1 Dry Run is merged in PR #99. Phase 6 and real PC execution remain unauthorized.
 
 
 ## 7. P5-517 — Approval-gated P1 Dry Run (Product Owner authorized 2026-11-07)
@@ -107,4 +107,4 @@ This task supersedes backlog item 6's earlier “no current-P1 acknowledgement/a
 - The UI exposes approval only when every listed item is `PLANNED`; the displayed result explicitly says no real PC changes occurred.
 - No OS, filesystem, registry, process, network, package-manager, installer, or real machine-changing capability is added.
 
-**Authority:** P5-517 runtime changes are authorized for implementation and CI verification only. The PR must remain unmerged until the Product Owner reviews the exact diff and explicitly approves merge. Phase 6 and real PC actions remain unauthorized.
+**Authority and result:** P5-517 was authorized as a bounded P1 approval-gate task and is merged in PR #99. Its approval authorizes P1 Dry Run only; it does not authorize real installation/removal, P2/P3, Phase 6, or any real PC action.
