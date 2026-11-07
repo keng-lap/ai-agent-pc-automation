@@ -1003,4 +1003,30 @@ describe('Structured Agent response (T-404)', () => {
     fixture.destroy();
   });
 
+
+  it('Q31: restored conversation state still exposes no machine-changing control', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const conversationId = '123e4567-e89b-42d3-a456-426614174000';
+    sessionStorage.setItem('ai-agent-pc-automation.conversation-id', conversationId);
+    const api = new FakeChatApi();
+    api.history = { messages: [{ role: 'user', text: 'previous request' }, { role: 'assistant', text: 'previous reply' }] };
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain('previous request');
+    const labels = Array.from(view.querySelectorAll('button')).map((button) =>
+      `${button.textContent ?? ''} ${button.getAttribute('aria-label') ?? ''}`,
+    );
+    expect(labels.join(' ')).not.toMatch(/execute|install|uninstall|remove|approve|อนุมัติ|ติดตั้ง|ถอนการติดตั้ง|ดำเนินการจริง/i);
+    fixture.destroy();
+  });
+
 });
