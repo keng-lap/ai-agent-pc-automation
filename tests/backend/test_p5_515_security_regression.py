@@ -189,7 +189,10 @@ def test_planner_exception_returns_only_a_generic_server_error(monkeypatch):
         raise RuntimeError("synthetic planner failure with sensitive detail")
 
     monkeypatch.setattr("agent_backend.plan_api.create_task_plan", fail_planner)
-    response = client.post("/api/plans", json=PLAN_PAYLOAD)
+    safe_client = TestClient(
+        app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
+    )
+    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
@@ -204,7 +207,10 @@ def test_tool_handler_exception_returns_generic_error_without_retry(monkeypatch)
         raise RuntimeError("synthetic handler failure with sensitive detail")
 
     monkeypatch.setattr(tools, "_HANDLERS", {"software.install": fail_handler})
-    response = client.post("/api/plans", json=PLAN_PAYLOAD)
+    safe_client = TestClient(
+        app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
+    )
+    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
@@ -224,7 +230,10 @@ def test_policy_configuration_exception_returns_safe_error_before_handler(monkey
 
     monkeypatch.setattr(tools, "_HANDLERS", {"software.install": spy_handler})
     monkeypatch.setattr(policy, "require_tool_allowed", fail_policy)
-    response = client.post("/api/plans", json=PLAN_PAYLOAD)
+    safe_client = TestClient(
+        app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
+    )
+    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
