@@ -152,7 +152,7 @@
                         type="button"
                         [disabled]="planning() || !(entry.clarificationDraft ?? '').trim()"
                         (click)="refinePlan(entry)"
-                      >{{ planning() ? (language() === 'th' ? 'กำลังปรับรายการ…' : 'Updating…') : (language() === 'th' ? 'ปรับรายการ' : 'Update plan') }}</button>
+                      >{{ planning() ? (language() === 'th' ? 'กำลังปรับรายการ…' : 'Updating…') : (language() === 'th' ? 'ส่งคำตอบและปรับแผน' : 'Submit and refine plan') }}</button>
                       @if (entry.refineError) {
                         <small role="alert">{{ language() === 'th' ? 'ปรับรายการไม่สำเร็จ โปรดลองสร้างคำขอใหม่' : 'Could not update the plan. Please submit a new request.' }}</small>
                       }
