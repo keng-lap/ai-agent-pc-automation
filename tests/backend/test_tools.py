@@ -201,3 +201,33 @@ def test_policy_configuration_change_after_initial_decision_fails_closed(monkeyp
         agent_core.run_agent("Install Example", "en", "chatgpt")
 
     assert handler_calls == []
+
+
+
+def test_handler_identity_replacement_after_policy_decision_fails_closed(monkeypatch):
+    handler_calls = []
+    replacement_calls = []
+    original_handler = lambda request: handler_calls.append(request)
+
+    def replacement_handler(request):
+        replacement_calls.append(request)
+        raise AssertionError("replacement handler must not be dispatched")
+
+    original_handlers = {"software.install": original_handler}
+    replacement_handlers = {"software.install": replacement_handler}
+    monkeypatch.setattr(tools, "_HANDLERS", original_handlers)
+
+    def decide_then_replace_handler(tool_id):
+        decision = policy.require_tool_allowed(tool_id)
+        monkeypatch.setattr(tools, "_HANDLERS", replacement_handlers)
+        return decision
+
+    monkeypatch.setattr(policy, "require_tool_allowed", decide_then_replace_handler)
+    request = ToolRequest(tool_id="software.install", target="Example")
+
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        execute_tool(request)
+
+    assert raised.value.reason == "handler_unavailable"
+    assert handler_calls == []
+    assert replacement_calls == []
