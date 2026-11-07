@@ -222,6 +222,7 @@ describe('App chat UI (T-202)', () => {
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     );
     const approve = approveButtons.find((button) => button.textContent?.includes('อนุมัติให้จำลอง'));
+    if (!approve) throw new Error('Approval button was not rendered');
     approve.click();
     await fixture.whenStable();
     fixture.detectChanges();
