@@ -173,3 +173,31 @@ def test_agent_core_policy_decision_denies_before_dispatch(monkeypatch):
 
     assert raised.value.reason == "permission_denied"
     assert handler_calls == []
+
+
+
+def test_policy_configuration_change_after_initial_decision_fails_closed(monkeypatch):
+    handler_calls = []
+    original_require = policy.require_tool_allowed
+
+    def spy_handler(request):
+        handler_calls.append(request)
+        raise AssertionError("dispatch must not use a handler after policy changes")
+
+    def decide_then_change_policy(tool_id):
+        decision = original_require(tool_id)
+        # Simulate policy configuration changing after the orchestration decision.
+        monkeypatch.setattr(policy, "_TOOL_POLICY", policy.MappingProxyType({}))
+        return decision
+
+    monkeypatch.setattr(agent_core, "require_tool_allowed", decide_then_change_policy)
+    monkeypatch.setattr(
+        tools,
+        "_HANDLERS",
+        {"software.install": spy_handler},
+    )
+
+    with pytest.raises(policy.PolicyConfigurationError):
+        agent_core.run_agent("Install Example", "en", "chatgpt")
+
+    assert handler_calls == []
