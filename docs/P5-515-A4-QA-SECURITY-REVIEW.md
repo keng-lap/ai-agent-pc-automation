@@ -68,3 +68,14 @@ P1 remains dry-run/report only. P2/P3 and Phase 6 remain disabled. P5-516 remain
 **No blocking defect was identified within the narrow scope of the merged P5-515 increments reviewed above.** Q13 and Q34 traceability claims are supported by direct tests. Q23 and Q35 remain Partial with explicit limitations. This review does **not** declare P5-515 complete: the 13 remaining Partial items require further evidence or an explicit Product Owner deferral, followed by explicit P5-515 closeout approval.
 
 This review is a separate QA/security pass by the A4 lane in the current project workflow. It is not represented as an independent external auditor or as the separately gated P5-516 review.
+
+
+## Follow-up review — PR #77
+
+A focused follow-up review was performed against the merged PR #77 tests and its successful GitHub Actions run [#42359381703](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42359381703).
+
+- **Q20:** The fake-clock test asserts the plan remains available one microsecond before expiry and is rejected exactly at `expires_at`. The test then verifies the expired plan reference is no longer available. This supports Q20 as Covered for the exact TTL boundary behavior.
+- **Q23:** A synthetic handler returns an invalid object through the in-process API test client. The test asserts the API returns only the generic 500 response and that the handler call count is exactly one. This supports Q23 as Covered for exception and malformed-result API response behavior.
+- **Safety:** Both tests are deterministic and in-process. No Windows host calls, filesystem changes, process execution, real network calls, installers, or machine-changing operations are used.
+
+The updated matrix records **24 Covered / 11 Partial / 0 Not covered or not evidenced**. Remaining Partial items are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. This follow-up does not declare P5-515 complete; remaining gaps still require evidence or explicit Product Owner disposition. P5-516 remains separately gated.
