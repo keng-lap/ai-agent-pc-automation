@@ -216,6 +216,9 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('อนุมัติให้จำลอง (Dry Run)');
+    expect(fixture.nativeElement.textContent).not.toContain('Mock reply');
+    expect(fixture.nativeElement.querySelector('.installer-card')).not.toBeNull();
+    expect((fixture.nativeElement.querySelector('.installer-details') as HTMLDetailsElement).open).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
 
     const approveButtons = Array.from(

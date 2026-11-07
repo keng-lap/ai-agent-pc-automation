@@ -297,7 +297,7 @@ export class App implements AfterViewChecked {
             const entryId = ++this.nextEntryId;
             this.entries.update((entries) => [
               ...entries,
-              { id: entryId, kind: 'agent', text: response.reply, response: this.isStructuredAgentResponse(response) ? response : undefined },
+              { id: entryId, kind: 'agent', text: '', response: this.isStructuredAgentResponse(response) ? response : undefined },
             ]);
             this.planning.set(true);
             defer(() => this.chatApi.createPlan(message, languageAtSend))
@@ -309,11 +309,15 @@ export class App implements AfterViewChecked {
               .subscribe({
                 next: (review: PlanReviewResponse) => this.entries.update((entries) =>
                   entries.map((entry) => entry.id === entryId
-                    ? (isPlanReviewResponse(review) ? { ...entry, review } : { ...entry, planError: true })
+                    ? (isPlanReviewResponse(review)
+                      ? { ...entry, text: review.dry_run_plan ? '' : response.reply, review }
+                      : { ...entry, text: response.reply, planError: true })
                     : entry),
                 ),
                 error: () => this.entries.update((entries) =>
-                  entries.map((entry) => entry.id === entryId ? { ...entry, planError: true } : entry),
+                  entries.map((entry) => entry.id === entryId
+                    ? { ...entry, text: response.reply, planError: true }
+                    : entry),
                 ),
               });
           } else {
