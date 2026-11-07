@@ -218,8 +218,10 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('อนุมัติให้จำลอง (Dry Run)');
     expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
 
-    const approve = Array.from(fixture.nativeElement.querySelectorAll('button'))
-      .find((button: Element) => button.textContent?.includes('อนุมัติให้จำลอง')) as HTMLButtonElement;
+    const approveButtons = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    );
+    const approve = approveButtons.find((button) => button.textContent?.includes('อนุมัติให้จำลอง'));
     approve.click();
     await fixture.whenStable();
     fixture.detectChanges();
