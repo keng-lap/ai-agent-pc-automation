@@ -233,7 +233,7 @@ def test_plan_creation_never_calls_dry_run_tool(monkeypatch):
     assert response.json()["approved"] is False
 
 
-def test_approval_runs_one_dry_run_and_replays_cached_result(monkeypatch):
+def test_approval_runs_every_plan_item_once_and_replays_cached_result(monkeypatch):
     from agent_backend import plan_api
     from agent_backend.tools import ToolResult
 
@@ -271,7 +271,12 @@ def test_approval_runs_one_dry_run_and_replays_cached_result(monkeypatch):
     assert first.json() == second.json()
     assert first.json()["approved"] is True
     assert first.json()["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
-    assert len(calls) == 1
+    assert first.json()["tool_result"]["target"] == "JDK, IntelliJ IDEA"
+    assert "จะติดตั้ง JDK" in first.json()["tool_result"]["summary"]
+    assert "จะติดตั้ง IntelliJ IDEA" in first.json()["tool_result"]["summary"]
+    assert "ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง" in first.json()["tool_result"]["summary"]
+    assert [call.target for call in calls] == ["JDK", "IntelliJ IDEA"]
+    assert len(calls) == 2
 
 
 def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
