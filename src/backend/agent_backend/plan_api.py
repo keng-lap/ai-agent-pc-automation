@@ -17,7 +17,6 @@ from agent_backend.plans import (
     DryRunPlan,
     PlanCapacityError,
     PlanExpiredError,
-    PlanIntegrityError,
     PlanNotFoundError,
     PlanStore,
     ProgramPlan,
