@@ -197,15 +197,15 @@ def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
         raise HTTPException(status_code=404, detail="Plan not found.")
     with _approval_lock:
-        cached = _approval_results.get(plan_id)
-        if cached is not None:
-            return PlanApprovalResponse(plan_id=plan_id, tool_result=cached)
         try:
             plan = _plan_store.get(plan_id)
         except PlanExpiredError:
             raise HTTPException(status_code=410, detail="Plan expired.") from None
         except PlanNotFoundError:
             raise HTTPException(status_code=404, detail="Plan not found.") from None
+        cached = _approval_results.get(plan_id)
+        if cached is not None:
+            return PlanApprovalResponse(plan_id=plan_id, tool_result=cached)
 
         # These fields are server-generated and digest-bound; never accept them from a client.
         if plan.risk_class != "R1" or plan.required_permission != "P1" or plan.mode != "dry_run":
@@ -228,6 +228,8 @@ def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
                 )
             }
         )
+        if len(_approval_results) >= 128:
+            _approval_results.pop(next(iter(_approval_results)))
         _approval_results[plan_id] = result
         return PlanApprovalResponse(plan_id=plan_id, tool_result=result)
 
