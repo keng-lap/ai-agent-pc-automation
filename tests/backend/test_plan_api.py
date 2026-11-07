@@ -288,3 +288,38 @@ def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
     plan_id = created["dry_run_plan"]["plan_id"]
     response = client.post(f"/api/plans/{plan_id}/approve", json={})
     assert response.status_code == 409
+
+
+
+def test_malformed_gemini_structured_plan_fails_closed(monkeypatch):
+    from agent_backend import plan_api
+
+    monkeypatch.setattr(
+        plan_api,
+        "generate_structured_plan",
+        lambda _prompt, _schema: '{"goal":"Install Chrome","steps":[],"approved":true}',
+    )
+    response = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "invalid_structured_plan"
+    assert "approved" not in response.text
+
+
+def test_gemini_plan_provider_failure_fails_closed(monkeypatch):
+    from agent_backend import plan_api
+    from agent_backend.providers.gemini import GeminiProviderError
+
+    def fail(_prompt, _schema):
+        raise GeminiProviderError("provider_unavailable")
+
+    monkeypatch.setattr(plan_api, "generate_structured_plan", fail)
+    response = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "gemini_plan_unavailable"
+    assert "provider_unavailable" in response.text
