@@ -12,10 +12,6 @@
   commands, or change Windows settings.
 #>
 [CmdletBinding()]
-param(
-    [switch]$UseExistingGeminiApiKey
-)
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -27,8 +23,8 @@ if (-not (Test-Path -LiteralPath $python)) {
     throw 'Backend virtual environment not found. Run scripts\setup.ps1 first.'
 }
 
-$existingKey = [Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'Process')
-if ([string]::IsNullOrWhiteSpace($existingKey)) {
+$originalGeminiKey = [Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'Process')
+if ([string]::IsNullOrWhiteSpace($originalGeminiKey)) {
     $secureKey = Read-Host 'Enter Gemini API key (input is hidden; key is not saved)' -AsSecureString
     if ($null -eq $secureKey -or $secureKey.Length -lt 20) {
         throw 'Gemini API key is missing or too short.'
@@ -43,7 +39,7 @@ if ([string]::IsNullOrWhiteSpace($existingKey)) {
     [Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $plainKey, 'Process')
     $plainKey = $null
 }
-elseif (-not $UseExistingGeminiApiKey) {
+else {
     Write-Host 'Using GEMINI_API_KEY already present in this PowerShell process.' -ForegroundColor DarkGray
 }
 
@@ -123,7 +119,9 @@ def run_probe(label, config):
         safe_error(exc)
         return False
     except Exception as exc:
-        print(f"[FAIL] {type(exc).__name__}: {str(exc)[:500]}")
+        message = str(exc).replace(key, "[REDACTED_API_KEY]")
+        message = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_API_KEY]", message)
+        print(f"[FAIL] {type(exc).__name__}: {message[:500]}")
         return False
 
 print("Gemini Structured Output Diagnostic")
@@ -171,7 +169,7 @@ try {
     $exitCode = $LASTEXITCODE
 }
 finally {
-    [Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $null, 'Process')
+    [Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $originalGeminiKey, 'Process')
     $secureKey = $null
     $plainKey = $null
     $pythonCode = $null
