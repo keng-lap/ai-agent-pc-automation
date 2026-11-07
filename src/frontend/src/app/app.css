@@ -106,3 +106,29 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .program-review small { color: var(--muted); font-size: 10px; }
 .plan-review { min-width: 0; }
 .plan-review .detail-meta { overflow-wrap: anywhere; }
+
+
+/* Compact software-installer review: keep the first view actionable, not verbose. */
+.plan-review > .detail-heading:not(.installer-heading),
+.plan-review > .detail-meta,
+.plan-review > .prerequisite-list,
+.plan-review .program-review span,
+.plan-review .tool-preview > span:not(.result-summary),
+.plan-review .tool-preview > small { display: none; }
+.plan-review .installer-heading { margin: 4px 0 9px; font-size: 13px; }
+.plan-review .program-review {
+  grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px;
+  margin: 7px 0; padding: 13px 14px; border-radius: 13px; background: var(--surface);
+}
+.plan-review .program-review strong { font-size: 14px; }
+.plan-review .program-review small { color: #4c9a78; font-size: 10px; font-weight: 750; }
+.plan-review .tool-preview { margin-top: 10px; padding: 13px 14px; }
+.plan-review .tool-preview > strong { font-size: 13px; }
+.plan-review .tool-preview .result-summary { display: block; }
+.plan-review .result-pass { color: #27845e; }
+.plan-review .result-fail { color: #bd4e55; }
+.plan-review .clarification-form { margin-top: 12px; }
+@media (prefers-color-scheme: dark) {
+  .plan-review .program-review small, .plan-review .result-pass { color: #83c9a7; }
+  .plan-review .result-fail { color: #f09a9f; }
+}
