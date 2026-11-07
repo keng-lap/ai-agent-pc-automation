@@ -118,3 +118,16 @@ A4 reviewed the merged PR #104 test and documentation scope and its successful G
 ## Follow-up review — Q35 Product Owner disposition
 
 The Product Owner accepted the documented limitation that Static Check is not a Runtime Sandbox. A4 records this as an accepted scope limitation, not as technical closure: Q35 remains Partial in the traceability matrix. No runtime sandbox, host-inspection capability, or execution path is added by this disposition.
+
+
+## Final WP5 evidence reconciliation and closeout review — 2026-11-08
+
+A4 completed the final documentation/evidence reconciliation against the merged WP1–WP4 increments, PR #104, the current traceability matrix, the verification report, and the successful main CI run for commit `f3e09a5f397433da6beebd6fe20a5dbd83c34728` (run #42397422816).
+
+- **Evidence consistency:** 33 matrix rows are Covered, 2 remain Partial, and 0 are Not covered / Not evidenced. The two Partial rows are explicitly identified; neither is silently promoted to Covered.
+- **Q30:** The PR #104 Chromium viewport-emulation suite passed in CI. Physical-device and screen-reader tests were not performed. The Product Owner explicitly deferred those tests on 2026-11-08 and directed closure of P5-515. A4 records this as a deferred residual, not a successful test result. No public tunnel or weakened loopback/authentication boundary was used.
+- **Q35:** Static source checks remain bounded static checks, not a runtime sandbox. The Product Owner accepted this limitation; Q35 remains Partial. No sandbox or host-inspection capability was introduced.
+- **CI:** Main merge commit `f3e09a5` has successful CI run #42397422816. Both backend and frontend jobs completed successfully; frontend steps included unit tests, Playwright E2E, and build; backend steps included tests and Ruff.
+- **Scope/safety:** WP5 changed documentation only. No runtime code, Windows host inspection, shell/PowerShell/CMD, installer, process action, public exposure, or machine-changing behavior was introduced.
+
+**A4 final conclusion:** No blocking inconsistency was identified in the reviewed evidence and closeout documentation within the declared P5-515 scope. The accepted closeout retains Q30 and Q35 as Partial. This is not P5-516 independent review, external penetration testing, or authorization for Phase 6. The Product Owner explicitly approved P5-515 closeout on 2026-11-08.
