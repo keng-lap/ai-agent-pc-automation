@@ -30,14 +30,20 @@ Estimates overlap slightly because WP1/WP2 can be developed and reviewed togethe
 
 Q26 is Covered after A4 reconciled the matrix with the approved P5-508 option A semantics: bounded in-memory events, maximum 500, oldest-first eviction, and clear-on-restart. The existing audit tests directly cover capacity, FIFO eviction, and new-sink emptiness. Time-based event expiry and durable audit storage are not required or authorized; no TTL or durable persistence was added.
 
-## Product Owner disposition — Q35\n\nThe Product Owner explicitly accepted the limitation that Static Check is not a Runtime Sandbox and directed that this limitation be documented. Keep Q35 as Partial in the technical matrix; do not add a runtime sandbox to P5-515. This is an accepted scope limitation, not proof of sandboxing and not authorization for host inspection or execution.\n\n## Q30 status and Product Owner disposition (2026-11-08)
+## Product Owner disposition — Q35
+
+The Product Owner explicitly accepted the limitation that Static Check is not a Runtime Sandbox and directed that this limitation be documented. Keep Q35 as Partial in the technical matrix; do not add a runtime sandbox to P5-515. This is an accepted scope limitation, not proof of sandboxing and not authorization for host inspection or execution.
+
+## Q30 status and Product Owner disposition (2026-11-08)
 
 PR #104 is merged; CI run #42395817656 passed 257 backend tests, Ruff, 36 frontend unit tests, all 9 Playwright E2E tests, and frontend build. The mobile checks are Chromium viewport emulation only. The Product Owner explicitly chose to skip physical iPhone and screen-reader testing for now and directed that P5-515 be closed. Record this as a deferred residual, not a passed test: Q30 remains Partial. Do not expose the app publicly, weaken loopback/authentication, or create a tunnel to obtain evidence.
 
 ## Sequencing and gates
 
 1. WP1–WP4: complete and merged; evidence is recorded in the verification report and A4 follow-up review.
-2. Q35 disposition is recorded as accepted limitation; keep its technical status Partial.\n3. Q30: physical-device and screen-reader evidence deferred by Product Owner on 2026-11-08; retain Partial and do not claim it passed.\n4. WP5: final evidence reconciliation and A4 review completed; Product Owner explicitly approved P5-515 closeout on 2026-11-08.
+2. Q35 disposition is recorded as an accepted limitation; keep its technical status Partial.
+3. Q30 physical-device and screen-reader evidence was deferred by the Product Owner on 2026-11-08; retain Partial and do not claim it passed.
+4. WP5 final evidence reconciliation and A4 review are complete; the Product Owner explicitly approved P5-515 closeout on 2026-11-08.
 
 All current WP1–WP4 code/test PRs are merged following explicit Product Owner authorization and successful CI/CodeQL. Any future code/test PR still requires a separate explicit Product Owner merge approval.
 
@@ -45,7 +51,7 @@ For each documentation-only PR: verify all changed paths are under docs/ and CI 
 
 ## Completion forecast
 
-WP1–WP4 are complete. P5-515 is closed by Product Owner approval on 2026-11-08. Q30's physical-device/screen-reader evidence is deferred and remains Partial; Q35's accepted static-check limitation remains Partial technically. If evidence cannot be obtained within the authorized scope, present the exact residual limitation for explicit disposition rather than inventing policy.
+WP1–WP4 are complete. P5-515 is closed by Product Owner approval on 2026-11-08. Q30's physical-device/screen-reader evidence is deferred and remains Partial; Q35's accepted static-check limitation remains Partial technically. No further P5-515 work is open; any future attempt to close either technical gap requires a separately authorized task.
 
 ## Safety and exit conditions
 
