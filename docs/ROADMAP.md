@@ -18,7 +18,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 **Complete — Product Owner closeout approved 2026-11-02.** T-402, T-403, and T-404 runtime implementation merged in PRs #45–#47. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5. See docs/PHASE-4.md.
 
 ## Phase 5 — Safety and Permission System
-**P5-510–P5-514 complete and merged (PRs #58–#65). P5-515 closeout approved by the Product Owner on 2026-11-08 and recorded in `docs/P5-515-CLOSEOUT-REPORT.md`. The matrix remains 33 Covered / 2 Partial / 0 Not covered. Q30 physical-device/screen-reader evidence is deferred and remains Partial; Q35 remains Partial under the accepted Static Check limitation. Final A4 reconciliation is complete. P5-516 independent review has not started and remains separately gated.** Phase 5 remains a mandatory safety gate; Phase 6 and real machine-changing execution remain unauthorized. See docs/PHASE-5.md and docs/P5-515-REMAINING-GAP-CLOSURE-PLAN.md.
+**P5-510–P5-514 complete and merged (PRs #58–#65). P5-515 closeout approved by the Product Owner on 2026-11-08 and recorded in `docs/P5-515-CLOSEOUT-REPORT.md`. The matrix remains 33 Covered / 2 Partial / 0 Not covered. Q30 physical-device/screen-reader evidence is deferred and remains Partial; Q35 remains Partial under the accepted Static Check limitation. Final A4 reconciliation is complete. P5-516 A4 independent security review is complete with findings documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. P5-517 approval-gated P1 Dry Run is separately authorized and merged in PR #99.** Phase 5 remains a mandatory safety gate; Phase 6 and real machine-changing execution remain unauthorized. See docs/PHASE-5.md and docs/P5-515-REMAINING-GAP-CLOSURE-PLAN.md.
 
 ## Phase 6 — Real PC Automation
 **Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
@@ -51,7 +51,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | P5-510–P5-514 complete; P5-515 closed with PO approval (2026-11-08), 33 Covered / 2 Partial; Q30 evidence deferred and Q35 limitation accepted; P5-516 gated/not started; real execution not authorized |
+| 5 | P5-510–P5-514 complete; P5-515 closed with PO approval (2026-11-08), 33 Covered / 2 Partial; Q30 evidence deferred and Q35 limitation accepted; P5-516 review complete with residual findings documented; P5-517 approval-gated P1 Dry Run merged; real execution not authorized |
 | 6 | Not Started |
 | 7 | Not Started |
 | 8 | Not Started |
