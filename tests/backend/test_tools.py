@@ -216,9 +216,10 @@ def test_handler_identity_replacement_after_policy_decision_fails_closed(monkeyp
     original_handlers = {"software.install": original_handler}
     replacement_handlers = {"software.install": replacement_handler}
     monkeypatch.setattr(tools, "_HANDLERS", original_handlers)
+    original_require = policy.require_tool_allowed
 
     def decide_then_replace_handler(tool_id):
-        decision = policy.require_tool_allowed(tool_id)
+        decision = original_require(tool_id)
         monkeypatch.setattr(tools, "_HANDLERS", replacement_handlers)
         return decision
 
