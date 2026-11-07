@@ -129,13 +129,18 @@ def test_structured_plan_uses_gemini_json_schema(monkeypatch):
 
     gemini.save_api_key("test-gemini-api-key-123456789")
     monkeypatch.setattr(gemini, "_client", lambda: Client())
-    result = gemini.generate_structured_plan("Create a plan", {"type": "OBJECT"})
+    class Schema:
+        @classmethod
+        def model_json_schema(cls):
+            return {"type": "OBJECT", "properties": {"goal": {"type": "STRING"}}}
+
+    result = gemini.generate_structured_plan("Create a plan", Schema)
 
     assert result == Response.text
     assert calls[0]["model"] == "gemini-3.1-flash-lite"
     assert calls[0]["contents"] == "Create a plan"
     assert calls[0]["config"].response_mime_type == "application/json"
-    assert calls[0]["config"].response_schema == {"type": "OBJECT"}
+    assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
 
 def test_chat_requires_gemini_configuration():
     response = client.post(
