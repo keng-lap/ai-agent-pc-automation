@@ -90,13 +90,14 @@ This task supersedes backlog item 6's earlier “no current-P1 acknowledgement/a
 
 **P5-517 scope:**
 1. Dispatch the fixed dry-run handler once for each program in the exact immutable approved plan; aggregate a result that names every program.
-2. Keep the approval decision server-owned and exact-plan-bound; preserve 10-minute expiry, restart invalidation, clarification blocking, and replay protection (cached result; no second dispatch).
+2. Treat an explicitly named software install/remove target as sufficient for a P1 preview; show unknown version/source/impact as unverified and ignore Gemini's optional questions for that supported action. Preserve mandatory Java clarification questions. Keep approval server-owned and exact-plan-bound; preserve 10-minute expiry, restart invalidation, clarification blocking, and replay protection (cached result; no second dispatch).
 3. Explicitly assert the sole `POST /api/plans/{plan_id}/approve` state transition in the API allow-list tests; keep acknowledgement/cancel/execute routes absent.
 4. Update Q15/Q17 and the superseding Product Owner decision record.
 5. Run backend tests, Ruff, frontend unit tests, and frontend production build in CI. Record actual commit and CI evidence before asking the Product Owner to test locally.
 
 **Acceptance tests:**
 - Plan creation never dispatches a dry-run handler.
+- An explicit request such as `Install Google Chrome` creates a `PLANNED` preview even when optional version/channel details are unspecified; Gemini's optional questions do not block approval.
 - Approval of an eligible two-program plan dispatches exactly those two program targets once each.
 - Repeating approval returns the cached result without another handler call.
 - Any plan item needing clarification blocks approval before dispatch.
