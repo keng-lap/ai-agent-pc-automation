@@ -55,7 +55,7 @@ These are static source checks, not a runtime sandbox. They cannot prove absence
 
 **Result: Open; no silent closure recommended.**
 
-The reconciled matrix after PR #77 records 24 Covered and 11 Partial items. Remaining Partial items are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. Their qualifications must remain visible. Any new expected policy, retention rule, or user-consent behavior must be confirmed against existing Product Owner decisions rather than inferred by tests.
+The reconciled matrix after PR #77 records 25 Covered and 10 Partial items. Remaining Partial items are Q02, Q09–Q12, Q16, Q25, Q28, and Q30–Q31. Their qualifications must remain visible. Any new expected policy, retention rule, or user-consent behavior must be confirmed against existing Product Owner decisions rather than inferred by tests.
 
 ## Safety boundary confirmation
 
@@ -78,4 +78,11 @@ A focused follow-up review was performed against the merged PR #77 tests and its
 - **Q23:** A synthetic handler returns an invalid object through the in-process API test client. The test asserts the API returns only the generic 500 response and that the handler call count is exactly one. This supports Q23 as Covered for exception and malformed-result API response behavior.
 - **Safety:** Both tests are deterministic and in-process. No Windows host calls, filesystem changes, process execution, real network calls, installers, or machine-changing operations are used.
 
-The updated matrix records **24 Covered / 11 Partial / 0 Not covered or not evidenced**. Remaining Partial items are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. This follow-up does not declare P5-515 complete; remaining gaps still require evidence or explicit Product Owner disposition. P5-516 remains separately gated.
+The updated matrix records **25 Covered / 10 Partial / 0 Not covered or not evidenced**. Q26 is Covered after reconciliation to the approved P5-508 option A retention decision: bounded in-memory events, maximum 500, oldest-first eviction, and clear-on-restart. Existing tests directly cover those behaviors. Time-based event expiry and durable storage are not approved requirements and were not added. Remaining Partial items are Q02, Q09–Q12, Q16, Q25, Q28, and Q30–Q31. This follow-up does not declare P5-515 complete; remaining gaps still require evidence or explicit Product Owner disposition. P5-516 remains separately gated.
+
+
+## Follow-up review — Q26 retention semantics
+
+A4 compared the Q26 matrix wording against the approved P5-508 decision register and the existing audit implementation/tests. The approved option A is bounded ephemeral in-memory events, cleared on process restart; the implementation additionally fixes the capacity at a maximum of 500 and evicts the oldest event first. Existing tests cover the 500-event default, FIFO eviction, and a new empty sink after restart.
+
+The earlier matrix wording “retention cap/expiry/restart” incorrectly implied that a time-based event TTL was required. It is not part of the approved option A decision. Q26 is therefore **Covered** with the explicit qualification that time-based expiry and durable storage are not required or authorized. No new TTL or durable persistence was implemented.
