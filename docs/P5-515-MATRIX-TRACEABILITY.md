@@ -53,7 +53,12 @@ All mapped tests use synthetic inputs, in-process clients, mocks, or fake data. 
 | Q34 Failure handling — planner/policy/handler throws safely | **Covered** | `test_p5_515_security_regression.py::test_planner_exception_returns_only_a_generic_server_error`; `test_p5_515_security_regression.py::test_tool_handler_exception_returns_generic_error_without_retry`; `test_p5_515_security_regression.py::test_policy_configuration_exception_returns_safe_error_before_handler`; existing policy/chat failure tests | Synthetic planner and handler exceptions return only the generic API 500 response; planner/handler call counters assert no retry. A policy configuration exception also returns the generic response and a spy confirms no handler invocation. |
 | Q35 Scope — test harness has no file/registry/process/network inspection capability | **Partial** | `test_p5_515_capability_audit.py::test_backend_test_sources_do_not_import_host_inspection_capabilities`; `test_p5_515_capability_audit.py::test_frontend_test_source_does_not_import_host_or_network_capabilities` | Static checks reject selected host-inspection imports and OS process/filesystem calls across Python tests, plus selected Node host/network imports in the frontend spec. This is not a sandbox and does not prove absence of dynamically loaded, indirect, or unlisted capabilities. Static read-only access is limited to repository test/source files. Product Owner disposition: accept this documented limitation for P5-515; do not build a runtime sandbox or claim Q35 technically Covered in this phase. |
 
-## Product Owner dispositions\n\n- **Q35 — accepted limitation:** The Product Owner accepts that the current Static Check is not a Runtime Sandbox. Keep Q35 classified as Partial for technical traceability, document the limitation, and do not expand P5-515 into building a runtime sandbox. This disposition does not authorize host inspection or execution capabilities.\n- **Q30 — still open:** Browser-emulated mobile checks are CI-verified, but physical-device and screen-reader evidence remain outstanding.\n\n## Coverage summary
+## Product Owner dispositions
+
+- **Q35 — accepted limitation (2026-11-07):** Static Check is not a Runtime Sandbox. Keep Q35 Partial; do not build a runtime sandbox in P5-515. This does not authorize host inspection or execution.
+- **Q30 — deferred residual (2026-11-08):** The Product Owner explicitly deferred physical-device and screen-reader testing and approved closing P5-515 with Q30 still Partial. Browser-emulated checks are the only mobile evidence; no physical iPhone or VoiceOver/Narrator/NVDA result is claimed.
+
+## Coverage summary
 
 - **Covered:** 33 matrix items
 - **Partial:** 2 matrix items
