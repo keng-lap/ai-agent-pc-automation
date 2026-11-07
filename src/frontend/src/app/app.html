@@ -89,8 +89,8 @@
                 }
               }
               @if (entry.review; as review) {
-                <section class="installer-card plan-review" [attr.aria-label]="language() === 'th' ? 'รายการซอฟต์แวร์และการจำลอง' : 'Software plan and dry run'">
-                  <div class="installer-card-heading">
+                <section class="agent-details plan-review installer-card" [attr.aria-label]="language() === 'th' ? 'รายการซอฟต์แวร์และการจำลอง' : 'Software plan and dry run'">
+                  <div class="composer-footer">
                     <div>
                       <p class="eyebrow">{{ language() === 'th' ? 'SOFTWARE INSTALLER' : 'SOFTWARE INSTALLER' }}</p>
                       <h3>{{ review.interpretation.category === 'software_remove'
@@ -98,19 +98,19 @@
                         : (language() === 'th' ? 'รายการซอฟต์แวร์ที่ต้องติดตั้ง' : 'Software to install') }}</h3>
                     </div>
                     @if (review.approved && review.tool_result) {
-                      <span class="installer-status installer-status--success">{{ language() === 'th' ? 'Dry Run ผ่าน' : 'Dry run passed' }}</span>
+                      <span class="status-pill installer-status--success">{{ language() === 'th' ? 'Dry Run ผ่าน' : 'Dry run passed' }}</span>
                     } @else if (canApproveReview(review)) {
-                      <span class="installer-status">{{ language() === 'th' ? 'พร้อมจำลอง' : 'Ready to simulate' }}</span>
+                      <span class="status-pill installer-status">{{ language() === 'th' ? 'พร้อมจำลอง' : 'Ready to simulate' }}</span>
                     } @else {
-                      <span class="installer-status installer-status--pending">{{ language() === 'th' ? 'รอข้อมูล' : 'Needs information' }}</span>
+                      <span class="status-pill installer-status--pending">{{ language() === 'th' ? 'รอข้อมูล' : 'Needs information' }}</span>
                     }
                   </div>
 
                   @if (review.dry_run_plan; as dryRun) {
                     <div class="installer-program-list">
                       @for (program of dryRun.programs; track program.order) {
-                        <article class="installer-program">
-                          <div class="installer-app-icon" aria-hidden="true">▣</div>
+                        <article class="program-review installer-program">
+                          <div class="message-avatar installer-app-icon" aria-hidden="true">▣</div>
                           <div class="installer-program-info">
                             <strong>{{ program.program }}</strong>
                             @if (program.version && program.version !== 'ยังไม่ได้ระบุ' && program.version !== 'Not specified') {
@@ -126,7 +126,7 @@
                   }
 
                   @if (review.questions.length) {
-                    <div class="installer-questions">
+                    <div class="tool-preview installer-questions">
                       <strong>{{ language() === 'th' ? 'ต้องการข้อมูลเพิ่ม' : 'More information needed' }}</strong>
                       <ul class="prerequisite-list">
                         @for (question of review.questions; track question) {
@@ -160,17 +160,17 @@
                   }
 
                   @if (review.approved && review.tool_result; as result) {
-                    <div class="installer-result" role="status">
-                      <span class="installer-result-icon" aria-hidden="true">✓</span>
+                    <div class="tool-preview installer-result" role="status">
+                      <span class="message-avatar installer-result-icon" aria-hidden="true">✓</span>
                       <div>
                         <strong>{{ language() === 'th' ? 'จำลองการติดตั้งผ่าน' : 'Dry run passed' }}</strong>
                         <span>{{ language() === 'th' ? 'ไม่มีการติดตั้งหรือเปลี่ยนแปลงเครื่องจริง' : 'Nothing was installed or changed on this PC.' }}</span>
                       </div>
                     </div>
                   } @else if (canApproveReview(review)) {
-                    <div class="installer-actions">
+                    <div class="tool-preview installer-actions">
                       <p>{{ language() === 'th' ? 'ตรวจสอบรายการแล้วกดอนุมัติเพื่อจำลองการติดตั้ง' : 'Review the list, then approve to simulate the installation.' }}</p>
-                      <button class="send-button installer-approve-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
+                      <button class="send-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
                         {{ planning() ? (language() === 'th' ? 'กำลังตรวจสอบ…' : 'Checking…') : (language() === 'th' ? 'อนุมัติให้จำลอง (Dry Run)' : 'Approve & Run Dry Run') }}
                       </button>
                       @if (entry.approvalError) {
@@ -178,7 +178,7 @@
                       }
                     </div>
                   } @else {
-                    <div class="installer-actions installer-actions--blocked">
+                    <div class="tool-preview installer-actions installer-actions--blocked">
                       <strong>{{ language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready to simulate' }}</strong>
                       <span>{{ language() === 'th' ? 'กรุณาระบุข้อมูลที่จำเป็นก่อน' : 'Provide the required information first.' }}</span>
                     </div>
