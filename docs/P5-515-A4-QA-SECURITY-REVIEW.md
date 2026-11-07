@@ -2,7 +2,7 @@
 
 ## Review status
 
-**Focused review completed for the merged P5-515 increments #66, #73, #74, and #75.** This is the A4 QA/security review lane required for P5-515 evidence reconciliation. It is not P5-516, not a third-party penetration test, and not approval for real PC execution.
+**Focused review completed for the merged P5-515 increments #66, #73, #74, #75, and #77.** This is the A4 QA/security review lane required for P5-515 evidence reconciliation. It is not P5-516, not a third-party penetration test, and not approval for real PC execution.
 
 ## Review scope
 
@@ -12,7 +12,7 @@ Reviewed the merged source/test changes and their traceability claims for:
 - Static source-level audit-sink transport/telemetry checks and bounded test-harness capability checks (PR #73).
 - Handler identity replacement protection between policy decision and final dispatch (PR #74).
 - API-safe planner, policy-configuration, and handler exception behavior (PR #75).
-- Corresponding Q13, Q23, Q27, Q34, and Q35 entries in `P5-515-MATRIX-TRACEABILITY.md`.
+- Corresponding Q13, Q20, Q23, Q27, Q34, and Q35 entries in `P5-515-MATRIX-TRACEABILITY.md`.
 
 ## Evidence reviewed
 
@@ -21,7 +21,7 @@ Reviewed the merged source/test changes and their traceability claims for:
 | PR #66 | `3d661d7e56c431722abf5dd3c0aae23e631c546e` | #42355435380 | Passed |
 | PR #73 | `1a4f3a5024bb3ae7f4e9298284ef87d7bcee75a9` | #42357992572 | Passed |
 | PR #74 | `eb6e858ad17a3224b3c1f75fcce80bc4e9bc8efe` | #42358505456 | Passed |
-| PR #75 | `2f512559bc32221b2559514e94b252036f2a0582` | #42358957033 | Passed |
+| PR #75 | `2f512559bc32221b2559514e94b252036f2a0582` | #42358957033 | Passed |\n| PR #77 | `2ad52b2045f0b7927935d44dae8161ce9369939b` | #42359381703 | Passed |
 
 PR #75 had an earlier failed run (#42358655824) because TestClient re-raised application exceptions. The tests were changed to use `raise_server_exceptions=False`; the updated head passed all four CI steps. The failed run is retained in the verification evidence for transparency.
 
@@ -41,7 +41,7 @@ This evidence supports Q13 as Covered. It does not establish protection against 
 
 Synthetic planner and handler exceptions are exercised through the in-process API client. Tests assert a generic `500 Internal server error.` response and call counts of one. A synthetic policy-configuration exception returns the same generic response and a spy confirms that no tool handler is invoked.
 
-This evidence supports Q34 as Covered. Q23 remains Partial because malformed handler return values are not yet directly exercised through the API boundary, even though normal dispatch result validation has separate tests.
+This evidence supports Q34 as Covered. Q23 is now Covered after PR #77 added a synthetic malformed handler return value through the API boundary, asserting a generic HTTP 500 response and exactly one handler invocation (no retry).
 
 ### F3 — Audit and test-harness capability checks are static, bounded checks
 
@@ -55,7 +55,7 @@ These are static source checks, not a runtime sandbox. They cannot prove absence
 
 **Result: Open; no silent closure recommended.**
 
-The reconciled matrix records 22 Covered and 13 Partial items. Remaining Partial items are Q02, Q09–Q12, Q16, Q20, Q23, Q25–Q26, Q28, and Q30–Q31. Their qualifications must remain visible. Any new expected policy, retention rule, or user-consent behavior must be confirmed against existing Product Owner decisions rather than inferred by tests.
+The reconciled matrix after PR #77 records 24 Covered and 11 Partial items. Remaining Partial items are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. Their qualifications must remain visible. Any new expected policy, retention rule, or user-consent behavior must be confirmed against existing Product Owner decisions rather than inferred by tests.
 
 ## Safety boundary confirmation
 
@@ -65,7 +65,7 @@ P1 remains dry-run/report only. P2/P3 and Phase 6 remain disabled. P5-516 remain
 
 ## Review conclusion
 
-**No blocking defect was identified within the narrow scope of the merged P5-515 increments reviewed above.** Q13 and Q34 traceability claims are supported by direct tests. Q23 and Q35 remain Partial with explicit limitations. This review does **not** declare P5-515 complete: the 13 remaining Partial items require further evidence or an explicit Product Owner deferral, followed by explicit P5-515 closeout approval.
+**No blocking defect was identified within the narrow scope of the merged P5-515 increments reviewed above.** Q13, Q20, Q23, and Q34 traceability claims are supported by direct tests. Q35 remains Partial with explicit static-check limitations. This review does **not** declare P5-515 complete: the 11 remaining Partial items require further evidence or an explicit Product Owner disposition, followed by explicit P5-515 closeout approval.
 
 This review is a separate QA/security pass by the A4 lane in the current project workflow. It is not represented as an independent external auditor or as the separately gated P5-516 review.
 

@@ -80,7 +80,7 @@ Q13 is Covered after the handler-identity replacement regression test. Q34 is Co
 
 ## A4 QA/security review
 
-The focused A4 QA/security review of merged increments #66, #73, #74, #75, and #77 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13/Q34 coverage updates and explicitly retains the Q23/Q35 limitations. This review is not the separately gated P5-516 review and does not close P5-515.
+The focused A4 QA/security review of merged increments #66, #73, #74, #75, and #77 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13, Q20, Q23, and Q34 coverage updates; Q35 remains Partial because the capability audit is static and bounded. This review is not the separately gated P5-516 review and does not close P5-515.
 
 ## Reproducibility reference
 
