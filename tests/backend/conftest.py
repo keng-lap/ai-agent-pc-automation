@@ -19,7 +19,7 @@ def stub_gemini_structured_plans(monkeypatch):
     from agent_backend import plan_api
 
     def generate(prompt, response_schema):
-        request = prompt.split("<user_request>\\n", 1)[-1].split("\\n</user_request>", 1)[0]
+        request = prompt.split("<user_request>\n", 1)[-1].split("\n</user_request>", 1)[0]
         return response_schema(
             goal=request or "Task plan",
             steps=(
