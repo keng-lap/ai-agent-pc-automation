@@ -207,7 +207,8 @@ def test_policy_configuration_change_after_initial_decision_fails_closed(monkeyp
 def test_handler_identity_replacement_after_policy_decision_fails_closed(monkeypatch):
     handler_calls = []
     replacement_calls = []
-    original_handler = lambda request: handler_calls.append(request)
+    def original_handler(request):
+        handler_calls.append(request)
 
     def replacement_handler(request):
         replacement_calls.append(request)
