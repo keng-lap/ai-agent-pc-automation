@@ -316,15 +316,6 @@ def test_explicit_software_target_can_be_approved_without_optional_questions(mon
     from agent_backend import plan_api
     from agent_backend.tools import ToolResult
 
-    monkeypatch.setattr(
-        plan_api,
-        "generate_structured_plan",
-        lambda _prompt, _schema: (
-            '{"goal":"Install Google Chrome","steps":'
-            '[{"title":"Review requested software","detail":"Google Chrome"}],'
-            '"questions":["Which optional Chrome channel do you prefer?"]}'
-        ),
-    )
     calls = []
 
     def dry_run(request):
