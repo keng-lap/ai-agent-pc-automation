@@ -31,7 +31,7 @@ User -> Local Web App (loopback) -> Agent Core -> Controlled Tool / Task Layer -
 ## 6. Safety Requirements
 The Agent must never have unrestricted control of the computer. All automation passes through a controlled tool/task layer. Sensitive operations include software installation/removal, file deletion/modification, administrator commands, process control, and system/network/security settings.
 
-The approved P-ORDER-1 option A preserves phase order: machine-changing tools remain dry-run/mock until Phase 5 Safety and Permission System is implemented and explicitly approved. No live provider calls, provider credentials, or external data transfer are currently approved. Preserve loopback binding and local API authorization.
+The approved P-ORDER-1 option A preserves phase order: machine-changing tools remain dry-run/mock until Phase 5 Safety and Permission System is implemented and explicitly approved. The separately approved T-601 Gemini chat flow may send bounded conversation context to Google; no provider call is used for policy, plan creation, audit, or tool dispatch. The Gemini API key is held in backend process memory and used only for provider authentication. Preserve loopback binding and local API authorization.
 
 ## 7. Development Philosophy
 - Each phase has a clear objective, deliverables, tests, and safety boundary.
