@@ -29,7 +29,7 @@ All mapped tests use synthetic inputs, in-process clients, mocks, or fake data. 
 | Q10 Policy — client/model claims low risk or permission | **Partial** | `test_policy.py::test_policy_decision_allows_only_catalogued_p1_dry_run_tools`; `test_plan_api.py::test_plan_request_rejects_client_supplied_policy_fields`; `test_p5_515_security_regression.py::test_plans_endpoint_rejects_client_supplied_authority_and_execution_fields` | Backend-owned mapping and client-field rejection are covered; there is no separate adversarial model-output test specifically claiming a lower risk/permission than backend policy. |
 | Q11 Policy — P2 inspection request denied | **Partial** | `test_policy.py::test_policy_matrix_is_complete_and_maps_disabled_levels_to_deny`; `test_policy.py::test_policy_decision_allows_only_catalogued_p1_dry_run_tools` | Matrix maps P2 to deny, but no dedicated P2 inspection request/spy-handler test exists. |
 | Q12 Policy — P3 install/remove execution denied | **Partial** | `test_policy.py::test_policy_matrix_is_complete_and_maps_disabled_levels_to_deny`; `test_tools.py::test_machine_changing_tool_returns_dry_run_without_execution`; `test_tools.py::test_catalog_contains_only_static_dry_run_tools` | Dry-run-only catalog is tested; no distinct P3 execution request is submitted through a dedicated API scenario. |
-| Q13 Dispatch — handler identity or policy version changes after decision | **Not covered** | — | No test mutates/replaces handler identity or policy version between decision and final dispatch guard. |
+| Q13 Dispatch — handler identity or policy version changes after decision | **Partial** | `test_tools.py::test_policy_configuration_change_after_initial_decision_fails_closed`; `test_tools.py::test_handler_dispatch_map_is_immutable` | A changed policy mapping after the orchestration decision is rejected by the final dispatch-time policy validation before a spy handler runs. Handler identity replacement between decision and dispatch is not independently covered. |
 | Q14 Dispatch — handler map missing or unexpected | **Covered** | `test_p5_515_security_regression.py::test_missing_registered_handler_fails_closed_without_dispatch`; `test_tools.py::test_handler_dispatch_map_is_immutable`; `test_tools.py::test_unknown_constructed_tool_never_reaches_a_spy_handler`; `test_tools.py::test_invalid_policy_configuration_never_reaches_a_spy_handler` | Missing registered handler returns the typed `handler_unavailable` denial and does not invoke a spy handler. |
 | Q15 Dry-run — approved P1 catalog item invokes fake/dry-run only | **Covered** | `test_p5_515_security_regression.py::test_registered_tool_dispatch_remains_dry_run_only`; `test_tools.py::test_machine_changing_tool_returns_dry_run_without_execution`; `test_tools.py::test_dispatch_result_is_validated_and_remains_dry_run` | Dry-run result and no-execution contract are asserted. |
 | Q16 Parameters — invalid type/extra/out-of-range value | **Partial** | `test_tools.py::test_unknown_tool_and_arbitrary_command_payload_are_rejected`; `test_plans.py::test_unknown_fields_and_non_contract_statuses_are_rejected`; `test_plans.py::test_unvalidated_program_payload_is_rejected`; `test_plans.py::test_duplicate_program_names_and_empty_plan_are_rejected` | Invalid payload/model fields and plan constraints are covered; no general parameter-boundary suite tests every type and numeric range. |
@@ -56,14 +56,14 @@ All mapped tests use synthetic inputs, in-process clients, mocks, or fake data. 
 ## Coverage summary
 
 - **Covered:** 19 matrix items
-- **Partial:** 13 matrix items
-- **Not covered / not evidenced:** 3 matrix items
+- **Partial:** 14 matrix items
+- **Not covered / not evidenced:** 2 matrix items
 
 These are traceability classifications, not a percentage score or a declaration of P5-515 completion. Several partial/not-covered items may depend on Product Owner decisions or require a separately scoped test increment. Do not silently reinterpret them as passed.
 
 ## Recommended remaining P5-515 work
 
-1. Add focused synthetic tests for Q13, Q27, and Q35 only after confirming the intended contracts and testable boundaries.
+1. Add focused synthetic tests for Q27 and Q35 only after confirming the intended contracts and testable boundaries; Q13 remains partial because handler identity replacement is not directly exercised.
 2. Strengthen partial coverage for Q02, Q09–Q12, Q16, Q20, Q23, Q25–Q26, Q28, Q30–Q31, and Q34 where the approved behavior is already unambiguous.
 3. Keep audit retention semantics and any unresolved policy behavior aligned with Product Owner decisions; tests must not invent a policy.
 4. Have A4 independently review the test-to-matrix mapping and evidence before P5-515 closeout. P5-516 remains a separate, gated task.
