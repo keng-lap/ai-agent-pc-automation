@@ -8,7 +8,7 @@ Runtime changes, if required, must remain within the approved P1 dry-run boundar
 
 ## Current baseline
 
-- Current matrix: 33 Covered / 2 Partial / 0 Not covered or not evidenced.
+- Current matrix: 33 Covered / 2 Partial / 0 Not covered or not evidenced. PR #104 is merged and CI-verified; Q30 has browser-emulated viewport evidence but still lacks physical-device and screen-reader results. The Product Owner has accepted the Q35 Static Check limitation; Q35 remains Partial technically.
 - Remaining rows: Q30 and Q35.
 - WP1–WP4 are complete and merged: PRs #85, #81, #82, and #84. Original PR #80 was closed as superseded after its branch diverged; WP1 was reapplied on current main in PR #85.
 - Approved design baseline: P5-508 decisions and P5-509 reconciliation.
@@ -30,10 +30,10 @@ Estimates overlap slightly because WP1/WP2 can be developed and reviewed togethe
 
 Q26 is Covered after A4 reconciled the matrix with the approved P5-508 option A semantics: bounded in-memory events, maximum 500, oldest-first eviction, and clear-on-restart. The existing audit tests directly cover capacity, FIFO eviction, and new-sink emptiness. Time-based event expiry and durable audit storage are not required or authorized; no TTL or durable persistence was added.
 
-## Sequencing and gates
+## Product Owner disposition — Q35\n\nThe Product Owner explicitly accepted the limitation that Static Check is not a Runtime Sandbox and directed that this limitation be documented. Keep Q35 as Partial in the technical matrix; do not add a runtime sandbox to P5-515. This is an accepted scope limitation, not proof of sandboxing and not authorization for host inspection or execution.\n\n## Q30 status after PR #104\n\nPR #104 is merged; CI run #42395817656 passed 257 backend tests, Ruff, 36 frontend unit tests, all 9 Playwright E2E tests, and frontend build. The Playwright mobile checks remain browser emulation. Physical phone and screen-reader testing still require a safe, explicitly approved local test path; do not relax loopback/authentication controls.\n\n## Sequencing and gates
 
 1. WP1–WP4: complete and merged; evidence is recorded in the verification report and A4 follow-up review.
-2. WP5: complete the final evidence reconciliation and A4 review; obtain Product Owner disposition for Q30 and Q35, then explicit P5-515 closeout approval.
+2. Q35 disposition is recorded as accepted limitation; keep its technical status Partial.\n3. Q30: obtain physical-device and at least one screen-reader result using a separately approved safe local test path, or return to the Product Owner for a decision if that path cannot be provided without weakening the local-first boundary.\n4. WP5: complete final evidence reconciliation and A4 review, then obtain explicit P5-515 closeout approval.
 
 All current WP1–WP4 code/test PRs are merged following explicit Product Owner authorization and successful CI/CodeQL. Any future code/test PR still requires a separate explicit Product Owner merge approval.
 
@@ -41,7 +41,7 @@ For each documentation-only PR: verify all changed paths are under docs/ and CI 
 
 ## Completion forecast
 
-WP1–WP4 are complete. Remaining effort is limited to Q30 browser-level mobile/accessibility evidence, Q35 capability-boundary disposition, and final Product Owner closeout. If evidence cannot be obtained within the authorized scope, present the exact residual limitation for explicit disposition rather than inventing policy.
+WP1–WP4 are complete. Remaining effort is limited to Q30 physical-device/screen-reader evidence, final A4 evidence reconciliation, and explicit Product Owner P5-515 closeout. Q35's accepted limitation is documented and remains Partial technically. If evidence cannot be obtained within the authorized scope, present the exact residual limitation for explicit disposition rather than inventing policy.
 
 ## Safety and exit conditions
 

@@ -18,7 +18,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 **Complete — Product Owner closeout approved 2026-11-02.** T-402, T-403, and T-404 runtime implementation merged in PRs #45–#47. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5. See docs/PHASE-4.md.
 
 ## Phase 5 — Safety and Permission System
-**P5-510–P5-514 complete and merged (PRs #58–#65). P5-515 is authorized and in progress: WP1–WP4 are merged (PRs #85, #81, #82, and #84), with CI/CodeQL evidence recorded. The current QA matrix is 33 Covered / 2 Partial / 0 Not covered; Q30 (real-browser mobile/screen-reader evidence) and Q35 (static capability checks are not a runtime sandbox) remain Partial. Final A4 reconciliation and explicit Product Owner closeout are still required. P5-516 independent review has not started and remains separately gated.** Phase 5 remains a mandatory safety gate; Phase 6 and real machine-changing execution remain unauthorized. See docs/PHASE-5.md and docs/P5-515-REMAINING-GAP-CLOSURE-PLAN.md.
+**P5-510–P5-514 complete and merged (PRs #58–#65). P5-515 is authorized and in progress: WP1–WP4 and Q30 browser-emulated mobile tests are merged (including PR #104); latest CI #42395817656 passed 257 backend tests, Ruff, 36 frontend unit tests, 9 Playwright E2E tests, and frontend build. The matrix remains 33 Covered / 2 Partial / 0 Not covered. Q30 remains Partial pending physical-device and screen-reader results. The Product Owner accepted the Q35 limitation that Static Check is not a Runtime Sandbox; Q35 remains Partial technically and no runtime sandbox is in scope. Final A4 reconciliation and explicit Product Owner closeout are still required. P5-516 independent review has not started and remains separately gated.** Phase 5 remains a mandatory safety gate; Phase 6 and real machine-changing execution remain unauthorized. See docs/PHASE-5.md and docs/P5-515-REMAINING-GAP-CLOSURE-PLAN.md.
 
 ## Phase 6 — Real PC Automation
 **Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
@@ -51,7 +51,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | P5-510–P5-514 complete; P5-515 in progress (WP1–WP4 merged; Q30/Q35 Partial; closeout pending); P5-516 gated/not started; real execution not authorized |
+| 5 | P5-510–P5-514 complete; P5-515 in progress (WP1–WP4 and PR #104 merged; Q30/Q35 Partial; Q35 limitation accepted; Q30 physical/screen-reader evidence and closeout pending); P5-516 gated/not started; real execution not authorized |
 | 6 | Not Started |
 | 7 | Not Started |
 | 8 | Not Started |
