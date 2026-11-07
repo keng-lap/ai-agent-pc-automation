@@ -271,7 +271,6 @@ class PlanApprovalResponse(BaseModel):
     notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
 
 
-@router.post("/api/plans/{plan_id}/approve", response_model=PlanApprovalResponse)
 def _prune_approval_results() -> None:
     """Keep replay records only while their immutable plans remain active."""
     for approved_plan_id in tuple(_approval_results):
@@ -281,6 +280,8 @@ def _prune_approval_results() -> None:
             _approval_results.pop(approved_plan_id, None)
 
 
+
+@router.post("/api/plans/{plan_id}/approve", response_model=PlanApprovalResponse)
 def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
     """Approve one immutable P1 plan and run its dry-run report exactly once."""
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
