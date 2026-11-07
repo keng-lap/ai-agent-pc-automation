@@ -103,7 +103,7 @@ def test_p1_plan_has_no_acknowledge_cancel_or_execute_route():
 def test_plan_reference_is_opaque_and_unknown_reference_fails_closed():
     response = client.get("/api/plans/" + "f" * 32)
     assert response.status_code == 404
-    assert response.json() == {"detail": "Plan not found."}
+    assert response.json() == {"detail": "Not Found"}
 
 
 def test_denied_policy_never_invokes_spy_handler(monkeypatch):
