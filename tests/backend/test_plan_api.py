@@ -375,40 +375,26 @@ def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
 
 
 
-def test_malformed_gemini_structured_plan_fails_closed(monkeypatch):
+def test_plan_creation_does_not_depend_on_a_second_gemini_call(monkeypatch):
     from agent_backend import plan_api
 
-    monkeypatch.setattr(
-        plan_api,
-        "generate_structured_plan",
-        lambda _prompt, _schema: '{"goal":"Install Chrome","steps":[],"approved":true}',
-    )
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("plan creation must use the deterministic backend planner")
+
+    # The chat response already came from Gemini. The plan API must not make
+    # another provider call or require Gemini structured-output support.
+    monkeypatch.setattr(plan_api, "generate_structured_plan", forbidden, raising=False)
     response = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "ติดตั้ง Google Chrome", "language": "th"},
     )
-    assert response.status_code == 502
-    assert response.json() == {"detail": {"code": "invalid_structured_plan"}}
-    assert "approved" not in response.text
 
-
-def test_gemini_plan_provider_failure_fails_closed(monkeypatch):
-    from agent_backend import plan_api
-    from agent_backend.providers.gemini import GeminiProviderError
-
-    def fail(_prompt, _schema):
-        raise GeminiProviderError("provider_unavailable")
-
-    monkeypatch.setattr(plan_api, "generate_structured_plan", fail)
-    response = client.post(
-        "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
-    )
-    assert response.status_code == 502
-    assert response.json() == {
-        "detail": {
-            "code": "gemini_plan_unavailable",
-            "provider_code": "provider_unavailable",
-        }
-    }
-    assert "API key" not in response.text
+    assert response.status_code == 200
+    body = response.json()
+    assert body["interpretation"]["category"] == "software_install"
+    assert body["interpretation"]["target"] == "Google Chrome"
+    assert body["dry_run_plan"]["programs"][0]["program"] == "Google Chrome"
+    assert body["dry_run_plan"]["programs"][0]["status"] == "PLANNED"
+    assert body["tool_result"] is None
+    assert body["approved"] is False
+    assert body["questions"] == []
