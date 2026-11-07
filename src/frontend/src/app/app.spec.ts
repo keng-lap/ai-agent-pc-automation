@@ -669,7 +669,7 @@ describe('App chat UI (T-202)', () => {
 
 
 describe('Structured Agent response (T-404)', () => {
-  it('renders the plan, prerequisites, dry-run result and approval notice', async () => {
+  it('renders the plan but never treats a chat response as dry-run approval', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -717,7 +717,8 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('Install Chrome');
     expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
     expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
-    expect(view.textContent).toContain('จำลองเท่านั้น');
+    expect(view.textContent).toContain('รอการตรวจสอบแผนและอนุมัติ');
+    expect(view.textContent).not.toContain('Dry run only; no changes were made.');
     expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     fixture.destroy();
@@ -875,7 +876,8 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
     expect(view.textContent).toContain('JDK');
     expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
-    expect(view.textContent).toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
+    expect(view.textContent).toContain('ยังไม่พร้อมอนุมัติ');
+    expect(view.textContent).not.toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
