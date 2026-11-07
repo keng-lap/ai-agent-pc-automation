@@ -53,12 +53,12 @@ Prohibited:
 | Q14 | Dispatch | Handler map missing or unexpected | Safe denial; no fallback |
 | Q15 | Dry-run | Approved P1 catalog item | Fake/dry-run handler only; spy confirms no side effects |
 | Q16 | Parameters | Invalid type, extra parameter, out-of-range value | Reject before handler |
-| Q17 | Confirmation | No acknowledgement where acknowledgement is required | No state transition beyond allowed presentation |
-| Q18 | Confirmation | Acknowledgement bound to different plan/digest | Deny; no grant/dispatch |
-| Q19 | Confirmation | Expired, consumed, cancelled, or revoked reference | Deny; terminal state preserved |
-| Q20 | Confirmation | Replay and concurrent double-consumption | At most one informational acknowledgement; never execution |
-| Q21 | Confirmation | Plan parameters changed after presentation | Old acknowledgement/reference invalid |
-| Q22 | Restart/clock | Restart, clock rollback/jump, or expiry boundary | Behavior follows PO-approved contract; fail closed on uncertainty |
+| Q17 | P1 lifecycle | Attempt acknowledgement, approval, cancellation, or execute route | No such P1 state-transition endpoint exists; unknown routes return 404 |
+| Q18 | Plan identity | Refine a plan with explicit answers | New immutable plan ID/digest; original plan remains unchanged |
+| Q19 | Plan integrity | Tamper with stored plan digest | Reject and invalidate the affected reference; no dispatch |
+| Q20 | Expiry | Read a plan at and after its 10-minute TTL boundary | Expired reference is rejected and then unavailable |
+| Q21 | Restart / clock | New process store or backward clock movement | Old references are unavailable; clock rollback fails closed |
+| Q22 | Digest binding | Change material fields, tool identity, or program order | Digest changes; equivalent content retains digest but receives a distinct opaque ID |
 | Q23 | API response | Handler error or malformed result | Bounded safe error; no stack trace/secrets |
 | Q24 | Audit | Event includes prompt/token/raw parameters | Schema rejects or redaction prevents persistence |
 | Q25 | Audit | Event sink unavailable | No unsafe fallback; behavior follows approved failure policy |
@@ -135,3 +135,20 @@ The matrix depends on PO decisions in P5-502 through P5-506, including risk/perm
 
 This plan does not claim that any tests have run or passed. It does not authorize runtime implementation. No Phase 6 capability or real PC operation is authorized.
 
+
+
+## 9. P5-515 execution evidence (merge commit)
+
+The first bounded P5-515 test increment was merged in PR #66. The merge commit is `3d661d7e56c431722abf5dd3c0aae23e631c546e`. GitHub Actions CI run [42355435380](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42355435380) completed with conclusion `success`; its backend and frontend jobs both completed successfully.
+
+The workflow's actual commands and configured environments are defined in `.github/workflows/ci.yml`:
+- Backend tests: from `src/backend`, `python -m pytest ../../tests/backend` (Ubuntu runner, Python 3.12; CI step successful).
+- Ruff: from `src/backend`, `ruff check agent_backend ../../tests/backend` (CI step successful).
+- Frontend unit tests: from `src/frontend`, `npm test -- --watch=false` (Ubuntu runner, Node 24; CI step successful).
+- Frontend build: from `src/frontend`, `npm run build` (CI step successful).
+
+The available GitHub run/job metadata confirms successful step conclusions but does not expose raw stdout, exact pytest collection/pass count, or explicit process exit-code text. Those details are not asserted here. See the linked run for authoritative job status.
+
+Existing backend tests provide deterministic fake-clock coverage for expiry and clock rollback, process-local store restart invalidation, plan digest binding/tamper detection, and audit sink capacity/restart/clear behavior. PR #66 adds synthetic HTTP-boundary and spy-handler regression cases. The suite uses in-process test clients, synthetic values, and dry-run handlers; it does not execute OS commands, installers, package managers, filesystem mutations, registry operations, or real PC changes.
+
+P5-515 is **in progress**, not closed: merge-commit CI is green, but complete matrix-to-test traceability and A4 independent review/evidence closeout remain outstanding. P5-516 remains a separately gated independent review.
