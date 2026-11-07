@@ -106,3 +106,49 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .program-review small { color: var(--muted); font-size: 10px; }
 .plan-review { min-width: 0; }
 .plan-review .detail-meta { overflow-wrap: anywhere; }
+
+
+/* Compact software-installer presentation; advanced diagnostics stay collapsed. */
+.installer-card { display: grid; gap: 14px; margin-top: 14px; padding: 16px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); }
+.installer-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.installer-card-heading .eyebrow { margin-bottom: 4px; }
+.installer-card-heading h3 { margin: 0; font-size: 15px; letter-spacing: -.025em; }
+.installer-status { flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); background: var(--surface-raised); font-size: 10px; font-weight: 700; }
+.installer-status--success { border-color: #b9dfcd; color: #26734f; background: #effaf4; }
+.installer-status--pending { border-color: #ead9a8; color: #8a6820; background: #fff9e9; }
+.installer-program-list { display: grid; gap: 8px; }
+.installer-program { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
+.installer-app-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border-radius: 11px; color: #6256cb; background: #efedff; font-size: 23px; }
+.installer-program-info { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.installer-program-info strong { overflow-wrap: anywhere; font-size: 13px; }
+.installer-program-info span, .installer-program-state { color: var(--muted); font-size: 10px; }
+.installer-program-state { flex: 0 0 auto; text-align: right; }
+.installer-empty { color: var(--muted); font-size: 12px; }
+.installer-questions { padding: 10px 12px; border: 1px solid #ead9a8; border-radius: 11px; background: #fffaf0; color: #715b2b; font-size: 11px; }
+.installer-questions .prerequisite-list { margin-bottom: 0; }
+.installer-actions { display: grid; gap: 9px; padding-top: 3px; }
+.installer-actions p, .installer-actions span { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.installer-approve-button { width: 100%; min-height: 45px; font-size: 13px; }
+.installer-actions--blocked { padding: 10px 12px; border-radius: 11px; background: var(--surface-raised); font-size: 11px; }
+.installer-result { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid #b9dfcd; border-radius: 12px; color: #26734f; background: #effaf4; }
+.installer-result-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%; color: #fff; background: #32966a; font-weight: 800; }
+.installer-result div { display: grid; gap: 3px; }
+.installer-result strong { font-size: 12px; }
+.installer-result span:not(.installer-result-icon) { font-size: 10px; }
+.installer-error { color: #b9565c; font-size: 11px; }
+.installer-details { padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); }
+.installer-details summary { width: fit-content; color: var(--muted); font-size: 10px; cursor: pointer; }
+.installer-details[open] { display: grid; gap: 7px; }
+@media (prefers-color-scheme: dark) {
+  .installer-status--success, .installer-result { border-color: #35694f; color: #a5e0c0; background: #20372e; }
+  .installer-result-icon { color: #fff; background: #287c56; }
+  .installer-status--pending, .installer-questions { border-color: #6b5830; color: #ead49a; background: #393222; }
+  .installer-app-icon { color: #d1caff; background: #36304f; }
+}
+@media (max-width: 600px) {
+  .installer-card { padding: 13px; gap: 12px; }
+  .installer-card-heading { align-items: flex-start; }
+  .installer-card-heading h3 { font-size: 14px; }
+  .installer-program { align-items: flex-start; }
+  .installer-program-state { max-width: 92px; }
+}
