@@ -81,3 +81,8 @@ $RECYCLE.BIN/
 .idea/
 .vscode/
 .claude/settings.local.json
+
+# --- Playwright local test artifacts (do not commit reports/screenshots) ---
+src/frontend/test-results/
+src/frontend/playwright-report/
+src/frontend/playwright/.cache/
