@@ -71,6 +71,10 @@ The merged source-level matrix now records:
 
 Q13 is Covered after the handler-identity replacement regression test. Q34 is Covered after direct synthetic planner, policy-configuration, and handler exception tests at the API boundary. Q23 remains Partial because malformed handler-result behavior is not yet directly exercised through the API boundary. See [P5-515 Matrix-to-Test Traceability](P5-515-MATRIX-TRACEABILITY.md) for exact test names and limitations.
 
+## A4 QA/security review
+
+The focused A4 QA/security review of merged increments #66, #73, #74, and #75 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13/Q34 coverage updates and explicitly retains the Q23/Q35 limitations. This review is not the separately gated P5-516 review and does not close P5-515.
+
 ## Reproducibility reference
 
 The backend commands, from the workflow's working directory:
