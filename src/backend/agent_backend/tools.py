@@ -120,9 +120,17 @@ def execute_tool(request: ToolRequest) -> ToolResult:
     """Apply the final policy guard before fixed-handler dispatch."""
     from agent_backend.policy import PolicyDeniedError, require_tool_allowed
 
-    handler = _HANDLERS.get(request.tool_id)
+    # Pin both the dispatch table and selected callable before policy evaluation.
+    # A replaced table/handler must not inherit the earlier policy decision.
+    handlers = _HANDLERS
+    handler = handlers.get(request.tool_id)
     if handler is None:
         raise PolicyDeniedError("handler_unavailable")
+
     require_tool_allowed(request.tool_id)
+
+    if _HANDLERS is not handlers or _HANDLERS.get(request.tool_id) is not handler:
+        raise PolicyDeniedError("handler_unavailable")
+
     result = handler(request)
     return ToolResult.model_validate(result.model_dump())
