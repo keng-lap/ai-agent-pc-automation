@@ -142,6 +142,65 @@ def test_structured_plan_uses_gemini_json_schema(monkeypatch):
     assert calls[0]["config"].response_mime_type == "application/json"
     assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
 
+
+def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
+    calls = []
+
+    class Response:
+        text = "answer"
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+
+    assert gemini.generate_reply("first message") == "answer"
+    assert gemini.generate_reply("second message") == "answer"
+
+    assert len(calls) == 2
+    for call in calls:
+        assert call["model"] == "gemini-3.1-flash-lite"
+        assert call["config"].system_instruction == gemini.CHAT_SYSTEM_INSTRUCTION
+        assert (
+            "Do not ask follow-up questions for optional preferences"
+            in call["config"].system_instruction
+        )
+        assert "DRY RUN" in call["config"].system_instruction
+
+
+def test_structured_plan_does_not_receive_chat_system_instruction(monkeypatch):
+    calls = []
+
+    class Response:
+        text = '{"goal":"Prepare Java","steps":[{"title":"Review","detail":"Review requirements"}],"questions":[]}'
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+
+    class Schema:
+        @classmethod
+        def model_json_schema(cls):
+            return {"type": "OBJECT", "properties": {"goal": {"type": "STRING"}}}
+
+    assert gemini.generate_structured_plan("Create a plan", Schema) == Response.text
+    assert calls[0]["config"].system_instruction is None
+    assert calls[0]["config"].response_mime_type == "application/json"
+
+
 def test_chat_requires_gemini_configuration():
     response = client.post(
         "/api/chat",
