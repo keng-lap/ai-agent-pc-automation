@@ -51,9 +51,9 @@ Prohibited:
 | Q12 | Policy | P3 install/remove execution requested | Deny; no execution handler exists |
 | Q13 | Dispatch | Fixed handler identity or policy version changes after decision | Final guard denies |
 | Q14 | Dispatch | Handler map missing or unexpected | Safe denial; no fallback |
-| Q15 | Dry-run | Approved P1 catalog item | Fake/dry-run handler only; spy confirms no side effects |
+| Q15 | Dry-run | Explicitly approve a fully specified P1 plan containing one or more programs | Fake/dry-run handler runs once per listed program; result accounts for every item; spy confirms no side effects |
 | Q16 | Parameters | Invalid type, extra parameter, out-of-range value | Reject before handler |
-| Q17 | P1 lifecycle | Attempt acknowledgement, approval, cancellation, or execute route | No such P1 state-transition endpoint exists; unknown routes return 404 |
+| Q17 | P1 lifecycle | Approve an eligible immutable P1 plan; attempt acknowledgement/cancel/execute routes | Only `POST /api/plans/{plan_id}/approve` is allowed; approval runs dry-run only. Acknowledgement, cancel, and execute routes remain absent (404). |
 | Q18 | Plan identity | Refine a plan with explicit answers | New immutable plan ID/digest; original plan remains unchanged |
 | Q19 | Plan integrity | Tamper with stored plan digest | Reject and invalidate the affected reference; no dispatch |
 | Q20 | Expiry | Read a plan at and after its 10-minute TTL boundary | Expired reference is rejected and then unavailable |

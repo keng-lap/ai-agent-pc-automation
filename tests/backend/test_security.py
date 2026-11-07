@@ -240,6 +240,12 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/plans"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}"]) == {"get"}
     assert set(paths["/api/plans/{plan_id}/refine"]) == {"post"}
+    assert set(paths["/api/plans/{plan_id}/approve"]) == {"post"}
+    assert not any(
+        path.endswith(("/acknowledgement", "/cancel", "/execute"))
+        for path in paths
+    )
+    assert "/api/execute" not in paths
 
 
 def test_response_has_no_cors_headers_or_cookies():

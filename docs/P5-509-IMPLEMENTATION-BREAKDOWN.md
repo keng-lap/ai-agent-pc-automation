@@ -75,3 +75,36 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 I1 / P5-510 is complete and merged in PR #58. I2 / P5-511 is complete and merged in PR #61 (commit 2875399). Its implementation and verification used synthetic inputs and dry-run handlers only; no machine-changing operation was performed.
 
 **Current gate:** P5-510 through P5-514 are complete and merged (PRs #58, #61, #63, #64, and #65). P5-515 is authorized and in progress; PR #66 is merged and merge-commit CI run `42355435380` passed. Remaining P5-515 work is evidence/matrix reconciliation and review of existing test coverage. P5-516 is a separate independent review and has not started; it requires separate authorization. Phase 6 and real PC execution remain unauthorized.
+
+
+## 7. P5-517 — Approval-gated P1 Dry Run (Product Owner authorized 2026-11-07)
+
+This task supersedes backlog item 6's earlier “no current-P1 acknowledgement/approval” implementation assumption only for the bounded P1 Dry Run gate. The original P5-508 D-P5-06 remains historical; the binding replacement is D-P5-13 in the P5-508 decision packet.
+
+**Required flow:** Gemini-assisted plan → display exact immutable plan → user explicitly approves that plan → backend verifies plan identity/digest, eligibility, and 10-minute TTL → fixed dry-run handler runs once for every listed program → UI displays the result and an explicit no-machine-changes notice.
+
+**Implementation findings on main at task start (commit `5bd9225365d777202e144eef535a7a93e67d762f`):**
+- The approval API, frontend approval button, and approval client call already exist.
+- Existing tests cover a single dispatch and replay caching, but the approval test's Java fixture contains two programs while the implementation dispatches only the first program. This could misrepresent a partially simulated plan as complete.
+- Existing P5-507/P5-515 documentation and the OpenAPI allow-list test did not consistently describe/assert the approval route.
+
+**P5-517 scope:**
+1. Dispatch the fixed dry-run handler once for each program in the exact immutable approved plan; aggregate a result that names every program.
+2. Restore the P5-514 architecture: the backend builds the trusted typed review plan deterministically from the original user request and does not make a second Gemini call or parse Gemini chat prose. Treat an explicitly named software install/remove target as sufficient for a P1 preview; show unknown version/source/impact as unverified. Preserve mandatory Java clarification questions. Keep approval server-owned and exact-plan-bound; preserve 10-minute expiry, restart invalidation, clarification blocking, and replay protection (cached result; no second dispatch).
+3. Explicitly assert the sole `POST /api/plans/{plan_id}/approve` state transition in the API allow-list tests; keep acknowledgement/cancel/execute routes absent.
+4. Update Q15/Q17 and the superseding Product Owner decision record.
+5. Run backend tests, Ruff, frontend unit tests, and frontend production build in CI. Record actual commit and CI evidence before asking the Product Owner to test locally.
+
+**Acceptance tests:**
+- Plan creation never dispatches a dry-run handler.
+- An explicit request such as `ติดตั้ง Google Chrome` creates a `PLANNED` preview without a second Gemini provider call; optional version/channel details remain visibly unspecified and do not block this P1 preview.
+- The plan API must remain available after the chat response even if Gemini structured-output generation is unavailable, because it uses the deterministic backend planner.
+- Approval of an eligible two-program plan dispatches exactly those two program targets once each.
+- Repeating approval returns the cached result without another handler call.
+- Any plan item needing clarification blocks approval before dispatch.
+- A changed/refined plan has a new identity and requires a new approval.
+- The API exposes only the approval transition; acknowledgement, cancel, execute, install, and remove routes remain absent.
+- The UI exposes approval only when every listed item is `PLANNED`; the displayed result explicitly says no real PC changes occurred.
+- No OS, filesystem, registry, process, network, package-manager, installer, or real machine-changing capability is added.
+
+**Authority:** P5-517 runtime changes are authorized for implementation and CI verification only. The PR must remain unmerged until the Product Owner reviews the exact diff and explicitly approves merge. Phase 6 and real PC actions remain unauthorized.
