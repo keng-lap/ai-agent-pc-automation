@@ -17,6 +17,7 @@ from agent_backend.plans import (
     DryRunPlan,
     PlanCapacityError,
     PlanExpiredError,
+    PlanIntegrityError,
     PlanNotFoundError,
     PlanStore,
     ProgramPlan,
@@ -276,7 +277,7 @@ def _prune_approval_results() -> None:
     for approved_plan_id in tuple(_approval_results):
         try:
             _plan_store.get(approved_plan_id)
-        except (PlanExpiredError, PlanNotFoundError):
+        except (PlanExpiredError, PlanIntegrityError, PlanNotFoundError):
             _approval_results.pop(approved_plan_id, None)
 
 
