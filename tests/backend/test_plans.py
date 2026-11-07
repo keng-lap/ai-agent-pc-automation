@@ -270,3 +270,70 @@ def test_plan_ttl_is_valid_just_before_expiry_and_expires_at_exact_boundary():
         store.get(plan.plan_id)
     with pytest.raises(PlanNotFoundError):
         store.get(plan.plan_id)
+
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("order", 0),
+        ("order", 51),
+        ("order", True),
+        ("order", "1"),
+        ("program", ""),
+        ("program", "x" * 121),
+        ("program", 123),
+        ("version", ""),
+        ("version", "x" * 81),
+        ("purpose", ""),
+        ("purpose", "x" * 241),
+        ("reason", ""),
+        ("reason", "x" * 501),
+        ("source", ""),
+        ("source", "x" * 161),
+        ("impact", ""),
+        ("impact", "x" * 241),
+    ],
+)
+def test_program_plan_rejects_invalid_types_empty_and_out_of_range_fields(field, value):
+    values = program().model_dump()
+    values[field] = value
+
+    with pytest.raises(ValidationError):
+        ProgramPlan.model_validate(values)
+
+
+@pytest.mark.parametrize(
+    "dependencies",
+    [
+        ("",),
+        ("x" * 121,),
+        tuple(f"dependency-{index}" for index in range(21)),
+        ("JRE", "jre"),
+        (123,),
+    ],
+)
+def test_program_plan_rejects_invalid_dependency_boundaries(dependencies):
+    values = program().model_dump()
+    values["dependencies"] = dependencies
+
+    with pytest.raises(ValidationError):
+        ProgramPlan.model_validate(values)
+
+
+def test_program_plan_accepts_exact_documented_numeric_and_text_boundaries():
+    item = program(
+        order=50,
+        program="P" * 120,
+        version="V" * 80,
+        purpose="P" * 240,
+        reason="R" * 500,
+        source="S" * 160,
+        impact="I" * 240,
+        dependencies=tuple(f"dependency-{index}" for index in range(20)),
+    )
+
+    assert item.order == 50
+    assert len(item.program) == 120
+    assert len(item.version) == 80
+    assert len(item.dependencies) == 20

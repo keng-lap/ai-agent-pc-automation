@@ -233,3 +233,25 @@ def test_handler_identity_replacement_after_policy_decision_fails_closed(monkeyp
     assert raised.value.reason == "handler_unavailable"
     assert handler_calls == []
     assert replacement_calls == []
+
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"tool_id": "software.install", "target": ""},
+        {"tool_id": "software.install", "target": "x" * 121},
+        {"tool_id": "software.install", "target": 123},
+        {"tool_id": "software.install", "target": "Chrome", "extra": "not-allowed"},
+        {"tool_id": "shell.run", "target": "whoami"},
+    ],
+)
+def test_tool_request_rejects_invalid_type_extra_and_out_of_range_values(payload):
+    with pytest.raises(ValidationError):
+        ToolRequest.model_validate(payload)
+
+
+def test_tool_request_accepts_exact_target_length_boundary():
+    request = ToolRequest(tool_id="software.install", target="C" * 120)
+
+    assert len(request.target) == 120
