@@ -12,12 +12,6 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_backend.providers.gemini import (
-    GeminiNotConfiguredError,
-    GeminiProviderError,
-    generate_structured_plan,
-)
-
 from agent_backend.planner import PlanStep, TaskIntent, TaskPlan, create_task_plan
 from agent_backend.plans import (
     DryRunPlan,
@@ -26,6 +20,11 @@ from agent_backend.plans import (
     PlanNotFoundError,
     PlanStore,
     ProgramPlan,
+)
+from agent_backend.providers.gemini import (
+    GeminiNotConfiguredError,
+    GeminiProviderError,
+    generate_structured_plan,
 )
 from agent_backend.tools import ToolRequest, ToolResult, execute_tool
 
