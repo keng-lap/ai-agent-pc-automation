@@ -255,3 +255,63 @@ def test_tool_request_accepts_exact_target_length_boundary():
     request = ToolRequest(tool_id="software.install", target="C" * 120)
 
     assert len(request.target) == 120
+
+
+def test_tool_request_rejects_model_supplied_risk_or_permission_claims():
+    with pytest.raises(ValidationError):
+        ToolRequest.model_validate(
+            {
+                "tool_id": "software.install",
+                "target": "Example",
+                "risk_class": "low",
+                "permission": "P0",
+                "execution_mode": "execute",
+            }
+        )
+
+    decision = policy.decide_tool_policy("software.install")
+    assert decision.allowed is True
+    assert decision.rule is not None
+    assert (decision.rule.risk, decision.rule.permission, decision.rule.outcome) == (
+        "R1",
+        "P1",
+        "allow_dry_run",
+    )
+
+
+@pytest.mark.parametrize(
+    ("tool_id", "risk", "permission"),
+    [
+        ("synthetic.inspect", "R2", "P2"),
+        ("synthetic.execute", "R3", "P3"),
+    ],
+)
+def test_disabled_p2_p3_policy_never_invokes_a_spy_handler(
+    monkeypatch, tool_id, risk, permission
+):
+    handler_calls = []
+
+    def spy_handler(request):
+        handler_calls.append(request)
+        raise AssertionError("disabled P2/P3 handler must never be invoked")
+
+    # Isolate the decision branch for a synthetic disabled capability. The
+    # production catalog remains unchanged and no real handler is registered.
+    monkeypatch.setattr(policy, "validate_policy_configuration", lambda: None)
+    monkeypatch.setattr(
+        policy,
+        "_TOOL_POLICY",
+        policy.MappingProxyType(
+            {
+                tool_id: (risk, permission, "inspect" if permission == "P2" else "execute")
+            }
+        ),
+    )
+    monkeypatch.setattr(tools, "_HANDLERS", {tool_id: spy_handler})
+    request = ToolRequest.model_construct(tool_id=tool_id, target="Synthetic")
+
+    with pytest.raises(policy.PolicyDeniedError) as raised:
+        execute_tool(request)
+
+    assert raised.value.reason == "risk_denied"
+    assert handler_calls == []
