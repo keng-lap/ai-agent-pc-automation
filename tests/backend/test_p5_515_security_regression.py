@@ -209,3 +209,23 @@ def test_tool_handler_exception_returns_generic_error_without_retry(monkeypatch)
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
     assert len(calls) == 1
+
+
+
+def test_policy_configuration_exception_returns_safe_error_before_handler(monkeypatch):
+    handler_calls = []
+
+    def spy_handler(request):
+        handler_calls.append(request)
+        raise AssertionError("handler must not run after policy failure")
+
+    def fail_policy(_tool_id):
+        raise policy.PolicyConfigurationError("synthetic policy configuration failure")
+
+    monkeypatch.setattr(tools, "_HANDLERS", {"software.install": spy_handler})
+    monkeypatch.setattr(policy, "require_tool_allowed", fail_policy)
+    response = client.post("/api/plans", json=PLAN_PAYLOAD)
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error."}
+    assert handler_calls == []
