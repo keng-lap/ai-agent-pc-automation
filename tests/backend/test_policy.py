@@ -107,3 +107,23 @@ def test_policy_matrix_rejects_malformed_entries(monkeypatch, malformed):
 
     with pytest.raises(policy.PolicyConfigurationError, match="malformed"):
         policy.validate_policy_configuration()
+
+
+
+@pytest.mark.parametrize(
+    "malformed_rule",
+    [
+        policy.PolicyRule(["R2"], "P2", "deny"),
+        policy.PolicyRule("R2", ["P2"], "deny"),
+        policy.PolicyRule("R2", "P2", ["deny"]),
+    ],
+)
+def test_policy_matrix_rejects_rules_with_malformed_field_types(monkeypatch, malformed_rule):
+    monkeypatch.setattr(
+        policy,
+        "POLICY_MATRIX",
+        (policy.POLICY_MATRIX[0], policy.POLICY_MATRIX[1], malformed_rule, policy.POLICY_MATRIX[3]),
+    )
+
+    with pytest.raises(policy.PolicyConfigurationError, match="malformed"):
+        policy.validate_policy_configuration()
