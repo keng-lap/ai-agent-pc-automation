@@ -1,4 +1,4 @@
-"""Gemini-assisted plan review with backend-owned P1 dry-run approval.
+"""Deterministic plan review with backend-owned P1 dry-run approval.
 
 Gemini contributes validated display-only plan text. This router owns intent,
 policy, permissions, plan integrity, expiry, approval, and dry-run dispatch.
@@ -151,7 +151,7 @@ def _questions_for_review(
 
 @router.post("/api/plans", response_model=PlanReviewResponse)
 def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
-    """Create a Gemini-assisted review plan without running the dry-run tool."""
+    """Create a deterministic backend review plan without calling Gemini or running tools."""
     task_plan = create_task_plan(payload.request, payload.language)
     intent = task_plan.intent
     if intent.category == "development_task" and re.search(r"\bjava\b", payload.request, re.IGNORECASE):
