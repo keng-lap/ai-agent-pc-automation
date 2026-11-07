@@ -48,6 +48,15 @@ jobs:
       - name: Run frontend unit tests
         working-directory: src/frontend
         run: npm test -- --watch=false
+      - name: Install Playwright Chromium
+        working-directory: src/frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser E2E tests (desktop and mobile viewports)
+        working-directory: src/frontend
+        env:
+          CI: true
+          LOCAL_AGENT_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: npm run test:e2e
       - name: Build frontend
         working-directory: src/frontend
         run: npm run build
