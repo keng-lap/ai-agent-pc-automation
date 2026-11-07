@@ -6,6 +6,7 @@ P1 dry-run-only plan/tool contracts.
 """
 
 import re
+import threading
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -24,6 +25,8 @@ from agent_backend.tools import ToolRequest, ToolResult, execute_tool
 
 router = APIRouter()
 _plan_store = PlanStore()
+_approval_lock = threading.RLock()
+_approval_results: dict[str, ToolResult] = {}
 
 
 class PlanReviewRequest(BaseModel):
@@ -52,7 +55,8 @@ class PlanReviewResponse(BaseModel):
     interpretation: TaskIntent
     task_plan: TaskPlan
     dry_run_plan: DryRunPlan | None
-    tool_result: ToolResult | None
+    tool_result: ToolResult | None = None
+    approved: bool = False
     questions: tuple[str, ...]
     notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
     refined_from_plan_id: str | None = None
@@ -152,40 +156,80 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
         intent = intent.model_copy(update={"target": "Java"})
         task_plan = task_plan.model_copy(update={"intent": intent})
     dry_run_plan = None
-    tool_result = None
     candidate = _programs_for_review(intent, payload.language)
 
     if candidate is not None:
         tool_id, programs = candidate
         try:
+            # Creating a review plan must never run even the mock dry-run tool.
             dry_run_plan = _plan_store.create(tool_id, programs)
-            tool_request = ToolRequest(tool_id=tool_id, target=programs[0].program)
-            tool_result = execute_tool(tool_request)
-            if payload.language == "th":
-                action = "ติดตั้ง" if tool_id == "software.install" else "ถอนการติดตั้ง"
-                tool_result = tool_result.model_copy(
-                    update={
-                        "summary": (
-                            f"จำลองเท่านั้น: จะ{action} {programs[0].program}; "
-                            "ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
-                        )
-                    }
-                )
         except PlanCapacityError:
             raise HTTPException(status_code=503, detail="Plan capacity reached.") from None
         except ValueError:
             # A missing or unsupported target remains a clarification, never a fallback.
             dry_run_plan = None
-            tool_result = None
 
     return PlanReviewResponse(
         request=payload.request,
         interpretation=intent,
         task_plan=task_plan,
         dry_run_plan=dry_run_plan,
-        tool_result=tool_result,
+        tool_result=None,
+        approved=False,
         questions=_questions_for_review(intent, payload.language),
     )
+
+
+class PlanApprovalResponse(BaseModel):
+    """Result of one explicit approval; this is always a mock/dry-run report."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan_id: str
+    approved: Literal[True] = True
+    tool_result: ToolResult
+    notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
+
+
+@router.post("/api/plans/{plan_id}/approve", response_model=PlanApprovalResponse)
+def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
+    """Approve one immutable P1 plan and run its dry-run report exactly once."""
+    if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
+        raise HTTPException(status_code=404, detail="Plan not found.")
+    with _approval_lock:
+        cached = _approval_results.get(plan_id)
+        if cached is not None:
+            return PlanApprovalResponse(plan_id=plan_id, tool_result=cached)
+        try:
+            plan = _plan_store.get(plan_id)
+        except PlanExpiredError:
+            raise HTTPException(status_code=410, detail="Plan expired.") from None
+        except PlanNotFoundError:
+            raise HTTPException(status_code=404, detail="Plan not found.") from None
+
+        # These fields are server-generated and digest-bound; never accept them from a client.
+        if plan.risk_class != "R1" or plan.required_permission != "P1" or plan.mode != "dry_run":
+            raise HTTPException(status_code=403, detail="Plan is not eligible for dry run.")
+        if any(item.status != "PLANNED" for item in plan.programs):
+            raise HTTPException(status_code=409, detail="Plan requires clarification before approval.")
+
+        try:
+            result = execute_tool(
+                ToolRequest(tool_id=plan.tool_id, target=plan.programs[0].program)
+            )
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Plan cannot be dry-run.") from None
+        action = "ติดตั้ง" if plan.tool_id == "software.install" else "ถอนการติดตั้ง"
+        result = result.model_copy(
+            update={
+                "summary": (
+                    f"จำลองเท่านั้น: จะ{action} {plan.programs[0].program}; "
+                    "ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
+                )
+            }
+        )
+        _approval_results[plan_id] = result
+        return PlanApprovalResponse(plan_id=plan_id, tool_result=result)
 
 
 @router.get("/api/plans/{plan_id}", response_model=DryRunPlan)
