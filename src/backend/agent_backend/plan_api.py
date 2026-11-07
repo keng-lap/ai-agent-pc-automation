@@ -272,6 +272,15 @@ class PlanApprovalResponse(BaseModel):
 
 
 @router.post("/api/plans/{plan_id}/approve", response_model=PlanApprovalResponse)
+def _prune_approval_results() -> None:
+    """Keep replay records only while their immutable plans remain active."""
+    for approved_plan_id in tuple(_approval_results):
+        try:
+            _plan_store.get(approved_plan_id)
+        except (PlanExpiredError, PlanNotFoundError):
+            _approval_results.pop(approved_plan_id, None)
+
+
 def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
     """Approve one immutable P1 plan and run its dry-run report exactly once."""
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
@@ -283,6 +292,7 @@ def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
             raise HTTPException(status_code=410, detail="Plan expired.") from None
         except PlanNotFoundError:
             raise HTTPException(status_code=404, detail="Plan not found.") from None
+        _prune_approval_results()
         cached = _approval_results.get(plan_id)
         if cached is not None:
             return PlanApprovalResponse(plan_id=plan_id, tool_result=cached)
@@ -308,8 +318,6 @@ def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
                 )
             }
         )
-        if len(_approval_results) >= 128:
-            _approval_results.pop(next(iter(_approval_results)))
         _approval_results[plan_id] = result
         return PlanApprovalResponse(plan_id=plan_id, tool_result=result)
 
