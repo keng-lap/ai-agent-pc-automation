@@ -128,3 +128,23 @@ PR #80 became divergent after the other approved increments were merged and GitH
 CI #42361989751 passed backend tests, Ruff, frontend unit tests, and frontend build. CodeQL #42361987478 completed successfully for Python, JavaScript/TypeScript, and Actions.
 
 Q30 remains Partial: jsdom assertions do not prove real browser viewport behavior or full screen-reader operation. Q35 remains Partial: static source checks are not a runtime sandbox. Neither limitation is silently waived by these merges.
+
+
+## Q30 mobile viewport and accessibility evidence — PR #104
+
+- PR: [#104 — mobile viewport and screen-reader evidence](https://github.com/keng-lap/ai-agent-pc-automation/pull/104)
+- Merge commit: `d32633868ff600af262a4a1f832cebf2fc0663c4`
+- Final head commit: `58b06d5aa4466f45f6db6a1afe99d1dbf4b60748`
+- GitHub Actions CI run: [#42395817656](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42395817656) — **success**
+- Backend: 257 tests passed; Ruff reported “All checks passed”.
+- Frontend unit tests: 36 passed.
+- Playwright E2E: 9 passed — 3 desktop viewport cases, language-switch behavior, 4 mobile viewport cases (320×568, 375×667, 390×844, 430×932), and accessible names/keyboard focus.
+- Frontend build: passed.
+
+The first run on the preceding head failed because the send button was disabled while the test attempted to focus it. The test was corrected to enter a harmless message, assert the button is enabled, and then assert focus. The final CI run above is the successful run; the earlier failure is not counted as passing evidence.
+
+**Q30 remains Partial.** These are Chromium browser viewport-emulation tests, not a physical-phone test and not a VoiceOver/Narrator/NVDA run. The manual protocol remains outstanding. No public exposure or weakening of loopback/authentication controls was introduced.
+
+## Q35 Product Owner disposition
+
+The Product Owner accepted the documented limitation that Static Check is not a Runtime Sandbox. Q35 remains technically **Partial** in the matrix; P5-515 will record the limitation rather than expanding scope to build a runtime sandbox. This does not authorize host inspection, arbitrary execution, or Phase 6.
