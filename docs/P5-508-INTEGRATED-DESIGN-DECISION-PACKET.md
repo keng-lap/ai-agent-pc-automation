@@ -134,3 +134,22 @@ The Product Owner has approved the decisions in Section 5. P5-502 through P5-507
 ## 10. Approval record
 
 On 2026-10-30, the Product Owner explicitly confirmed: “ทั้ง 12 ข้อเลย” — approving all 12 decisions using the recommended safe defaults. This approval resolves D-P5-01 through D-P5-11 as recorded above. D-P5-12 remains a separate gate: runtime implementation has not been authorized.
+
+
+## 11. Superseding Product Owner decision — 2026-11-07
+
+The Product Owner subsequently directed: “เพิ่ม apporve แล้วค่อย dry รัน” (add approval first, then dry run). This is a new, explicit decision that supersedes the earlier D-P5-06 rule for the current P1 workflow. The 2026-10-30 decision remains in the historical register above; it is not silently rewritten.
+
+**D-P5-13 — P1 approval gate before Dry Run: Approved on 2026-11-07.**
+
+- The user must see the exact immutable per-program plan before any dry-run handler is called.
+- Dry Run is permitted only after an explicit user action on the approval control for that exact plan.
+- Approval is backend-owned, bound to the server-created plan ID and digest, and subject to the existing 10-minute plan expiry and process-restart invalidation.
+- Every program marked `PLANNED` in the approved plan must receive its own fixed dry-run handler invocation. The result must account for every listed program; a partial simulation must not be presented as a complete plan result.
+- A plan with any `NEEDS_CLARIFICATION`, `BLOCKED`, or `UNSUPPORTED` item cannot be approved. Refinement creates a new plan and requires a new approval.
+- Repeated approval requests may return the cached result but must not dispatch handlers again.
+- Approval authorizes **P1 Dry Run only**. It does not authorize installation, removal, OS inspection, shell/process execution, downloads, package-manager access, or any Windows change.
+- No acknowledgement, cancel, execute, install, or remove endpoint/control is introduced. The sole state-changing P1 route is `POST /api/plans/{plan_id}/approve`.
+- The approval control must clearly say “อนุมัติให้จำลอง (Dry Run)” (or equivalent) and the result must state “จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง”.
+
+**Bounded runtime task authorization:** The Product Owner authorized P5-517 on 2026-11-07 to reconcile the approval-gated P1 workflow, correct per-program Dry Run coverage, update the related tests and documentation, and provide a testable PR. This does not authorize merging the runtime PR, Phase 6, or any real PC-changing action. Product Owner review is required before merge.
