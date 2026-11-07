@@ -194,6 +194,7 @@
                     @if (review.clarification) {
                       <div class="detail-heading">{{ language() === 'th' ? 'ข้อมูลที่เพิ่มจากคุณ' : 'Your clarification' }}</div>
                       <p class="detail-meta">{{ review.clarification }}</p>
+                      <p class="detail-meta">{{ language() === 'th' ? 'สร้างแผนฉบับใหม่แล้ว โดยเก็บแผนเดิมไว้ไม่แก้ทับ' : 'A new immutable plan was created; the previous plan was preserved.' }}</p>
                     }
                     @if (review.dry_run_plan; as dryRun) {
                       <div class="detail-heading">{{ language() === 'th' ? 'รายละเอียดซอฟต์แวร์' : 'Software details' }}</div>
