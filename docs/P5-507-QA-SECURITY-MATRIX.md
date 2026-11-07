@@ -2,7 +2,7 @@
 
 ## Status and boundary
 
-**Proposal for Product Owner review. Documentation only.** This document defines future verification cases and evidence requirements. It does not run tests, inspect the user's PC, authorize runtime implementation, or enable any machine-changing operation.
+**Approved verification baseline; execution is tracked by P5-515.** This matrix is reconciled to the binding P5-509 decisions. P5-515 executes only synthetic fixtures, fake clocks, in-process API tests, and spy handlers. It does not inspect the user's PC or enable any machine-changing operation.
 
 All Phase 5 implementation and verification must remain mock/dry-run only. P2 inspection and P3 machine changes remain denied. The matrix is a test design, not evidence that any test has passed.
 
