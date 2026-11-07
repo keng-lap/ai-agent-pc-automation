@@ -12,7 +12,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_backend.planner import PlanStep, TaskIntent, TaskPlan, create_task_plan
+from agent_backend.planner import TaskIntent, TaskPlan, create_task_plan
 from agent_backend.plans import (
     DryRunPlan,
     PlanCapacityError,
