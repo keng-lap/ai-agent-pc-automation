@@ -809,4 +809,198 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
   });
+
+  it('Q28: unknown plan status is rejected and shown as a safe neutral plan error', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'c'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1, program: 'Chrome', version: 'Stable',
+          purpose: 'Browser', reason: 'User request', source: 'Not checked',
+          source_verification: 'NOT_CHECKED', dependencies: [],
+          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
+          impact: 'Not checked', status: 'UNRECOGNIZED_STATUS',
+        }],
+      },
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    } as unknown as PlanReviewResponse);
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'Install Chrome';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Backend สร้างแผนตรวจสอบไม่ได้');
+    expect(fixture.nativeElement.textContent).not.toContain('UNRECOGNIZED_STATUS');
+    expect(fixture.nativeElement.querySelector('.plan-review')).toBeNull();
+    fixture.destroy();
+  });
+
+  it('Q28: missing required program fields are rejected without breaking the chat UI', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'd'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1, program: 'Chrome', version: 'Stable',
+          purpose: 'Browser', reason: 'User request', source: 'Not checked',
+          source_verification: 'NOT_CHECKED',
+          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
+          impact: 'Not checked', status: 'PLANNED',
+        }],
+      },
+      tool_result: null,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    } as unknown as PlanReviewResponse);
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'Install Chrome';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Backend สร้างแผนตรวจสอบไม่ได้');
+    expect(fixture.nativeElement.querySelector('.plan-review')).toBeNull();
+    expect(fixture.nativeElement.querySelector('textarea')).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('Q30: controls have accessible names, labels, and non-positive tab order', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const view = fixture.nativeElement as HTMLElement;
+    const buttons = Array.from(view.querySelectorAll('button')) as HTMLButtonElement[];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect((button.getAttribute('aria-label') ?? button.textContent ?? '').trim().length).toBeGreaterThan(0);
+      expect(button.tabIndex).toBeGreaterThanOrEqual(0);
+    }
+
+    const textareas = Array.from(view.querySelectorAll('textarea')) as HTMLTextAreaElement[];
+    for (const textarea of textareas) {
+      const label = textarea.getAttribute('aria-label')
+        ?? view.querySelector(`label[for="${textarea.id}"]`)?.textContent;
+      expect(label?.trim().length ?? 0).toBeGreaterThan(0);
+      expect(textarea.tabIndex).toBeGreaterThanOrEqual(0);
+    }
+
+    const log = view.querySelector('[role="log"]');
+    expect(log?.getAttribute('aria-live')).toBe('polite');
+    fixture.destroy();
+  });
+
+  it('Q31: no machine-changing control appears in empty, loading, error, or plan states', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const assertNoMachineAction = (): void => {
+      const view = fixture.nativeElement as HTMLElement;
+      const labels = Array.from(view.querySelectorAll('button')).map((button) =>
+        `${button.textContent ?? ''} ${button.getAttribute('aria-label') ?? ''}`,
+      );
+      expect(labels.join(' ')).not.toMatch(/execute|install|uninstall|remove|approve|อนุมัติ|ติดตั้ง|ถอนการติดตั้ง|ดำเนินการจริง/i);
+    };
+
+    assertNoMachineAction();
+
+    const pending = new Subject<unknown>();
+    api.responder = () => pending;
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'pending';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    assertNoMachineAction();
+    pending.error({ status: 500 });
+    fixture.detectChanges();
+    assertNoMachineAction();
+
+    api.responder = () => of({ reply: 'safe reply' });
+    api.planResponder = (message) => of({
+      request: message,
+      interpretation: { category: 'development_task', goal: message, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'e'.repeat(32), mode: 'dry_run', live_checks_performed: false,
+        expires_at: '2026-11-07T03:00:00Z',
+        programs: [{
+          order: 1, program: 'JDK', version: 'Not specified', purpose: 'Java',
+          reason: 'Clarification needed', source: 'Not checked',
+          source_verification: 'NOT_CHECKED', dependencies: [],
+          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
+          impact: 'Not checked', status: 'NEEDS_CLARIFICATION',
+        }],
+      },
+      tool_result: { status: 'dry_run', summary: 'Dry run only.' },
+      questions: ['Which JDK version?'],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    input.value = 'Prepare Java';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    assertNoMachineAction();
+    expect(fixture.nativeElement.querySelector('.clarification-form')).not.toBeNull();
+    fixture.destroy();
+  });
+
 });
