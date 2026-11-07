@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** PRs #66, #73, #74, #75, #77, #81, #82, #84, and #85 are merged. WP1–WP4 close nine previously Partial rows. The reconciled matrix is 33 Covered / 2 Partial / 0 Not covered or not evidenced; Q30 and Q35 remain open. This report records only merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
+**P5-515 closed by Product Owner approval on 2026-11-08.** PRs #66, #73, #74, #75, #77, #81, #82, #84, #85, and #104 are merged. WP1–WP4 are complete. Final matrix: 33 Covered / 2 Partial / 0 Not covered or not evidenced. Q30 physical-device/screen-reader evidence is explicitly deferred and remains Partial; Q35 remains Partial under the accepted static-check limitation. This is a bounded P5-515 closeout, not a claim that every matrix row is technically Covered or that Phase 5 authorizes real PC execution.
 
 ## Source and CI identity
 
@@ -148,3 +148,13 @@ The first run on the preceding head failed because the send button was disabled 
 ## Q35 Product Owner disposition
 
 The Product Owner accepted the documented limitation that Static Check is not a Runtime Sandbox. Q35 remains technically **Partial** in the matrix; P5-515 will record the limitation rather than expanding scope to build a runtime sandbox. This does not authorize host inspection, arbitrary execution, or Phase 6.
+
+
+## Final P5-515 closeout reconciliation (2026-11-08)
+
+- **Q30 — Partial, deferred by Product Owner:** PR #104 browser-emulated viewport and accessibility assertions remain CI-verified. Physical iPhone and screen-reader testing were not performed; the Product Owner explicitly directed that these be skipped for now and approved closing P5-515 with this residual visible.
+- **Q35 — Partial, accepted limitation:** Static capability checks are not a runtime sandbox. The Product Owner accepted this limitation; no sandbox or host-inspection capability was added.
+- **Matrix:** 33 Covered / 2 Partial / 0 Not covered or not evidenced. No Partial row was promoted to Covered as a result of a waiver.
+- **Final main CI:** merge commit `f3e09a5f397433da6beebd6fe20a5dbd83c34728`, run [#42397422816](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42397422816), conclusion `success`; backend and frontend jobs and all listed steps completed successfully, including Playwright desktop/mobile viewport emulation and frontend build.
+- **Safety:** no runtime code changed in WP5; no Windows host action, public tunnel, real installer, shell execution, or machine-changing operation was performed or authorized.
+- **Approval:** Product Owner instruction to close P5-515 recorded 2026-11-08. P5-516 remains separately gated; Phase 6 and real PC execution remain unauthorized.
