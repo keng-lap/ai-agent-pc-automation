@@ -254,3 +254,19 @@ def test_expired_plans_are_pruned_before_capacity_is_checked():
 
     assert replacement.plan_id != plan.plan_id
     assert store.get(replacement.plan_id) == replacement
+
+
+
+def test_plan_ttl_is_valid_just_before_expiry_and_expires_at_exact_boundary():
+    clock_value = [NOW]
+    store = PlanStore(clock=lambda: clock_value[0])
+    plan = store.create("software.install", [program()])
+
+    clock_value[0] = plan.expires_at - timedelta(microseconds=1)
+    assert store.get(plan.plan_id) == plan
+
+    clock_value[0] = plan.expires_at
+    with pytest.raises(PlanExpiredError):
+        store.get(plan.plan_id)
+    with pytest.raises(PlanNotFoundError):
+        store.get(plan.plan_id)

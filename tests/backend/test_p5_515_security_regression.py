@@ -238,3 +238,22 @@ def test_policy_configuration_exception_returns_safe_error_before_handler(monkey
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
     assert handler_calls == []
+
+
+
+def test_malformed_tool_handler_result_returns_generic_api_error_without_retry(monkeypatch):
+    handler_calls = []
+
+    def malformed_handler(request):
+        handler_calls.append(request)
+        return object()
+
+    monkeypatch.setattr(tools, "_HANDLERS", {"software.install": malformed_handler})
+    safe_client = TestClient(
+        app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
+    )
+    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error."}
+    assert len(handler_calls) == 1
