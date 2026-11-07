@@ -62,8 +62,8 @@ No lane may self-approve a Product Owner decision or merge a runtime PR.
 - P2 inspection and P3 execution remain hard-denied.
 - No arbitrary shell/PowerShell/CMD/script/process execution.
 - No filesystem, registry, process, installed-software, network, or system-setting inspection.
-- No provider call from plan creation, policy, audit, or tool dispatch. The separately approved T-601 Gemini chat flow may send the current bounded conversation context to Google; no package/source lookup, package manager, or credential transfer is permitted.
-- No chat/task history; no durable audit; no prompts/full plan in audit events.
+- No provider call from plan creation, policy, audit, or tool dispatch. The separately approved T-601 Gemini chat flow may send the current bounded conversation context to Google; the Gemini API key is used only for provider authentication and is not included in chat content. No package/source lookup or package-manager access is permitted.
+- No durable chat/task history; conversation context is bounded and process-local. No durable audit; no prompts/full plan in audit events.
 - Preserve loopback-only binding, local API token semantics, Host/Origin, JSON-only state-changing requests, and 16 KiB body limit.
 - Backend is the authority; model/frontend/client never grant permission.
 - Fail closed before handler dispatch. No fallback/retry with broader capability.
