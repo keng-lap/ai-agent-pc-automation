@@ -1,8 +1,8 @@
-"""Local deterministic plan-review API for P5-514.
+"""Gemini-assisted plan review with backend-owned P1 dry-run approval.
 
-This router never calls Gemini, inspects Windows, downloads software, or executes
-machine-changing actions. It composes the existing deterministic planner and
-P1 dry-run-only plan/tool contracts.
+Gemini contributes validated display-only plan text. This router owns intent,
+policy, permissions, plan integrity, expiry, approval, and dry-run dispatch.
+It never inspects Windows, downloads software, or performs machine changes.
 """
 
 import re
@@ -193,7 +193,7 @@ def _questions_for_review(
 
 @router.post("/api/plans", response_model=PlanReviewResponse)
 def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
-    """Create a deterministic plan review and optional P1 dry-run report."""
+    """Create a Gemini-assisted review plan without running the dry-run tool."""
     task_plan = create_task_plan(payload.request, payload.language)
     intent = task_plan.intent
     if intent.category == "development_task" and re.search(r"\bjava\b", payload.request, re.IGNORECASE):
