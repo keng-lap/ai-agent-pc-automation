@@ -260,6 +260,12 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
     )
 
 
+class PlanApprovalRequest(BaseModel):
+    """Approval carries no client-controlled authority or action parameters."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+
 class PlanApprovalResponse(BaseModel):
     """Result of one explicit approval; this is always a mock/dry-run report."""
 
@@ -272,7 +278,9 @@ class PlanApprovalResponse(BaseModel):
 
 
 @router.post("/api/plans/{plan_id}/approve", response_model=PlanApprovalResponse)
-def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
+def approve_plan_review(
+    plan_id: str, _payload: PlanApprovalRequest
+) -> PlanApprovalResponse:
     """Approve one immutable P1 plan and run its dry-run report exactly once."""
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
         raise HTTPException(status_code=404, detail="Plan not found.")
