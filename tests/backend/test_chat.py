@@ -167,7 +167,7 @@ def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
     for call in calls:
         assert call["model"] == "gemini-3.1-flash-lite"
         assert call["config"].system_instruction == gemini.CHAT_SYSTEM_INSTRUCTION
-        assert "Do not ask follow-up questions for optional preferences" in call["config"].system_instruction
+        assert (\n            "Do not ask follow-up questions for optional preferences"\n            in call["config"].system_instruction\n        )
         assert "DRY RUN" in call["config"].system_instruction
 
 
