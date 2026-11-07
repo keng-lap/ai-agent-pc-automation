@@ -111,6 +111,32 @@ def test_chat_uses_gemini_and_returns_plain_reply(monkeypatch):
     ]
 
 
+
+
+def test_structured_plan_uses_gemini_json_schema(monkeypatch):
+    calls = []
+
+    class Response:
+        text = '{"goal":"Prepare Java","steps":[{"title":"Review","detail":"Review requirements"}],"questions":[]}'
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+    result = gemini.generate_structured_plan("Create a plan", {"type": "OBJECT"})
+
+    assert result == Response.text
+    assert calls[0]["model"] == "gemini-3.1-flash-lite"
+    assert calls[0]["contents"] == "Create a plan"
+    assert calls[0]["config"].response_mime_type == "application/json"
+    assert calls[0]["config"].response_schema == {"type": "OBJECT"}
+
 def test_chat_requires_gemini_configuration():
     response = client.post(
         "/api/chat",
