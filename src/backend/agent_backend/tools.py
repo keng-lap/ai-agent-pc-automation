@@ -1,4 +1,4 @@
-""""Backend-owned static tool catalog and dry-run-only dispatch (T-402)."""
+"""Backend-owned static tool catalog and dry-run-only dispatch (T-402)."""
 
 from types import MappingProxyType
 from typing import Literal
