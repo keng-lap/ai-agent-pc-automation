@@ -32,11 +32,22 @@ _EXTERNAL_TRANSPORT_ROOTS = {
     "urllib3",
 }
 
-_HOST_CAPABILITY_ROOTS = _EXTERNAL_TRANSPORT_ROOTS | {
+_HOST_CAPABILITY_ROOTS = {
+    "aiohttp",
+    "boto3",
     "ctypes",
+    "datadog",
+    "mixpanel",
+    "newrelic",
+    "opentelemetry",
     "psutil",
     "pywinauto",
+    "requests",
+    "sentry_sdk",
+    "socket",
     "subprocess",
+    "urllib",
+    "urllib3",
     "winreg",
     "wmi",
 }
