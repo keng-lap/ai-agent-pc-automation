@@ -55,6 +55,7 @@ jobs:
         working-directory: src/frontend
         env:
           CI: true
+          LOCAL_AGENT_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         run: npm run test:e2e
       - name: Build frontend
         working-directory: src/frontend
