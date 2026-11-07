@@ -81,3 +81,29 @@ def test_static_policy_definitions_are_immutable():
         policy._TOOL_POLICY["software.install"] = ("R3", "P3", "execute")
     with pytest.raises((AttributeError, TypeError)):
         policy.POLICY_MATRIX[0].risk = "R3"
+
+
+
+def test_policy_matrix_rejects_duplicate_risk_entries(monkeypatch):
+    duplicate = (
+        policy.POLICY_MATRIX[0],
+        policy.POLICY_MATRIX[1],
+        policy.POLICY_MATRIX[2],
+        policy.POLICY_MATRIX[2],
+    )
+    monkeypatch.setattr(policy, "POLICY_MATRIX", duplicate)
+
+    with pytest.raises(policy.PolicyConfigurationError):
+        policy.validate_policy_configuration()
+
+
+@pytest.mark.parametrize("malformed", [None, {"risk": "R2", "permission": "P2", "outcome": "deny"}])
+def test_policy_matrix_rejects_malformed_entries(monkeypatch, malformed):
+    monkeypatch.setattr(
+        policy,
+        "POLICY_MATRIX",
+        (policy.POLICY_MATRIX[0], policy.POLICY_MATRIX[1], malformed, policy.POLICY_MATRIX[3]),
+    )
+
+    with pytest.raises(policy.PolicyConfigurationError, match="malformed"):
+        policy.validate_policy_configuration()
