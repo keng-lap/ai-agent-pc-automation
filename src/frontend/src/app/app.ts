@@ -41,6 +41,84 @@ const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
+  if (!isRecord(value) || typeof value['request'] !== 'string') return false;
+  const interpretation = value['interpretation'];
+  const taskPlan = value['task_plan'];
+  if (
+    !isRecord(interpretation)
+    || typeof interpretation['category'] !== 'string'
+    || typeof interpretation['goal'] !== 'string'
+    || !(typeof interpretation['target'] === 'string' || interpretation['target'] === null)
+    || !isRecord(taskPlan)
+    || !Array.isArray(taskPlan['steps'])
+    || !taskPlan['steps'].every((step) => (
+      isRecord(step)
+      && typeof step['order'] === 'number'
+      && typeof step['title'] === 'string'
+      && typeof step['detail'] === 'string'
+    ))
+    || !Array.isArray(taskPlan['prerequisites'])
+    || !taskPlan['prerequisites'].every((prerequisite) => (
+      isRecord(prerequisite)
+      && typeof prerequisite['id'] === 'string'
+      && typeof prerequisite['order'] === 'number'
+      && typeof prerequisite['title'] === 'string'
+      && typeof prerequisite['reason'] === 'string'
+      && typeof prerequisite['status'] === 'string'
+    ))
+    || !Array.isArray(value['questions'])
+    || !value['questions'].every((question) => typeof question === 'string')
+    || value['notice'] !== 'DRY_RUN_ONLY_NO_CHANGES_MADE'
+  ) return false;
+
+  const dryRunPlan = value['dry_run_plan'];
+  if (dryRunPlan !== null) {
+    if (
+      !isRecord(dryRunPlan)
+      || typeof dryRunPlan['plan_id'] !== 'string'
+      || dryRunPlan['mode'] !== 'dry_run'
+      || dryRunPlan['live_checks_performed'] !== false
+      || typeof dryRunPlan['expires_at'] !== 'string'
+      || !Array.isArray(dryRunPlan['programs'])
+      || dryRunPlan['programs'].length < 1
+    ) return false;
+
+    const validStatuses = ['PLANNED', 'NEEDS_CLARIFICATION', 'BLOCKED', 'UNSUPPORTED'];
+    if (!dryRunPlan['programs'].every((program) => (
+      isRecord(program)
+      && Number.isInteger(program['order'])
+      && typeof program['program'] === 'string'
+      && program['program'].trim().length > 0
+      && typeof program['version'] === 'string'
+      && typeof program['purpose'] === 'string'
+      && typeof program['reason'] === 'string'
+      && typeof program['source'] === 'string'
+      && program['source_verification'] === 'NOT_CHECKED'
+      && Array.isArray(program['dependencies'])
+      && program['dependencies_verification'] === 'NOT_CHECKED'
+      && (typeof program['disk_space_estimate'] === 'string' || program['disk_space_estimate'] === null)
+      && program['dependencies'].every((dependency) => typeof dependency === 'string')
+      && typeof program['impact'] === 'string'
+      && typeof program['status'] === 'string'
+      && validStatuses.includes(program['status'])
+    ))) return false;
+  }
+
+  const toolResult = value['tool_result'];
+  if (toolResult !== null && (
+    !isRecord(toolResult)
+    || toolResult['status'] !== 'dry_run'
+    || typeof toolResult['summary'] !== 'string'
+  )) return false;
+
+  return true;
+}
+
 const MESSAGES: Record<UiLanguage, Record<ErrorCode, string>> = {
   th: {
     'MSG-03': 'เชื่อมต่อ Backend ไม่ได้ โปรดตรวจสอบว่า Backend ทำงานอยู่ (scripts\\dev.ps1).',
@@ -228,7 +306,9 @@ export class App implements AfterViewChecked {
               )
               .subscribe({
                 next: (review: PlanReviewResponse) => this.entries.update((entries) =>
-                  entries.map((entry) => entry.id === entryId ? { ...entry, review } : entry),
+                  entries.map((entry) => entry.id === entryId
+                    ? (isPlanReviewResponse(review) ? { ...entry, review } : { ...entry, planError: true })
+                    : entry),
                 ),
                 error: () => this.entries.update((entries) =>
                   entries.map((entry) => entry.id === entryId ? { ...entry, planError: true } : entry),
@@ -276,7 +356,9 @@ export class App implements AfterViewChecked {
       .subscribe({
         next: (refined: PlanReviewResponse) => this.entries.update((entries) => entries.map((item) =>
           item.id === entry.id
-            ? { ...item, review: refined, clarificationDraft: '', refineError: false }
+            ? (isPlanReviewResponse(refined)
+              ? { ...item, review: refined, clarificationDraft: '', refineError: false }
+              : { ...item, refineError: true })
             : item,
         )),
         error: () => this.entries.update((entries) => entries.map((item) =>
@@ -333,7 +415,7 @@ export class App implements AfterViewChecked {
         UNSUPPORTED: 'Unsupported',
       },
     };
-    return labels[this.language()][status] ?? status;
+    return labels[this.language()][status] ?? (this.language() === 'th' ? 'สถานะไม่รู้จัก' : 'Unknown status');
   }
 
   protected prerequisiteLabel(status: string): string {
@@ -349,7 +431,7 @@ export class App implements AfterViewChecked {
         discovery_not_available: 'Discovery unavailable in this phase',
       },
     };
-    return labels[this.language()][status] ?? status;
+    return labels[this.language()][status] ?? (this.language() === 'th' ? 'สถานะเงื่อนไขไม่รู้จัก' : 'Unknown prerequisite status');
   }
 
   protected labelFor(kind: EntryKind): string {
