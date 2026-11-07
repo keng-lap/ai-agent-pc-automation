@@ -48,6 +48,6 @@ Primary documents: README.md, docs/PROJECT.md, docs/ROADMAP.md, docs/PHASE-0.md 
 If sources conflict, stop and reconcile documentation before implementation. Proposals are not requirements until explicitly approved.
 
 ## 10. Current Status
-**Phase 4 closeout approved 2026-11-02. Phase 5 planning authorized 2026-11-02; runtime implementation is not yet authorized.**
+**Phase 4 closeout approved 2026-11-02. P5-515 closeout was approved 2026-11-08. P5-516 A4 independent security review is complete with residual findings documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. P5-517 approval-gated P1 Dry Run is merged. Phase 6 and real PC execution remain unauthorized.**
 
 See docs/PHASE-4.md for Phase 4 closeout scope and docs/PHASE-5.md for the active safety-planning baseline. Phase 5 does not authorize real machine-changing execution; Phase 6 and each individual capability require separate authorization.
