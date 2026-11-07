@@ -312,6 +312,52 @@ def test_approval_rejects_client_supplied_authority_or_action_fields(monkeypatch
     assert calls == []
 
 
+def test_explicit_software_target_can_be_approved_without_optional_questions(monkeypatch):
+    from agent_backend import plan_api
+    from agent_backend.tools import ToolResult
+
+    monkeypatch.setattr(
+        plan_api,
+        "generate_structured_plan",
+        lambda _prompt, _schema: (
+            '{"goal":"Install Google Chrome","steps":'
+            '[{"title":"Review requested software","detail":"Google Chrome"}],'
+            '"questions":["Which optional Chrome channel do you prefer?"]}'
+        ),
+    )
+    calls = []
+
+    def dry_run(request):
+        calls.append(request)
+        return ToolResult(
+            tool_id=request.tool_id,
+            target=request.target,
+            status="dry_run",
+            summary="Mock dry run",
+        )
+
+    monkeypatch.setattr(plan_api, "execute_tool", dry_run)
+    created = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["questions"] == []
+    assert body["dry_run_plan"]["programs"][0]["program"] == "Google Chrome"
+    assert body["dry_run_plan"]["programs"][0]["status"] == "PLANNED"
+    assert body["tool_result"] is None
+    assert body["approved"] is False
+    assert calls == []
+
+    plan_id = body["dry_run_plan"]["plan_id"]
+    approved = client.post(f"/api/plans/{plan_id}/approve", json={})
+    assert approved.status_code == 200
+    assert approved.json()["approved"] is True
+    assert approved.json()["tool_result"]["target"] == "Google Chrome"
+    assert len(calls) == 1
+
+
 def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
     from agent_backend import plan_api
 
@@ -321,7 +367,7 @@ def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
     monkeypatch.setattr(plan_api, "execute_tool", forbidden)
     created = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "Prepare Java development", "language": "en"},
     ).json()
     plan_id = created["dry_run_plan"]["plan_id"]
     response = client.post(f"/api/plans/{plan_id}/approve", json={})
