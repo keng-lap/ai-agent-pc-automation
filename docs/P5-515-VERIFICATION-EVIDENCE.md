@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** PRs #66, #73, #74, #75, and #77 are merged. GitHub Actions CI passed for the final PR heads of #73, #74, #75, and #77. The matrix is reconciled to 24 Covered / 11 Partial. This report records only facts available from merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
+**In progress.** PRs #66, #73, #74, #75, and #77 are merged. GitHub Actions CI passed for the final PR heads of #73, #74, #75, and #77. The matrix is reconciled to 25 Covered / 10 Partial. This report records only facts available from merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
 
 ## Source and CI identity
 
@@ -67,7 +67,7 @@ No exact pytest pass count is asserted here because the authoritative evidence u
 
 PR #77 uses a fake clock to verify the plan is valid immediately before expiry and rejected at the exact expiry boundary. It also injects a synthetic malformed handler result through the in-process API client and verifies a generic HTTP 500 response with one handler invocation (no retry). No real host or machine-changing action is involved.
 
-The updated source-level matrix records **24 Covered / 11 Partial / 0 Not covered or not evidenced**. Q20 and Q23 are now Covered; the remaining Partial rows are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. This remains a traceability classification, not a P5-515 completion claim.
+The updated source-level matrix records **24 Covered / 11 Partial / 0 Not covered or not evidenced**. Q20, Q23, and Q26 are now Covered; the remaining Partial rows are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. This remains a traceability classification, not a P5-515 completion claim.
 
 ## Updated matrix classification
 
@@ -80,7 +80,7 @@ Q13 is Covered after the handler-identity replacement regression test. Q34 is Co
 
 ## A4 QA/security review
 
-The focused A4 QA/security review of merged increments #66, #73, #74, #75, and #77 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13, Q20, Q23, and Q34 coverage updates; Q35 remains Partial because the capability audit is static and bounded. This review is not the separately gated P5-516 review and does not close P5-515.
+The focused A4 QA/security review of merged increments #66, #73, #74, #75, and #77 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13, Q20, Q23, Q26, and Q34 coverage updates; Q35 remains Partial because the capability audit is static and bounded. This review is not the separately gated P5-516 review and does not close P5-515.
 
 ## Reproducibility reference
 
@@ -107,3 +107,8 @@ These are documentation references only; the Product Owner does not need to run 
 ## Matrix-to-test traceability
 
 A source-level Q01–Q35 mapping is maintained in [P5-515 Matrix-to-Test Traceability](P5-515-MATRIX-TRACEABILITY.md). It records exact backend/frontend test names and distinguishes Covered, Partial, and Not covered / Not evidenced. The mapping is not a new CI run and does not close P5-515; unresolved gaps and A4 review remain open.
+
+
+## Q26 retention decision reconciliation
+
+The approved P5-508 decision is audit option A: bounded ephemeral in-memory events cleared on restart. The implementation caps the sink at 500 events and evicts oldest-first. Existing tests cover the 500-event default, FIFO eviction, and an empty new sink. A time-based event TTL and durable audit storage are not part of the approved decision. Q26 is classified Covered on that basis; no retention behavior was added.

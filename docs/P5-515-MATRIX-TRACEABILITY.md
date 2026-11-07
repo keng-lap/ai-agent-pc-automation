@@ -42,7 +42,7 @@ All mapped tests use synthetic inputs, in-process clients, mocks, or fake data. 
 | Q23 API response — handler error/malformed result bounded and safe | **Covered** | `test_p5_515_security_regression.py::test_tool_handler_exception_returns_generic_error_without_retry`; `test_p5_515_security_regression.py::test_malformed_tool_handler_result_returns_generic_api_error_without_retry`; `test_tools.py::test_dispatch_result_is_validated_and_remains_dry_run`; `test_chat.py::test_upstream_error_is_not_exposed`; `test_chat.py::test_unclassified_sdk_runtime_error_exposes_no_message`; `app.spec.ts` tests “shows only the safe error type for an unclassified Gemini failure” and “shows the safe SDK error type when Gemini reports an SDK runtime error” | Synthetic handler exception and malformed return value are both exercised through the in-process API boundary; the response is generic HTTP 500 and the handler is called once (no retry). |
 | Q24 Audit — prompt/token/raw parameters rejected or redacted | **Covered** | `test_audit.py::test_event_schema_is_strict_and_immutable`; `test_audit.py::test_optional_diagnostics_failure_is_non_blocking`; `test_security.py::test_no_message_content_is_logged`; `test_plans.py::test_unknown_fields_and_non_contract_statuses_are_rejected` | Audit rejects prompt/token/raw fields; chat log test checks message content is not logged. |
 | Q25 Audit — event sink unavailable follows approved failure policy | **Partial** | `test_audit.py::test_optional_diagnostics_failure_is_non_blocking` | Invalid optional diagnostic event does not block safe path; no injected unavailable sink at API/dispatch boundary. |
-| Q26 Audit — retention cap/expiry/restart | **Partial** | `test_audit.py::test_sink_evicts_oldest_event_at_capacity`; `test_audit.py::test_sink_default_capacity_is_bounded_to_500`; `test_audit.py::test_new_sink_starts_empty_and_clear_removes_events` | Capacity and process-local reset are tested; time-based retention/expiry is not implemented or evidenced. |
+| Q26 Audit — retention cap/restart | **Covered** | `test_audit.py::test_sink_evicts_oldest_event_at_capacity`; `test_audit.py::test_sink_default_capacity_is_bounded_to_500`; `test_audit.py::test_new_sink_starts_empty_and_clear_removes_events` | Directly covers the approved option A semantics: maximum 500 in-memory events, oldest-first eviction, and empty state for a new process-local sink. Time-based event expiry and durable storage are not approved requirements. |
 | Q27 Privacy — external telemetry/provider call absent | **Covered** | `test_p5_515_capability_audit.py::test_audit_sink_has_no_external_telemetry_or_transport_dependency` | AST inspection rejects external transport/telemetry imports and outbound-call names in the audit sink module; an in-process sink record/snapshot confirms the exercised path remains local. This is a source-level guard, not a runtime network sandbox. |
 | Q28 Frontend — unknown status/missing field renders safe neutral error | **Partial** | `app.spec.ts` test “F-08/F-16: maps every specified backend, proxy, malformed-body and timeout error class”; `app.spec.ts` test “F-16: an HTTP 200 parse error is an unexpected response” | Known error classes and malformed response are covered; unknown plan status/missing-field rendering is not directly tested. |
 | Q29 Frontend — language change changes labels only | **Covered** | `app.spec.ts` test “F-17/F-18: language switch updates the UI and document language”; `app.spec.ts` test “F-22: changing language relabels errors but does not alter existing messages or replies” | Language changes preserve existing message/reply content. |
@@ -55,8 +55,8 @@ All mapped tests use synthetic inputs, in-process clients, mocks, or fake data. 
 
 ## Coverage summary
 
-- **Covered:** 24 matrix items
-- **Partial:** 11 matrix items
+- **Covered:** 25 matrix items
+- **Partial:** 10 matrix items
 - **Not covered / not evidenced:** 0 matrix items
 
 These are traceability classifications, not a percentage score or a declaration of P5-515 completion. Several partial/not-covered items may depend on Product Owner decisions or require a separately scoped test increment. Do not silently reinterpret them as passed.
@@ -64,7 +64,7 @@ These are traceability classifications, not a percentage score or a declaration 
 ## Recommended remaining P5-515 work
 
 1. Q13 and Q34 are now Covered by merged regression tests. Q27 has a direct source-level audit-sink check. Q35 has a bounded static capability audit, but remains Partial because static checks are not a runtime sandbox and cannot prove the absence of indirect or dynamically loaded capabilities.
-2. Strengthen remaining partial coverage for Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31 where the approved behavior is already unambiguous.
+2. Strengthen remaining partial coverage for Q02, Q09–Q12, Q16, Q25, Q28, and Q30–Q31 where the approved behavior is already unambiguous.
 3. Keep audit retention semantics and any unresolved policy behavior aligned with Product Owner decisions; tests must not invent a policy.
 4. Have A4 independently review the test-to-matrix mapping and evidence before P5-515 closeout. P5-516 remains a separate, gated task.
 
