@@ -178,3 +178,34 @@ def test_missing_registered_handler_fails_closed_without_dispatch(monkeypatch):
         raise AssertionError("missing handler unexpectedly succeeded")
 
     assert calls == []
+
+
+
+def test_planner_exception_returns_only_a_generic_server_error(monkeypatch):
+    calls = []
+
+    def fail_planner(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise RuntimeError("synthetic planner failure with sensitive detail")
+
+    monkeypatch.setattr("agent_backend.plan_api.create_task_plan", fail_planner)
+    response = client.post("/api/plans", json=PLAN_PAYLOAD)
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error."}
+    assert len(calls) == 1
+
+
+def test_tool_handler_exception_returns_generic_error_without_retry(monkeypatch):
+    calls = []
+
+    def fail_handler(request):
+        calls.append(request)
+        raise RuntimeError("synthetic handler failure with sensitive detail")
+
+    monkeypatch.setattr(tools, "_HANDLERS", {"software.install": fail_handler})
+    response = client.post("/api/plans", json=PLAN_PAYLOAD)
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error."}
+    assert len(calls) == 1
