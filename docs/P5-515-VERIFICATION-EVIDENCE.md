@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** PRs #66, #73, #74, and #75 are merged. GitHub Actions CI passed for the final PR heads of #73, #74, and #75. The matrix is reconciled to 22 Covered / 13 Partial. This report records only facts available from merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
+**In progress.** PRs #66, #73, #74, #75, and #77 are merged. GitHub Actions CI passed for the final PR heads of #73, #74, #75, and #77. The matrix is reconciled to 24 Covered / 11 Partial. This report records only facts available from merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
 
 ## Source and CI identity
 
@@ -62,18 +62,25 @@ The final successful PR #75 CI run reports:
 
 No exact pytest pass count is asserted here because the authoritative evidence used for this update was the workflow/job conclusion metadata, not a separately preserved complete test summary.
 
+
+| [#77](https://github.com/keng-lap/ai-agent-pc-automation/pull/77) | Q20 exact TTL boundary and Q23 malformed handler-result API-boundary regression tests | `2ad52b2045f0b7927935d44dae8161ce9369939b` | [CI #42359381703](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42359381703) — successful (backend, Ruff, frontend tests, frontend build) |
+
+PR #77 uses a fake clock to verify the plan is valid immediately before expiry and rejected at the exact expiry boundary. It also injects a synthetic malformed handler result through the in-process API client and verifies a generic HTTP 500 response with one handler invocation (no retry). No real host or machine-changing action is involved.
+
+The updated source-level matrix records **24 Covered / 11 Partial / 0 Not covered or not evidenced**. Q20 and Q23 are now Covered; the remaining Partial rows are Q02, Q09–Q12, Q16, Q25–Q26, Q28, and Q30–Q31. This remains a traceability classification, not a P5-515 completion claim.
+
 ## Updated matrix classification
 
 The merged source-level matrix now records:
-- **Covered:** 22 items
-- **Partial:** 13 items
+- **Covered:** 24 items
+- **Partial:** 11 items
 - **Not covered / not evidenced:** 0 items
 
-Q13 is Covered after the handler-identity replacement regression test. Q34 is Covered after direct synthetic planner, policy-configuration, and handler exception tests at the API boundary. Q23 remains Partial because malformed handler-result behavior is not yet directly exercised through the API boundary. See [P5-515 Matrix-to-Test Traceability](P5-515-MATRIX-TRACEABILITY.md) for exact test names and limitations.
+Q13 is Covered after the handler-identity replacement regression test. Q34 is Covered after direct synthetic planner, policy-configuration, and handler exception tests at the API boundary. Q23 is Covered after PR #77 added a malformed handler-result test through the API boundary. See [P5-515 Matrix-to-Test Traceability](P5-515-MATRIX-TRACEABILITY.md) for exact test names and limitations.
 
 ## A4 QA/security review
 
-The focused A4 QA/security review of merged increments #66, #73, #74, and #75 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13/Q34 coverage updates and explicitly retains the Q23/Q35 limitations. This review is not the separately gated P5-516 review and does not close P5-515.
+The focused A4 QA/security review of merged increments #66, #73, #74, #75, and #77 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13/Q34 coverage updates and explicitly retains the Q23/Q35 limitations. This review is not the separately gated P5-516 review and does not close P5-515.
 
 ## Reproducibility reference
 
