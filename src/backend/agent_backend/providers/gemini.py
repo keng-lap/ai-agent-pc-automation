@@ -70,7 +70,10 @@ def _safe_sdk_trace(exc: Exception) -> list[str]:
     return trace[-4:]
 
 
-def _generate_content(contents: str | list[types.Content]) -> types.GenerateContentResponse:
+def _generate_content(
+    contents: str | list[types.Content],
+    config: types.GenerateContentConfig | None = None,
+) -> types.GenerateContentResponse:
     try:
         client = _client()
     except RuntimeError as exc:
@@ -87,6 +90,7 @@ def _generate_content(contents: str | list[types.Content]) -> types.GenerateCont
         return client.models.generate_content(
             model=MODEL_NAME,
             contents=contents,
+            config=config,
         )
     except errors.APIError as exc:
         if exc.code in (401, 403):
@@ -138,3 +142,16 @@ def test_connection() -> None:
 
 def generate_reply(contents: str | list[types.Content]) -> str:
     return _response_text(_generate_content(contents))
+
+
+
+def generate_structured_plan(
+    contents: str,
+    response_schema: type,
+) -> str:
+    """Request schema-constrained JSON; callers must validate it before use."""
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=response_schema,
+    )
+    return _response_text(_generate_content(contents, config=config))

@@ -12,7 +12,7 @@ client = TestClient(
 )
 
 
-def test_java_development_request_returns_explicit_dry_run_plan_without_machine_checks():
+def test_java_development_request_returns_plan_without_running_dry_run():
     response = client.post(
         "/api/plans",
         json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
@@ -27,8 +27,8 @@ def test_java_development_request_returns_explicit_dry_run_plan_without_machine_
     assert body["dry_run_plan"]["live_checks_performed"] is False
     assert body["dry_run_plan"]["programs"][0]["program"] == "JDK"
     assert body["dry_run_plan"]["programs"][0]["status"] == "NEEDS_CLARIFICATION"
-    assert body["tool_result"]["status"] == "dry_run"
-    assert "ไม่มีการเปลี่ยนแปลง" in body["tool_result"]["summary"]
+    assert body["tool_result"] is None
+    assert body["approved"] is False
     assert body["questions"] == [
         "ต้องการ JDK เวอร์ชันใด (เช่น 21 LTS)?",
         "ต้องการใช้ IDE ใด หรือให้แนะนำตัวเลือกก่อน?",
@@ -111,7 +111,8 @@ def test_java_plan_refinement_creates_a_new_immutable_plan_from_explicit_answers
     assert body["dry_run_plan"]["programs"][0]["status"] == "PLANNED"
     assert body["questions"] == []
     assert body["dry_run_plan"]["live_checks_performed"] is False
-    assert "ไม่มีการเปลี่ยนแปลง" in body["tool_result"]["summary"]
+    assert body["tool_result"] is None
+    assert body["approved"] is False
 
     old_plan = client.get(f"/api/plans/{old_plan_id}")
     assert old_plan.status_code == 200
@@ -214,3 +215,111 @@ def test_plan_refinement_request_rejects_an_arbitrary_unknown_field():
     )
 
     assert response.status_code == 422
+
+
+def test_plan_creation_never_calls_dry_run_tool(monkeypatch):
+    from agent_backend import plan_api
+
+    def forbidden(_request):
+        raise AssertionError("dry run must wait for explicit approval")
+
+    monkeypatch.setattr(plan_api, "execute_tool", forbidden)
+    response = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert response.status_code == 200
+    assert response.json()["tool_result"] is None
+    assert response.json()["approved"] is False
+
+
+def test_approval_runs_one_dry_run_and_replays_cached_result(monkeypatch):
+    from agent_backend import plan_api
+    from agent_backend.tools import ToolResult
+
+    calls = []
+
+    def dry_run(request):
+        calls.append(request)
+        return ToolResult(
+            tool_id=request.tool_id,
+            target=request.target,
+            status="dry_run",
+            summary="Mock dry run",
+        )
+
+    monkeypatch.setattr(plan_api, "execute_tool", dry_run)
+    initial = client.post(
+        "/api/plans",
+        json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
+    ).json()
+    refined = client.post(
+        f"/api/plans/{initial['dry_run_plan']['plan_id']}/refine",
+        json={
+            "request": "เตรียมเครื่องพัฒนา Java",
+            "clarification": "JDK 21 LTS และ IntelliJ IDEA",
+            "language": "th",
+        },
+    ).json()
+    plan_id = refined["dry_run_plan"]["plan_id"]
+
+    first = client.post(f"/api/plans/{plan_id}/approve", json={})
+    second = client.post(f"/api/plans/{plan_id}/approve", json={})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    assert first.json()["approved"] is True
+    assert first.json()["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
+    assert len(calls) == 1
+
+
+def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
+    from agent_backend import plan_api
+
+    def forbidden(_request):
+        raise AssertionError("ineligible plan must not reach dry-run tool")
+
+    monkeypatch.setattr(plan_api, "execute_tool", forbidden)
+    created = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    ).json()
+    plan_id = created["dry_run_plan"]["plan_id"]
+    response = client.post(f"/api/plans/{plan_id}/approve", json={})
+    assert response.status_code == 409
+
+
+
+def test_malformed_gemini_structured_plan_fails_closed(monkeypatch):
+    from agent_backend import plan_api
+
+    monkeypatch.setattr(
+        plan_api,
+        "generate_structured_plan",
+        lambda _prompt, _schema: '{"goal":"Install Chrome","steps":[],"approved":true}',
+    )
+    response = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Internal server error."}
+    assert "approved" not in response.text
+
+
+def test_gemini_plan_provider_failure_fails_closed(monkeypatch):
+    from agent_backend import plan_api
+    from agent_backend.providers.gemini import GeminiProviderError
+
+    def fail(_prompt, _schema):
+        raise GeminiProviderError("provider_unavailable")
+
+    monkeypatch.setattr(plan_api, "generate_structured_plan", fail)
+    response = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Internal server error."}
+    assert "provider_unavailable" not in response.text

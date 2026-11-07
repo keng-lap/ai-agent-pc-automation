@@ -33,6 +33,7 @@ interface ChatEntry {
   planError?: boolean;
   clarificationDraft?: string;
   refineError?: boolean;
+  approvalError?: boolean;
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
@@ -74,6 +75,7 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
     || !Array.isArray(value['questions'])
     || !value['questions'].every((question) => typeof question === 'string')
     || value['notice'] !== 'DRY_RUN_ONLY_NO_CHANGES_MADE'
+    || typeof value['approved'] !== 'boolean'
   ) return false;
 
   const dryRunPlan = value['dry_run_plan'];
@@ -328,6 +330,48 @@ export class App implements AfterViewChecked {
       });
   }
 
+
+  protected canApproveReview(review: PlanReviewResponse): boolean {
+    return Boolean(
+      review.dry_run_plan
+      && !review.approved
+      && review.questions.length === 0
+      && review.dry_run_plan.programs.length > 0
+      && review.dry_run_plan.programs.every((program) => program.status === 'PLANNED')
+    );
+  }
+
+  protected approvePlan(entry: ChatEntry): void {
+    const review = entry.review;
+    const planId = review?.dry_run_plan?.plan_id;
+    if (!review || !planId || !this.canApproveReview(review) || this.planning()) return;
+
+    this.planning.set(true);
+    this.entries.update((entries) => entries.map((item) =>
+      item.id === entry.id ? { ...item, approvalError: false } : item,
+    ));
+    defer(() => this.chatApi.approvePlan(planId))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result) => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id
+            ? (result?.approved === true
+              && result.plan_id === planId
+              && result.notice === 'DRY_RUN_ONLY_NO_CHANGES_MADE'
+              && result.tool_result?.status === 'dry_run'
+              ? { ...item, review: { ...review, approved: true, tool_result: result.tool_result }, approvalError: false }
+              : { ...item, approvalError: true })
+            : item,
+        )),
+        error: () => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id ? { ...item, approvalError: true } : item,
+        )),
+      });
+  }
 
   protected onClarificationInput(entryId: number, event: Event): void {
     const value = (event.target as HTMLTextAreaElement).value;

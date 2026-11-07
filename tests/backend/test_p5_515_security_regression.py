@@ -22,6 +22,26 @@ PLAN_PAYLOAD = {"request": "Install Google Chrome", "language": "en"}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
 
+def create_eligible_plan_id():
+    initial = client.post(
+        "/api/plans",
+        json={"request": "Prepare Java development", "language": "en"},
+    )
+    assert initial.status_code == 200
+    initial_id = initial.json()["dry_run_plan"]["plan_id"]
+    refined = client.post(
+        f"/api/plans/{initial_id}/refine",
+        json={
+            "request": "Prepare Java development",
+            "clarification": "JDK 21 LTS and IntelliJ IDEA",
+            "language": "en",
+        },
+    )
+    assert refined.status_code == 200
+    return refined.json()["dry_run_plan"]["plan_id"]
+
+
+
 def test_plans_endpoint_rejects_missing_and_invalid_local_token():
     for token in (None, "b" * 64):
         headers = {"origin": GOOD_ORIGIN}
@@ -84,20 +104,21 @@ def test_plans_endpoint_rejects_client_supplied_authority_and_execution_fields()
     assert response.status_code == 422
 
 
-def test_p1_plan_has_no_acknowledge_cancel_or_execute_route():
+def test_p1_plan_requires_approval_and_has_no_execute_route():
     created = client.post("/api/plans", json=PLAN_PAYLOAD)
     assert created.status_code == 200
     plan_id = created.json()["dry_run_plan"]["plan_id"]
 
     for method, path in (
         ("post", f"/api/plans/{plan_id}/acknowledgement"),
-        ("post", f"/api/plans/{plan_id}/approve"),
         ("post", f"/api/plans/{plan_id}/cancel"),
         ("post", f"/api/plans/{plan_id}/execute"),
         ("post", "/api/execute"),
     ):
         response = getattr(client, method)(path, json={})
         assert response.status_code == 404
+
+    assert client.post(f"/api/plans/{plan_id}/approve", json={}).status_code == 409
 
 
 def test_plan_reference_is_opaque_and_unknown_reference_fails_closed():
@@ -210,7 +231,8 @@ def test_tool_handler_exception_returns_generic_error_without_retry(monkeypatch)
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
     )
-    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
+    plan_id = create_eligible_plan_id()
+    response = safe_client.post(f"/api/plans/{plan_id}/approve", json={})
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
@@ -252,7 +274,8 @@ def test_malformed_tool_handler_result_returns_generic_api_error_without_retry(m
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
     )
-    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
+    plan_id = create_eligible_plan_id()
+    response = safe_client.post(f"/api/plans/{plan_id}/approve", json={})
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}

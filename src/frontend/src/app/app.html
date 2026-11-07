@@ -76,14 +76,8 @@
                     }
                   </ul>
                   <div class="tool-preview">
-                    <strong>{{ language() === 'th' ? 'สถานะงาน' : 'Task status' }}: {{ taskStatusLabel(response.task_status) }}</strong>
-                    @if (response.tool_result; as result) {
-                      <span>{{ language() === 'th' ? 'เครื่องมือ' : 'Tool' }}: {{ result.tool_id }} · {{ result.target }}</span>
-                      <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงเครื่อง' : 'Dry run only — no computer changes were made' }}</span>
-                      <span>{{ result.summary }}</span>
-                    } @else {
-                      <span>{{ language() === 'th' ? 'ไม่มีเครื่องมือที่อนุญาตสำหรับงานนี้' : 'No allowlisted tool applies to this task' }}</span>
-                    }
+                    <strong>{{ language() === 'th' ? 'สถานะงาน: รอการตรวจสอบแผนและอนุมัติ' : 'Task status: awaiting plan review and approval' }}</strong>
+                    <span>{{ language() === 'th' ? 'ข้อความจากแชตไม่สามารถอนุมัติหรือเริ่ม Dry Run ได้ ต้องอนุมัติผ่านแผนตรวจสอบเท่านั้น' : 'A chat response cannot approve or start a dry run. Approval must use the plan-review control.' }}</span>
                     @if (!response.provider_connected) {
                       <small>{{ language() === 'th' ? 'ยังไม่เชื่อมต่อ AI Provider — ใช้การวางแผนในเครื่อง' : 'AI provider is not connected — using local planning' }}</small>
                     }
@@ -164,14 +158,30 @@
                     </div>
                   }
 
-                  <div class="tool-preview">
-                    <strong>{{ language() === 'th' ? 'ผลการจำลอง' : 'Dry-run result' }}</strong>
-                    <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง' : 'Dry-run only — no changes made.' }}</span>
-                    @if (review.tool_result; as result) {
+                  @if (review.approved && review.tool_result; as result) {
+                    <div class="tool-preview" role="status">
+                      <strong>{{ language() === 'th' ? 'ผลการจำลอง' : 'Dry-run result' }}</strong>
+                      <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง' : 'Dry-run only — no changes made.' }}</span>
                       <span>{{ result.summary }}</span>
-                    }
-                    <small>{{ language() === 'th' ? 'ไม่มีการตรวจสอบเครื่อง แหล่งดาวน์โหลด เวอร์ชัน หรือ Dependencies แบบสด' : 'No live machine, download source, version, or dependency checks were performed.' }}</small>
-                  </div>
+                      <small>{{ language() === 'th' ? 'ไม่มีการตรวจสอบเครื่อง แหล่งดาวน์โหลด เวอร์ชัน หรือ Dependencies แบบสด' : 'No live machine, download source, version, or dependency checks were performed.' }}</small>
+                    </div>
+                  } @else if (canApproveReview(review)) {
+                    <div class="tool-preview">
+                      <strong>{{ language() === 'th' ? 'รอการอนุมัติจากคุณ' : 'Awaiting your approval' }}</strong>
+                      <span>{{ language() === 'th' ? 'การอนุมัตินี้จะเรียก Dry Run เพื่อรายงานผลเท่านั้น ไม่ติดตั้งหรือเปลี่ยนแปลงเครื่อง' : 'Approval runs a report-only dry run. It will not install or change anything on this PC.' }}</span>
+                      <button class="send-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
+                        {{ planning() ? (language() === 'th' ? 'กำลังประมวลผล…' : 'Processing…') : (language() === 'th' ? 'อนุมัติให้จำลอง (Dry Run)' : 'Approve dry run') }}
+                      </button>
+                      @if (entry.approvalError) {
+                        <small role="alert">{{ language() === 'th' ? 'อนุมัติหรือจำลองไม่สำเร็จ แผนอาจหมดอายุ โปรดลองสร้างคำขอใหม่' : 'Approval failed or the plan expired. Please create a new request.' }}</small>
+                      }
+                    </div>
+                  } @else {
+                    <div class="tool-preview">
+                      <strong>{{ language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready for approval' }}</strong>
+                      <span>{{ language() === 'th' ? 'ต้องตอบคำถามและปรับแผนให้ครบก่อน จึงจะอนุมัติ Dry Run ได้' : 'Resolve all clarification items before approving a dry run.' }}</span>
+                    </div>
+                  }
                 </section>
               }
               @if (entry.planError) {

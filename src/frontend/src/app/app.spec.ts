@@ -12,6 +12,7 @@ class FakeChatApi {
   restoredConversationIds: string[] = [];
   clearedConversationIds: string[] = [];
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
+  approvalCalls: string[] = [];
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -19,9 +20,16 @@ class FakeChatApi {
     dry_run_plan: null,
     tool_result: null,
     questions: [],
+    approved: false,
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     refined_from_plan_id: 'a'.repeat(32),
     clarification,
+  });
+  approveResponder: (planId: string) => Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> = (planId) => of({
+    plan_id: planId,
+    approved: true,
+    tool_result: { status: 'dry_run', summary: 'Dry run only; no changes made.' },
+    notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
   history: { messages: Array<{ role: 'user' | 'assistant'; text: string }> } = { messages: [] };
   historyError: unknown;
@@ -36,6 +44,7 @@ class FakeChatApi {
     dry_run_plan: null,
     tool_result: null,
     questions: [],
+    approved: false,
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
 
@@ -46,6 +55,11 @@ class FakeChatApi {
 
   createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
     return this.planResponder(message, language);
+  }
+
+  approvePlan(planId: string): Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> {
+    this.approvalCalls.push(planId);
+    return this.approveResponder(planId);
   }
 
   refinePlan(planId: string, request: string, clarification: string, language: UiLanguage): Observable<PlanReviewResponse> {
@@ -162,6 +176,60 @@ describe('App chat UI (T-202)', () => {
     httpTestingController?.verify();
     httpTestingController = null;
     vi.restoreAllMocks();
+  });
+
+
+
+  it('shows dry-run approval only for a fully specified plan and renders the result after approval', async () => {
+    await render();
+    api.planResponder = (request) => of({
+      request,
+      interpretation: { category: 'development_task', goal: request, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'a'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T15:00:00Z',
+        programs: [{
+          order: 1,
+          program: 'JDK',
+          version: '21 LTS',
+          purpose: 'Java development kit',
+          reason: 'Explicit user choice',
+          source: 'Not checked',
+          source_verification: 'NOT_CHECKED',
+          dependencies: [],
+          dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null,
+          impact: 'Not checked',
+          status: 'PLANNED',
+        }],
+      },
+      tool_result: null,
+      approved: false,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    send('Prepare Java development');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('อนุมัติให้จำลอง (Dry Run)');
+    expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
+
+    const approveButtons = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    );
+    const approve = approveButtons.find((button) => button.textContent?.includes('อนุมัติให้จำลอง'));
+    if (!approve) throw new Error('Approval button was not rendered');
+    approve.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.approvalCalls).toEqual(['a'.repeat(32)]);
+    expect(fixture.nativeElement.textContent).toContain('ผลการจำลอง');
+    expect(fixture.nativeElement.textContent).toContain('Dry run only; no changes made.');
   });
 
   it('F-01: starts in Thai with the empty hint and disabled Send', async () => {
@@ -432,6 +500,7 @@ describe('App chat UI (T-202)', () => {
       dry_run_plan: null,
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     fixture.detectChanges();
@@ -474,6 +543,7 @@ describe('App chat UI (T-202)', () => {
       dry_run_plan: null,
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     fixture.detectChanges();
@@ -490,6 +560,7 @@ describe('App chat UI (T-202)', () => {
       dry_run_plan: null,
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
   });
@@ -601,7 +672,7 @@ describe('App chat UI (T-202)', () => {
 
 
 describe('Structured Agent response (T-404)', () => {
-  it('renders the plan, prerequisites, dry-run result and approval notice', async () => {
+  it('renders the plan but never treats a chat response as dry-run approval', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -649,7 +720,8 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('Install Chrome');
     expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
     expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
-    expect(view.textContent).toContain('จำลองเท่านั้น');
+    expect(view.textContent).toContain('รอการตรวจสอบแผนและอนุมัติ');
+    expect(view.textContent).not.toContain('Dry run only; no changes were made.');
     expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     fixture.destroy();
@@ -682,6 +754,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น' },
       questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     api.refineResponder = (_planId, request, clarification) => of({
@@ -703,6 +776,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลง' },
       questions: ['ต้องการ IDE ใด?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
       refined_from_plan_id: originalPlanId,
       clarification,
@@ -783,6 +857,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'would install JDK; no changes were made' },
       questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     await TestBed.configureTestingModule({
@@ -804,7 +879,8 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
     expect(view.textContent).toContain('JDK');
     expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
-    expect(view.textContent).toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
+    expect(view.textContent).toContain('ยังไม่พร้อมอนุมัติ');
+    expect(view.textContent).not.toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
@@ -833,6 +909,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     } as unknown as PlanReviewResponse);
     await TestBed.configureTestingModule({
@@ -879,6 +956,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     } as unknown as PlanReviewResponse);
     await TestBed.configureTestingModule({
@@ -990,6 +1068,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'Dry run only.' },
       questions: ['Which JDK version?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     input.value = 'Prepare Java';
