@@ -16,7 +16,7 @@ Authorized by the Product Owner on 2026-11-03. This is a bounded provider integr
 
 - Provider: Google Gemini Developer API.
 - Python SDK: `google-genai`.
-- SDK call: `client.models.generate_content(model="gemini-3.1-flash-lite", contents=messages)`.
+- SDK call: `client.models.generate_content(model="gemini-3.1-flash-lite", contents=messages, config=GenerateContentConfig(system_instruction=CHAT_SYSTEM_INSTRUCTION))` for chat replies. Structured plan generation uses its separate JSON-schema configuration.
 - Model: `gemini-3.1-flash-lite`.
 - Official SDK documentation: https://googleapis.github.io/python-genai/
 - API key guidance: https://ai.google.dev/gemini-api/docs/api-key
