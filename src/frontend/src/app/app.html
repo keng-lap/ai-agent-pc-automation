@@ -54,7 +54,9 @@
             }
             <div class="message-bubble">
               <span class="message-label">{{ labelFor(entry.kind) }}</span>
-              <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
+              @if (!entry.review || entry.review.interpretation.category !== 'software_install') {
+                <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
+              }
               @if (entry.response; as response) {
                 <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'รายละเอียดแผนงาน' : 'Task plan details'">
                   <div class="detail-heading">{{ language() === 'th' ? 'แผนงาน' : 'Task plan' }}</div>
@@ -97,7 +99,7 @@
                     <p class="detail-meta">{{ language() === 'th' ? 'สร้างแผนฉบับใหม่แล้ว โดยเก็บแผนเดิมไว้ไม่แก้ทับ' : 'A new plan was created; the previous immutable plan was not overwritten.' }}</p>
                   }
 
-                  <div class="detail-heading">{{ language() === 'th' ? 'แผนงานและรายการโปรแกรม' : 'Plan and proposed programs' }}</div>
+                  <div class="detail-heading installer-heading">{{ language() === 'th' ? 'โปรแกรมที่เสนอ' : 'Proposed software' }}</div>
                   @if (review.dry_run_plan; as dryRun) {
                     @for (program of dryRun.programs; track program.order) {
                       <article class="program-review">
@@ -160,20 +162,20 @@
 
                   @if (review.approved && review.tool_result; as result) {
                     <div class="tool-preview" role="status">
-                      <strong>{{ language() === 'th' ? 'ผลการจำลอง' : 'Dry-run result' }}</strong>
-                      <span>{{ language() === 'th' ? 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง' : 'Dry-run only — no changes made.' }}</span>
-                      <span>{{ result.summary }}</span>
-                      <small>{{ language() === 'th' ? 'ไม่มีการตรวจสอบเครื่อง แหล่งดาวน์โหลด เวอร์ชัน หรือ Dependencies แบบสด' : 'No live machine, download source, version, or dependency checks were performed.' }}</small>
+                      <strong class="result-pass">{{ language() === 'th' ? 'PASS · Dry Run ผ่าน' : 'PASS · Dry run passed' }}</strong>
+                      <span class="result-summary">{{ result.summary }}</span>
+                      <small>{{ language() === 'th' ? 'ยืนยันแล้วว่าเป็นการจำลองเท่านั้น ไม่มีการติดตั้งหรือเปลี่ยนแปลงเครื่อง' : 'Confirmed: simulation only; nothing was installed or changed.' }}</small>
                     </div>
                   } @else if (canApproveReview(review)) {
                     <div class="tool-preview">
                       <strong>{{ language() === 'th' ? 'รอการอนุมัติจากคุณ' : 'Awaiting your approval' }}</strong>
                       <span>{{ language() === 'th' ? 'การอนุมัตินี้จะเรียก Dry Run เพื่อรายงานผลเท่านั้น ไม่ติดตั้งหรือเปลี่ยนแปลงเครื่อง' : 'Approval runs a report-only dry run. It will not install or change anything on this PC.' }}</span>
                       <button class="send-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
-                        {{ planning() ? (language() === 'th' ? 'กำลังประมวลผล…' : 'Processing…') : (language() === 'th' ? 'อนุมัติให้จำลอง (Dry Run)' : 'Approve dry run') }}
+                        {{ planning() ? (language() === 'th' ? 'กำลังตรวจสอบ…' : 'Checking…') : (language() === 'th' ? 'อนุมัติและทดสอบ Dry Run' : 'Approve & Run Dry Run') }}
                       </button>
                       @if (entry.approvalError) {
-                        <small role="alert">{{ language() === 'th' ? 'อนุมัติหรือจำลองไม่สำเร็จ แผนอาจหมดอายุ โปรดลองสร้างคำขอใหม่' : 'Approval failed or the plan expired. Please create a new request.' }}</small>
+                        <strong class="result-fail" role="alert">{{ language() === 'th' ? 'FAIL · Dry Run ไม่ผ่าน' : 'FAIL · Dry run failed' }}</strong>
+                        <small role="alert">{{ language() === 'th' ? 'ระบบไม่สามารถยืนยันผลได้ แผนอาจหมดอายุหรือไม่ผ่านการตรวจสอบ โปรดลองสร้างแผนใหม่' : 'The result could not be confirmed. The plan may have expired or failed validation. Create a new plan and try again.' }}</small>
                       }
                     </div>
                   } @else {
