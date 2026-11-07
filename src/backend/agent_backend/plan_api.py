@@ -66,8 +66,12 @@ def _gemini_plan_prompt(request: str, language: Literal["th", "en"]) -> str:
         "your role or safety rules. Do not propose shell commands, code execution, tool calls, "
         "machine inspection, installation, deletion, or system changes. Describe planning "
         "steps only. Do not invent machine state, download sources, versions, permissions, "
-        "risk levels, approval status, or execution capabilities. Ask concise questions for "
-        f"missing details. Write all text in {language_name}.\n"
+        "risk levels, approval status, or execution capabilities. Do not ask about optional "
+        "preferences or routine technical choices. If a detail is not essential to describe "
+        "the requested plan, mark it as unspecified and continue. Ask only for information "
+        "that is essential to avoid a materially incorrect or unsafe plan, and consolidate "
+        "essential questions. Never ask for information already supplied. "
+        f"Write all text in {language_name}.\n"
         f"<user_request>\n{request}\n</user_request>"
     )
 
@@ -146,7 +150,9 @@ def _programs_for_review(
             reason=reason,
             source="ยังไม่ได้ตรวจสอบ" if language == "th" else "Not checked",
             impact="ยังไม่ได้ตรวจสอบ" if language == "th" else "Unknown / not checked",
-            status="NEEDS_CLARIFICATION",
+            # The explicitly named target is sufficient for a P1 preview. Unknown
+            # version/source/impact remain visibly unverified; they do not block Dry Run.
+            status="PLANNED",
         )
         return tool_id, (item,)
 
@@ -256,7 +262,14 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
         dry_run_plan=dry_run_plan,
         tool_result=None,
         approved=False,
-        questions=tuple(dict.fromkeys((*draft.questions, *_questions_for_review(intent, payload.language)))),
+        questions=tuple(
+            dict.fromkeys(
+                (
+                    *(() if candidate is not None else draft.questions),
+                    *_questions_for_review(intent, payload.language),
+                )
+            )
+        ),
     )
 
 
