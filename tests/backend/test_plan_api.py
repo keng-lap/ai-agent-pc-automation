@@ -180,3 +180,38 @@ def test_java_refinement_rejects_client_supplied_policy_fields():
     )
 
     assert response.status_code == 422
+
+
+
+def test_plan_request_rejects_an_arbitrary_unknown_field():
+    response = client.post(
+        "/api/plans",
+        json={
+            "request": "Install Google Chrome",
+            "language": "en",
+            "client_trace": "untrusted-extra",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_plan_refinement_request_rejects_an_arbitrary_unknown_field():
+    initial = client.post(
+        "/api/plans",
+        json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
+    )
+    assert initial.status_code == 200
+    plan_id = initial.json()["dry_run_plan"]["plan_id"]
+
+    response = client.post(
+        f"/api/plans/{plan_id}/refine",
+        json={
+            "request": "เตรียมเครื่องพัฒนา Java",
+            "clarification": "JDK 21 LTS",
+            "language": "th",
+            "client_trace": "untrusted-extra",
+        },
+    )
+
+    assert response.status_code == 422
