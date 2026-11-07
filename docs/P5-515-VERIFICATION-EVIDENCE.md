@@ -63,3 +63,8 @@ npm run build
 ```
 
 These are documentation references only; the Product Owner does not need to run them on the Windows PC for this verification.
+
+
+## Matrix-to-test traceability
+
+A source-level Q01–Q35 mapping is maintained in [P5-515 Matrix-to-Test Traceability](P5-515-MATRIX-TRACEABILITY.md). It records exact backend/frontend test names and distinguishes Covered, Partial, and Not covered / Not evidenced. The mapping is not a new CI run and does not close P5-515; unresolved gaps and A4 review remain open.

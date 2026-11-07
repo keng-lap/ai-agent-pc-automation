@@ -152,3 +152,8 @@ The available GitHub run/job metadata confirms successful step conclusions but d
 Existing backend tests provide deterministic fake-clock coverage for expiry and clock rollback, process-local store restart invalidation, plan digest binding/tamper detection, and audit sink capacity/restart/clear behavior. PR #66 adds synthetic HTTP-boundary and spy-handler regression cases. The suite uses in-process test clients, synthetic values, and dry-run handlers; it does not execute OS commands, installers, package managers, filesystem mutations, registry operations, or real PC changes.
 
 P5-515 is **in progress**, not closed: merge-commit CI is green, but complete matrix-to-test traceability and A4 independent review/evidence closeout remain outstanding. P5-516 remains a separately gated independent review.
+
+
+## 10. P5-515 matrix-to-test traceability
+
+The current source-level mapping of Q01–Q35 to concrete backend/frontend test names, including partial and uncovered cases, is maintained in [P5-515-MATRIX-TRACEABILITY.md](P5-515-MATRIX-TRACEABILITY.md). This mapping does not itself constitute a test run or close the verification gate.
