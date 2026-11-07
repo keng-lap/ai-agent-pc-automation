@@ -99,3 +99,21 @@ def test_new_sink_starts_empty_and_clear_removes_events():
 
     first_process.clear()
     assert first_process.snapshot() == ()
+
+
+
+def test_unavailable_optional_audit_sink_does_not_block_safe_path(monkeypatch):
+    sink = AuditEventSink()
+    safe_path_calls = []
+
+    def unavailable(_event):
+        raise OSError("synthetic sink unavailable")
+
+    monkeypatch.setattr(sink, "record", unavailable)
+
+    recorded = sink.record_optional(event())
+    safe_path_calls.append("continued")
+
+    assert recorded is False
+    assert safe_path_calls == ["continued"]
+    assert sink.snapshot() == ()
