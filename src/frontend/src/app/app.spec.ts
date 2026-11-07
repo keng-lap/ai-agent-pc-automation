@@ -44,6 +44,7 @@ class FakeChatApi {
     dry_run_plan: null,
     tool_result: null,
     questions: [],
+    approved: false,
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
 
@@ -496,6 +497,7 @@ describe('App chat UI (T-202)', () => {
       dry_run_plan: null,
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     fixture.detectChanges();
@@ -538,6 +540,7 @@ describe('App chat UI (T-202)', () => {
       dry_run_plan: null,
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     fixture.detectChanges();
@@ -554,6 +557,7 @@ describe('App chat UI (T-202)', () => {
       dry_run_plan: null,
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
   });
@@ -746,6 +750,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น' },
       questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     api.refineResponder = (_planId, request, clarification) => of({
@@ -767,6 +772,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลง' },
       questions: ['ต้องการ IDE ใด?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
       refined_from_plan_id: originalPlanId,
       clarification,
@@ -847,6 +853,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'would install JDK; no changes were made' },
       questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     await TestBed.configureTestingModule({
@@ -897,6 +904,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     } as unknown as PlanReviewResponse);
     await TestBed.configureTestingModule({
@@ -943,6 +951,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: null,
       questions: [],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     } as unknown as PlanReviewResponse);
     await TestBed.configureTestingModule({
@@ -1054,6 +1063,7 @@ describe('Structured Agent response (T-404)', () => {
       },
       tool_result: { status: 'dry_run', summary: 'Dry run only.' },
       questions: ['Which JDK version?'],
+      approved: false,
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
     input.value = 'Prepare Java';
