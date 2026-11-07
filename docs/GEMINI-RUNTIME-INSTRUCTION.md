@@ -1,38 +1,24 @@
-# Gemini Runtime Working Rules — Follow-up Task
+# Gemini Runtime Working Rules — T-602 Implementation
 
-## Purpose
+## Product Owner authorization
 
-Make the Gemini Chat feature in the local application consistently concise and reduce repeated requests for information across conversations, without weakening the approved safety and privacy boundaries.
+Authorized by the Product Owner on 2026-11-07. Scope is limited to supplying a backend-owned system instruction on every Gemini Chat generation request and adding regression tests. This does not authorize PC automation, function/tool calling, real machine-changing actions, new data flows, or changes to chat retention.
 
-## Verified current behavior
+## Implementation
 
-The current implementation is documented in `docs/T-601-GEMINI-CHAT-MVP.md` and the current backend source:
+- `src/backend/agent_backend/providers/gemini.py` defines `CHAT_SYSTEM_INSTRUCTION` in backend-owned code.
+- `generate_reply()` constructs a `GenerateContentConfig` with that instruction and passes it to every chat generation request.
+- The instruction asks Gemini to use supplied conversation history, avoid repeated/optional clarification questions, make safe reversible assumptions, consolidate genuinely essential questions, answer concisely, and avoid inventing access or actions.
+- It explicitly preserves the adviser/planner role and the existing backend validation, user approval, and DRY RUN boundary.
+- Structured plan generation remains separate and does not inherit the chat instruction.
 
-- `src/backend/agent_backend/chat.py` builds the conversation contents from the current conversation's in-memory history.
-- It sends up to 10 preceding user/assistant pairs plus the current user message.
-- `src/backend/agent_backend/providers/gemini.py` calls `client.models.generate_content(model=MODEL_NAME, contents=contents, config=config)`.
-- The chat call currently does not supply a backend-owned `system_instruction` / equivalent persistent instruction.
-- Conversation history is temporary process memory, capped at 128 conversations and one hour of inactivity. It is not durable memory and must not be described as cross-session memory.
+## Important limitations
 
-## Required behavior for a future bounded runtime change
+- This is behavioral guidance, not a security control. Backend validation, allowlists, risk controls, and approval checks remain authoritative.
+- The instruction does not grant Gemini access to `GEMINI.md`, GitHub, local files, PC state, or previous conversations. Only the current request and conversation history already supplied by the application are available.
+- Conversation history remains in process memory, capped at 128 conversations and one hour of inactivity; it is not durable cross-session memory.
+- The instruction can reduce unnecessary questions but cannot guarantee that Gemini will never ask when a detail is genuinely essential.
 
-A future authorized implementation should:
+## Verification
 
-1. Define a concise, backend-owned system instruction for Gemini Chat and apply it on every chat request, not only once in a browser conversation.
-2. Tell Gemini to use the current conversation context and provided project context before asking questions.
-3. Prohibit repetitive clarification requests. For non-critical missing details, state a safe assumption and continue.
-4. Ask only when a missing detail is genuinely blocking, safety-critical, irreversible, privacy-sensitive, or requires Product Owner approval.
-5. Consolidate unavoidable questions into one concise message.
-6. Keep answers and plans concise; do not repeat information already supplied.
-7. Preserve the existing role separation: Gemini proposes; backend validates; user approves; backend performs DRY RUN only; results are shown to the user.
-8. Keep backend policy and validation authoritative. A system instruction is behavioral guidance, not a security control.
-9. Preserve the current context limit, expiry, in-memory-only retention, credential handling, and sanitized provider-error behavior unless separately approved.
-10. Add focused tests proving the system instruction is supplied on every chat request and that current approval/dry-run boundaries remain unchanged.
-
-## Important limitation
-
-A system instruction can reduce unnecessary questions, but it cannot guarantee that Gemini will never ask. It must not encourage the model to invent facts or proceed when a required safety decision is missing.
-
-## Authorization status
-
-**Documentation only. Runtime implementation is not authorized by this document.** A separate bounded runtime task must be explicitly authorized by the Product Owner before code changes begin. Do not interpret this follow-up specification as permission to modify the backend.
+Regression tests verify that the same system instruction is included in each chat generation call and that structured plan generation does not inherit the chat instruction. Existing chat history, retention, error-sanitization, and approval boundaries remain unchanged.
