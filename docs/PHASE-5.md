@@ -2,7 +2,7 @@
 
 ## Status
 
-**Planning authorized by the Product Owner on 2026-11-02.** I1 / P5-510 and I2 / P5-511 are complete (PRs #58 and #61). I3 / P5-512 is complete and merged in PR #63; I4 / P5-513 is complete and merged in PR #64. The Product Owner explicitly authorized I5 / P5-514 on 2026-11-07; implementation is in progress on `feat/P5-514-thai-default-ux-api-integration`. P5-515 verification and P5-516 independent review remain not started and require separate authorization. No real PC action or Phase 6 execution is authorized.
+**Planning authorized by the Product Owner on 2026-11-02.** P5-510 through P5-513 are complete and merged (PRs #58, #61, #63, and #64). P5-514 was completed and merged in PR #65 (commit `463457b`) on 2026-11-07. The Product Owner explicitly authorized P5-515 on 2026-11-07; verification is in progress on `test/P5-515-negative-abuse-regression` (draft PR #66). P5-516 independent review has not started. No real PC action or Phase 6 execution is authorized.
 
 Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The repository status documents record this verification evidence.
 
