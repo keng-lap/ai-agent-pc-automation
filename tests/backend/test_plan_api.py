@@ -279,6 +279,39 @@ def test_approval_runs_every_plan_item_once_and_replays_cached_result(monkeypatc
     assert len(calls) == 2
 
 
+
+def test_approval_rejects_client_supplied_authority_or_action_fields(monkeypatch):
+    from agent_backend import plan_api
+
+    calls = []
+
+    def forbidden(request):
+        calls.append(request)
+        raise AssertionError("untrusted approval payload must not dispatch")
+
+    monkeypatch.setattr(plan_api, "execute_tool", forbidden)
+    initial = client.post(
+        "/api/plans",
+        json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
+    ).json()
+    refined = client.post(
+        f"/api/plans/{initial['dry_run_plan']['plan_id']}/refine",
+        json={
+            "request": "เตรียมเครื่องพัฒนา Java",
+            "clarification": "JDK 21 LTS",
+            "language": "th",
+        },
+    ).json()
+    plan_id = refined["dry_run_plan"]["plan_id"]
+
+    response = client.post(
+        f"/api/plans/{plan_id}/approve",
+        json={"approved": True, "tool_id": "software.remove", "target": "untrusted"},
+    )
+    assert response.status_code == 422
+    assert calls == []
+
+
 def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
     from agent_backend import plan_api
 
