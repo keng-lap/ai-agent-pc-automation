@@ -293,19 +293,26 @@ def approve_plan_review(plan_id: str) -> PlanApprovalResponse:
         if any(item.status != "PLANNED" for item in plan.programs):
             raise HTTPException(status_code=409, detail="Plan requires clarification before approval.")
 
+        action = "ติดตั้ง" if plan.tool_id == "software.install" else "ถอนการติดตั้ง"
         try:
-            result = execute_tool(
-                ToolRequest(tool_id=plan.tool_id, target=plan.programs[0].program)
+            # A plan can contain several programs. Dry-run every listed item;
+            # never report the whole plan as simulated after dispatching only item 1.
+            item_results = tuple(
+                execute_tool(ToolRequest(tool_id=plan.tool_id, target=item.program))
+                for item in plan.programs
             )
         except ValueError:
             raise HTTPException(status_code=422, detail="Plan cannot be dry-run.") from None
-        action = "ติดตั้ง" if plan.tool_id == "software.install" else "ถอนการติดตั้ง"
-        result = result.model_copy(
+        result = item_results[0].model_copy(
             update={
+                "target": ", ".join(item.program for item in plan.programs),
                 "summary": (
-                    f"จำลองเท่านั้น: จะ{action} {plan.programs[0].program}; "
-                    "ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
-                )
+                    "จำลองเท่านั้น: "
+                    + "; ".join(
+                        f"จะ{action} {item.program}" for item in plan.programs
+                    )
+                    + "; ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
+                ),
             }
         )
         if len(_approval_results) >= 128:
