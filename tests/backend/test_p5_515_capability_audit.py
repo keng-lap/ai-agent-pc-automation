@@ -5,6 +5,7 @@ filesystem contents, registry, running processes, or network state.
 """
 
 import ast
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agent_backend.audit import AuditEventSink
@@ -121,9 +122,7 @@ def test_audit_sink_has_no_external_telemetry_or_transport_dependency():
     sink.record(
         {
             "event_type": "policy.denied",
-            "occurred_at": __import__("datetime").datetime.now(
-                __import__("datetime").UTC
-            ),
+            "occurred_at": datetime.now(UTC),
             "tool_id": "software.install",
             "outcome": "denied",
             "deny_reason": "permission_denied",
