@@ -375,28 +375,18 @@ def refine_plan_review(plan_id: str, payload: PlanRefinementRequest) -> PlanRevi
     programs = _java_refinement_programs(payload.clarification, payload.language)
     try:
         new_plan = _plan_store.create("software.install", programs)
-        tool_result = execute_tool(ToolRequest(tool_id="software.install", target="JDK"))
     except PlanCapacityError:
         raise HTTPException(status_code=503, detail="Plan capacity reached.") from None
     except ValueError:
         raise HTTPException(status_code=422, detail="Clarification could not be applied.") from None
 
-    action_list = ", ".join(
-        f"{item.program} {item.version}" if item.program == "JDK" else item.program
-        for item in programs
-    )
-    summary = (
-        f"จำลองเท่านั้น: เตรียมรายการ {action_list}; ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง"
-        if payload.language == "th"
-        else f"Dry run only: would prepare {action_list}; no computer changes were made."
-    )
-    tool_result = tool_result.model_copy(update={"summary": summary})
     return PlanReviewResponse(
         request=payload.request,
         interpretation=intent,
         task_plan=task_plan,
         dry_run_plan=new_plan,
-        tool_result=tool_result,
+        tool_result=None,
+        approved=False,
         questions=_java_refinement_questions(programs, payload.language),
         refined_from_plan_id=plan_id,
         clarification=payload.clarification,
