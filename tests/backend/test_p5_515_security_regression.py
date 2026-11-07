@@ -138,3 +138,43 @@ def test_registered_tool_dispatch_remains_dry_run_only():
     assert result.status == "dry_run"
     assert result.approval_required is True
     assert "no changes were made" in result.summary
+
+
+def test_plans_endpoint_rejects_missing_required_request_before_planning(monkeypatch):
+    calls = []
+
+    def spy_planner(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("planner must not run for an invalid request")
+
+    monkeypatch.setattr("agent_backend.plan_api.create_task_plan", spy_planner)
+    response = client.post("/api/plans", json={"language": "en"})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": (
+            'Invalid request. Send JSON like {"message": "...", "language": "th"} '
+            "with 1 to 2000 characters and language th or en."
+        )
+    }
+    assert calls == []
+
+
+def test_missing_registered_handler_fails_closed_without_dispatch(monkeypatch):
+    calls = []
+
+    def spy_handler(request):
+        calls.append(request)
+        raise AssertionError("missing handler must never be invoked")
+
+    monkeypatch.setattr(tools, "_HANDLERS", {})
+    request = tools.ToolRequest(tool_id="software.install", target="Synthetic")
+
+    try:
+        tools.execute_tool(request)
+    except policy.PolicyDeniedError as error:
+        assert error.reason == "handler_unavailable"
+    else:
+        raise AssertionError("missing handler unexpectedly succeeded")
+
+    assert calls == []
