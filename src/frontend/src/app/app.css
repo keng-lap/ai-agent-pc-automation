@@ -110,24 +110,3 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 
 
 
-.installer-card{display:grid;gap:12px;margin-top:14px;padding:14px;border:1px solid var(--line-strong);border-radius:16px}
-.installer-card-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.installer-card-heading h3{margin:0;font-size:15px}
-.installer-status{padding:5px 9px;border:1px solid var(--line);border-radius:99px;color:var(--muted);font-size:10px}
-.installer-status--success,.installer-result{border-color:#b9dfcd;color:#26734f;background:#effaf4}
-.installer-program-list{display:grid;gap:8px}
-.installer-program{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-raised)}
-.installer-app-icon{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;border-radius:11px;background:#efedff}
-.installer-program-info{display:grid;gap:3px;flex:1;min-width:0}
-.installer-program-info strong{overflow-wrap:anywhere;font-size:13px}
-.installer-program-info span,.installer-program-state{color:var(--muted);font-size:10px}
-.installer-questions,.installer-actions--blocked{padding:10px;border:1px solid var(--line);border-radius:11px;font-size:11px}
-.installer-actions{display:grid;gap:9px}
-.installer-actions p{margin:0;color:var(--muted);font-size:11px}
-.installer-approve-button{width:100%;min-height:45px}
-.installer-result{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid;border-radius:12px}
-.installer-result-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;color:white;background:#32966a}
-.installer-details{padding-top:10px;border-top:1px solid var(--line)}
-.installer-details summary{font-size:10px;cursor:pointer}
-.installer-details[open]{display:grid;gap:7px}
-.installer-error{color:#b9565c;font-size:11px}
