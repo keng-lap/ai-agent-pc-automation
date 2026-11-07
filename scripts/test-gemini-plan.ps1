@@ -13,7 +13,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RequestText = 'เตรียมเครื่องเพื่อพัฒนา Java',
+    [string]$RequestText = 'Prepare this PC for Java development',
     [string]$BackendUrl = 'http://127.0.0.1:8000'
 )
 
