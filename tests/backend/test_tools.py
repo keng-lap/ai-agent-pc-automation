@@ -203,10 +203,10 @@ def test_policy_configuration_change_after_initial_decision_fails_closed(monkeyp
     assert handler_calls == []
 
 
-
 def test_handler_identity_replacement_after_policy_decision_fails_closed(monkeypatch):
     handler_calls = []
     replacement_calls = []
+
     def original_handler(request):
         handler_calls.append(request)
 
