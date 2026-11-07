@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 # The app loads the repository .env when imported. Tests use fixed local
 # settings so TestClient Host and Origin headers stay valid.
 os.environ["BACKEND_HOST"] = "127.0.0.1"
