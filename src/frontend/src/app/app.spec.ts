@@ -12,6 +12,7 @@ class FakeChatApi {
   restoredConversationIds: string[] = [];
   clearedConversationIds: string[] = [];
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
+  approvalCalls: string[] = [];
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -19,9 +20,16 @@ class FakeChatApi {
     dry_run_plan: null,
     tool_result: null,
     questions: [],
+    approved: false,
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     refined_from_plan_id: 'a'.repeat(32),
     clarification,
+  });
+  approveResponder: (planId: string) => Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> = (planId) => of({
+    plan_id: planId,
+    approved: true,
+    tool_result: { status: 'dry_run', summary: 'Dry run only; no changes made.' },
+    notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
   history: { messages: Array<{ role: 'user' | 'assistant'; text: string }> } = { messages: [] };
   historyError: unknown;
@@ -46,6 +54,11 @@ class FakeChatApi {
 
   createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
     return this.planResponder(message, language);
+  }
+
+  approvePlan(planId: string): Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> {
+    this.approvalCalls.push(planId);
+    return this.approveResponder(planId);
   }
 
   refinePlan(planId: string, request: string, clarification: string, language: UiLanguage): Observable<PlanReviewResponse> {
@@ -162,6 +175,57 @@ describe('App chat UI (T-202)', () => {
     httpTestingController?.verify();
     httpTestingController = null;
     vi.restoreAllMocks();
+  });
+
+
+
+  it('shows dry-run approval only for a fully specified plan and renders the result after approval', async () => {
+    await render();
+    api.planResponder = (request) => of({
+      request,
+      interpretation: { category: 'development_task', goal: request, target: 'Java' },
+      task_plan: { steps: [], prerequisites: [] },
+      dry_run_plan: {
+        plan_id: 'a'.repeat(32),
+        mode: 'dry_run',
+        live_checks_performed: false,
+        expires_at: '2026-11-07T15:00:00Z',
+        programs: [{
+          order: 1,
+          program: 'JDK',
+          version: '21 LTS',
+          purpose: 'Java development kit',
+          reason: 'Explicit user choice',
+          source: 'Not checked',
+          source_verification: 'NOT_CHECKED',
+          dependencies: [],
+          dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null,
+          impact: 'Not checked',
+          status: 'PLANNED',
+        }],
+      },
+      tool_result: null,
+      approved: false,
+      questions: [],
+      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+    });
+    send('Prepare Java development');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('อนุมัติให้จำลอง (Dry Run)');
+    expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
+
+    const approve = Array.from(fixture.nativeElement.querySelectorAll('button'))
+      .find((button: Element) => button.textContent?.includes('อนุมัติให้จำลอง')) as HTMLButtonElement;
+    approve.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.approvalCalls).toEqual(['a'.repeat(32)]);
+    expect(fixture.nativeElement.textContent).toContain('ผลการจำลอง');
+    expect(fixture.nativeElement.textContent).toContain('Dry run only; no changes made.');
   });
 
   it('F-01: starts in Thai with the empty hint and disabled Send', async () => {
