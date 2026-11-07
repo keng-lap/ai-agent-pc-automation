@@ -117,7 +117,7 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .plan-review .tool-preview > small { display: none; }
 .plan-review .installer-heading { margin: 4px 0 9px; font-size: 13px; }
 .plan-review .program-review {
-  grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
   margin: 7px 0; padding: 13px 14px; border-radius: 13px; background: var(--surface);
 }
 .plan-review .program-review strong { font-size: 14px; }
@@ -131,4 +131,9 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 @media (prefers-color-scheme: dark) {
   .plan-review .program-review small, .plan-review .result-pass { color: #83c9a7; }
   .plan-review .result-fail { color: #f09a9f; }
+}
+
+.plan-review .program-review .program-icon {
+  display: grid; place-items: center; width: 32px; height: 32px;
+  grid-row: 1 / span 2; border-radius: 10px; background: var(--active); font-size: 17px;
 }
