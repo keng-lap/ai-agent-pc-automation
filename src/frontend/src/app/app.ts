@@ -56,7 +56,21 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
     || !(typeof interpretation['target'] === 'string' || interpretation['target'] === null)
     || !isRecord(taskPlan)
     || !Array.isArray(taskPlan['steps'])
+    || !taskPlan['steps'].every((step) => (
+      isRecord(step)
+      && typeof step['order'] === 'number'
+      && typeof step['title'] === 'string'
+      && typeof step['detail'] === 'string'
+    ))
     || !Array.isArray(taskPlan['prerequisites'])
+    || !taskPlan['prerequisites'].every((prerequisite) => (
+      isRecord(prerequisite)
+      && typeof prerequisite['id'] === 'string'
+      && typeof prerequisite['order'] === 'number'
+      && typeof prerequisite['title'] === 'string'
+      && typeof prerequisite['reason'] === 'string'
+      && typeof prerequisite['status'] === 'string'
+    ))
     || !Array.isArray(value['questions'])
     || !value['questions'].every((question) => typeof question === 'string')
     || value['notice'] !== 'DRY_RUN_ONLY_NO_CHANGES_MADE'
@@ -71,18 +85,23 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
       || dryRunPlan['live_checks_performed'] !== false
       || typeof dryRunPlan['expires_at'] !== 'string'
       || !Array.isArray(dryRunPlan['programs'])
+      || dryRunPlan['programs'].length < 1
     ) return false;
 
     const validStatuses = ['PLANNED', 'NEEDS_CLARIFICATION', 'BLOCKED', 'UNSUPPORTED'];
     if (!dryRunPlan['programs'].every((program) => (
       isRecord(program)
-      && typeof program['order'] === 'number'
+      && Number.isInteger(program['order'])
       && typeof program['program'] === 'string'
+      && program['program'].trim().length > 0
       && typeof program['version'] === 'string'
       && typeof program['purpose'] === 'string'
       && typeof program['reason'] === 'string'
       && typeof program['source'] === 'string'
+      && program['source_verification'] === 'NOT_CHECKED'
       && Array.isArray(program['dependencies'])
+      && program['dependencies_verification'] === 'NOT_CHECKED'
+      && (typeof program['disk_space_estimate'] === 'string' || program['disk_space_estimate'] === null)
       && program['dependencies'].every((dependency) => typeof dependency === 'string')
       && typeof program['impact'] === 'string'
       && typeof program['status'] === 'string'
