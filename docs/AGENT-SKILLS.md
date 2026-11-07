@@ -2,16 +2,15 @@
 
 ## Status
 
-**Proposed implementation on branch `docs/SKILL-001-foundation`.** These are workspace-level instruction skills; they do not change application runtime behavior, backend authorization, or Windows execution capabilities.
+**Merged into `main` via PR #102** (merge commit `c03f07f3eca762524fef254609b5c1707670006d`). The six workspace instruction skills are documentation/procedure files; they do not change application runtime behavior, backend authorization, or Windows execution capabilities.
 
 ## Format and discovery
 
-Skills use the Agent Skills format: one folder per skill with a required `SKILL.md` containing YAML `name` and `description` frontmatter. They are stored under `.agents/skills/`, the interoperable workspace path supported by Gemini CLI as an alias alongside `.gemini/skills/`.
+Skills use the Agent Skills format: one folder per skill with a required `SKILL.md` containing YAML `name` and `description` frontmatter. They are stored under `.agents/skills/`.
 
-Official references:
-- [Gemini CLI Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/skills.md)
-- [Creating Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/creating-skills.md)
-- [Agent Skill best practices](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/skills-best-practices.md)
+- Gemini CLI documents workspace skill discovery for its supported host/version. Follow the [official Gemini CLI Agent Skills guide](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/skills.md) and verify activation locally before relying on it.
+- ChatGPT does **not** automatically discover or activate repository skill files. When acting on this project, ChatGPT should consult `docs/CHATGPT-AGENT-GUIDE.md` and retrieve only the relevant `SKILL.md` files through the connected repository source.
+- Skill activation and workspace trust remain host/version-specific; a merged file is not evidence of activation in a particular agent.
 
 ## Included skills
 
@@ -26,20 +25,14 @@ Official references:
 
 ## Operating principles
 
-- `GEMINI.md` remains the project-wide instruction and source-of-truth entry point. Skills provide focused procedures on demand; they do not replace or weaken it.
-- Skill descriptions are short and distinct to support discovery. Detailed procedures load only when a skill activates.
+- `GEMINI.md` remains the project-wide instruction and source-of-truth entry point for hosts that load it. ChatGPT's repository workflow is described separately in `docs/CHATGPT-AGENT-GUIDE.md`.
+- Skill descriptions are short and distinct to support host discovery. Detailed procedures load only when the host supports and activates them, or when an assistant explicitly retrieves them.
 - No skill includes executable scripts, automatic machine actions, network calls, or credentials.
-- Skill activation/consent and workspace trust depend on the installed host agent/version. Verify discovery in the actual local environment before relying on activation.
 - These files do not affect the Gemini Chat API used by the running application. Runtime behavior still requires backend-owned instructions supplied by the application.
 - These skills do not authorize Phase 6, real PC execution, mobile remote control, new providers/data flows, or any change to existing safety/privacy policy.
 
 ## Local verification (Gemini CLI)
 
-From the repository root after pulling this branch:
+If using Gemini CLI, verify skill discovery in the installed version using its documented commands and workspace-trust requirements. Do not assume that a command supported by one host/version is available in PowerShell or another ChatGPT interface. Do not install third-party skills or grant broader filesystem/tool access as a workaround.
 
-```text
-/skills reload
-/skills list
-```
-
-Confirm that all six names appear. If they do not, verify workspace trust and the host agent's supported skill discovery path. Do not install third-party skills or grant broader filesystem/tool access as a workaround.
+**Verification status:** merge is confirmed; local activation in a Gemini CLI host has not been independently verified.
