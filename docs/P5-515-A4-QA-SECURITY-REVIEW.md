@@ -101,3 +101,20 @@ The matrix now records **33 Covered / 2 Partial / 0 Not covered or not evidenced
 
 **Result: WP1–WP4 review complete; P5-515 remains open.** No blocking defect was identified within the narrow synthetic/in-process scope reviewed. Q30 and Q35 require further bounded evidence or explicit Product Owner disposition, followed by a separate explicit P5-515 closeout decision. P5-516 remains separately gated.
 
+
+
+## Follow-up review — PR #104 / Q30 browser-emulated mobile evidence
+
+A4 reviewed the merged PR #104 test and documentation scope and its successful GitHub Actions run [#42395817656](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42395817656).
+
+- Backend tests: 257 passed; Ruff passed.
+- Frontend unit tests: 36 passed.
+- Playwright E2E: 9 passed, including 320×568, 375×667, 390×844, and 430×932 viewport checks, horizontal-overflow assertions, accessible names/roles, and keyboard focus after enabling the send button.
+- Frontend build: passed.
+- The initial failing focus test was corrected at the test layer: it now fills a harmless message and verifies the send button is enabled before focusing it. No application runtime behavior was changed for this correction.
+
+**A4 conclusion:** The merged browser-emulation evidence is satisfactory for the bounded automated scope. It does not prove physical-device rendering or assistive-technology operation. Q30 therefore remains Partial until physical mobile and screen-reader results are recorded. The manual protocol remains subject to the existing local-first/loopback safety boundary; do not weaken authentication or host binding to force device access.
+
+## Follow-up review — Q35 Product Owner disposition
+
+The Product Owner accepted the documented limitation that Static Check is not a Runtime Sandbox. A4 records this as an accepted scope limitation, not as technical closure: Q35 remains Partial in the traceability matrix. No runtime sandbox, host-inspection capability, or execution path is added by this disposition.
