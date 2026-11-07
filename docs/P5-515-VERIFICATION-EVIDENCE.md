@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** PRs #66, #73, #74, #75, and #77 are merged. GitHub Actions CI passed for the final PR heads of #73, #74, #75, and #77. The matrix is reconciled to 25 Covered / 10 Partial. This report records only facts available from merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
+**In progress.** PRs #66, #73, #74, #75, #77, #81, #82, #84, and #85 are merged. WP1–WP4 close nine previously Partial rows. The reconciled matrix is 33 Covered / 2 Partial / 0 Not covered or not evidenced; Q30 and Q35 remain open. This report records only merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
 
 ## Source and CI identity
 
@@ -112,3 +112,19 @@ A source-level Q01–Q35 mapping is maintained in [P5-515 Matrix-to-Test Traceab
 ## Q26 retention decision reconciliation
 
 The approved P5-508 decision is audit option A: bounded ephemeral in-memory events cleared on restart. The implementation caps the sink at 500 events and evicts oldest-first. Existing tests cover the 500-event default, FIFO eviction, and an empty new sink. A time-based event TTL and durable audit storage are not part of the approved decision. Q26 is classified Covered on that basis; no retention behavior was added.
+
+
+## WP1–WP4 merged verification (2026-11-07)
+
+| PR | Scope | Merge commit | CI run | CodeQL run | Result |
+|---|---|---|---|---|---|
+| [#81](https://github.com/keng-lap/ai-agent-pc-automation/pull/81) | Q16 parameter boundaries | d5b8fe5b34968d744d9a86ea3f019603e3f879d3 | [#42360539658](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42360539658) | [#42360541663](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42360541663) | Passed |
+| [#82](https://github.com/keng-lap/ai-agent-pc-automation/pull/82) | Q25 optional audit sink failure | 98c48db555a3383213855bf517f2f809beaca562 | [#42360611477](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42360611477) | [#42360610055](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42360610055) | Passed |
+| [#84](https://github.com/keng-lap/ai-agent-pc-automation/pull/84) | Q28 defensive rendering; Q31 control inventory; limited Q30 assertions | 4e606909701100a03c0a8f06466d658253c05405 | [#42361212383](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42361212383) | [#42361210045](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42361210045) | Passed |
+| [#85](https://github.com/keng-lap/ai-agent-pc-automation/pull/85) | Q02, Q09–Q12 request/policy boundaries (rebased replacement for conflicted #80) | 70afa274fec80566bc0f63e13cb628d570b61924 | [#42361989751](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42361989751) | [#42361987478](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42361987478) | Passed |
+
+PR #80 became divergent after the other approved increments were merged and GitHub reported a merge conflict. Its approved WP1 changes were reapplied on current main in PR #85, reviewed against the exact head, and merged after CI and CodeQL passed. PR #80 was closed as superseded without merging. The WP1 P2/P3 cases use synthetic policy mappings and spy handlers only; no actual P2/P3 tools were added.
+
+CI #42361989751 passed backend tests, Ruff, frontend unit tests, and frontend build. CodeQL #42361987478 completed successfully for Python, JavaScript/TypeScript, and Actions.
+
+Q30 remains Partial: jsdom assertions do not prove real browser viewport behavior or full screen-reader operation. Q35 remains Partial: static source checks are not a runtime sandbox. Neither limitation is silently waived by these merges.

@@ -55,7 +55,7 @@ These are static source checks, not a runtime sandbox. They cannot prove absence
 
 **Result: Open; no silent closure recommended.**
 
-The reconciled matrix after PR #77 records 25 Covered and 10 Partial items. Remaining Partial items are Q02, Q09–Q12, Q16, Q25, Q28, and Q30–Q31. Their qualifications must remain visible. Any new expected policy, retention rule, or user-consent behavior must be confirmed against existing Product Owner decisions rather than inferred by tests.
+The reconciled matrix after WP1–WP4 records 33 Covered and 2 Partial items. Remaining Partial items are Q30 and Q35. Their qualifications must remain visible. Any new expected policy, retention rule, or user-consent behavior must be confirmed against existing Product Owner decisions rather than inferred by tests.
 
 ## Safety boundary confirmation
 
@@ -65,7 +65,7 @@ P1 remains dry-run/report only. P2/P3 and Phase 6 remain disabled. P5-516 remain
 
 ## Review conclusion
 
-**No blocking defect was identified within the narrow scope of the merged P5-515 increments reviewed above.** Q13, Q20, Q23, and Q34 traceability claims are supported by direct tests. Q35 remains Partial with explicit static-check limitations. This review does **not** declare P5-515 complete: the 11 remaining Partial items require further evidence or an explicit Product Owner disposition, followed by explicit P5-515 closeout approval.
+**No blocking defect was identified within the narrow scope of the merged P5-515 increments reviewed above.** Q13, Q20, Q23, and Q34 traceability claims are supported by direct tests. Q35 remains Partial with explicit static-check limitations. This review does **not** declare P5-515 complete: the 2 remaining Partial items (Q30 and Q35) require further evidence or an explicit Product Owner disposition, followed by explicit P5-515 closeout approval.
 
 This review is a separate QA/security pass by the A4 lane in the current project workflow. It is not represented as an independent external auditor or as the separately gated P5-516 review.
 
@@ -78,7 +78,7 @@ A focused follow-up review was performed against the merged PR #77 tests and its
 - **Q23:** A synthetic handler returns an invalid object through the in-process API test client. The test asserts the API returns only the generic 500 response and that the handler call count is exactly one. This supports Q23 as Covered for exception and malformed-result API response behavior.
 - **Safety:** Both tests are deterministic and in-process. No Windows host calls, filesystem changes, process execution, real network calls, installers, or machine-changing operations are used.
 
-The updated matrix records **25 Covered / 10 Partial / 0 Not covered or not evidenced**. Q26 is Covered after reconciliation to the approved P5-508 option A retention decision: bounded in-memory events, maximum 500, oldest-first eviction, and clear-on-restart. Existing tests directly cover those behaviors. Time-based event expiry and durable storage are not approved requirements and were not added. Remaining Partial items are Q02, Q09–Q12, Q16, Q25, Q28, and Q30–Q31. This follow-up does not declare P5-515 complete; remaining gaps still require evidence or explicit Product Owner disposition. P5-516 remains separately gated.
+The updated matrix records **25 Covered / 10 Partial / 0 Not covered or not evidenced**. Q26 is Covered after reconciliation to the approved P5-508 option A retention decision: bounded in-memory events, maximum 500, oldest-first eviction, and clear-on-restart. Existing tests directly cover those behaviors. Time-based event expiry and durable storage are not approved requirements and were not added. Remaining Partial items are Q30 and Q35. This follow-up does not declare P5-515 complete; remaining gaps still require evidence or explicit Product Owner disposition. P5-516 remains separately gated.
 
 
 ## Follow-up review — Q26 retention semantics
@@ -86,3 +86,18 @@ The updated matrix records **25 Covered / 10 Partial / 0 Not covered or not evid
 A4 compared the Q26 matrix wording against the approved P5-508 decision register and the existing audit implementation/tests. The approved option A is bounded ephemeral in-memory events, cleared on process restart; the implementation additionally fixes the capacity at a maximum of 500 and evicts the oldest event first. Existing tests cover the 500-event default, FIFO eviction, and a new empty sink after restart.
 
 The earlier matrix wording “retention cap/expiry/restart” incorrectly implied that a time-based event TTL was required. It is not part of the approved option A decision. Q26 is therefore **Covered** with the explicit qualification that time-based expiry and durable storage are not required or authorized. No new TTL or durable persistence was implemented.
+
+
+## Follow-up review — WP1–WP4 merged increments (#81, #82, #84, #85)
+
+A4 reviewed the exact merged diffs and successful CI/CodeQL evidence for the four increments:
+
+- WP1 / PR #85 — Q02, Q09–Q12: arbitrary extra fields are rejected on plan creation and refinement; malformed policy matrix containers, entries, and field types fail closed; duplicate risk is rejected; client/model-supplied authority claims are rejected; synthetic P2/P3 policy branches deny before spy handlers run. The P2/P3 tests deliberately isolate the decision branch by bypassing the configuration-consistency validator in the test only. The production catalog remains unchanged, with no P2/P3 handler or route.
+- WP2 / PR #81 — Q16: strict type, size, numeric/order, dependency and tool-request boundaries are tested, including exact accepted upper bounds. Tests are model/validation boundary tests, not host actions.
+- WP3 / PR #82 — Q25: a synthetic optional audit sink raises OSError; the optional record call returns false, retains no event, and the safe path continues. No external fallback, durable storage, or TTL is added.
+- WP4 / PR #84 — Q28 and Q31: nested plan response validation rejects unknown status/missing required fields into a neutral UI error; machine-changing controls are inventoried across empty, loading, error, clarification-plan and restored states. No approval or execution controls were added.
+
+The matrix now records **33 Covered / 2 Partial / 0 Not covered or not evidenced**. Q30 remains Partial because Vitest/jsdom does not provide a real browser layout engine or full screen-reader evidence. Q35 remains Partial because static source-level checks are not a runtime sandbox and cannot prove the absence of indirect/dynamic capabilities.
+
+**Result: WP1–WP4 review complete; P5-515 remains open.** No blocking defect was identified within the narrow synthetic/in-process scope reviewed. Q30 and Q35 require further bounded evidence or explicit Product Owner disposition, followed by a separate explicit P5-515 closeout decision. P5-516 remains separately gated.
+

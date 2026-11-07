@@ -2,14 +2,15 @@
 
 ## Purpose and authority
 
-This document breaks down the 10 remaining Partial rows in the current P5-515 traceability matrix into bounded work packages. It is a planning and coordination artifact under the Product Owner's existing P5-515 authorization; it does not authorize P2/P3, Phase 6, live PC actions, or a new retention policy.
+This document tracks the 2 remaining Partial rows in the current P5-515 traceability matrix into bounded work packages. It is a planning and coordination artifact under the Product Owner's existing P5-515 authorization; it does not authorize P2/P3, Phase 6, live PC actions, or a new retention policy.
 
 Runtime changes, if required, must remain within the approved P1 dry-run boundary and use synthetic inputs, fake clocks, in-process clients, and spy handlers. Any code/test PR still requires separate Product Owner merge approval. Documentation-only PRs may be merged under the standing docs-only permission after confirming every changed path is under docs/ and CI passes.
 
 ## Current baseline
 
-- Current matrix: 25 Covered / 10 Partial / 0 Not covered or not evidenced.
-- Remaining rows: Q02, Q09, Q10, Q11, Q12, Q16, Q25, Q28, Q30, Q31.
+- Current matrix: 33 Covered / 2 Partial / 0 Not covered or not evidenced.
+- Remaining rows: Q30 and Q35.
+- WP1–WP4 are complete and merged: PRs #85, #81, #82, and #84. Original PR #80 was closed as superseded after its branch diverged; WP1 was reapplied on current main in PR #85.
 - Approved design baseline: P5-508 decisions and P5-509 reconciliation.
 - Relevant binding decisions: backend-owned R0–R3/P0–P3 policy; P1 dry-run only; P2/P3 hard-denied; strict request/model validation; audit option A (ephemeral in-memory events, max 500, oldest-first eviction, cleared on restart); optional diagnostics failure is non-blocking; no durable audit log.
 
@@ -31,18 +32,16 @@ Q26 is Covered after A4 reconciled the matrix with the approved P5-508 option A 
 
 ## Sequencing and gates
 
-1. WP1 and WP2: backend test increments; review exact changed paths and test intent.
-2. WP3: audit failure test; Q26 is already reconciled and Covered.
-3. WP4: frontend test increment; any production UI fix must remain defensive display-only.
-4. WP5: final evidence, A4 review, and remaining PO decision list.
+1. WP1–WP4: complete and merged; evidence is recorded in the verification report and A4 follow-up review.
+2. WP5: complete the final evidence reconciliation and A4 review; obtain Product Owner disposition for Q30 and Q35, then explicit P5-515 closeout approval.
 
-For each code/test PR: verify the exact head SHA, all CI jobs, and changed files; then request explicit Product Owner merge approval. Do not merge code/test PRs automatically.
+All current WP1–WP4 code/test PRs are merged following explicit Product Owner authorization and successful CI/CodeQL. Any future code/test PR still requires a separate explicit Product Owner merge approval.
 
 For each documentation-only PR: verify all changed paths are under docs/ and CI passes; the standing documentation-only merge permission applies.
 
 ## Completion forecast
 
-Target: 3–5 working days from active execution of this plan. This is an estimate, not a guaranteed completion date. If a test exposes behavior that conflicts with the approved design, stop that work item and present the exact decision needed rather than inventing policy.
+WP1–WP4 are complete. Remaining effort is limited to Q30 browser-level mobile/accessibility evidence, Q35 capability-boundary disposition, and final Product Owner closeout. If evidence cannot be obtained within the authorized scope, present the exact residual limitation for explicit disposition rather than inventing policy.
 
 ## Safety and exit conditions
 
