@@ -2,7 +2,7 @@
 
 ## Status
 
-**Planning authorized by the Product Owner on 2026-11-02.** P5-510 through P5-513 are complete and merged (PRs #58, #61, #63, and #64). P5-514 was completed and merged in PR #65 (commit `463457b`) on 2026-11-07. The Product Owner explicitly authorized P5-515 on 2026-11-07; verification is in progress on `test/P5-515-negative-abuse-regression` (draft PR #66). P5-516 independent review has not started. No real PC action or Phase 6 execution is authorized.
+**Planning authorized by the Product Owner on 2026-11-02.** P5-510 through P5-513 are complete and merged (PRs #58, #61, #63, and #64). P5-514 was completed and merged in PR #65 (commit `463457b`) on 2026-11-07. The Product Owner explicitly authorized P5-515 on 2026-11-07. Its initial negative/abuse/regression test increment was merged in PR #66; GitHub Actions CI passed on merge commit `3d661d7` (run `42355435380`: backend tests, Ruff, frontend unit tests, and frontend build all successful). P5-515 evidence/matrix reconciliation remains in progress. P5-516 independent review has not started. No real PC action or Phase 6 execution is authorized.
 
 Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The repository status documents record this verification evidence.
 
