@@ -3,7 +3,7 @@
 Personal AI Agent for safely automating approved tasks on a local Windows 11 PC through a local web application.
 
 ## Current project status
-**Phase 4 — Tool / Task System: CLOSED (Product Owner approval, 2026-11-02). Phase 5 — P5-510 through P5-513 complete (PRs #58, #61, #63, #64); P5-514 authorized and in progress. Gemini text-chat MVP separately authorized and manually tested successfully by the Product Owner (2026-11-07).**
+**Phase 4 — Tool / Task System: CLOSED (Product Owner approval, 2026-11-02). Phase 5 — P5-510 through P5-514 complete (PRs #58, #61, #63, #64, #65); P5-515 verification authorized and in progress in draft PR #66; P5-516 independent review remains gated. Gemini text-chat MVP separately authorized and manually tested successfully by the Product Owner (2026-11-07).**
 
 - Phase 0–3 are complete.
 - Phase 4 implementation PRs #45–#47 are merged. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5.
