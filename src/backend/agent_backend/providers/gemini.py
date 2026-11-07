@@ -144,14 +144,19 @@ def generate_reply(contents: str | list[types.Content]) -> str:
     return _response_text(_generate_content(contents))
 
 
-
 def generate_structured_plan(
     contents: str,
     response_schema: type,
 ) -> str:
-    """Request schema-constrained JSON; callers must validate it before use."""
+    """Request schema-constrained JSON; callers must validate it before use.
+
+    Gemini's structured-output endpoint accepts the JSON Schema representation
+    via response_json_schema. Passing the Pydantic class as response_schema can
+    be rejected by the provider for this model/SDK combination.
+    """
+    json_schema = response_schema.model_json_schema()
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
-        response_schema=response_schema,
+        response_json_schema=json_schema,
     )
     return _response_text(_generate_content(contents, config=config))
