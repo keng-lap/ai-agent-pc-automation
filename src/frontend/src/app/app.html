@@ -103,6 +103,7 @@
                   @if (review.dry_run_plan; as dryRun) {
                     @for (program of dryRun.programs; track program.order) {
                       <article class="program-review">
+                        <span class="program-icon" aria-hidden="true">📦</span>
                         <strong>{{ program.order }}. {{ program.program }}</strong>
                         <span>{{ language() === 'th' ? 'เวอร์ชัน' : 'Version' }}: {{ program.version }}</span>
                         <span>{{ language() === 'th' ? 'เหตุผล' : 'Reason' }}: {{ program.reason }}</span>
