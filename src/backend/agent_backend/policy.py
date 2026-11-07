@@ -71,6 +71,11 @@ class PolicyConfigurationError(RuntimeError):
 
 def validate_policy_configuration() -> None:
     """Fail startup if the static matrix and fixed dry-run catalog disagree."""
+    if not isinstance(POLICY_MATRIX, tuple) or any(
+        type(rule) is not PolicyRule for rule in POLICY_MATRIX
+    ):
+        raise PolicyConfigurationError("Policy matrix contains malformed rule entries")
+
     expected = {"R0", "R1", "R2", "R3"}
     risks = [rule.risk for rule in POLICY_MATRIX]
     if len(risks) != len(set(risks)) or set(risks) != expected:
