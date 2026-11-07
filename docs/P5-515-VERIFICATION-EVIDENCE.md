@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** PR #66 is merged. GitHub Actions CI passed on the merge commit. This report records only facts available from the merged repository and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
+**In progress.** PRs #66, #73, #74, and #75 are merged. GitHub Actions CI passed for the final PR heads of #73, #74, and #75. The matrix is reconciled to 22 Covered / 13 Partial. This report records only facts available from merged repository content and GitHub Actions metadata; it does not claim full P5-515 or Phase 5 closeout.
 
 ## Source and CI identity
 
@@ -42,6 +42,38 @@ GitHub run metadata reports both jobs (`backend`, `frontend`) as `completed / su
 - Current P1 remains plan/report and dry-run only. P2 inspection, P3 execution, Phase 6, and real PC actions remain unauthorized.
 - P5-515 remains open until the QA matrix is fully reconciled to concrete test evidence and A4 independent review is completed.
 - P5-516 is a separate independent-review task and has not started.
+
+
+## Subsequent P5-515 increments
+
+| PR | Scope | Merge commit | CI evidence |
+|---|---|---|---|
+| [#73](https://github.com/keng-lap/ai-agent-pc-automation/pull/73) | Static source-level audit for audit-sink transport/telemetry and bounded test-harness capability checks | `1a4f3a5024bb3ae7f4e9298284ef87d7bcee75a9` | [CI #42357992572](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42357992572) — successful |
+| [#74](https://github.com/keng-lap/ai-agent-pc-automation/pull/74) | Q13 handler identity replacement guard and in-process spy-handler regression test | `eb6e858ad17a3224b3c1f75fcce80bc4e9bc8efe` | [CI #42358505456](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42358505456) — successful |
+| [#75](https://github.com/keng-lap/ai-agent-pc-automation/pull/75) | Q23/Q34 API-boundary exception handling tests for planner, policy configuration, and tool handler | `2f512559bc32221b2559514e94b252036f2a0582` | [CI #42358957033](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/42358957033) — successful |
+
+PR #75 initially had a failed CI run (#42358655824): the default TestClient re-raised application exceptions instead of exposing the HTTP 500 response under test. The tests were corrected to use `raise_server_exceptions=False`, then the updated PR head passed backend tests, Ruff, frontend unit tests, and frontend build in CI #42358957033. The failed run is retained here for transparent audit history; it was not treated as a passing result.
+
+The final successful PR #75 CI run reports:
+- Backend tests: success
+- Ruff: success
+- Frontend unit tests: success
+- Frontend build: success
+
+No exact pytest pass count is asserted here because the authoritative evidence used for this update was the workflow/job conclusion metadata, not a separately preserved complete test summary.
+
+## Updated matrix classification
+
+The merged source-level matrix now records:
+- **Covered:** 22 items
+- **Partial:** 13 items
+- **Not covered / not evidenced:** 0 items
+
+Q13 is Covered after the handler-identity replacement regression test. Q34 is Covered after direct synthetic planner, policy-configuration, and handler exception tests at the API boundary. Q23 remains Partial because malformed handler-result behavior is not yet directly exercised through the API boundary. See [P5-515 Matrix-to-Test Traceability](P5-515-MATRIX-TRACEABILITY.md) for exact test names and limitations.
+
+## A4 QA/security review
+
+The focused A4 QA/security review of merged increments #66, #73, #74, and #75 is recorded in [P5-515 A4 QA/Security Review](P5-515-A4-QA-SECURITY-REVIEW.md). It supports the Q13/Q34 coverage updates and explicitly retains the Q23/Q35 limitations. This review is not the separately gated P5-516 review and does not close P5-515.
 
 ## Reproducibility reference
 
