@@ -56,6 +56,7 @@ SAFE_GEMINI_ERROR_CODES = frozenset(
         "unknown",
     }
 )
+SAFE_PLAN_ERROR_CODES = frozenset({"gemini_plan_unavailable", "invalid_structured_plan"})
 SAFE_ERROR_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
@@ -105,6 +106,19 @@ async def http_error_handler(
             )
         )
     ):
+        detail = exc.detail
+    elif (
+        exc.status_code == 502
+        and request.url.path == "/api/plans"
+        and isinstance(exc.detail, dict)
+        and set(exc.detail).issubset({"code", "provider_code"})
+        and exc.detail.get("code") in SAFE_PLAN_ERROR_CODES
+        and (
+            "provider_code" not in exc.detail
+            or exc.detail["provider_code"] in SAFE_GEMINI_ERROR_CODES
+        )
+    ):
+        # Plan errors expose fixed allowlisted codes only, never provider messages.
         detail = exc.detail
     else:
         detail = "Internal server error."
