@@ -37,10 +37,12 @@ test('mobile controls expose accessible names and keyboard focus', async ({ page
   await expect(page.getByRole('log', { name: 'ข้อความสนทนา' })).toBeVisible();
 
   const messageBox = page.getByRole('textbox', { name: 'ข้อความของคุณ' });
+  await messageBox.fill('ทดสอบการเข้าถึงด้วยแป้นพิมพ์');
   await messageBox.focus();
   await expect(messageBox).toBeFocused();
 
   const sendButton = page.getByRole('button', { name: 'ส่งข้อความ' });
+  await expect(sendButton).toBeEnabled();
   await sendButton.focus();
   await expect(sendButton).toBeFocused();
 });
