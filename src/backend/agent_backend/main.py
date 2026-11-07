@@ -117,7 +117,7 @@ async def http_error_handler(
             "provider_code" not in exc.detail
             or exc.detail["provider_code"] in SAFE_GEMINI_ERROR_CODES
         )
-    ) or False:
+    ):
         # Expose only fixed, allowlisted plan error codes; never provider messages.
         detail = exc.detail
     else:
