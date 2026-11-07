@@ -304,7 +304,7 @@ def test_malformed_gemini_structured_plan_fails_closed(monkeypatch):
         json={"request": "Install Google Chrome", "language": "en"},
     )
     assert response.status_code == 502
-    assert response.json() == {"detail": "Internal server error."}
+    assert response.json() == {"detail": {"code": "invalid_structured_plan"}}
     assert "approved" not in response.text
 
 
@@ -321,5 +321,10 @@ def test_gemini_plan_provider_failure_fails_closed(monkeypatch):
         json={"request": "Install Google Chrome", "language": "en"},
     )
     assert response.status_code == 502
-    assert response.json() == {"detail": "Internal server error."}
-    assert "provider_unavailable" not in response.text
+    assert response.json() == {
+        "detail": {
+            "code": "gemini_plan_unavailable",
+            "provider_code": "provider_unavailable",
+        }
+    }
+    assert "API key" not in response.text
