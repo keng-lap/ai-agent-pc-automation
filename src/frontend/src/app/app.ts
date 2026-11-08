@@ -269,6 +269,9 @@ export class App implements AfterViewChecked {
           this.authReady.set(true);
         },
         error: () => {
+          this.authEnabled.set(true);
+          this.authenticated.set(false);
+          this.authenticatorEnrolled.set(false);
           this.authError.set(this.language() === 'th'
             ? 'เชื่อมต่อระบบยืนยันตัวตนไม่ได้ กรุณาตรวจสอบ Backend'
             : 'Could not reach the authentication service. Check the backend.');
@@ -456,7 +459,10 @@ export class App implements AfterViewChecked {
 
   protected canApproveReview(review: PlanReviewResponse): boolean {
     return Boolean(
-      review.dry_run_plan
+      this.authEnabled()
+      && this.authenticated()
+      && this.authenticatorEnrolled()
+      && review.dry_run_plan
       && !review.approved
       && review.questions.length === 0
       && review.dry_run_plan.programs.length > 0
