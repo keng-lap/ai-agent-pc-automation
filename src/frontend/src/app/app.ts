@@ -505,7 +505,7 @@ export class App implements AfterViewChecked {
     const planId = review?.dry_run_plan?.plan_id;
     const challengeId = entry.stepUpChallengeId;
     const code = entry.totpCode ?? '';
-    if (!review || !planId || !challengeId || !/^\\d{6}$/.test(code) || !this.canApproveReview(review) || this.planning()) return;
+    if (!review || !planId || !challengeId || !/^\d{6}$/.test(code) || !this.canApproveReview(review) || this.planning()) return;
 
     this.planning.set(true);
     this.entries.update((entries) => entries.map((item) =>
