@@ -383,3 +383,27 @@ def test_chunked_body_limit_rejects_body_without_content_length():
 
 async def _unexpected_app(scope, receive, send):
     raise AssertionError("oversized body must be rejected before routing")
+
+
+
+def test_google_oidc_callback_accepts_google_origin_without_local_agent_token():
+    callback_client = TestClient(app, base_url=BASE_URL)
+    response = callback_client.get(
+        "/auth/google/callback?state=opaque-state-value-123456&code=opaque-code",
+        headers={"origin": "https://accounts.google.com"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("?login=unavailable")
+
+
+def test_google_oidc_callback_rejects_foreign_origin():
+    callback_client = TestClient(app, base_url=BASE_URL)
+    response = callback_client.get(
+        "/auth/google/callback?state=opaque-state-value-123456&code=opaque-code",
+        headers={"origin": "https://evil.example"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
