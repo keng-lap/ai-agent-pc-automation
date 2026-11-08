@@ -1,3 +1,5 @@
+import pytest
+
 from agent_backend.totp import (
     TOTP_DIGITS,
     TOTP_PERIOD_SECONDS,
@@ -9,11 +11,7 @@ from agent_backend.totp import (
     provisioning_uri,
 )
 
-import pytest
 
-
-# RFC 6238 Appendix B SHA-1 test secret; six-digit output is the final six
-# digits of the published eight-digit vector.
 RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 
 
