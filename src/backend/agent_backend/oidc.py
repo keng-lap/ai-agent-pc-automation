@@ -306,7 +306,8 @@ class GoogleOidcClient:
             and now - issued_at <= MAX_ID_TOKEN_AGE_SECONDS
         )
         if (
-            issuer not in GOOGLE_ISSUERS
+            not isinstance(issuer, str)
+            or issuer not in GOOGLE_ISSUERS
             or not valid_audience
             or (authorized_party is not None and authorized_party != self._client_id)
             or not isinstance(nonce, str)
