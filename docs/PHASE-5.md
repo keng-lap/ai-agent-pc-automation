@@ -118,10 +118,10 @@ The Product Owner authorized bounded runtime implementation on 2026-11-08. The a
 - Merged: W3 TOTP core (PR #114).
 - Merged: W4 exact-action-bound step-up challenge core (PR #115).
 - Merged: W5 audit/privacy controls (PR #116).
-- In progress: W6 API/UI integration and end-to-end regression tests (branch `feat/P5-516-01-w6-auth-runtime-integration`).
+- Merged: W6 API/UI integration and end-to-end regression tests (PR #119). Backend 370 passed/1 skipped, Ruff passed, frontend unit tests passed, desktop/mobile browser E2E passed, frontend build passed, and Windows DPAPI passed.
 - High-risk approval must fail closed if authentication or TOTP is unavailable. No legacy approval fallback is permitted.
 - Runtime remains loopback-only and P1 dry-run-only. No Windows command or machine-changing operation is enabled.
 - Lost-authenticator replacement remains intentionally unavailable pending a separately approved trusted-setup procedure.
-- F-516-01 remains OPEN until W6 merges, independent A4 review passes, and Product Owner completes real Google OIDC + Windows DPAPI/authenticator smoke tests.
+- F-516-01 remains OPEN until independent A4 review passes and Product Owner completes real Google OIDC + Windows DPAPI/authenticator smoke tests.
 
 **Phase 6 is NOT AUTHORIZED.** Phase 5 closeout and separate Phase 6 approval are still required; F-516-01 completion alone does not grant permission to execute on Windows.

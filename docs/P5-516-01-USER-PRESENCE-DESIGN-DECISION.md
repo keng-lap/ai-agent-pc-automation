@@ -165,7 +165,7 @@ F-516-01 can close only when all of the following are demonstrated:
 
 **Merged work:** TOTP core, exact-action step-up core, audit/privacy controls, authenticator enrollment/storage, and Google OIDC/session core (PRs #114–#118).
 
-**In progress:** W6 runtime/API/frontend integration and regression tests on branch `feat/P5-516-01-w6-auth-runtime-integration`. This branch is not yet merged.
+**Merged:** W6 runtime/API/frontend integration and regression tests (PR #119). Backend tests (370 passed, 1 skipped), Ruff, frontend unit tests, desktop/mobile browser E2E, frontend build, and Windows DPAPI CI all passed.
 
 **Open decision:** trusted-setup replacement after loss of the authenticator device. Until a separately approved procedure exists, the Agent does not provide device replacement or self-service recovery.
 
