@@ -233,7 +233,7 @@ class EncryptedTotpSecretFileStore:
                 raise SecretStoreError("Encrypted authenticator storage is invalid.") from None
             except SecretStoreError:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - sanitize platform protector failures
                 raise SecretStoreError("Encrypted authenticator storage is unavailable.") from None
 
 
