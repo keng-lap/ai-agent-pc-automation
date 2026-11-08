@@ -46,7 +46,7 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
     manager, store = build_manager(tmp_path)
     enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
     payload = base64.b64decode(enrollment.qr_data_uri.split(",", 1)[1])
-    assert enrollment.qr_data_uri.startswith("data:image/svg+xml;base64,")
+    assert enrollment.qr_data_uri.startswith("data:image/png;base64,")
     assert b"<svg" in payload
 
     # The QR response is one-time; persisted bytes contain only protector output.
