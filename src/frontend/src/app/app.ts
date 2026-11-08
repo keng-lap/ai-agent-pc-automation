@@ -323,7 +323,7 @@ export class App implements AfterViewChecked {
   protected confirmAuthenticatorSetup(): void {
     const enrollmentId = this.enrollmentId();
     const code = this.authCode();
-    if (!enrollmentId || !/^\\d{6}$/.test(code) || this.authBusy()) return;
+    if (!enrollmentId || !/^\d{6}$/.test(code) || this.authBusy()) return;
     this.authBusy.set(true);
     this.authError.set('');
     defer(() => this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code))
