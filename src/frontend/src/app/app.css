@@ -110,3 +110,11 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 
 
 
+
+
+.auth-card { display: grid; gap: 12px; padding: 22px 26px; }
+.auth-card h2 { margin: 0; font-size: 19px; }
+.auth-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.auth-card label { color: var(--ink); font-size: 12px; font-weight: 700; }
+.auth-card input { width: min(100%, 220px); padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-raised); color: var(--ink); font: inherit; letter-spacing: .18em; }
+.auth-qr { width: min(240px, 100%); height: auto; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
