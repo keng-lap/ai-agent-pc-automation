@@ -338,6 +338,7 @@ def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
         "google-genai>=1.0.0",
         "qrcode[pil]>=8.2",
         "google-auth>=2.62.1",
+        "requests>=2.32",
     ]
 
 
