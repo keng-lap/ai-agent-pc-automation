@@ -8,6 +8,7 @@ Approved direction:
 - Google OpenID Connect sign-in; owner identity keyed by the enrolled Google `sub`.
 - High-risk approval requires a fresh SMS OTP sent only to the owner's pre-registered phone number.
 - OTP approval is bound to one immutable action and does not authorize a session or future actions.
+- Account recovery sends a one-time confirmation code to the email address on the same enrolled Google account; the user must enter the code to complete the recovery step. The destination is not user-selectable during recovery.
 
 This document is a work breakdown and dependency plan. It does not select vendors, approve credentials or production integrations, or authorize runtime changes.
 
@@ -16,7 +17,7 @@ This document is a work breakdown and dependency plan. It does not select vendor
 | ID | Workstream | Can proceed in parallel? | Required interface / dependency | Deliverable |
 |---|---|---|---|---|
 | W1 | Google OIDC sign-in and owner allowlist | Yes | Existing local web-app session boundary; owner enrollment decision | OIDC adapter contract, callback/session design, mocked tests |
-| W2 | Registered phone enrollment and recovery | Design can proceed in parallel; runtime wiring depends on W1 identity | Stable owner identity; recovery ceremony decision | Enrollment/recovery state machine, threat model, tests |
+| W2 | Registered phone enrollment and recovery | Design can proceed in parallel; runtime wiring depends on W1 identity | Stable owner identity; recovery ceremony decision | Phone enrollment/recovery state machine, Google-account email confirmation flow, threat model, tests |
 | W3 | OTP challenge service and SMS provider adapter | Core challenge logic can proceed in parallel using a fake provider; delivery integration depends on W2 and provider selection | Registered destination interface; provider contract | Challenge lifecycle, one-time atomic consume, rate limits, fake-provider tests |
 | W4 | Exact-action binding and backend risk gate | Yes, in parallel with W1-W3 | Current plan/approval contract and backend policy | Canonical action digest, server-owned risk decision, mutation/replay tests |
 | W5 | Audit and privacy verification | Yes, in parallel | Existing bounded audit sink and event schema | Events for sign-in/step-up outcomes; redaction and no-secret tests |
@@ -36,7 +37,7 @@ This document is a work breakdown and dependency plan. It does not select vendor
 
 - Google Cloud project / OAuth client ownership, redirect configuration, and secret handling.
 - SMS provider, Thailand delivery support, pricing, delivery receipts, webhook authentication, and retention.
-- Phone enrollment and lost-phone recovery procedure.
+- Phone enrollment and lost-phone recovery procedure. Account recovery email confirmation is decided: send a single-use, short-lived code to the email on the enrolled Google account and require successful entry. This confirms access to that mailbox; it is not an independent factor if the Google account itself is compromised, and it must not silently replace or change the enrolled phone number.
 - Session lifetime and reauthentication rules.
 - Exact backend risk categories that trigger SMS step-up.
 - Whether any external provider communication is allowed in the target deployment and how it is disclosed.
