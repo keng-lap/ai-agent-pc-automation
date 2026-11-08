@@ -307,8 +307,15 @@ def approve_plan_review(
             raise HTTPException(status_code=409, detail="Plan requires clarification before approval.")
 
         services = getattr(request.app.state, "auth_services", None)
+        if services is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Google sign-in and authenticator approval are not configured.",
+            )
+        principal = getattr(request.state, "principal", None)
+        if principal is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
         if services is not None:
-            principal = getattr(request.state, "principal", None)
             if (
                 principal is None
                 or _payload.challenge_id is None
@@ -345,9 +352,6 @@ def approve_plan_review(
                 )
                 raise HTTPException(status_code=403, detail="Step-up verification failed.")
             record_auth_audit_event(event_type="auth.step_up", outcome="success")
-        elif _payload.challenge_id is not None or _payload.totp_code is not None:
-            raise HTTPException(status_code=422, detail="Step-up fields are unavailable.")
-
         action = "ติดตั้ง" if plan.tool_id == "software.install" else "ถอนการติดตั้ง"
         try:
             # A plan can contain several programs. Dry-run every listed item;
