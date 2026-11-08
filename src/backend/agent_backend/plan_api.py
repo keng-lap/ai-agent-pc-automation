@@ -254,8 +254,18 @@ def create_plan_step_up_challenge(
     try:
         enrolled_secret = services.secret_store.load(owner_sub=principal.owner_sub)
     except SecretStoreError:
+        record_auth_audit_event(
+            event_type="auth.step_up",
+            outcome="denied",
+            reason="secret_store_unavailable",
+        )
         raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
     if enrolled_secret is None:
+        record_auth_audit_event(
+            event_type="auth.step_up",
+            outcome="denied",
+            reason="authenticator_not_enrolled",
+        )
         raise HTTPException(status_code=403, detail="Authenticator enrollment required.")
 
     tool_definition = next(
@@ -272,7 +282,6 @@ def create_plan_step_up_challenge(
         action_digest=plan.plan_digest,
         risk_class=tool_definition.risk_class,
     )
-    record_auth_audit_event(event_type="auth.step_up", outcome="success")
     return StepUpChallengeResponse(
         challenge_id=challenge.challenge_id,
         plan_id=challenge.plan_id,
