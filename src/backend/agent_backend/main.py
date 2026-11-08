@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .auth_api import build_auth_services, require_session, router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
 from .plan_api import router as plan_router
@@ -16,9 +17,11 @@ from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 
 
-def create_app(settings=None) -> FastAPI:
+def create_app(settings=None, auth_services=None) -> FastAPI:
     validate_policy_configuration()
     settings = settings or load_settings()
+    if auth_services is None:
+        auth_services = build_auth_services(settings)
     docs_enabled = settings.app_env == "development"
     application = FastAPI(
         title="AI Agent PC Automation",
@@ -27,9 +30,12 @@ def create_app(settings=None) -> FastAPI:
         redoc_url="/redoc" if docs_enabled else None,
         openapi_url="/openapi.json" if docs_enabled else None,
     )
+    application.state.settings = settings
+    application.state.auth_services = auth_services
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
-    application.include_router(chat_router)
-    application.include_router(plan_router)
+    application.include_router(auth_router)
+    application.include_router(chat_router, dependencies=[Depends(require_session)])
+    application.include_router(plan_router, dependencies=[Depends(require_session)])
     return application
 
 
