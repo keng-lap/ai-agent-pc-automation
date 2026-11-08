@@ -247,9 +247,8 @@ def test_missing_totp_prevents_tool_handler_exception_path(monkeypatch):
     plan_id = create_eligible_plan_id()
     response = safe_client.post(f"/api/plans/{plan_id}/approve", json={})
 
-    assert response.status_code == 500
-    assert response.json() == {"detail": "Internal server error."}
-    assert len(calls) == 1
+    assert response.status_code == 503
+    assert calls == []
 
 
 
