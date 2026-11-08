@@ -230,7 +230,7 @@ class GoogleOidcClient:
             payload = response.json()
         except OidcAuthenticationError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - sanitize untrusted provider/network failures
             raise OidcAuthenticationError("Google token exchange failed.") from None
 
         if not isinstance(payload, dict) or not isinstance(payload.get("id_token"), str):
@@ -254,7 +254,7 @@ class GoogleOidcClient:
                 GoogleRequest(),
                 audience=self._client_id,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - sanitize third-party token verification errors
             raise OidcAuthenticationError("Google ID token signature is invalid.") from None
 
     def _validate_identity_token(
@@ -267,7 +267,7 @@ class GoogleOidcClient:
             claims = self._token_verifier(token)
         except OidcAuthenticationError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - sanitize injected/provider verifier failures
             raise OidcAuthenticationError("Google ID token is invalid.") from None
         if not isinstance(claims, Mapping):
             raise OidcAuthenticationError("Google ID token claims are invalid.")
