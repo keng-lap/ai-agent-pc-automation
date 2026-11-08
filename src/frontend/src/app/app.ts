@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { ChatApi, ConversationHistory, PlanReviewResponse, UiLanguage } from './chat/chat-api';
+import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 
 type EntryKind = 'user' | 'agent' | 'error';
@@ -226,9 +226,19 @@ export class App implements AfterViewChecked {
   protected readonly clearing = signal(false);
   protected readonly conversationNotice = signal('');
   private readonly conversationId = signal('');
+  protected readonly authReady = signal(false);
+  protected readonly authEnabled = signal(false);
+  protected readonly authenticated = signal(false);
+  protected readonly authenticatorEnrolled = signal(false);
+  protected readonly authBusy = signal(false);
+  protected readonly authError = signal('');
+  protected readonly enrollmentId = signal('');
+  protected readonly qrDataUri = signal('');
+  protected readonly authCode = signal('');
 
   constructor() {
     this.document.documentElement.lang = this.language();
+    this.refreshAuthSession();
     const storedConversationId = readStoredConversationId();
     const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
     this.conversationId.set(conversationId);
@@ -242,6 +252,112 @@ export class App implements AfterViewChecked {
   ngAfterViewChecked(): void {
     const log = this.messageLog?.nativeElement;
     if (log) log.scrollTop = log.scrollHeight;
+  }
+
+
+  protected refreshAuthSession(): void {
+    defer(() => this.chatApi.getAuthSession())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (session: AuthSession) => {
+          this.authEnabled.set(session.enabled);
+          this.authenticated.set(session.authenticated);
+          this.authenticatorEnrolled.set(session.authenticator_enrolled);
+          this.authReady.set(true);
+        },
+        error: () => {
+          this.authError.set(this.language() === 'th'
+            ? 'เชื่อมต่อระบบยืนยันตัวตนไม่ได้ กรุณาตรวจสอบ Backend'
+            : 'Could not reach the authentication service. Check the backend.');
+          this.authReady.set(true);
+        },
+      });
+  }
+
+  protected loginWithGoogle(): void {
+    if (this.authBusy()) return;
+    this.authBusy.set(true);
+    this.authError.set('');
+    defer(() => this.chatApi.startGoogleLogin())
+      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .subscribe({
+        next: (result) => {
+          if (typeof result.authorization_url !== 'string'
+            || !result.authorization_url.startsWith('https://accounts.google.com/')) {
+            this.authError.set('Invalid Google sign-in URL.');
+            return;
+          }
+          window.location.assign(result.authorization_url);
+        },
+        error: () => this.authError.set(this.language() === 'th'
+          ? 'เริ่มเข้าสู่ระบบ Google ไม่สำเร็จ'
+          : 'Could not start Google sign-in.'),
+      });
+  }
+
+  protected beginAuthenticatorSetup(): void {
+    if (this.authBusy()) return;
+    this.authBusy.set(true);
+    this.authError.set('');
+    defer(() => this.chatApi.beginAuthenticatorEnrollment())
+      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .subscribe({
+        next: (result) => {
+          this.enrollmentId.set(result.enrollment_id);
+          this.qrDataUri.set(result.qr_data_uri);
+          this.authCode.set('');
+        },
+        error: () => this.authError.set(this.language() === 'th'
+          ? 'สร้าง QR สำหรับ Authenticator ไม่สำเร็จ'
+          : 'Could not create the authenticator QR code.'),
+      });
+  }
+
+  protected onAuthCodeInput(event: Event): void {
+    this.authCode.set((event.target as HTMLInputElement).value.replace(/[^0-9]/g, '').slice(0, 6));
+  }
+
+  protected confirmAuthenticatorSetup(): void {
+    const enrollmentId = this.enrollmentId();
+    const code = this.authCode();
+    if (!enrollmentId || !/^\\d{6}$/.test(code) || this.authBusy()) return;
+    this.authBusy.set(true);
+    this.authError.set('');
+    defer(() => this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code))
+      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .subscribe({
+        next: (result) => {
+          if (result.enrolled !== true) {
+            this.authError.set('Authenticator confirmation failed.');
+            return;
+          }
+          this.enrollmentId.set('');
+          this.qrDataUri.set('');
+          this.authCode.set('');
+          this.authenticatorEnrolled.set(true);
+        },
+        error: () => this.authError.set(this.language() === 'th'
+          ? 'รหัสไม่ถูกต้องหรือหมดอายุ ลองเริ่มลงทะเบียนใหม่'
+          : 'Invalid or expired code. Start enrollment again.'),
+      });
+  }
+
+  protected logout(): void {
+    if (this.authBusy()) return;
+    this.authBusy.set(true);
+    defer(() => this.chatApi.logout())
+      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .subscribe({
+        next: () => {
+          this.authenticated.set(false);
+          this.authenticatorEnrolled.set(false);
+          this.enrollmentId.set('');
+          this.qrDataUri.set('');
+        },
+        error: () => this.authError.set(this.language() === 'th'
+          ? 'ออกจากระบบไม่สำเร็จ'
+          : 'Could not sign out.'),
+      });
   }
 
   protected setLanguage(language: UiLanguage): void {
