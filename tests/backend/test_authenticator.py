@@ -12,7 +12,7 @@ from agent_backend.authenticator import (
 from agent_backend.totp import code_at
 
 
-class TestProtector:
+class FakeProtector:
     """Non-cryptographic test double; production Windows adapter uses DPAPI."""
 
     def protect(self, plaintext: bytes) -> bytes:
@@ -25,32 +25,34 @@ class TestProtector:
         return ciphertext[len(prefix) :]
 
 
+RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+
+
 def build_manager(tmp_path, now=90):
     store = EncryptedTotpSecretFileStore(
         tmp_path / "authenticator.json",
-        TestProtector(),
+        FakeProtector(),
     )
-    return (
-        AuthenticatorEnrollmentManager(
-            secret_store=store,
-            clock=lambda: now,
-        ),
-        store,
+    manager = AuthenticatorEnrollmentManager(
+        secret_store=store,
+        clock=lambda: now,
+        secret_factory=lambda: RFC_SECRET,
     )
+    return manager, store
 
 
 def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
     manager, store = build_manager(tmp_path)
     enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
     payload = base64.b64decode(enrollment.qr_data_uri.split(",", 1)[1])
-    assert b"otpauth://totp" in payload
+    assert enrollment.qr_data_uri.startswith("data:image/svg+xml;base64,")
+    assert b"<svg" in payload
 
-    # The QR itself contains the secret only in the one-time response; the
-    # persisted file contains only the protector output, never plaintext.
+    # The QR response is one-time; persisted bytes contain only protector output.
     assert manager.confirm(
         enrollment_id=enrollment.enrollment_id,
         owner_sub="owner-sub",
-        code=_code_from_qr(enrollment.qr_data_uri, 90),
+        code=code_at(RFC_SECRET, 90),
     )
     raw_file = (tmp_path / "authenticator.json").read_text(encoding="ascii")
     assert "owner-sub" not in raw_file
@@ -62,7 +64,7 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
 def test_enrollment_is_one_time_and_does_not_allow_self_service_replacement(tmp_path):
     manager, _store = build_manager(tmp_path)
     enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    code = _code_from_qr(enrollment.qr_data_uri, 90)
+    code = code_at(RFC_SECRET, 90)
 
     assert manager.confirm(
         enrollment_id=enrollment.enrollment_id,
@@ -103,7 +105,7 @@ def test_invalid_totp_exhausts_five_enrollment_attempts(tmp_path):
 
 def test_expired_enrollment_cannot_be_confirmed(tmp_path):
     now = [90.0]
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", TestProtector())
+    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
     manager = AuthenticatorEnrollmentManager(
         secret_store=store,
         clock=lambda: now[0],
@@ -145,12 +147,3 @@ def test_dpapi_adapter_is_explicitly_windows_only():
             WindowsDpapiProtector().protect(b"test")
 
 
-def _code_from_qr(qr_data_uri, timestamp):
-    import re
-    from xml.etree import ElementTree
-
-    svg = base64.b64decode(qr_data_uri.split(",", 1)[1]).decode("utf-8")
-    # Extract the provisioning URI from the SVG's path data is not reliable.
-    # Enrollment integration tests use the manager's pending secret directly
-    # via a dedicated test helper rather than reverse-engineering QR pixels.
-    raise AssertionError("test helper must be replaced with an explicit pending-code seam")
