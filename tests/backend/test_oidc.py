@@ -186,3 +186,62 @@ def test_redirect_uri_must_be_loopback_http(redirect_uri):
             redirect_uri=redirect_uri,
             token_verifier=lambda _token: {},
         )
+
+
+
+def test_session_store_requires_explicit_ttl_and_master_allowlist():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    with pytest.raises(ValueError, match="session TTL"):
+        ApplicationSessionStore(ttl_seconds=0)
+
+    store = ApplicationSessionStore(ttl_seconds=1800, clock=lambda: 1100)
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    identity = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
+    credential = store.create(identity=identity, allowlist=allowlist)
+
+    principal = store.resolve(credential.token)
+    assert principal.owner_sub == identity.sub
+    assert principal.session_id == credential.session_id
+    assert credential.token not in store._sessions
+
+
+def test_session_store_rejects_non_master_identity():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    store = ApplicationSessionStore(ttl_seconds=1800, clock=lambda: 1100)
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    identity = GoogleIdentity(sub="another-sub", email="owner@example.test")
+
+    with pytest.raises(OidcAuthenticationError, match="Master User"):
+        store.create(identity=identity, allowlist=allowlist)
+
+
+def test_session_store_expires_and_revokes_tokens():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = [1100.0]
+    store = ApplicationSessionStore(ttl_seconds=60, clock=lambda: now[0])
+    identity = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    credential = store.create(identity=identity, allowlist=allowlist)
+
+    assert store.resolve(credential.token) is not None
+    assert store.revoke(credential.token)
+    assert store.resolve(credential.token) is None
+
+    second = store.create(identity=identity, allowlist=allowlist)
+    now[0] = second.expires_at
+    assert store.resolve(second.token) is None
+
+
+def test_session_store_capacity_is_bounded():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    store = ApplicationSessionStore(ttl_seconds=1800, clock=lambda: 1100, capacity=1)
+    identity = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    store.create(identity=identity, allowlist=allowlist)
+
+    with pytest.raises(OidcAuthenticationError, match="capacity"):
+        store.create(identity=identity, allowlist=allowlist)
