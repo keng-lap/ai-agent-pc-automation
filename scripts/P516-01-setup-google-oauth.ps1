@@ -211,13 +211,13 @@ Write-Host ("Google verified account: " + $verifiedEmail) -ForegroundColor Green
 if ($masterSub -and $masterSub -ne $verifiedSub) {
     Write-Host "This account differs from the configured Master User." -ForegroundColor Yellow
     $replaceAnswer = (Read-Host ("Replace the Master User with " + $verifiedEmail + "? Type YES to confirm")).Trim()
-    if ($replaceAnswer -cne "YES") {
+    if ($replaceAnswer -ine "YES") {
         throw "Master User was not changed. No .env changes were saved."
     }
 }
 elseif (-not $masterSub) {
     $confirmAnswer = (Read-Host ("Set " + $verifiedEmail + " as the single Master User? Type YES to confirm")).Trim()
-    if ($confirmAnswer -cne "YES") {
+    if ($confirmAnswer -ine "YES") {
         throw "Master User setup was not confirmed. No .env changes were saved."
     }
 }
