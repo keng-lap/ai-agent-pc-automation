@@ -17,7 +17,7 @@ function Get-DotEnvValue([string[]]$Lines, [string]$Name) {
     $prefix = "$Name="
     foreach ($line in $Lines) {
         if ($line.StartsWith($prefix, [StringComparison]::Ordinal)) {
-            return $line.Substring($prefix.Length).Trim().Trim('"').Trim("'")
+            return $line.Substring($prefix.Length).Trim().Trim([char[]]@(34, 39))
         }
     }
     return ""
