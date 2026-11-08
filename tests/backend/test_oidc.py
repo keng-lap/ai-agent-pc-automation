@@ -47,7 +47,8 @@ def valid_claims(nonce):
 def build_client(*, now=1100, claims=None, response=None, transactions=None):
     claims = claims or valid_claims("expected-nonce")
     http = FakeHttp(response or FakeResponse({"id_token": "signed-id-token"}))
-    verifier = lambda _token: claims
+    def verifier(_token):
+        return claims
     client = GoogleOidcClient(
         client_id="test-client-id",
         client_secret="test-client-secret",
