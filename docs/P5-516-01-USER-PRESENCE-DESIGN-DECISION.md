@@ -112,57 +112,63 @@ TOTP avoids SMS fees, SIM-swap and carrier-delivery dependencies, but is **not p
 - A4 must review identity, session, lost-device handling, exact-action binding, rate limits, and audit behavior before any side-effecting capability.
 - WebAuthn/passkeys may be considered as a future hardening option, but are not selected by this decision.
 
-## 5. External data flow and remaining implementation choices
+## 5. External data flow and implementation constraints
 
-Google sign-in requires outbound communication with Google for identity only. TOTP generation and verification are local and require no authenticator-vendor integration or paid messaging service. Do not send prompts, plans, files, machine data, or Windows telemetry to Google.
+Google sign-in requires outbound communication with Google for OIDC identity verification only. TOTP generation, enrollment verification, and action step-up are local. Do not send prompts, plans, files, machine data, or Windows telemetry to Google.
 
-Remaining details to resolve before runtime implementation:
-1. Google OAuth client/project ownership, redirect URI, consent configuration, and secret management.
-2. Trusted-setup authenticator enrollment, encrypted secret storage/key protection, and lost-device replacement ceremony.
-3. Session lifetime, reauthentication, logout, and revocation behavior.
-4. Exact backend risk categories that trigger TOTP step-up.
-5. Security review of the Google OIDC integration and its data-processing terms.
+The Product Owner approved implementation on 2026-11-08. The implementation must preserve these constraints:
 
-No provider account, credential, or production integration is selected by this document.
+- OAuth client ID and secret are supplied locally through ignored `.env`; never commit or paste real credentials.
+- The exact Google `sub` for the one Master User is configured explicitly. Email address is not an identity key and cannot grant or change ownership.
+- The OAuth callback must be a loopback HTTP URL registered exactly in the Google Cloud OAuth client.
+- Session lifetime must be explicitly configured (60–86400 seconds); no implicit lifetime is selected. Sessions are process-local and invalidated on restart. Multi-worker operation is unsupported until shared atomic storage is designed and reviewed.
+- The authenticator secret is encrypted with Windows DPAPI for the current Windows user. QR data is returned once in memory and is not persisted by the frontend.
+- The application cookie is HttpOnly and SameSite=Lax for the local HTTP loopback deployment. This is not a public-network deployment profile.
+- Real Google credentials and a real Windows DPAPI test must be supplied/run by the Product Owner locally; tests in CI use mock OIDC and a test-only secret protector.
+- No Google access/refresh token is retained after identity verification.
 
 ## 6. Scope and explicit exclusions
 
-This decision does **not** authorize:
-- implementation of Google OAuth or authenticator runtime endpoints;
-- use of paid SMS, SMS provider integration, email OTP, or recovery codes;
-- storage or use of real Google credentials in this documentation-only task;
-- changing current approval behavior or enabling a new approval route;
-- enabling P2 machine inspection or P3 machine-changing execution;
-- installing software, running commands, accessing files/processes, or changing Windows settings;
-- opening the local application to a public network;
-- starting Phase 6.
+The Product Owner authorized the bounded F-516-01 runtime implementation on 2026-11-08. This authorization covers only Google OIDC sign-in, one Master User session, authenticator enrollment, TOTP exact-action step-up, privacy/audit integration, UI integration, and tests.
 
-The existing P1 workflow remains dry-run/plan-only. F-516-01 remains open until the approved design is implemented, tested, and independently reviewed.
+It does **not** authorize:
+- SMS, SMS providers, paid messaging, email OTP, recovery codes, or a second Master User;
+- Google Account recovery or a parallel recovery mechanism inside the Agent;
+- self-service authenticator replacement after device loss;
+- public-network exposure or mobile/remote access;
+- P2 machine inspection, P3 machine-changing execution, or any real Windows command;
+- Phase 6.
 
-## 7. Acceptance criteria for future implementation
+The existing P1 workflow remains dry-run/plan-only. If Google authentication or authenticator configuration is missing, high-risk approval must fail closed. No approval may fall back to the pre-TOTP path.
 
-A separately authorized implementation must demonstrate:
-- only the enrolled Google `sub` can sign in as Master User;
-- forged, expired, wrong-audience, replayed, or otherwise invalid Google identity responses are rejected;
-- only the enrolled authenticator can complete step-up;
-- TOTP is bound to the authenticated owner, session, and exact immutable action digest;
-- action mutation, expiry, replay, concurrent verification, wrong code, clock skew, and rate-limit cases fail closed;
-- no TOTP or authenticator secret appears in logs, API responses, audit events, or frontend storage;
-- missing or unavailable authenticator secret cannot bypass step-up;
-- lost-device replacement cannot be performed using only the same possibly compromised session;
-- all local-first, backend-owned policy, exact-action confirmation, audit privacy, and dry-run-only boundaries remain intact;
-- A4 security review and targeted regression tests pass before F-516-01 can be marked resolved.
+## 7. Acceptance criteria
+
+F-516-01 can close only when all of the following are demonstrated:
+
+- only the configured stable Google `sub` can create a Master User session;
+- forged, expired, wrong-audience, wrong-issuer, wrong-nonce, replayed, or otherwise invalid Google identity responses are rejected;
+- the login transaction uses state, nonce, and PKCE; Google access/refresh tokens are not retained;
+- session tokens are opaque, bounded, expiring, revocable, and stored only as digests;
+- only one authenticator can be enrolled; QR/provisioning material is one-time and not logged or persisted;
+- authenticator secret storage is protected by Windows DPAPI and unavailable/corrupt storage fails closed;
+- every high-risk approval requires a fresh TOTP challenge bound to owner, session, plan ID, immutable digest, and backend-derived risk;
+- action mutation, expiry, replay, concurrent verification, wrong code, clock skew, rate limit, missing configuration, and missing secret fail closed;
+- frontend never stores TOTP secrets or QR data persistently;
+- local-only Host/Origin/API-token controls and dry-run-only tool boundary remain intact;
+- backend, frontend, Ruff, browser E2E, and security regression checks pass;
+- an independent A4 review records evidence and any residual risk;
+- the Product Owner locally completes real Google OAuth and Windows DPAPI/authenticator smoke tests.
 
 ## 8. Current status and next gate
 
-**Approved:** Google sign-in plus authenticator-app TOTP (QR enrollment) for high-risk action approval; SMS delivery is rejected.
+**Approved:** Google OIDC sign-in plus authenticator-app TOTP (QR enrollment) for high-risk approval. SMS, email OTP, recovery codes, and second Master User are rejected.
 
-**Still requiring a separate procedure decision:** trusted-setup replacement after loss of the authenticator device.
+**Merged work:** TOTP core, exact-action step-up core, audit/privacy controls, authenticator enrollment/storage, and Google OIDC/session core (PRs #114–#118).
 
-**Not implemented:** Google OIDC and TOTP runtime behavior.
+**In progress:** W6 runtime/API/frontend integration and regression tests on branch `feat/P5-516-01-w6-auth-runtime-integration`. This branch is not yet merged.
 
-**F-516-01:** Open — approved direction recorded; implementation and independent verification remain outstanding.
+**Open decision:** trusted-setup replacement after loss of the authenticator device. Until a separately approved procedure exists, the Agent does not provide device replacement or self-service recovery.
 
-**Phase 6 / real PC execution:** NOT AUTHORIZED.
+**F-516-01:** OPEN — do not mark complete until W6 is merged, independent A4 review is complete, and local Windows/Google smoke tests pass.
 
-Next step: reconcile the project status and Phase 5 documents, then prepare bounded, separately authorized runtime workstreams using mocked OIDC and local/test TOTP only.
+**Phase 6 / real PC execution:** NOT AUTHORIZED. Completing F-516-01 is a prerequisite, not automatic permission to execute real machine-changing actions.
