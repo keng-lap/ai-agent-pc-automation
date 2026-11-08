@@ -64,3 +64,12 @@ test('mobile controls expose accessible names and keyboard focus', async ({ page
   await sendButton.focus();
   await expect(sendButton).toBeFocused();
 });
+
+test('mobile dashboard keeps the primary navigation available', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+
+  await expect(page.getByRole('navigation', { name: 'นำทาง' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /สนทนากับ Agent/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /ตั้งค่า Gemini/ })).toBeVisible();
+});
