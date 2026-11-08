@@ -69,11 +69,11 @@ def provisioning_uri(secret: str, *, account_name: str, issuer: str) -> str:
     )
 
 
-def code_at(secret: str, timestamp: int | float) -> str:
+def code_at(secret: str, timestamp: float) -> str:
     """Return the six-digit RFC 6238 code for a timestamp (test/support helper)."""
     key = _decode_secret(secret)
     if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)):
-        raise ValueError("timestamp must be a finite number")
+        raise TypeError("timestamp must be a finite number")
     if not math.isfinite(timestamp) or timestamp < 0:
         raise ValueError("timestamp must be a finite non-negative number")
     counter = int(timestamp) // TOTP_PERIOD_SECONDS
@@ -88,7 +88,7 @@ def matching_step(
     secret: str,
     code: str,
     *,
-    timestamp: int | float,
+    timestamp: float,
     window_steps: int = TOTP_WINDOW_STEPS,
 ) -> int | None:
     """Return the matched counter step within the bounded clock-skew window."""
@@ -146,7 +146,7 @@ class TotpReplayGuard:
         owner_key: str,
         secret: str,
         code: str,
-        timestamp: int | float | None = None,
+        timestamp: float | None = None,
     ) -> bool:
         if not isinstance(owner_key, str) or not owner_key or len(owner_key) > 256:
             return False
