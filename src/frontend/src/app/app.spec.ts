@@ -14,6 +14,7 @@ class FakeChatApi {
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
   approvalCalls: string[] = [];
   stepUpCalls: string[] = [];
+  authSession = { enabled: false, authenticated: false, authenticator_enrolled: false };
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -50,7 +51,7 @@ class FakeChatApi {
   });
 
   getAuthSession(): Observable<{ enabled: boolean; authenticated: boolean; authenticator_enrolled: boolean }> {
-    return of({ enabled: false, authenticated: false, authenticator_enrolled: false });
+    return of(this.authSession);
   }
 
   startGoogleLogin(): Observable<{ authorization_url: string }> {
@@ -211,6 +212,7 @@ describe('App chat UI (T-202)', () => {
 
 
   it('shows dry-run approval only for a fully specified plan and renders the result after approval', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     await render();
     api.planResponder = (request) => of({
       request,
