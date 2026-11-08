@@ -86,3 +86,5 @@ $RECYCLE.BIN/
 src/frontend/test-results/
 src/frontend/playwright-report/
 src/frontend/playwright/.cache/
+
+.agent-state/
