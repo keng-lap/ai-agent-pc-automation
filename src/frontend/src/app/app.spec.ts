@@ -241,7 +241,7 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('อนุมัติให้จำลอง (Dry Run)');
+    expect(fixture.nativeElement.textContent).toContain('ยืนยันตัวตนเพื่ออนุมัติ');
     expect(fixture.nativeElement.textContent).not.toContain('Mock reply');
     expect(fixture.nativeElement.querySelector('.installer-card')).not.toBeNull();
     expect((fixture.nativeElement.querySelector('.installer-details') as HTMLDetailsElement).open).toBe(false);
@@ -250,9 +250,23 @@ describe('App chat UI (T-202)', () => {
     const approveButtons = Array.from(
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     );
-    const approve = approveButtons.find((button) => button.textContent?.includes('อนุมัติให้จำลอง'));
-    if (!approve) throw new Error('Approval button was not rendered');
+    const approve = approveButtons.find((button) => button.textContent?.includes('ยืนยันตัวตนเพื่ออนุมัติ'));
+    if (!approve) throw new Error('Step-up button was not rendered');
     approve.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.stepUpCalls).toEqual(['a'.repeat(32)]);
+    const codeInput = fixture.nativeElement.querySelector('input[id^="totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันและจำลอง'));
+    if (!confirm) throw new Error('TOTP confirmation button was not rendered');
+    confirm.click();
     await fixture.whenStable();
     fixture.detectChanges();
 
