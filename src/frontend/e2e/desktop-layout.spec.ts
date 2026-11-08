@@ -57,3 +57,13 @@ test('language switch is usable without invoking computer actions', async ({ pag
   await expect(page.getByRole('heading', { name: 'Chat with your Agent' })).toBeVisible();
   await expect(englishButton).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('dashboard navigation links point to the existing workspace panels', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByRole('complementary', { name: 'เมนูหลัก' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /สนทนากับ Agent/ })).toHaveAttribute('href', '#workspace');
+  await expect(page.getByRole('link', { name: /ตั้งค่า Gemini/ })).toHaveAttribute('href', '#provider-settings');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.locator('#provider-settings')).toBeVisible();
+});
