@@ -106,12 +106,3 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .program-review small { color: var(--muted); font-size: 10px; }
 .plan-review { min-width: 0; }
 .plan-review .detail-meta { overflow-wrap: anywhere; }
-
-
-
-
-
-
-.auth-card { display: grid; gap: 10px; padding: 20px; }
-.auth-qr { width: 220px; max-width: 100%; background: white; }
-.auth-card input { max-width: 220px; }
