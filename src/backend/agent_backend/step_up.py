@@ -140,7 +140,12 @@ class StepUpChallengeStore:
         if not self._valid_identity(owner_sub, session_id):
             return False
         now = self._clock()
-        if isinstance(now, bool) or not isinstance(now, (int, float)) or now < 0:
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(now)
+            or now < 0
+        ):
             return False
 
         with self._lock:
