@@ -88,7 +88,7 @@ These controls describe the approved direction and implementation requirements; 
 | Time step | 30 seconds |
 | Clock tolerance | Current time step plus/minus at most one step |
 | Use | One successful verification per accepted time step |
-| Attempts | Maximum 5 failed attempts per challenge window, with bounded owner/session rate limits |
+| Attempts | Maximum 5 failed attempts per challenge and 5 failed attempts per owner/session in a rolling 300-second window |
 | Storage | Secret encrypted at rest; no QR/provisioning URI persistence |
 | Comparison | Constant-time comparison |
 | Replay | Atomically record and reject an already-consumed time step |
