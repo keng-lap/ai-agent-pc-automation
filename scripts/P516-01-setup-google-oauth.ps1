@@ -146,9 +146,9 @@ $env:GOOGLE_OIDC_BOOTSTRAP_REDIRECT_URI = $bootstrapRedirect
 
 Write-Host ""
 Write-Host "Starting Google identity verification in your browser..."
-$bootstrapOutput = @(& $python $bootstrapPath 2>&1)
+$bootstrapOutput = & $python $bootstrapPath 2>&1
 $bootstrapExitCode = $LASTEXITCODE
-$bootstrapText = ($bootstrapOutput | ForEach-Object { "$_" }) -join [Environment]::NewLine
+$bootstrapText = ($bootstrapOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
 
 if ($bootstrapExitCode -ne 0) {
     foreach ($line in $bootstrapOutput) {
