@@ -322,6 +322,7 @@ def test_runtime_dependencies_remain_unchanged():
         "uvicorn>=0.54",
         "python-dotenv>=1.2",
         "google-genai>=1.0.0",
+        "qrcode>=8.2",
     ]
 
 
