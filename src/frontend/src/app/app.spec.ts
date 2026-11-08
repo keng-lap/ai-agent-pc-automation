@@ -48,6 +48,26 @@ class FakeChatApi {
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
 
+  getAuthSession(): Observable<{ enabled: boolean; authenticated: boolean; authenticator_enrolled: boolean }> {
+    return of({ enabled: false, authenticated: false, authenticator_enrolled: false });
+  }
+
+  startGoogleLogin(): Observable<{ authorization_url: string }> {
+    return of({ authorization_url: 'https://accounts.google.com/test' });
+  }
+
+  beginAuthenticatorEnrollment(): Observable<{ enrollment_id: string; qr_data_uri: string; expires_at: number }> {
+    return of({ enrollment_id: 'a'.repeat(32), qr_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', expires_at: 0 });
+  }
+
+  confirmAuthenticatorEnrollment(): Observable<{ enrolled: boolean }> {
+    return of({ enrolled: true });
+  }
+
+  logout(): Observable<{ logged_out: boolean }> {
+    return of({ logged_out: true });
+  }
+
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
     this.calls.push({ message, language, conversationId });
     return this.responder(message, language);
