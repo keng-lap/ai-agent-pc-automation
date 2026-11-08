@@ -51,7 +51,7 @@ Start the local app using the repository's normal Windows setup/launcher. Open t
 3. Enter the six-digit code to confirm enrollment.
 4. Store the authenticator device safely. The Agent intentionally has no SMS, email OTP, recovery code, second owner, or self-service lost-device replacement.
 
-For a high-risk Dry Run approval, request a fresh challenge and enter a fresh six-digit code. The code is bound to that exact plan, digest, owner, and session and can be consumed only once.
+For a high-risk Dry Run approval, request a fresh challenge and enter a fresh six-digit code. The code is bound to that exact plan, digest, owner, and session and can be consumed only once. After restarting the backend, wait for the next 30-second authenticator code before approving; the current step is deliberately blocked to prevent replay from the previous process.
 
 ## 5. Security and support boundaries
 
