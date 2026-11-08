@@ -211,13 +211,13 @@ Write-Host ("Google verified account: " + $verifiedEmail) -ForegroundColor Green
 if ($masterSub -and $masterSub -ne $verifiedSub) {
     Write-Host "This account differs from the configured Master User." -ForegroundColor Yellow
     $replaceAnswer = (Read-Host ("Replace the Master User with " + $verifiedEmail + "? Type YES to confirm")).Trim()
-    if ($replaceAnswer -cne "YES") {
+    if ($replaceAnswer -ine "YES") {
         throw "Master User was not changed. No .env changes were saved."
     }
 }
 elseif (-not $masterSub) {
     $confirmAnswer = (Read-Host ("Set " + $verifiedEmail + " as the single Master User? Type YES to confirm")).Trim()
-    if ($confirmAnswer -cne "YES") {
+    if ($confirmAnswer -ine "YES") {
         throw "Master User setup was not confirmed. No .env changes were saved."
     }
 }
@@ -252,9 +252,24 @@ $env:BACKEND_PORT = [string]$backendPortNumber
 $env:LOCAL_AGENT_TOKEN = $localToken
 $env:PYTHONPATH = Join-Path $repoRoot "src\backend"
 
-$validationCode = 'from agent_backend.config import load_settings; s=load_settings(load_env_file=False); assert s.auth_enabled; print("Google OAuth configuration: valid")'
-& $python -c $validationCode
-$validationExitCode = $LASTEXITCODE
+$validationScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) ("p516-oauth-validation-" + [Guid]::NewGuid().ToString("N") + ".py")
+$validationLines = @(
+    'from agent_backend.config import load_settings'
+    'settings = load_settings(load_env_file=False)'
+    'assert settings.auth_enabled'
+    'print("Google OAuth configuration: valid")'
+)
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+try {
+    [System.IO.File]::WriteAllLines($validationScriptPath, $validationLines, $utf8NoBom)
+    & $python $validationScriptPath
+    $validationExitCode = $LASTEXITCODE
+}
+finally {
+    if (Test-Path -LiteralPath $validationScriptPath) {
+        Remove-Item -LiteralPath $validationScriptPath -Force
+    }
+}
 if ($validationExitCode -ne 0) {
     throw "Local configuration validation failed. .env was not changed."
 }
