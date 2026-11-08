@@ -321,7 +321,8 @@ def test_example_configuration_has_no_token_or_secret():
     example = (repo_root / ".env.example").read_text(encoding="utf-8").lower()
     assert "local_agent_token=" in example
     assert "local_agent_token=\n" in example
-    assert "secret=" not in example
+    assert "google_oidc_client_secret=" in example
+    assert "google_oidc_client_secret=real" not in example
     assert "api_key=" not in example
 
 
