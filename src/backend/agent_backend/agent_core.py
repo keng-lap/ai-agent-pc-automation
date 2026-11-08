@@ -9,13 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from agent_backend.planner import Language, TaskPlan, create_task_plan
-from agent_backend.policy import require_tool_allowed
-from agent_backend.tools import (
-    ToolResult,
-    execute_tool,
-    select_tool,
-    validate_tool_request,
-)
+from agent_backend.tools import ToolResult
 
 AgentProvider = Literal["chatgpt"]
 TaskStatus = Literal["planned", "dry_run_completed"]
@@ -35,26 +29,17 @@ class AgentResponse(BaseModel):
 
 
 def run_agent(message: str, language: Language, provider: AgentProvider) -> AgentResponse:
-    """Plan and dry-run a request without contacting an AI provider or the OS."""
+    """Create a plan only; approval-gated dispatch belongs exclusively to plan_api."""
     if provider != "chatgpt":
         raise ValueError("Unsupported agent provider")
 
     plan = create_task_plan(message, language)
-    try:
-        tool_request = select_tool(plan.intent)
-        validated_request = validate_tool_request(plan.intent, tool_request)
-    except ValueError:
-        tool_result = None
-    else:
-        require_tool_allowed(validated_request.tool_id)
-        tool_result = execute_tool(validated_request)
-
     return AgentResponse(
-        reply=_format_reply(plan, tool_result),
+        reply=_format_reply(plan, None),
         provider=provider,
         plan=plan,
-        task_status="dry_run_completed" if tool_result is not None else "planned",
-        tool_result=tool_result,
+        task_status="planned",
+        tool_result=None,
     )
 
 
