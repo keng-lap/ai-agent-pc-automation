@@ -52,7 +52,7 @@
             </button>
           } @else {
             <p>{{ language() === 'th' ? 'สแกน QR ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก' : 'Scan this QR with your authenticator app, then enter its six-digit code.' }}</p>
-            <img class="auth-qr" [src]="qrDataUri()" alt="Authenticator enrollment QR code" />
+            <img [src]="qrDataUri()" width="220" alt="Authenticator enrollment QR code" />
             <label for="auth-code">{{ language() === 'th' ? 'รหัสยืนยัน 6 หลัก' : 'Six-digit verification code' }}</label>
             <input id="auth-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="authCode()" (input)="onAuthCodeInput($event)" />
             <button class="send-button" type="button" [disabled]="authBusy() || authCode().length !== 6" (click)="confirmAuthenticatorSetup()">
