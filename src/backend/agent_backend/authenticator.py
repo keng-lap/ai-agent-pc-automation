@@ -221,10 +221,12 @@ class EncryptedTotpSecretFileStore:
                 if (
                     not isinstance(payload, dict)
                     or set(payload) != {"owner_sub", "secret"}
-                    or payload["owner_sub"] != owner_sub
+                    or not isinstance(payload["owner_sub"], str)
                     or not isinstance(payload["secret"], str)
                 ):
                     raise ValueError
+                if payload["owner_sub"] != owner_sub:
+                    return None
                 code_at(payload["secret"], 0)
                 return payload["secret"]
             except (OSError, ValueError, TypeError, KeyError, TotpConfigurationError):
