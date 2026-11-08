@@ -107,3 +107,21 @@ All implementation and verification during Phase 5 must use mocks/dry-runs. Comp
 - Required runtime tasks have bounded scope, dependencies, tests, and safety statements.
 - A4 review is complete and evidence is recorded.
 - Product Owner explicitly approves Phase 5 closeout.
+
+
+## F-516-01 — Google OIDC and authenticator TOTP runtime gate
+
+The Product Owner authorized bounded runtime implementation on 2026-11-08. The approved identity and step-up method is Google OIDC plus one authenticator-app TOTP. SMS, paid SMS, email OTP, recovery codes, and a second Master User are excluded.
+
+- Merged: W1 Google OIDC and Master User/session core (PR #118).
+- Merged: W2 authenticator QR enrollment and Windows DPAPI secret storage (PR #117).
+- Merged: W3 TOTP core (PR #114).
+- Merged: W4 exact-action-bound step-up challenge core (PR #115).
+- Merged: W5 audit/privacy controls (PR #116).
+- In progress: W6 API/UI integration and end-to-end regression tests (branch `feat/P5-516-01-w6-auth-runtime-integration`).
+- High-risk approval must fail closed if authentication or TOTP is unavailable. No legacy approval fallback is permitted.
+- Runtime remains loopback-only and P1 dry-run-only. No Windows command or machine-changing operation is enabled.
+- Lost-authenticator replacement remains intentionally unavailable pending a separately approved trusted-setup procedure.
+- F-516-01 remains OPEN until W6 merges, independent A4 review passes, and Product Owner completes real Google OIDC + Windows DPAPI/authenticator smoke tests.
+
+**Phase 6 is NOT AUTHORIZED.** Phase 5 closeout and separate Phase 6 approval are still required; F-516-01 completion alone does not grant permission to execute on Windows.

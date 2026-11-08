@@ -140,3 +140,35 @@ def test_replay_guard_serializes_concurrent_reuse():
         results = list(pool.map(lambda _index: attempt(), range(8)))
 
     assert sum(results) == 1
+
+
+
+def test_replay_guard_blocks_current_time_step_after_restart():
+    now = [90.0]
+    guard = TotpReplayGuard(clock=lambda: now[0])
+    guard.block_through_current_step(owner_key="master-user", timestamp=now[0])
+
+    assert not guard.verify_and_consume(
+        owner_key="master-user",
+        secret=RFC_SECRET,
+        code=code_at(RFC_SECRET, now[0]),
+        timestamp=now[0],
+    )
+
+    now[0] = 120.0
+    assert guard.verify_and_consume(
+        owner_key="master-user",
+        secret=RFC_SECRET,
+        code=code_at(RFC_SECRET, now[0]),
+        timestamp=now[0],
+    )
+
+
+def test_replay_guard_rejects_invalid_restart_timestamp():
+    guard = TotpReplayGuard(clock=lambda: 90.0)
+
+    with pytest.raises(TotpConfigurationError):
+        guard.block_through_current_step(
+            owner_key="master-user",
+            timestamp=float("nan"),
+        )

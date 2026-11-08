@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Protocol
 
 import qrcode
-from qrcode.image.svg import SvgPathImage
 
 from .totp import (
     TotpConfigurationError,
@@ -289,8 +288,15 @@ class AuthenticatorEnrollmentManager:
         with self._lock:
             if self._secret_store.is_configured():
                 raise RuntimeError("an authenticator is already enrolled")
-            if any(item.owner_sub == owner_sub for item in self._pending.values()):
-                raise RuntimeError("an enrollment is already pending")
+            # A refreshed/lost enrollment page cannot recover its one-time QR.
+            # Starting again invalidates any older pending QR for this owner.
+            superseded = [
+                enrollment_id
+                for enrollment_id, item in self._pending.items()
+                if item.owner_sub == owner_sub
+            ]
+            for enrollment_id in superseded:
+                self._pending.pop(enrollment_id, None)
             secret = self._secret_factory()
             uri = provisioning_uri(
                 secret,
@@ -366,8 +372,8 @@ def _qr_data_uri(provisioning_uri_value: str) -> str:
     )
     qr.add_data(provisioning_uri_value)
     qr.make(fit=True)
-    image = qr.make_image(image_factory=SvgPathImage)
+    image = qr.make_image(fill_color="black", back_color="white")
     buffer = BytesIO()
-    image.save(buffer)
+    image.save(buffer, format="PNG")
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:image/svg+xml;base64,{encoded}"
+    return f"data:image/png;base64,{encoded}"

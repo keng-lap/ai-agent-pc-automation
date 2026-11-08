@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 
 import pytest
 
@@ -45,8 +46,8 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
     manager, store = build_manager(tmp_path)
     enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
     payload = base64.b64decode(enrollment.qr_data_uri.split(",", 1)[1])
-    assert enrollment.qr_data_uri.startswith("data:image/svg+xml;base64,")
-    assert b"<svg" in payload
+    assert enrollment.qr_data_uri.startswith("data:image/png;base64,")
+    assert payload.startswith(b"\x89PNG\r\n\x1a\n")
 
     # The QR response is one-time; persisted bytes contain only protector output.
     assert manager.confirm(
@@ -147,3 +148,36 @@ def test_dpapi_adapter_is_explicitly_windows_only():
             WindowsDpapiProtector().protect(b"test")
 
 
+
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows DPAPI integration test")
+def test_windows_dpapi_protects_and_unprotects_secret_bytes():
+    protector = WindowsDpapiProtector()
+    plaintext = b"local authenticator secret material"
+
+    protected = protector.protect(plaintext)
+
+    assert protected != plaintext
+    assert plaintext not in protected
+    assert protector.unprotect(protected) == plaintext
+
+
+
+def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    first = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    second = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+
+    assert first.enrollment_id != second.enrollment_id
+    assert not manager.confirm(
+        enrollment_id=first.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert manager.confirm(
+        enrollment_id=second.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET

@@ -13,6 +13,8 @@ class FakeChatApi {
   clearedConversationIds: string[] = [];
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
   approvalCalls: string[] = [];
+  stepUpCalls: string[] = [];
+  authSession = { enabled: false, authenticated: false, authenticator_enrolled: false };
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -48,6 +50,26 @@ class FakeChatApi {
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
 
+  getAuthSession(): Observable<{ enabled: boolean; authenticated: boolean; authenticator_enrolled: boolean }> {
+    return of(this.authSession);
+  }
+
+  startGoogleLogin(): Observable<{ authorization_url: string }> {
+    return of({ authorization_url: 'https://accounts.google.com/test' });
+  }
+
+  beginAuthenticatorEnrollment(): Observable<{ enrollment_id: string; qr_data_uri: string; expires_at: number }> {
+    return of({ enrollment_id: 'a'.repeat(32), qr_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', expires_at: 0 });
+  }
+
+  confirmAuthenticatorEnrollment(): Observable<{ enrolled: boolean }> {
+    return of({ enrolled: true });
+  }
+
+  logout(): Observable<{ logged_out: boolean }> {
+    return of({ logged_out: true });
+  }
+
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
     this.calls.push({ message, language, conversationId });
     return this.responder(message, language);
@@ -57,7 +79,12 @@ class FakeChatApi {
     return this.planResponder(message, language);
   }
 
-  approvePlan(planId: string): Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> {
+  createPlanStepUpChallenge(planId: string): Observable<{ challenge_id: string; plan_id: string; expires_at: number }> {
+    this.stepUpCalls.push(planId);
+    return of({ challenge_id: 'b'.repeat(32), plan_id: planId, expires_at: 1_800_000_120 });
+  }
+
+  approvePlan(planId: string, _challengeId: string, _totpCode: string): Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> {
     this.approvalCalls.push(planId);
     return this.approveResponder(planId);
   }
@@ -127,6 +154,10 @@ describe('App chat UI (T-202)', () => {
     fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     if (httpTestingController) {
+      const authRequest = httpTestingController.expectOne('/api/auth/session');
+      authRequest.flush({ enabled: false, authenticated: false, authenticator_enrolled: false });
+      await fixture.whenStable();
+      fixture.detectChanges();
       const statusRequest = httpTestingController.expectOne('/api/settings/gemini');
       statusRequest.flush({ configured: false, model: 'gemini-3.1-flash-lite' });
     }
@@ -181,6 +212,7 @@ describe('App chat UI (T-202)', () => {
 
 
   it('shows dry-run approval only for a fully specified plan and renders the result after approval', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     await render();
     api.planResponder = (request) => of({
       request,
@@ -215,7 +247,7 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('อนุมัติให้จำลอง (Dry Run)');
+    expect(fixture.nativeElement.textContent).toContain('ยืนยันตัวตนเพื่ออนุมัติ');
     expect(fixture.nativeElement.textContent).not.toContain('Mock reply');
     expect(fixture.nativeElement.querySelector('.installer-card')).not.toBeNull();
     expect((fixture.nativeElement.querySelector('.installer-details') as HTMLDetailsElement).open).toBe(false);
@@ -224,9 +256,23 @@ describe('App chat UI (T-202)', () => {
     const approveButtons = Array.from(
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     );
-    const approve = approveButtons.find((button) => button.textContent?.includes('อนุมัติให้จำลอง'));
-    if (!approve) throw new Error('Approval button was not rendered');
+    const approve = approveButtons.find((button) => button.textContent?.includes('ยืนยันตัวตนเพื่ออนุมัติ'));
+    if (!approve) throw new Error('Step-up button was not rendered');
     approve.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.stepUpCalls).toEqual(['a'.repeat(32)]);
+    const codeInput = fixture.nativeElement.querySelector('input[id^="totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันและจำลอง'));
+    if (!confirm) throw new Error('TOTP confirmation button was not rendered');
+    confirm.click();
     await fixture.whenStable();
     fixture.detectChanges();
 

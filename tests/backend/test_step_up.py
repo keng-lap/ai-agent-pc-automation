@@ -155,3 +155,38 @@ def test_challenge_capacity_is_bounded():
 
     with pytest.raises(RuntimeError, match="capacity"):
         create(store)
+
+
+
+def test_failed_attempts_are_rate_limited_across_challenges_for_one_session():
+    now = [90.0]
+    store = StepUpChallengeStore(clock=lambda: now[0])
+
+    for _ in range(MAX_FAILED_ATTEMPTS):
+        receipt = create(store)
+        assert verify(store, receipt, code="000000") is False
+
+    final = create(store)
+    assert verify(store, final) is False
+    assert store.get(final.challenge_id).status == "locked"
+
+
+def test_owner_session_failure_window_resets_after_five_minutes():
+    now = [90.0]
+    store = StepUpChallengeStore(clock=lambda: now[0])
+    receipt = create(store)
+
+    assert verify(store, receipt, code="000000") is False
+    now[0] += 300
+    next_receipt = create(store)
+
+    assert store.verify_and_consume(
+        challenge_id=next_receipt.challenge_id,
+        owner_sub=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+        action_digest=DIGEST,
+        risk_class="high",
+        secret=RFC_SECRET,
+        code=code_at(RFC_SECRET, now[0]),
+    ) is True

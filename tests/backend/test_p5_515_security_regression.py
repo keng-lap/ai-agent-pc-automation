@@ -131,10 +131,8 @@ def test_p1_plan_requires_approval_and_has_no_execute_route(monkeypatch):
         assert response.status_code == 404
 
     approved = client.post(f"/api/plans/{plan_id}/approve", json={})
-    assert approved.status_code == 200
-    assert approved.json()["approved"] is True
-    assert approved.json()["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
-    assert len(calls) == 1
+    assert approved.status_code == 503
+    assert calls == []
 
 
 def test_plan_reference_is_opaque_and_unknown_reference_fails_closed():
@@ -236,7 +234,7 @@ def test_planner_exception_returns_only_a_generic_server_error(monkeypatch):
     assert len(calls) == 1
 
 
-def test_tool_handler_exception_returns_generic_error_without_retry(monkeypatch):
+def test_missing_totp_prevents_tool_handler_exception_path(monkeypatch):
     calls = []
 
     def fail_handler(request):
@@ -250,9 +248,8 @@ def test_tool_handler_exception_returns_generic_error_without_retry(monkeypatch)
     plan_id = create_eligible_plan_id()
     response = safe_client.post(f"/api/plans/{plan_id}/approve", json={})
 
-    assert response.status_code == 500
-    assert response.json() == {"detail": "Internal server error."}
-    assert len(calls) == 1
+    assert response.status_code == 503
+    assert calls == []
 
 
 
@@ -279,7 +276,7 @@ def test_policy_configuration_exception_returns_safe_error_before_handler(monkey
 
 
 
-def test_malformed_tool_handler_result_returns_generic_api_error_without_retry(monkeypatch):
+def test_missing_totp_prevents_malformed_tool_handler_path(monkeypatch):
     handler_calls = []
 
     def malformed_handler(request):
@@ -293,6 +290,5 @@ def test_malformed_tool_handler_result_returns_generic_api_error_without_retry(m
     plan_id = create_eligible_plan_id()
     response = safe_client.post(f"/api/plans/{plan_id}/approve", json={})
 
-    assert response.status_code == 500
-    assert response.json() == {"detail": "Internal server error."}
-    assert len(handler_calls) == 1
+    assert response.status_code == 503
+    assert handler_calls == []

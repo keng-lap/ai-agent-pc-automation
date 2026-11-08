@@ -232,7 +232,16 @@ def test_foreign_origin_precedes_method_routing():
 def test_openapi_read_routes_and_methods_match_allow_list():
     paths = app.openapi()["paths"]
     get_routes = {path for path, operations in paths.items() if "get" in operations}
-    assert get_routes == {"/health", "/api/settings/gemini", "/api/chat/{conversation_id}", "/api/plans/{plan_id}"}
+    assert get_routes == {
+        "/health",
+        "/api/settings/gemini",
+        "/api/chat/{conversation_id}",
+        "/api/plans/{plan_id}",
+        "/api/auth/session",
+        "/api/auth/google/start",
+        "/api/authenticator/status",
+        "/auth/google/callback",
+    }
     assert set(paths["/api/chat"]) == {"post"}
     assert set(paths["/api/chat/{conversation_id}"]) == {"get", "delete"}
     assert set(paths["/api/settings/gemini"]) == {"get", "put"}
@@ -241,6 +250,10 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/plans/{plan_id}"]) == {"get"}
     assert set(paths["/api/plans/{plan_id}/refine"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}/approve"]) == {"post"}
+    assert set(paths["/api/plans/{plan_id}/step-up"]) == {"post"}
+    assert set(paths["/api/auth/logout"]) == {"post"}
+    assert set(paths["/api/authenticator/enrollment"]) == {"post"}
+    assert set(paths["/api/authenticator/enrollment/confirm"]) == {"post"}
     assert not any(
         path.endswith(("/acknowledgement", "/cancel", "/execute"))
         for path in paths
@@ -308,11 +321,12 @@ def test_example_configuration_has_no_token_or_secret():
     example = (repo_root / ".env.example").read_text(encoding="utf-8").lower()
     assert "local_agent_token=" in example
     assert "local_agent_token=\n" in example
-    assert "secret=" not in example
+    assert "google_oidc_client_secret=" in example
+    assert "google_oidc_client_secret=real" not in example
     assert "api_key=" not in example
 
 
-def test_runtime_dependencies_remain_unchanged():
+def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
     repo_root = Path(__file__).resolve().parents[2]
     pyproject = tomllib.loads(
         (repo_root / "src/backend/pyproject.toml").read_text(encoding="utf-8")
@@ -322,8 +336,9 @@ def test_runtime_dependencies_remain_unchanged():
         "uvicorn>=0.54",
         "python-dotenv>=1.2",
         "google-genai>=1.0.0",
-        "qrcode>=8.2",
+        "qrcode[pil]>=8.2",
         "google-auth>=2.62.1",
+        "requests>=2.32",
     ]
 
 
@@ -370,3 +385,27 @@ def test_chunked_body_limit_rejects_body_without_content_length():
 
 async def _unexpected_app(scope, receive, send):
     raise AssertionError("oversized body must be rejected before routing")
+
+
+
+def test_google_oidc_callback_accepts_google_origin_without_local_agent_token():
+    callback_client = TestClient(app, base_url=BASE_URL)
+    response = callback_client.get(
+        "/auth/google/callback?state=opaque-state-value-123456&code=opaque-code",
+        headers={"origin": "https://accounts.google.com"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("?login=unavailable")
+
+
+def test_google_oidc_callback_rejects_foreign_origin():
+    callback_client = TestClient(app, base_url=BASE_URL)
+    response = callback_client.get(
+        "/auth/google/callback?state=opaque-state-value-123456&code=opaque-code",
+        headers={"origin": "https://evil.example"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403

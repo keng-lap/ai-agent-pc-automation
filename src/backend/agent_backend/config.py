@@ -13,6 +13,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -35,6 +36,26 @@ class Settings:
     frontend_port: int
     log_level: str
     local_agent_token: str
+    google_oidc_client_id: str | None = None
+    google_oidc_client_secret: str | None = None
+    google_oidc_redirect_uri: str | None = None
+    master_google_sub: str | None = None
+    app_session_ttl_seconds: int | None = None
+    authenticator_secret_path: Path | None = None
+
+    @property
+    def auth_enabled(self) -> bool:
+        return all(
+            value is not None
+            for value in (
+                self.google_oidc_client_id,
+                self.google_oidc_client_secret,
+                self.google_oidc_redirect_uri,
+                self.master_google_sub,
+                self.app_session_ttl_seconds,
+                self.authenticator_secret_path,
+            )
+        )
 
 
 def _port(name: str, default: int) -> int:
@@ -68,11 +89,80 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
             "Run scripts\\setup.ps1 to generate it."
         )
 
+    backend_port = _port("BACKEND_PORT", 8000)
+    frontend_port = _port("FRONTEND_PORT", 4200)
+
+    auth_env_names = (
+        "GOOGLE_OIDC_CLIENT_ID",
+        "GOOGLE_OIDC_CLIENT_SECRET",
+        "MASTER_GOOGLE_SUB",
+        "APP_SESSION_TTL_SECONDS",
+        "GOOGLE_OIDC_REDIRECT_URI",
+        "AUTHENTICATOR_SECRET_PATH",
+    )
+    auth_values = {name: os.environ.get(name, "").strip() for name in auth_env_names}
+    auth_configured = any(auth_values.values())
+    auth_settings: dict[str, object] = {}
+    if auth_configured:
+        required_names = (
+            "GOOGLE_OIDC_CLIENT_ID",
+            "GOOGLE_OIDC_CLIENT_SECRET",
+            "MASTER_GOOGLE_SUB",
+            "APP_SESSION_TTL_SECONDS",
+        )
+        missing = [name for name in required_names if not auth_values[name]]
+        if missing:
+            raise ConfigError(
+                "Google authentication configuration is incomplete: "
+                + ", ".join(missing)
+            )
+        client_id = auth_values["GOOGLE_OIDC_CLIENT_ID"]
+        client_secret = auth_values["GOOGLE_OIDC_CLIENT_SECRET"]
+        master_sub = auth_values["MASTER_GOOGLE_SUB"]
+        if len(client_id) > 512 or len(client_secret) > 512 or len(master_sub) > 256:
+            raise ConfigError("Google authentication configuration exceeds its size limit.")
+        try:
+            session_ttl = int(auth_values["APP_SESSION_TTL_SECONDS"])
+        except ValueError:
+            raise ConfigError("APP_SESSION_TTL_SECONDS must be an integer.") from None
+        if not 60 <= session_ttl <= 86400:
+            raise ConfigError("APP_SESSION_TTL_SECONDS must be between 60 and 86400.")
+        redirect_uri = auth_values["GOOGLE_OIDC_REDIRECT_URI"] or (
+            f"http://127.0.0.1:{backend_port}/auth/google/callback"
+        )
+        parsed_redirect = urlparse(redirect_uri)
+        if (
+            parsed_redirect.scheme != "http"
+            or parsed_redirect.hostname not in {"127.0.0.1", "localhost"}
+            or parsed_redirect.port != backend_port
+            or parsed_redirect.path != "/auth/google/callback"
+            or parsed_redirect.query
+            or parsed_redirect.fragment
+            or parsed_redirect.username is not None
+            or parsed_redirect.password is not None
+        ):
+            raise ConfigError(
+                "GOOGLE_OIDC_REDIRECT_URI must be the configured loopback callback URL."
+            )
+        secret_path = Path(
+            auth_values["AUTHENTICATOR_SECRET_PATH"]
+            or (REPO_ROOT / ".agent-state" / "authenticator.json")
+        ).expanduser()
+        auth_settings = {
+            "google_oidc_client_id": client_id,
+            "google_oidc_client_secret": client_secret,
+            "google_oidc_redirect_uri": redirect_uri,
+            "master_google_sub": master_sub,
+            "app_session_ttl_seconds": session_ttl,
+            "authenticator_secret_path": secret_path,
+        }
+
     return Settings(
         app_env=os.environ.get("APP_ENV", "development").strip(),
         backend_host=host,
-        backend_port=_port("BACKEND_PORT", 8000),
-        frontend_port=_port("FRONTEND_PORT", 4200),
+        backend_port=backend_port,
+        frontend_port=frontend_port,
         log_level=os.environ.get("LOG_LEVEL", "info").strip().lower(),
         local_agent_token=token,
+        **auth_settings,
     )

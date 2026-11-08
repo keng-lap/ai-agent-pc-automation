@@ -51,16 +51,23 @@ class LocalWebSecurityMiddleware:
             await self._reject(send, 400, "Host not allowed.")
             return
 
+        path = scope.get("path", "")
+        method = scope["method"].upper()
         origins = headers.get(b"origin", [])
         if len(origins) > 1:
             await self._reject(send, 403, "Origin not allowed.")
             return
         origin = origins[0].decode("latin-1") if origins else None
         if origin is not None and origin not in self.allowed_origins:
-            await self._reject(send, 403, "Origin not allowed.")
-            return
+            callback_origin = (
+                path == "/auth/google/callback"
+                and method == "GET"
+                and origin == "https://accounts.google.com"
+            )
+            if not callback_origin:
+                await self._reject(send, 403, "Origin not allowed.")
+                return
 
-        path = scope.get("path", "")
         if path == "/api" or path.startswith("/api/"):
             supplied_tokens = headers.get(AGENT_TOKEN_HEADER, [])
             if len(supplied_tokens) != 1 or not hmac.compare_digest(
@@ -69,7 +76,6 @@ class LocalWebSecurityMiddleware:
                 await self._reject(send, 401, "Local Agent authorization required.")
                 return
 
-        method = scope["method"].upper()
         if method in STATE_CHANGING_METHODS:
             if origin is None:
                 await self._reject(send, 403, "Origin not allowed.")
