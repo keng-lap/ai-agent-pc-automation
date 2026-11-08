@@ -147,3 +147,16 @@ def test_dpapi_adapter_is_explicitly_windows_only():
             WindowsDpapiProtector().protect(b"test")
 
 
+
+
+
+@pytest.mark.skipif(__import__("os").name != "nt", reason="Windows DPAPI integration test")
+def test_windows_dpapi_protects_and_unprotects_secret_bytes():
+    protector = WindowsDpapiProtector()
+    plaintext = b"local authenticator secret material"
+
+    protected = protector.protect(plaintext)
+
+    assert protected != plaintext
+    assert plaintext not in protected
+    assert protector.unprotect(protected) == plaintext
