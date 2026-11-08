@@ -129,9 +129,16 @@ def _services(request: Request) -> AuthServices:
     return services
 
 
-def _frontend_url(request: Request, status: str) -> str:
+def _frontend_redirect(request: Request, status: str) -> RedirectResponse:
     settings: Settings = request.app.state.settings
-    return f"http://127.0.0.1:{settings.frontend_port}/?login={status}"
+    response = RedirectResponse(
+        f"http://127.0.0.1:{settings.frontend_port}/?login={status}",
+        status_code=303,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @router.get("/api/auth/session", response_model=AuthSessionResponse)
@@ -155,7 +162,12 @@ def get_auth_session(request: Request) -> AuthSessionResponse:
 
 
 @router.get("/api/auth/google/start", response_model=GoogleLoginStartResponse)
-def start_google_login(request: Request) -> GoogleLoginStartResponse:
+def start_google_login(
+    request: Request,
+    response: Response,
+) -> GoogleLoginStartResponse:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     services = _services(request)
     try:
         result = services.oidc.begin_login()
@@ -173,14 +185,14 @@ def complete_google_login(
 ) -> Response:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
-        return RedirectResponse(_frontend_url(request, "unavailable"), status_code=303)
+        return _frontend_redirect(request, "unavailable")
     if error is not None or state is None or code is None:
         record_auth_audit_event(
             event_type="auth.sign_in",
             outcome="denied",
             reason="identity_invalid",
         )
-        return RedirectResponse(_frontend_url(request, "failed"), status_code=303)
+        return _frontend_redirect(request, "failed")
 
     try:
         identity = services.oidc.complete_login(state=state, code=code)
@@ -204,7 +216,7 @@ def complete_google_login(
 
     record_auth_audit_event(event_type="auth.sign_in", outcome="success")
     settings: Settings = request.app.state.settings
-    response = RedirectResponse(_frontend_url(request, "success"), status_code=303)
+    response = _frontend_redirect(request, "success")
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=credential.token,
@@ -253,7 +265,12 @@ def authenticator_status(request: Request) -> AuthSessionResponse:
 
 
 @router.post("/api/authenticator/enrollment", response_model=EnrollmentStartResponse)
-def begin_authenticator_enrollment(request: Request) -> EnrollmentStartResponse:
+def begin_authenticator_enrollment(
+    request: Request,
+    response: Response,
+) -> EnrollmentStartResponse:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     services = _services(request)
     principal = require_session(request)
     if principal is None:
