@@ -84,11 +84,13 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
     ):
         raise RuntimeError("Google authentication settings are incomplete.")
 
-    replay_guard = TotpReplayGuard()
     secret_store = EncryptedTotpSecretFileStore(
         settings.authenticator_secret_path,
         WindowsDpapiProtector(),
     )
+    replay_guard = TotpReplayGuard()
+    if secret_store.load(owner_sub=settings.master_google_sub) is not None:
+        replay_guard.block_through_current_step(owner_key=settings.master_google_sub)
     return AuthServices(
         oidc=GoogleOidcClient(
             client_id=settings.google_oidc_client_id,
