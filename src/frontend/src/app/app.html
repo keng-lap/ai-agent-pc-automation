@@ -216,10 +216,21 @@
                     </div>
                   } @else if (canApproveReview(review)) {
                     <div class="tool-preview installer-actions">
-                      <p>{{ language() === 'th' ? 'ตรวจสอบรายการแล้วกดอนุมัติเพื่อจำลองการติดตั้ง' : 'Review the list, then approve to simulate the installation.' }}</p>
-                      <button class="send-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
-                        {{ planning() ? (language() === 'th' ? 'กำลังตรวจสอบ…' : 'Checking…') : (language() === 'th' ? 'อนุมัติให้จำลอง (Dry Run)' : 'Approve & Run Dry Run') }}
-                      </button>
+                      @if (!entry.stepUpChallengeId) {
+                        <p>{{ language() === 'th' ? 'ตรวจสอบรายการแล้วขอรหัสยืนยันจากแอป Authenticator' : 'Review the list, then request a code from your authenticator app.' }}</p>
+                        <button class="send-button" type="button" [disabled]="planning()" (click)="approvePlan(entry)">
+                          {{ planning() ? (language() === 'th' ? 'กำลังเตรียม...' : 'Preparing...') : (language() === 'th' ? 'ยืนยันตัวตนเพื่ออนุมัติ' : 'Verify identity to approve') }}
+                        </button>
+                      } @else {
+                        <label [for]="'totp-' + entry.id">{{ language() === 'th' ? 'รหัส Authenticator 6 หลัก (ใช้ได้ครั้งเดียว)' : 'Six-digit authenticator code (one use)' }}</label>
+                        <input [id]="'totp-' + entry.id" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="entry.totpCode ?? ''" (input)="onTotpInput(entry.id, $event)" />
+                        <button class="send-button" type="button" [disabled]="planning() || (entry.totpCode ?? '').length !== 6" (click)="confirmPlanApproval(entry)">
+                          {{ planning() ? (language() === 'th' ? 'กำลังตรวจสอบ...' : 'Verifying...') : (language() === 'th' ? 'ยืนยันและจำลอง (Dry Run)' : 'Confirm & Run Dry Run') }}
+                        </button>
+                      }
+                      @if (entry.stepUpError) {
+                        <small class="installer-error" role="alert">{{ language() === 'th' ? 'สร้างคำขอยืนยันไม่สำเร็จ กรุณาลองใหม่' : 'Could not create the verification challenge. Try again.' }}</small>
+                      }
                       @if (entry.approvalError) {
                         <small class="installer-error" role="alert">{{ language() === 'th' ? 'Dry Run ไม่ผ่าน โปรดลองอีกครั้งหรือตรวจสอบรายละเอียด' : 'Dry run failed. Try again or review the details.' }}</small>
                       }
