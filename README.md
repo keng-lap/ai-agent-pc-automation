@@ -3,11 +3,11 @@
 Personal AI Agent for safely automating approved tasks on a local Windows 11 PC through a local web application.
 
 ## Current project status
-**Phase 4 — Tool / Task System: CLOSED (Product Owner approval, 2026-11-02). Phase 5 — P5-510 through P5-514 complete (PRs #58–#65); P5-515 initial negative/abuse/regression tests merged in PR #66 and merge-commit CI passed (run #42355435380); P5-515 evidence/matrix reconciliation remains in progress. P5-516 independent review remains gated. Gemini text-chat MVP separately authorized and manually tested successfully by the Product Owner (2026-11-07).**
+**Phase 4 — Tool / Task System: CLOSED (Product Owner approval, 2026-11-02). Phase 5 — P5-510 through P5-515 are complete; P5-516 independent security review is complete (PR #107), with follow-up work for F-516-02, F-516-03, and F-516-04 authorized and underway. F-516-01 (stronger user-presence proof) is deferred and remains a hard prerequisite before any side-effecting capability. Phase 6 and real PC execution are not authorized. Gemini text-chat MVP remains separately authorized under T-601.**
 
 - Phase 0–3 are complete.
 - Phase 4 implementation PRs #45–#47 are merged. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5.
-- Phase 5 planning baseline: docs/PHASE-5.md. P5-510 through P5-514 are merged. P5-515 initial regression tests are merged in PR #66; merge-commit CI passed for backend tests, Ruff, frontend unit tests, and frontend build. Evidence/matrix reconciliation remains in progress; P5-516 independent review is gated. This does not authorize real PC execution.
+- Phase 5 baseline: docs/PHASE-5.md. P5-510 through P5-515 closeout is complete. P5-516 review findings are recorded in docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md. Follow-up work addresses the legacy plan-only entry point (F-516-03), bounded in-memory audit producers (F-516-02), and status documentation (F-516-04). F-516-01 user-presence assurance is deferred; no side-effecting capability may be introduced until it is resolved and separately authorized.
 - The Four-Agent workflow is coordinator-managed with four separated roles; it is not four autonomous LLM processes or a runtime orchestrator.
 - Machine-changing tools remain mock/dry-run. Phase 5 does not enable real execution; Phase 6 and each capability require separate authorization.
 - Gemini text-only chat is separately approved as T-601. The current message and up to 10 recent user/assistant pairs may be sent to Gemini; context and API key remain in backend process memory only. The Product Owner confirmed that a real API-key connection test and chat exchange passed on 2026-11-07. Tool/function calling and PC actions remain disabled.
@@ -24,7 +24,7 @@ User -> Local Web App (loopback) -> FastAPI Backend -> Gemini API (text chat onl
 1. No unrestricted PC control.
 2. All automation passes through backend-controlled tool contracts, allowlists, and validation.
 3. No raw model text may be executed as a command.
-4. Machine-changing tools remain dry-run/mock until Phase 5 is complete and explicitly approved.
+4. Machine-changing tools remain mock/dry-run only. Phase 6 and each real machine-changing capability require separate explicit authorization.
 5. Preserve loopback binding and local API authorization.
 6. No provider integration, credentials, or external data transfer without explicit approval.
 7. Do not persist chat messages/history or task history unless a future decision explicitly authorizes it.
