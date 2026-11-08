@@ -284,7 +284,6 @@ def begin_authenticator_enrollment(
         )
     except (RuntimeError, ValueError):
         raise HTTPException(status_code=409, detail="Authenticator enrollment is unavailable.") from None
-    record_auth_audit_event(event_type="auth.enrollment", outcome="success")
     return EnrollmentStartResponse(
         enrollment_id=start.enrollment_id,
         qr_data_uri=start.qr_data_uri,
