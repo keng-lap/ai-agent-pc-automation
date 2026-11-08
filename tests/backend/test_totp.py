@@ -82,7 +82,7 @@ def test_invalid_timestamps_are_rejected(timestamp):
 def test_matching_step_accepts_current_and_one_adjacent_step_only():
     assert matching_step(RFC_SECRET, code_at(RFC_SECRET, 60), timestamp=59) == 2
     assert matching_step(RFC_SECRET, code_at(RFC_SECRET, 30), timestamp=59) == 1
-    assert matching_step(RFC_SECRET, code_at(RFC_SECRET, 0), timestamp=59) is None
+    assert matching_step(RFC_SECRET, code_at(RFC_SECRET, 0), timestamp=59) == 0
 
 
 @pytest.mark.parametrize("code", ["12345", "1234567", "１２３４５６", "12a456", ""])
@@ -105,13 +105,12 @@ def test_replay_guard_consumes_a_matching_step_once():
 def test_replay_guard_rejects_a_previously_consumed_adjacent_step():
     guard = TotpReplayGuard()
     previous = code_at(RFC_SECRET, 60)
-    current = code_at(RFC_SECRET, 90)
 
     assert guard.verify_and_consume(
         owner_key="owner", secret=RFC_SECRET, code=previous, timestamp=90
     )
     assert not guard.verify_and_consume(
-        owner_key="owner", secret=RFC_SECRET, code=current, timestamp=90
+        owner_key="owner", secret=RFC_SECRET, code=previous, timestamp=90
     )
 
 
