@@ -3,8 +3,8 @@ from dataclasses import replace
 from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import (
-    AuthServices,
     SESSION_COOKIE_NAME,
+    AuthServices,
 )
 from agent_backend.authenticator import (
     AuthenticatorEnrollmentManager,
