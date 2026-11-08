@@ -229,8 +229,9 @@ def test_planner_exception_returns_only_a_generic_server_error(monkeypatch):
     )
     response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
 
-    assert response.status_code == 503
-    assert calls == []
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error."}
+    assert len(calls) == 1
 
 
 def test_missing_totp_prevents_tool_handler_exception_path(monkeypatch):
