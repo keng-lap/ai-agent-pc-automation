@@ -8,10 +8,12 @@ import re
 import threading
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent_backend.audit import record_optional_audit_event
+from agent_backend.auth_audit import record_auth_audit_event
+from agent_backend.authenticator import SecretStoreError
 from agent_backend.planner import TaskIntent, TaskPlan, create_task_plan
 from agent_backend.plans import (
     DryRunPlan,
@@ -21,7 +23,7 @@ from agent_backend.plans import (
     PlanStore,
     ProgramPlan,
 )
-from agent_backend.tools import ToolRequest, ToolResult, execute_tool
+from agent_backend.tools import TOOL_CATALOG, ToolRequest, ToolResult, execute_tool
 
 router = APIRouter()
 _plan_store = PlanStore()
@@ -193,9 +195,22 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
 
 
 class PlanApprovalRequest(BaseModel):
-    """Approval carries no client-controlled authority or action parameters."""
+    """Approval carries only a challenge reference and a six-digit TOTP proof."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    challenge_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    totp_code: str | None = Field(default=None, pattern=r"^[0-9]{6}$")
+
+
+class StepUpChallengeResponse(BaseModel):
+    """Short-lived exact-action challenge metadata; no secret is returned."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    challenge_id: str
+    plan_id: str
+    expires_at: float
 
 
 class PlanApprovalResponse(BaseModel):
@@ -209,9 +224,67 @@ class PlanApprovalResponse(BaseModel):
     notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
 
 
+@router.post("/api/plans/{plan_id}/step-up", response_model=StepUpChallengeResponse)
+def create_plan_step_up_challenge(
+    plan_id: str,
+    request: Request,
+) -> StepUpChallengeResponse:
+    """Create a TOTP challenge bound to the exact immutable plan and session."""
+    services = getattr(request.app.state, "auth_services", None)
+    principal = getattr(request.state, "principal", None)
+    if services is None or principal is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
+        raise HTTPException(status_code=404, detail="Plan not found.")
+    try:
+        plan = _plan_store.get(plan_id)
+    except PlanExpiredError:
+        raise HTTPException(status_code=410, detail="Plan expired.") from None
+    except PlanNotFoundError:
+        raise HTTPException(status_code=404, detail="Plan not found.") from None
+
+    if (
+        plan.risk_class != "R1"
+        or plan.required_permission != "P1"
+        or plan.mode != "dry_run"
+        or any(item.status != "PLANNED" for item in plan.programs)
+    ):
+        raise HTTPException(status_code=409, detail="Plan is not ready for step-up approval.")
+
+    try:
+        enrolled_secret = services.secret_store.load(owner_sub=principal.owner_sub)
+    except SecretStoreError:
+        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+    if enrolled_secret is None:
+        raise HTTPException(status_code=403, detail="Authenticator enrollment required.")
+
+    tool_definition = next(
+        (item for item in TOOL_CATALOG if item.id == plan.tool_id),
+        None,
+    )
+    if tool_definition is None or tool_definition.risk_class != "high":
+        raise HTTPException(status_code=403, detail="Tool is not eligible for step-up approval.")
+
+    challenge = services.step_up.create(
+        owner_sub=principal.owner_sub,
+        session_id=principal.session_id,
+        plan_id=plan.plan_id,
+        action_digest=plan.plan_digest,
+        risk_class=tool_definition.risk_class,
+    )
+    record_auth_audit_event(event_type="auth.step_up", outcome="success")
+    return StepUpChallengeResponse(
+        challenge_id=challenge.challenge_id,
+        plan_id=challenge.plan_id,
+        expires_at=challenge.expires_at,
+    )
+
+
 @router.post("/api/plans/{plan_id}/approve", response_model=PlanApprovalResponse)
 def approve_plan_review(
-    plan_id: str, _payload: PlanApprovalRequest
+    plan_id: str,
+    _payload: PlanApprovalRequest,
+    request: Request,
 ) -> PlanApprovalResponse:
     """Approve one immutable P1 plan and run its dry-run report exactly once."""
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
@@ -232,6 +305,48 @@ def approve_plan_review(
             raise HTTPException(status_code=403, detail="Plan is not eligible for dry run.")
         if any(item.status != "PLANNED" for item in plan.programs):
             raise HTTPException(status_code=409, detail="Plan requires clarification before approval.")
+
+        services = getattr(request.app.state, "auth_services", None)
+        if services is not None:
+            principal = getattr(request.state, "principal", None)
+            if (
+                principal is None
+                or _payload.challenge_id is None
+                or _payload.totp_code is None
+            ):
+                raise HTTPException(status_code=403, detail="Fresh authenticator approval required.")
+            try:
+                secret = services.secret_store.load(owner_sub=principal.owner_sub)
+            except SecretStoreError:
+                raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+            if secret is None:
+                raise HTTPException(status_code=403, detail="Authenticator enrollment required.")
+            tool_definition = next(
+                (item for item in TOOL_CATALOG if item.id == plan.tool_id),
+                None,
+            )
+            if tool_definition is None or tool_definition.risk_class != "high":
+                raise HTTPException(status_code=403, detail="Tool is not eligible for approval.")
+            accepted = services.step_up.verify_and_consume(
+                challenge_id=_payload.challenge_id,
+                owner_sub=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan.plan_id,
+                action_digest=plan.plan_digest,
+                risk_class=tool_definition.risk_class,
+                secret=secret,
+                code=_payload.totp_code,
+            )
+            if not accepted:
+                record_auth_audit_event(
+                    event_type="auth.step_up",
+                    outcome="denied",
+                    reason="invalid_totp",
+                )
+                raise HTTPException(status_code=403, detail="Step-up verification failed.")
+            record_auth_audit_event(event_type="auth.step_up", outcome="success")
+        elif _payload.challenge_id is not None or _payload.totp_code is not None:
+            raise HTTPException(status_code=422, detail="Step-up fields are unavailable.")
 
         action = "ติดตั้ง" if plan.tool_id == "software.install" else "ถอนการติดตั้ง"
         try:
