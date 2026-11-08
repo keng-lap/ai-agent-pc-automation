@@ -232,7 +232,16 @@ def test_foreign_origin_precedes_method_routing():
 def test_openapi_read_routes_and_methods_match_allow_list():
     paths = app.openapi()["paths"]
     get_routes = {path for path, operations in paths.items() if "get" in operations}
-    assert get_routes == {"/health", "/api/settings/gemini", "/api/chat/{conversation_id}", "/api/plans/{plan_id}"}
+    assert get_routes == {
+        "/health",
+        "/api/settings/gemini",
+        "/api/chat/{conversation_id}",
+        "/api/plans/{plan_id}",
+        "/api/auth/session",
+        "/api/auth/google/start",
+        "/api/authenticator/status",
+        "/auth/google/callback",
+    }
     assert set(paths["/api/chat"]) == {"post"}
     assert set(paths["/api/chat/{conversation_id}"]) == {"get", "delete"}
     assert set(paths["/api/settings/gemini"]) == {"get", "put"}
@@ -241,6 +250,10 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/plans/{plan_id}"]) == {"get"}
     assert set(paths["/api/plans/{plan_id}/refine"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}/approve"]) == {"post"}
+    assert set(paths["/api/plans/{plan_id}/step-up"]) == {"post"}
+    assert set(paths["/api/auth/logout"]) == {"post"}
+    assert set(paths["/api/authenticator/enrollment"]) == {"post"}
+    assert set(paths["/api/authenticator/enrollment/confirm"]) == {"post"}
     assert not any(
         path.endswith(("/acknowledgement", "/cancel", "/execute"))
         for path in paths
