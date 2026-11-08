@@ -1,5 +1,3 @@
-import pytest
-
 from agent_backend.totp import (
     TOTP_DIGITS,
     TOTP_PERIOD_SECONDS,
@@ -10,6 +8,8 @@ from agent_backend.totp import (
     matching_step,
     provisioning_uri,
 )
+
+import pytest
 
 
 # RFC 6238 Appendix B SHA-1 test secret; six-digit output is the final six
