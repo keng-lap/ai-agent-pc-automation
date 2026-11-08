@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -236,12 +236,11 @@ def logout(request: Request) -> Response:
 
 
 @router.get("/api/authenticator/status", response_model=AuthSessionResponse)
-def authenticator_status(
-    request: Request,
-    _principal: SessionPrincipal | None = Depends(require_session),
-) -> AuthSessionResponse:
+def authenticator_status(request: Request) -> AuthSessionResponse:
     services = _services(request)
-    principal = request.state.principal
+    principal = require_session(request)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         enrolled = services.secret_store.load(owner_sub=principal.owner_sub) is not None
     except SecretStoreError:
@@ -254,12 +253,11 @@ def authenticator_status(
 
 
 @router.post("/api/authenticator/enrollment", response_model=EnrollmentStartResponse)
-def begin_authenticator_enrollment(
-    request: Request,
-    _principal: SessionPrincipal | None = Depends(require_session),
-) -> EnrollmentStartResponse:
+def begin_authenticator_enrollment(request: Request) -> EnrollmentStartResponse:
     services = _services(request)
-    principal = request.state.principal
+    principal = require_session(request)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         start = services.enrollment.begin(
             owner_sub=principal.owner_sub,
@@ -279,10 +277,11 @@ def begin_authenticator_enrollment(
 def confirm_authenticator_enrollment(
     payload: EnrollmentConfirmRequest,
     request: Request,
-    _principal: SessionPrincipal | None = Depends(require_session),
 ) -> dict[str, bool]:
     services = _services(request)
-    principal = request.state.principal
+    principal = require_session(request)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
     confirmed = services.enrollment.confirm(
         enrollment_id=payload.enrollment_id,
         owner_sub=principal.owner_sub,
