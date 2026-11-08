@@ -29,7 +29,7 @@
     </section>
   } @else {
     @if (!authEnabled()) {
-      <section class="auth-card" role="status">
+      <section class="chat-card auth-card" role="status">
         {{ language() === 'th' ? 'Google Login ยังไม่ได้ตั้งค่า · โหมดดูแผนเท่านั้น ไม่สามารถอนุมัติ Dry Run ได้' : 'Google sign-in is not configured. Preview only; Dry Run approval is disabled.' }}
       </section>
     }
