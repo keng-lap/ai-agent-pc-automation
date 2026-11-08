@@ -11,11 +11,14 @@ from __future__ import annotations
 import base64
 import ctypes
 import json
+import math
 import os
 import secrets
 import threading
 import time
+from ctypes import wintypes
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Protocol
 
@@ -55,7 +58,7 @@ class WindowsDpapiProtector:
 
     class _DataBlob(ctypes.Structure):
         _fields_ = [
-            ("cbData", ctypes.wintypes.DWORD),
+            ("cbData", wintypes.DWORD),
             ("pbData", ctypes.POINTER(ctypes.c_byte)),
         ]
 
@@ -88,7 +91,7 @@ class WindowsDpapiProtector:
                 ctypes.POINTER(cls._DataBlob),
                 ctypes.c_void_p,
                 ctypes.c_void_p,
-                ctypes.wintypes.DWORD,
+                wintypes.DWORD,
                 ctypes.POINTER(cls._DataBlob),
             ]
             succeeded = function(
@@ -256,10 +259,12 @@ class AuthenticatorEnrollmentManager:
         secret_store: EncryptedTotpSecretFileStore,
         replay_guard: TotpReplayGuard | None = None,
         clock=None,
+        secret_factory=generate_secret,
     ) -> None:
         self._secret_store = secret_store
         self._replay_guard = replay_guard or TotpReplayGuard()
         self._clock = clock or time.time
+        self._secret_factory = secret_factory
         self._pending: dict[str, _PendingEnrollment] = {}
         self._lock = threading.RLock()
 
@@ -269,7 +274,8 @@ class AuthenticatorEnrollmentManager:
         if not isinstance(account_name, str) or not 1 <= len(account_name.strip()) <= 254:
             raise ValueError("account label is invalid")
         now = self._clock()
-        if isinstance(now, bool) or not isinstance(now, (int, float)) or now < 0:
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now)
+            or now < 0:
             raise RuntimeError("system clock is invalid")
 
         with self._lock:
@@ -277,7 +283,7 @@ class AuthenticatorEnrollmentManager:
                 raise RuntimeError("an authenticator is already enrolled")
             if any(item.owner_sub == owner_sub for item in self._pending.values()):
                 raise RuntimeError("an enrollment is already pending")
-            secret = generate_secret()
+            secret = self._secret_factory()
             uri = provisioning_uri(
                 secret,
                 account_name=account_name,
@@ -352,8 +358,6 @@ def _qr_data_uri(provisioning_uri_value: str) -> str:
     qr.add_data(provisioning_uri_value)
     qr.make(fit=True)
     image = qr.make_image(image_factory=SvgPathImage)
-    from io import BytesIO
-
     buffer = BytesIO()
     image.save(buffer)
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
