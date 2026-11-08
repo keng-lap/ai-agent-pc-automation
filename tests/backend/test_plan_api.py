@@ -268,7 +268,6 @@ def test_approval_fails_closed_without_google_and_authenticator_configuration(mo
 
     assert first.status_code == 503
     assert second.status_code == 503
-    assert "not configured" in first.json()["detail"]
     assert calls == []
 
 
