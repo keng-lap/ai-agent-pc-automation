@@ -326,7 +326,7 @@ def test_example_configuration_has_no_token_or_secret():
     assert "api_key=" not in example
 
 
-def test_runtime_dependencies_remain_unchanged():
+def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
     repo_root = Path(__file__).resolve().parents[2]
     pyproject = tomllib.loads(
         (repo_root / "src/backend/pyproject.toml").read_text(encoding="utf-8")
