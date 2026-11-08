@@ -110,6 +110,11 @@ def matching_step(
     ):
         return None
 
+    try:
+        _decode_secret(secret)
+    except TotpConfigurationError:
+        return None
+
     current_step = int(timestamp) // TOTP_PERIOD_SECONDS
     matches: list[int] = []
     for step in range(current_step - window_steps, current_step + window_steps + 1):
