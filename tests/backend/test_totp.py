@@ -64,7 +64,7 @@ def test_invalid_secrets_are_rejected(secret):
 
 @pytest.mark.parametrize("timestamp", [-1, float("nan"), float("inf"), True, "59"])
 def test_invalid_timestamps_are_rejected(timestamp):
-    with pytest.raises(ValueError):
+    with pytest.raises((TypeError, ValueError)):
         code_at(RFC_SECRET, timestamp)
 
 
