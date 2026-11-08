@@ -1,8 +1,7 @@
-"""Deterministic plan review with backend-owned P1 dry-run approval.
+"""Deterministic backend plan review with backend-owned P1 dry-run approval.
 
-Gemini contributes validated display-only plan text. This router owns intent,
-policy, permissions, plan integrity, expiry, approval, and dry-run dispatch.
-It never inspects Windows, downloads software, or performs machine changes.
+This router owns intent, policy, permissions, plan integrity, expiry, approval,
+and dry-run dispatch. It never calls Gemini or performs machine changes.
 """
 
 import re
@@ -12,6 +11,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent_backend.audit import record_optional_audit_event
 from agent_backend.planner import TaskIntent, TaskPlan, create_task_plan
 from agent_backend.plans import (
     DryRunPlan,
@@ -170,6 +170,11 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
         try:
             # Creating a review plan must never run even the mock dry-run tool.
             dry_run_plan = _plan_store.create(tool_id, programs)
+            record_optional_audit_event(
+                event_type="plan.created",
+                tool_id=tool_id,
+                outcome="allowed",
+            )
         except PlanCapacityError:
             raise HTTPException(status_code=503, detail="Plan capacity reached.") from None
         except ValueError:
