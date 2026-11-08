@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from agent_backend import agent_core, policy, tools
+from agent_backend.audit import AUDIT_SINK
 from agent_backend.planner import create_task_plan
 from agent_backend.tools import (
     _HANDLERS,
@@ -315,3 +316,47 @@ def test_disabled_p2_p3_policy_never_invokes_a_spy_handler(
 
     assert raised.value.reason == "risk_denied"
     assert handler_calls == []
+
+
+
+def test_dispatch_records_allowlisted_policy_event():
+    AUDIT_SINK.clear()
+
+    result = execute_tool(ToolRequest(tool_id="software.install", target="Example"))
+
+    events = AUDIT_SINK.snapshot()
+    assert result.status == "dry_run"
+    assert len(events) == 1
+    assert events[0].event_type == "policy.allowed"
+    assert events[0].tool_id == "software.install"
+    assert events[0].outcome == "allowed"
+    assert events[0].deny_reason is None
+
+
+def test_policy_denial_records_reason_without_blocking_denial(monkeypatch):
+    AUDIT_SINK.clear()
+
+    def deny(_tool_id):
+        raise policy.PolicyDeniedError("permission_denied")
+
+    monkeypatch.setattr(policy, "require_tool_allowed", deny)
+    request = ToolRequest(tool_id="software.install", target="Example")
+
+    with pytest.raises(policy.PolicyDeniedError):
+        execute_tool(request)
+
+    events = AUDIT_SINK.snapshot()
+    assert len(events) == 1
+    assert events[0].event_type == "policy.denied"
+    assert events[0].outcome == "denied"
+    assert events[0].deny_reason == "permission_denied"
+
+
+def test_audit_sink_failure_does_not_block_dry_run(monkeypatch):
+    def unavailable(_event):
+        raise OSError("synthetic sink failure")
+
+    monkeypatch.setattr(AUDIT_SINK, "record", unavailable)
+    result = execute_tool(ToolRequest(tool_id="software.install", target="Example"))
+
+    assert result.status == "dry_run"
