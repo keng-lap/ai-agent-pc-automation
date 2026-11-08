@@ -24,6 +24,7 @@ export interface PlanReviewProgram {
 }
 
 export interface PlanApprovalResponse { plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE'; }
+export interface StepUpChallenge { challenge_id: string; plan_id: string; expires_at: number; }
 
 export interface PlanReviewResponse {
   request: string;
@@ -67,10 +68,17 @@ export class ChatApi {
     return this.http.get<PlanReviewResponse['dry_run_plan']>(`/api/plans/${encodeURIComponent(planId)}`);
   }
 
-  approvePlan(planId: string): Observable<PlanApprovalResponse> {
+  createPlanStepUpChallenge(planId: string): Observable<StepUpChallenge> {
+    return this.http.post<StepUpChallenge>(
+      `/api/plans/${encodeURIComponent(planId)}/step-up`,
+      {},
+    );
+  }
+
+  approvePlan(planId: string, challengeId: string, totpCode: string): Observable<PlanApprovalResponse> {
     return this.http.post<PlanApprovalResponse>(
       `/api/plans/${encodeURIComponent(planId)}/approve`,
-      {},
+      { challenge_id: challengeId, totp_code: totpCode },
     );
   }
 
