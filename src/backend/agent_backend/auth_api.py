@@ -212,7 +212,7 @@ def complete_google_login(
             outcome="denied",
             reason=reason,
         )
-        return RedirectResponse(_frontend_url(request, "failed"), status_code=303)
+        return _frontend_redirect(request, "failed")
 
     record_auth_audit_event(event_type="auth.sign_in", outcome="success")
     settings: Settings = request.app.state.settings
