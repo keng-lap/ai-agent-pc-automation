@@ -192,7 +192,7 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
 
     start = client.post("/api/authenticator/enrollment", json={})
     assert start.status_code == 200
-    assert start.json()["qr_data_uri"].startswith("data:image/svg+xml;base64,")
+    assert start.json()["qr_data_uri"].startswith("data:image/png;base64,")
 
     confirmed = client.post(
         "/api/authenticator/enrollment/confirm",
