@@ -5,9 +5,11 @@ from pydantic import ValidationError
 
 from agent_backend.audit import (
     MAX_AUDIT_EVENTS,
+    AUDIT_SINK,
     AuditEvent,
     AuditEventSink,
     make_audit_event,
+    record_optional_audit_event,
 )
 
 
@@ -117,3 +119,16 @@ def test_unavailable_optional_audit_sink_does_not_block_safe_path(monkeypatch):
     assert recorded is False
     assert safe_path_calls == ["continued"]
     assert sink.snapshot() == ()
+
+
+
+def test_optional_audit_rejects_unknown_tool_without_raising():
+    AUDIT_SINK.clear()
+
+    assert record_optional_audit_event(
+        event_type="policy.denied",
+        tool_id="shell.run",
+        outcome="denied",
+        deny_reason="unknown_tool",
+    ) is False
+    assert AUDIT_SINK.snapshot() == ()
