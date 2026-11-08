@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Protocol
 
 import qrcode
-from qrcode.image.svg import SvgPathImage
 
 from .totp import (
     TotpConfigurationError,
@@ -366,8 +365,8 @@ def _qr_data_uri(provisioning_uri_value: str) -> str:
     )
     qr.add_data(provisioning_uri_value)
     qr.make(fit=True)
-    image = qr.make_image(image_factory=SvgPathImage)
+    image = qr.make_image(fill_color="black", back_color="white")
     buffer = BytesIO()
-    image.save(buffer)
+    image.save(buffer, format="PNG")
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:image/svg+xml;base64,{encoded}"
+    return f"data:image/png;base64,{encoded}"
