@@ -14,6 +14,7 @@ import hmac
 import math
 import secrets
 import threading
+import time
 from collections.abc import Callable
 from urllib.parse import quote
 
@@ -166,6 +167,36 @@ class TotpReplayGuard:
                 return False
             self._last_consumed[owner_key] = step
             return True
+
+    def block_through_current_step(
+        self,
+        *,
+        owner_key: str,
+        timestamp: float | None = None,
+    ) -> None:
+        """Block the current and all earlier codes after a process restart.
+
+        The replay cache itself is process-local. Seeding it from the current
+        time step prevents a code from the immediately preceding process from
+        being replayed after restart while the same RFC 6238 time step remains
+        acceptable.
+        """
+        if not isinstance(owner_key, str) or not owner_key or len(owner_key) > 256:
+            raise TotpConfigurationError("Invalid TOTP owner key.")
+        if timestamp is None:
+            timestamp = self._clock() if self._clock is not None else time.time()
+        if (
+            isinstance(timestamp, bool)
+            or not isinstance(timestamp, (int, float))
+            or not math.isfinite(timestamp)
+            or timestamp < 0
+        ):
+            raise TotpConfigurationError("Invalid TOTP timestamp.")
+        current_step = int(timestamp // TOTP_PERIOD_SECONDS)
+        with self._lock:
+            previous = self._last_consumed.get(owner_key)
+            if previous is None or current_step > previous:
+                self._last_consumed[owner_key] = current_step
 
     def clear(self) -> None:
         """Clear process-local replay state; intended for isolated tests only."""
