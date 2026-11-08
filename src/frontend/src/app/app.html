@@ -13,9 +13,56 @@
     </div>
   </header>
 
-  <app-gemini-settings></app-gemini-settings>
+  @if (!authReady()) {
+    <section class="chat-card" aria-live="polite">
+      <p>{{ language() === 'th' ? 'กำลังตรวจสอบสถานะการเข้าสู่ระบบ...' : 'Checking sign-in status...' }}</p>
+    </section>
+  } @else if (authEnabled() && !authenticated()) {
+    <section class="chat-card auth-card" aria-labelledby="auth-title">
+      <p class="eyebrow">MASTER USER</p>
+      <h2 id="auth-title">{{ language() === 'th' ? 'เข้าสู่ระบบก่อนใช้งาน' : 'Sign in to continue' }}</h2>
+      <p>{{ language() === 'th' ? 'ใช้บัญชี Google ที่กำหนดเป็น Master User เท่านั้น' : 'Only the enrolled Google Master User account can access this agent.' }}</p>
+      <button class="send-button" type="button" [disabled]="authBusy()" (click)="loginWithGoogle()">
+        {{ authBusy() ? (language() === 'th' ? 'กำลังดำเนินการ...' : 'Please wait...') : (language() === 'th' ? 'เข้าสู่ระบบด้วย Google' : 'Continue with Google') }}
+      </button>
+      @if (authError()) { <p class="conversation-notice" role="alert">{{ authError() }}</p> }
+    </section>
+  } @else {
+    @if (authEnabled()) {
+      <section class="chat-card auth-card" aria-labelledby="auth-status-title">
+        <div class="chat-heading">
+          <div>
+            <p class="eyebrow">MASTER USER</p>
+            <h2 id="auth-status-title">{{ language() === 'th' ? 'ยืนยันตัวตนแล้ว' : 'Authenticated' }}</h2>
+          </div>
+          <button class="new-chat-button" type="button" [disabled]="authBusy()" (click)="logout()">
+            {{ language() === 'th' ? 'ออกจากระบบ' : 'Sign out' }}
+          </button>
+        </div>
+        @if (!authenticatorEnrolled()) {
+          <p>{{ language() === 'th' ? 'ลงทะเบียนแอป Authenticator ก่อนอนุมัติคำสั่งที่มีความเสี่ยงสูง' : 'Enroll an authenticator app before approving high-risk actions.' }}</p>
+          @if (!qrDataUri()) {
+            <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorSetup()">
+              {{ language() === 'th' ? 'เริ่มลงทะเบียน Authenticator' : 'Set up authenticator' }}
+            </button>
+          } @else {
+            <p>{{ language() === 'th' ? 'สแกน QR ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก' : 'Scan this QR with your authenticator app, then enter its six-digit code.' }}</p>
+            <img class="auth-qr" [src]="qrDataUri()" alt="Authenticator enrollment QR code" />
+            <label for="auth-code">{{ language() === 'th' ? 'รหัสยืนยัน 6 หลัก' : 'Six-digit verification code' }}</label>
+            <input id="auth-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="authCode()" (input)="onAuthCodeInput($event)" />
+            <button class="send-button" type="button" [disabled]="authBusy() || authCode().length !== 6" (click)="confirmAuthenticatorSetup()">
+              {{ language() === 'th' ? 'ยืนยันการลงทะเบียน' : 'Confirm enrollment' }}
+            </button>
+          }
+        } @else {
+          <p role="status">{{ language() === 'th' ? 'Authenticator พร้อมใช้งาน' : 'Authenticator is enrolled and ready.' }}</p>
+        }
+        @if (authError()) { <p class="conversation-notice" role="alert">{{ authError() }}</p> }
+      </section>
+    }
+    <app-gemini-settings></app-gemini-settings>
 
-  <section class="chat-card" aria-labelledby="chat-title">
+    <section class="chat-card" aria-labelledby="chat-title">
     <div class="chat-heading">
       <div>
         <p class="eyebrow">{{ language() === 'th' ? 'พื้นที่ทำงานส่วนตัว' : 'YOUR PRIVATE WORKSPACE' }}</p>
@@ -283,7 +330,8 @@
         </div>
       </div>
     </form>
-  </section>
+    </section>
+  }
 
   <footer class="page-footer">
     <span class="footer-lock" aria-hidden="true">◇</span>
