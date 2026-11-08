@@ -7,6 +7,7 @@ multi-worker deployment requires shared atomic challenge and replay storage.
 
 from __future__ import annotations
 
+import math
 import re
 import secrets
 import threading
@@ -93,7 +94,12 @@ class StepUpChallengeStore:
             raise ValueError("step-up challenge is required only for high-risk actions")
 
         now = self._clock()
-        if isinstance(now, bool) or not isinstance(now, (int, float)) or now < 0:
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(now)
+            or now < 0
+        ):
             raise RuntimeError("system clock is invalid")
         with self._lock:
             self._remove_expired(now)
