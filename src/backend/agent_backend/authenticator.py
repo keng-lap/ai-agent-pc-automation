@@ -288,8 +288,15 @@ class AuthenticatorEnrollmentManager:
         with self._lock:
             if self._secret_store.is_configured():
                 raise RuntimeError("an authenticator is already enrolled")
-            if any(item.owner_sub == owner_sub for item in self._pending.values()):
-                raise RuntimeError("an enrollment is already pending")
+            # A refreshed/lost enrollment page cannot recover its one-time QR.
+            # Starting again invalidates any older pending QR for this owner.
+            superseded = [
+                enrollment_id
+                for enrollment_id, item in self._pending.items()
+                if item.owner_sub == owner_sub
+            ]
+            for enrollment_id in superseded:
+                self._pending.pop(enrollment_id, None)
             secret = self._secret_factory()
             uri = provisioning_uri(
                 secret,
