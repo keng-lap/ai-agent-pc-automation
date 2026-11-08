@@ -139,6 +139,8 @@ def test_google_callback_creates_http_only_master_session(tmp_path):
     )
 
     assert response.status_code == 303
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["location"] == "http://127.0.0.1:4200/?login=success"
     cookie = response.headers["set-cookie"].lower()
     assert "httponly" in cookie
@@ -170,6 +172,7 @@ def test_login_start_returns_only_google_authorization_url(tmp_path):
     response = client.get("/api/auth/google/start")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     assert response.json() == {
         "authorization_url": "https://accounts.google.com/test-login"
     }
@@ -192,6 +195,7 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
 
     start = client.post("/api/authenticator/enrollment", json={})
     assert start.status_code == 200
+    assert start.headers["cache-control"] == "no-store"
     assert start.json()["qr_data_uri"].startswith("data:image/png;base64,")
 
     confirmed = client.post(
