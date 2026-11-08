@@ -34,6 +34,9 @@ interface ChatEntry {
   clarificationDraft?: string;
   refineError?: boolean;
   approvalError?: boolean;
+  stepUpChallengeId?: string;
+  totpCode?: string;
+  stepUpError?: boolean;
 }
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
@@ -468,9 +471,47 @@ export class App implements AfterViewChecked {
 
     this.planning.set(true);
     this.entries.update((entries) => entries.map((item) =>
-      item.id === entry.id ? { ...item, approvalError: false } : item,
+      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false } : item,
     ));
-    defer(() => this.chatApi.approvePlan(planId))
+    defer(() => this.chatApi.createPlanStepUpChallenge(planId))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (challenge) => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id
+            ? (challenge.plan_id === planId && /^[0-9a-f]{32}$/.test(challenge.challenge_id)
+              ? { ...item, stepUpChallengeId: challenge.challenge_id, totpCode: '', stepUpError: false }
+              : { ...item, stepUpError: true })
+            : item,
+        )),
+        error: () => this.entries.update((entries) => entries.map((item) =>
+          item.id === entry.id ? { ...item, stepUpError: true } : item,
+        )),
+      });
+  }
+
+  protected onTotpInput(entryId: number, event: Event): void {
+    const value = (event.target as HTMLInputElement).value.replace(/[^0-9]/g, '').slice(0, 6);
+    this.entries.update((entries) => entries.map((entry) =>
+      entry.id === entryId ? { ...entry, totpCode: value, stepUpError: false } : entry,
+    ));
+  }
+
+  protected confirmPlanApproval(entry: ChatEntry): void {
+    const review = entry.review;
+    const planId = review?.dry_run_plan?.plan_id;
+    const challengeId = entry.stepUpChallengeId;
+    const code = entry.totpCode ?? '';
+    if (!review || !planId || !challengeId || !/^\\d{6}$/.test(code) || !this.canApproveReview(review) || this.planning()) return;
+
+    this.planning.set(true);
+    this.entries.update((entries) => entries.map((item) =>
+      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false } : item,
+    ));
+    defer(() => this.chatApi.approvePlan(planId, challengeId, code))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
         take(1),
@@ -483,7 +524,7 @@ export class App implements AfterViewChecked {
               && result.plan_id === planId
               && result.notice === 'DRY_RUN_ONLY_NO_CHANGES_MADE'
               && result.tool_result?.status === 'dry_run'
-              ? { ...item, review: { ...review, approved: true, tool_result: result.tool_result }, approvalError: false }
+              ? { ...item, review: { ...review, approved: true, tool_result: result.tool_result }, approvalError: false, stepUpChallengeId: '', totpCode: '' }
               : { ...item, approvalError: true })
             : item,
         )),
@@ -521,7 +562,7 @@ export class App implements AfterViewChecked {
         next: (refined: PlanReviewResponse) => this.entries.update((entries) => entries.map((item) =>
           item.id === entry.id
             ? (isPlanReviewResponse(refined)
-              ? { ...item, review: refined, clarificationDraft: '', refineError: false }
+              ? { ...item, review: refined, clarificationDraft: '', refineError: false, stepUpChallengeId: '', totpCode: '' }
               : { ...item, refineError: true })
             : item,
         )),
