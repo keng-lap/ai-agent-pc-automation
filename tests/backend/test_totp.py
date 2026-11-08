@@ -1,5 +1,3 @@
-from urllib.parse import parse_qs, urlparse
-
 import pytest
 
 from agent_backend.totp import (
@@ -49,19 +47,12 @@ def test_provisioning_uri_uses_standard_authenticator_parameters():
         account_name="owner@example.test",
         issuer="AI Agent PC",
     )
-    parsed = urlparse(uri)
-    query = parse_qs(parsed.query)
-
-    assert parsed.scheme == "otpauth"
-    assert parsed.netloc == "totp"
-    assert query == {
-        "secret": [RFC_SECRET],
-        "issuer": ["AI Agent PC"],
-        "algorithm": ["SHA1"],
-        "digits": [str(TOTP_DIGITS)],
-        "period": [str(TOTP_PERIOD_SECONDS)],
-    }
-    assert "AI%20Agent%20PC" in parsed.path
+    assert uri.startswith("otpauth://totp/AI%20Agent%20PC%3Aowner%40example.test?")
+    assert f"secret={RFC_SECRET}" in uri
+    assert "issuer=AI%20Agent%20PC" in uri
+    assert "algorithm=SHA1" in uri
+    assert f"digits={TOTP_DIGITS}" in uri
+    assert f"period={TOTP_PERIOD_SECONDS}" in uri
 
 
 @pytest.mark.parametrize(
