@@ -233,7 +233,7 @@ def test_plan_creation_never_calls_dry_run_tool(monkeypatch):
     assert response.json()["approved"] is False
 
 
-def test_approval_runs_every_plan_item_once_and_replays_cached_result(monkeypatch):
+def test_approval_fails_closed_without_google_and_authenticator_configuration(monkeypatch):
     from agent_backend import plan_api
     from agent_backend.tools import ToolResult
 
@@ -266,17 +266,10 @@ def test_approval_runs_every_plan_item_once_and_replays_cached_result(monkeypatc
     first = client.post(f"/api/plans/{plan_id}/approve", json={})
     second = client.post(f"/api/plans/{plan_id}/approve", json={})
 
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json() == second.json()
-    assert first.json()["approved"] is True
-    assert first.json()["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
-    assert first.json()["tool_result"]["target"] == "JDK, IntelliJ IDEA"
-    assert "จะติดตั้ง JDK" in first.json()["tool_result"]["summary"]
-    assert "จะติดตั้ง IntelliJ IDEA" in first.json()["tool_result"]["summary"]
-    assert "ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง" in first.json()["tool_result"]["summary"]
-    assert [call.target for call in calls] == ["JDK", "IntelliJ IDEA"]
-    assert len(calls) == 2
+    assert first.status_code == 503
+    assert second.status_code == 503
+    assert "not configured" in first.json()["detail"]
+    assert calls == []
 
 
 
@@ -312,7 +305,7 @@ def test_approval_rejects_client_supplied_authority_or_action_fields(monkeypatch
     assert calls == []
 
 
-def test_explicit_software_target_can_be_approved_without_optional_questions(monkeypatch):
+def test_explicit_software_target_cannot_be_approved_without_totp(monkeypatch):
     from agent_backend import plan_api
     from agent_backend.tools import ToolResult
 
@@ -343,10 +336,8 @@ def test_explicit_software_target_can_be_approved_without_optional_questions(mon
 
     plan_id = body["dry_run_plan"]["plan_id"]
     approved = client.post(f"/api/plans/{plan_id}/approve", json={})
-    assert approved.status_code == 200
-    assert approved.json()["approved"] is True
-    assert approved.json()["tool_result"]["target"] == "Google Chrome"
-    assert len(calls) == 1
+    assert approved.status_code == 503
+    assert calls == []
 
 
 def test_approval_rejects_plan_that_needs_clarification(monkeypatch):
