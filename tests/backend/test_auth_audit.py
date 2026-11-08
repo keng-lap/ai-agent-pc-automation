@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from agent_backend.auth_audit import (
+    AUTH_AUDIT_SINK,
     MAX_AUTH_AUDIT_EVENTS,
     AuthAuditEvent,
     AuthAuditEventSink,
