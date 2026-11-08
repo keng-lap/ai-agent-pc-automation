@@ -252,9 +252,24 @@ $env:BACKEND_PORT = [string]$backendPortNumber
 $env:LOCAL_AGENT_TOKEN = $localToken
 $env:PYTHONPATH = Join-Path $repoRoot "src\backend"
 
-$validationCode = 'from agent_backend.config import load_settings; s=load_settings(load_env_file=False); assert s.auth_enabled; print("Google OAuth configuration: valid")'
-& $python -c $validationCode
-$validationExitCode = $LASTEXITCODE
+$validationScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) ("p516-oauth-validation-" + [Guid]::NewGuid().ToString("N") + ".py")
+$validationLines = @(
+    'from agent_backend.config import load_settings'
+    'settings = load_settings(load_env_file=False)'
+    'assert settings.auth_enabled'
+    'print("Google OAuth configuration: valid")'
+)
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+try {
+    [System.IO.File]::WriteAllLines($validationScriptPath, $validationLines, $utf8NoBom)
+    & $python $validationScriptPath
+    $validationExitCode = $LASTEXITCODE
+}
+finally {
+    if (Test-Path -LiteralPath $validationScriptPath) {
+        Remove-Item -LiteralPath $validationScriptPath -Force
+    }
+}
 if ($validationExitCode -ne 0) {
     throw "Local configuration validation failed. .env was not changed."
 }
