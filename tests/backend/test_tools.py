@@ -156,53 +156,6 @@ def test_invalid_policy_configuration_never_reaches_a_spy_handler(monkeypatch):
     assert handler_calls == []
 
 
-def test_agent_core_policy_decision_denies_before_dispatch(monkeypatch):
-    handler_calls = []
-
-    def deny(_tool_id):
-        raise policy.PolicyDeniedError("permission_denied")
-
-    monkeypatch.setattr(agent_core, "require_tool_allowed", deny)
-    monkeypatch.setattr(
-        "agent_backend.tools._HANDLERS",
-        {"software.install": lambda item: handler_calls.append(item)},
-    )
-
-    with pytest.raises(policy.PolicyDeniedError) as raised:
-        agent_core.run_agent("Install Example", "en", "chatgpt")
-
-    assert raised.value.reason == "permission_denied"
-    assert handler_calls == []
-
-
-
-def test_policy_configuration_change_after_initial_decision_fails_closed(monkeypatch):
-    handler_calls = []
-    original_require = policy.require_tool_allowed
-
-    def spy_handler(request):
-        handler_calls.append(request)
-        raise AssertionError("dispatch must not use a handler after policy changes")
-
-    def decide_then_change_policy(tool_id):
-        decision = original_require(tool_id)
-        # Simulate policy configuration changing after the orchestration decision.
-        monkeypatch.setattr(policy, "_TOOL_POLICY", policy.MappingProxyType({}))
-        return decision
-
-    monkeypatch.setattr(agent_core, "require_tool_allowed", decide_then_change_policy)
-    monkeypatch.setattr(
-        tools,
-        "_HANDLERS",
-        {"software.install": spy_handler},
-    )
-
-    with pytest.raises(policy.PolicyConfigurationError):
-        agent_core.run_agent("Install Example", "en", "chatgpt")
-
-    assert handler_calls == []
-
-
 def test_handler_identity_replacement_after_policy_decision_fails_closed(monkeypatch):
     handler_calls = []
     replacement_calls = []
@@ -315,3 +268,21 @@ def test_disabled_p2_p3_policy_never_invokes_a_spy_handler(
 
     assert raised.value.reason == "risk_denied"
     assert handler_calls == []
+
+
+
+def test_legacy_agent_entrypoint_only_plans_and_never_dispatches(monkeypatch):
+    calls = []
+
+    def forbidden(*_args, **_kwargs):
+        calls.append("called")
+        raise AssertionError("legacy entry point must never dispatch")
+
+    monkeypatch.setattr(agent_core, "execute_tool", forbidden, raising=False)
+    monkeypatch.setattr(agent_core, "require_tool_allowed", forbidden, raising=False)
+
+    response = agent_core.run_agent("Install Example", "en", "chatgpt")
+
+    assert response.task_status == "planned"
+    assert response.tool_result is None
+    assert calls == []
