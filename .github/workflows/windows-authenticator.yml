@@ -1,0 +1,36 @@
+name: Windows Authenticator DPAPI
+
+on:
+  pull_request:
+    paths:
+      - "src/backend/agent_backend/authenticator.py"
+      - "tests/backend/test_authenticator.py"
+      - "src/backend/pyproject.toml"
+      - ".github/workflows/windows-authenticator.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/backend/agent_backend/authenticator.py"
+      - "tests/backend/test_authenticator.py"
+      - "src/backend/pyproject.toml"
+      - ".github/workflows/windows-authenticator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-dpapi:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend test dependencies
+        run: python -m pip install -e "src/backend[dev]"
+      - name: Test Windows DPAPI authenticator storage
+        run: python -m pytest tests/backend/test_authenticator.py -q
