@@ -199,6 +199,9 @@ class StepUpChallengeStore:
             if not accepted:
                 attempts = challenge.failed_attempts + 1
                 previous_window = self._owner_failures.get(owner_session)
+                if previous_window is None and len(self._owner_failures) >= MAX_OWNER_FAILURE_ENTRIES:
+                    self._replace(challenge, failed_attempts=attempts, status="locked")
+                    return False
                 if previous_window is None or now - previous_window[0] >= OWNER_SESSION_FAILURE_WINDOW_SECONDS:
                     window_started, owner_attempts = float(now), 1
                 else:
