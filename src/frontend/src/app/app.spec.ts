@@ -13,6 +13,7 @@ class FakeChatApi {
   clearedConversationIds: string[] = [];
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
   approvalCalls: string[] = [];
+  stepUpCalls: string[] = [];
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -77,7 +78,12 @@ class FakeChatApi {
     return this.planResponder(message, language);
   }
 
-  approvePlan(planId: string): Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> {
+  createPlanStepUpChallenge(planId: string): Observable<{ challenge_id: string; plan_id: string; expires_at: number }> {
+    this.stepUpCalls.push(planId);
+    return of({ challenge_id: 'b'.repeat(32), plan_id: planId, expires_at: 1_800_000_120 });
+  }
+
+  approvePlan(planId: string, _challengeId: string, _totpCode: string): Observable<{ plan_id: string; approved: true; tool_result: { status: 'dry_run'; summary: string }; notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' }> {
     this.approvalCalls.push(planId);
     return this.approveResponder(planId);
   }
