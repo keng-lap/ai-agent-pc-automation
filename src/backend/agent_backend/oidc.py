@@ -321,3 +321,127 @@ class GoogleOidcClient:
         ):
             raise OidcAuthenticationError("Google identity claims failed validation.")
         return GoogleIdentity(sub=subject, email=email)
+
+
+@dataclass(frozen=True, slots=True)
+class SessionCredential:
+    """One-time bearer token returned to the HTTP-only cookie adapter."""
+
+    token: str
+    session_id: str
+    expires_at: float
+
+
+@dataclass(frozen=True, slots=True)
+class SessionPrincipal:
+    """Authenticated owner and opaque server-side session identity."""
+
+    owner_sub: str
+    session_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SessionRecord:
+    owner_sub: str
+    session_id: str
+    expires_at: float
+
+
+class ApplicationSessionStore:
+    """Bounded in-memory absolute-expiry session store.
+
+    The caller must provide an explicit TTL; no unapproved lifetime default is
+    silently selected. Only a SHA-256 token digest is retained in memory.
+    Sessions are invalidated on process restart.
+    """
+
+    def __init__(self, *, ttl_seconds: int, clock=None, capacity: int = 128):
+        if type(ttl_seconds) is not int or not 60 <= ttl_seconds <= 86400:
+            raise ValueError("session TTL must be between 60 and 86400 seconds")
+        if type(capacity) is not int or not 1 <= capacity <= 128:
+            raise ValueError("session capacity must be between 1 and 128")
+        self._ttl_seconds = ttl_seconds
+        self._clock = clock or time.time
+        self._capacity = capacity
+        self._sessions: dict[str, _SessionRecord] = {}
+        self._lock = threading.RLock()
+
+    def create(
+        self,
+        *,
+        identity: GoogleIdentity,
+        allowlist: MasterUserAllowlist,
+    ) -> SessionCredential:
+        allowlist.require_master_user(identity)
+        now = self._clock()
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(now)
+            or now < 0
+        ):
+            raise OidcAuthenticationError("Session clock is invalid.")
+        token = secrets.token_urlsafe(32)
+        token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        session_id = secrets.token_urlsafe(24)
+        expires_at = float(now) + self._ttl_seconds
+        with self._lock:
+            self._remove_expired(float(now))
+            if len(self._sessions) >= self._capacity:
+                raise OidcAuthenticationError("Session capacity reached.")
+            self._sessions[token_digest] = _SessionRecord(
+                owner_sub=identity.sub,
+                session_id=session_id,
+                expires_at=expires_at,
+            )
+        return SessionCredential(
+            token=token,
+            session_id=session_id,
+            expires_at=expires_at,
+        )
+
+    def resolve(self, token: str) -> SessionPrincipal | None:
+        if not isinstance(token, str) or not 32 <= len(token) <= 256:
+            return None
+        try:
+            token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        except UnicodeEncodeError:
+            return None
+        now = self._clock()
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(now)
+            or now < 0
+        ):
+            return None
+        with self._lock:
+            record = self._sessions.get(token_digest)
+            if record is None:
+                return None
+            if float(now) >= record.expires_at:
+                self._sessions.pop(token_digest, None)
+                return None
+            return SessionPrincipal(
+                owner_sub=record.owner_sub,
+                session_id=record.session_id,
+            )
+
+    def revoke(self, token: str) -> bool:
+        if not isinstance(token, str) or not 32 <= len(token) <= 256:
+            return False
+        try:
+            token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        except UnicodeEncodeError:
+            return False
+        with self._lock:
+            return self._sessions.pop(token_digest, None) is not None
+
+    def _remove_expired(self, now: float) -> None:
+        expired = [
+            digest
+            for digest, record in self._sessions.items()
+            if now >= record.expires_at
+        ]
+        for digest in expired:
+            self._sessions.pop(digest, None)
