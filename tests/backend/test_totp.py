@@ -10,6 +10,7 @@ from agent_backend.totp import (
     matching_step,
     provisioning_uri,
 )
+
 RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 
 
