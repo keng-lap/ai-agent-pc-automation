@@ -87,16 +87,22 @@ function Write-DotEnvAtomically {
         [string[]]$Lines
     )
 
-    $tempPath = $Path + "." + [Guid]::NewGuid().ToString("N") + ".tmp"
+    $fileToken = [Guid]::NewGuid().ToString("N")
+    $tempPath = $Path + "." + $fileToken + ".tmp"
+    $backupPath = $Path + "." + $fileToken + ".bak"
     $encoding = New-Object System.Text.UTF8Encoding($false)
 
     try {
         [System.IO.File]::WriteAllLines($tempPath, $Lines, $encoding)
-        [System.IO.File]::Replace($tempPath, $Path, $null)
+        # Use an explicit backup path for .NET Framework compatibility.
+        [System.IO.File]::Replace($tempPath, $Path, $backupPath)
     }
     finally {
         if (Test-Path -LiteralPath $tempPath) {
             Remove-Item -LiteralPath $tempPath -Force
+        }
+        if (Test-Path -LiteralPath $backupPath) {
+            Remove-Item -LiteralPath $backupPath -Force
         }
     }
 }
