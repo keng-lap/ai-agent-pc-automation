@@ -121,7 +121,7 @@ def test_expired_enrollment_cannot_be_confirmed(tmp_path):
 
 
 def test_secret_file_cannot_be_overwritten(tmp_path):
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", TestProtector())
+    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
     store.save(owner_sub="owner-sub", secret="GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
 
     with pytest.raises(SecretStoreError, match="already enrolled"):
@@ -129,7 +129,7 @@ def test_secret_file_cannot_be_overwritten(tmp_path):
 
 
 def test_corrupt_secret_file_fails_closed(tmp_path):
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", TestProtector())
+    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
     (tmp_path / "authenticator.json").write_text(
         json.dumps({"version": 1, "ciphertext": "not-base64!"}),
         encoding="ascii",
