@@ -161,3 +161,23 @@ def test_windows_dpapi_protects_and_unprotects_secret_bytes():
     assert protected != plaintext
     assert plaintext not in protected
     assert protector.unprotect(protected) == plaintext
+
+
+
+def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    first = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    second = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+
+    assert first.enrollment_id != second.enrollment_id
+    assert not manager.confirm(
+        enrollment_id=first.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert manager.confirm(
+        enrollment_id=second.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
