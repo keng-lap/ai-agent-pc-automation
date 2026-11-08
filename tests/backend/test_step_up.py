@@ -180,4 +180,13 @@ def test_owner_session_failure_window_resets_after_five_minutes():
     now[0] += 300
     next_receipt = create(store)
 
-    assert verify(store, next_receipt) is True
+    assert store.verify_and_consume(
+        challenge_id=next_receipt.challenge_id,
+        owner_sub=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+        action_digest=DIGEST,
+        risk_class="high",
+        secret=RFC_SECRET,
+        code=code_at(RFC_SECRET, now[0]),
+    ) is True
