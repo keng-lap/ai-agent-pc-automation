@@ -77,6 +77,8 @@ class WindowsDpapiProtector:
 
         crypt32 = ctypes.WinDLL("Crypt32.dll", use_last_error=True)
         kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
+        kernel32.LocalFree.restype = wintypes.HLOCAL
         buffer = ctypes.create_string_buffer(value)
         source = cls._DataBlob(
             len(value),
@@ -112,7 +114,7 @@ class WindowsDpapiProtector:
                 ctypes.POINTER(cls._DataBlob),
                 ctypes.c_void_p,
                 ctypes.c_void_p,
-                ctypes.wintypes.DWORD,
+                wintypes.DWORD,
                 ctypes.POINTER(cls._DataBlob),
             ]
             succeeded = function(
@@ -274,8 +276,12 @@ class AuthenticatorEnrollmentManager:
         if not isinstance(account_name, str) or not 1 <= len(account_name.strip()) <= 254:
             raise ValueError("account label is invalid")
         now = self._clock()
-        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now)
-            or now < 0:
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(now)
+            or now < 0
+        ):
             raise RuntimeError("system clock is invalid")
 
         with self._lock:
@@ -308,6 +314,7 @@ class AuthenticatorEnrollmentManager:
         if (
             isinstance(now, bool)
             or not isinstance(now, (int, float))
+            or not math.isfinite(now)
             or now < 0
             or not isinstance(enrollment_id, str)
             or not isinstance(owner_sub, str)
