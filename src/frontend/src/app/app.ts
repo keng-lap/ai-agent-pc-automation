@@ -529,7 +529,9 @@ export class App implements AfterViewChecked {
             : item,
         )),
         error: () => this.entries.update((entries) => entries.map((item) =>
-          item.id === entry.id ? { ...item, approvalError: true } : item,
+          item.id === entry.id
+            ? { ...item, approvalError: true, stepUpChallengeId: '', totpCode: '' }
+            : item,
         )),
       });
   }
