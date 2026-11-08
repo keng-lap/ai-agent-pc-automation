@@ -6,167 +6,163 @@
 |---|---|
 | Decision ID | D-P5-516-01 |
 | Finding | F-516-01 — P1 approval does not prove human presence |
-| Status | **Approved direction; detailed controls proposed for review** |
+| Status | **Approved direction; TOTP replaces SMS by Product Owner decision on 2026-11-08** |
 | Decision owner | Product Owner |
 | Decision date | 2026-11-08 |
-| Repository baseline | `main` — `bdf6d51505dfe61cf492a1b333a808fd16b08935` |
-| Scope | Identity sign-in and step-up confirmation design for a future exact-action approval flow |
+| Scope | Identity sign-in and step-up confirmation for a future exact-action approval flow |
 | Change type | Documentation only |
 
-## 1. Context
+## 1. Context and approved direction
 
-F-516-01 found that the current local API token, Origin header, plan ID, and approval request do not prove that the owner personally intended to approve an action. They protect parts of the local API boundary but are not human identity or user-presence evidence.
+The current local API token, Origin header, plan ID, and approval request do not prove that the owner personally intended to approve an action.
 
-The Product Owner has approved this direction:
-
-1. Sign in using **Sign in with Google** (Google account / Gmail).
-2. For a high-risk action, require a second confirmation using an **SMS one-time passcode (OTP)** sent only to the phone number previously registered by the system owner.
+The Product Owner has approved:
+1. Sign in using **Sign in with Google** through Google OpenID Connect (OIDC).
+2. For a high-risk action, require a second confirmation using a **TOTP code from an authenticator app**, enrolled by scanning a one-time QR code during trusted setup.
 3. Ordinary, non-high-risk interactions may use the authenticated application session, subject to existing policy and permission gates.
+4. Exactly one Master User owns the installation. No second Master User, self-promotion, recovery codes, or parallel admin recovery account.
+5. Google Account recovery remains entirely Google's responsibility. The AI Agent must not build a duplicate Google Account recovery flow or send Gmail recovery OTPs.
 
-This decision selects the authentication direction. It does not approve a real machine-changing capability.
+The Product Owner explicitly rejected paid SMS delivery. TOTP is generated and verified locally; no SMS, messaging provider, or authenticator-vendor API is needed. This decision does not approve a real machine-changing capability.
 
-## 2. Approved decision
+## 2. Approved decisions
 
-### D1 — Google sign-in
+### D1 — Google sign-in and single Master User
 
-Use Google as the identity provider for application sign-in. The application must identify the owner by the stable Google OpenID Connect subject (`sub`) after validating the Google identity response. A verified email address may be displayed and used as an account attribute, but email text alone must not be the durable identity key.
+Use Google OIDC for application sign-in. Identify the owner by the stable Google `sub` after validating the identity response. Email may be displayed as an account attribute but is not the durable identity key.
 
-Only the Google identity explicitly enrolled/allowlisted as the system owner may access the owner application.
+Only the one Google identity explicitly enrolled as Master User during trusted setup may access owner functions. Do not auto-enroll the first account that signs in.
 
-### D2 — Registered-phone SMS step-up for high-risk approval
+### D2 — Authenticator-app TOTP step-up
 
-For every future high-risk approval, require a fresh SMS OTP sent to the single phone number enrolled by the owner. Do not allow the browser, model, request payload, or plan to nominate or replace the destination number.
+For every future high-risk approval, require a fresh TOTP code from the enrolled authenticator app. Enroll it during trusted setup by displaying a one-time QR code using the standard `otpauth://` provisioning format.
 
-A successful Google sign-in is not, by itself, approval of an action. A successful SMS OTP is also not a blanket approval: it must be bound to the exact action being approved.
+Support standards-compatible apps such as Google Authenticator, Microsoft Authenticator, 2FAS, and Aegis. These apps do not need to connect to the AI Agent or provide an API.
+
+A successful Google sign-in is not action approval. A successful TOTP verification is not blanket approval; it must be bound to the exact action being approved.
 
 ### D3 — Exact-action binding
 
-The OTP challenge must be bound server-side to all relevant identifiers for one approval attempt:
-
-- authenticated owner identity;
+The TOTP challenge must be bound server-side to:
+- authenticated Master User identity;
 - authenticated application session;
 - immutable action/plan identifier and canonical action digest;
 - server-derived risk classification;
 - challenge identifier and expiry.
 
-Any material change to the action or its parameters invalidates the challenge and requires a new review and OTP. OTP verification must not authorize another action, a later action, or a whole session.
+Any material change to the action or its parameters invalidates the challenge and requires a new review and TOTP. Verification must not authorize another action, a later action, or a whole session.
 
 ### D4 — Fail closed
 
-If Google identity validation, owner allowlisting, phone enrollment, SMS delivery, OTP verification, challenge storage, expiry validation, or atomic one-time consumption fails, the high-risk approval is denied. No fallback to the local API token, Origin header, plan ID, or an unverified phone number is permitted.
+If Google identity validation, owner allowlisting, authenticator enrollment, secret storage, TOTP verification, expiry validation, replay prevention, or atomic one-time consumption fails, high-risk approval is denied. No fallback to the local API token, Origin header, plan ID, email OTP, SMS OTP, or an unverified identity is permitted.
 
-## 3. Proposed security controls for implementation review
+## 3. Implementation security controls
 
-The following are design requirements proposed for a later, separately authorized implementation. They are not claims about current runtime behavior.
+These controls describe the approved direction and implementation requirements; they are not claims about current runtime behavior.
 
 ### Google identity flow
 
-- Use OpenID Connect Authorization Code flow with PKCE and the standard `state` and `nonce` protections.
-- Validate the signature and the `iss`, `aud`, `exp`, `iat`, `nonce`, and verified-email claims as applicable.
-- Enroll the owner's stable Google `sub` through a controlled setup process; do not auto-enroll the first account that signs in.
-- Do not request or retain Google refresh tokens unless a separately approved requirement makes them necessary.
+- Use OIDC Authorization Code flow with PKCE and standard `state` and `nonce` protections.
+- Validate signature and applicable `iss`, `aud`, `exp`, `iat`, `nonce`, and verified-email claims.
+- Enroll the single owner's stable Google `sub` through trusted setup; never auto-enroll.
+- Do not request or retain Google refresh tokens unless separately approved.
 - Keep application sessions separate from Google access tokens; use secure, HttpOnly, SameSite cookies and CSRF protections appropriate to the local web architecture.
-- Sign-out and account revocation must invalidate the local application session.
+- Sign-out and account revocation invalidate the local application session.
 
-### Phone enrollment
+### Authenticator enrollment
 
-- The destination is one owner-controlled phone number registered through a controlled enrollment flow.
-- Verify possession of the number during enrollment before marking it active.
-- Do not permit self-service phone-number changes through an ordinary authenticated session alone.
-- A number change requires a separately reviewed recovery/re-enrollment process with strong owner verification and an audit event.
-- Do not silently fall back to another number, email OTP, or a number supplied in an action request.
+- Enroll exactly one owner authenticator during trusted setup after Google owner identity has been established.
+- Generate a cryptographically random TOTP secret and display its QR code only during the one-time enrollment ceremony.
+- Verify enrollment by requiring a valid current TOTP before marking the authenticator active.
+- Encrypt the TOTP secret at rest using an installation-held key.
+- Never log or expose the secret, QR payload, or provisioning URI; do not store them in frontend persistent storage.
+- Do not permit self-service authenticator replacement through an ordinary authenticated session alone.
+- If the phone/device is lost, replacement requires a separately approved trusted-setup procedure. No email/SMS OTP recovery, recovery codes, secondary Master User, or automatic fallback is provided.
 
-### SMS OTP challenge
+### TOTP profile and challenge
 
-Proposed defaults, to be validated during implementation planning:
-
-| Control | Proposed requirement |
+| Control | Requirement |
 |---|---|
-| Code | Cryptographically random 6-digit numeric code |
-| Lifetime | 5 minutes maximum |
-| Use | One successful verification only |
-| Attempts | Maximum 5 failed attempts per challenge |
-| Resend | Enforced cooldown and bounded resend count |
-| Rate limits | Per owner, session, phone number, and source; deny on abuse |
-| Storage | Store only a verifier (keyed hash/HMAC), never plaintext OTP |
-| Comparison | Constant-time verification where applicable |
-| Consumption | Atomic one-time transition; concurrent requests cannot both succeed |
-| Logging | Never log OTP, full phone number, provider credentials, or raw challenge secrets |
+| Standard | RFC 6238 TOTP; interoperable HMAC-SHA1 profile |
+| Code | 6 numeric digits |
+| Time step | 30 seconds |
+| Clock tolerance | Current time step plus/minus at most one step |
+| Use | One successful verification per accepted time step |
+| Attempts | Maximum 5 failed attempts per challenge window, with bounded owner/session rate limits |
+| Storage | Secret encrypted at rest; no QR/provisioning URI persistence |
+| Comparison | Constant-time comparison |
+| Replay | Atomically record and reject an already-consumed time step |
+| Logging | Never log TOTP values, QR payloads, provisioning URIs, or authenticator secrets |
 
-The UI must show the exact action summary before requesting the OTP. The OTP screen must identify that the code is authorizing that one action, not general access or future actions.
+The UI must show the exact action summary before requesting TOTP. It must clearly state that the code authorizes that one action only.
 
 ### Risk classification
 
-- High-risk status must be derived by backend-owned policy, not by the model or frontend.
-- The model and client cannot downgrade an action's risk or skip step-up verification.
+- High-risk status is derived by backend-owned policy, never by the model or frontend.
+- The model and client cannot downgrade risk or skip step-up.
 - Unknown, mixed, or ambiguous actions inherit the highest applicable risk or are denied pending review.
-- SMS verification supplements the existing exact-action confirmation and permission checks; it does not replace them.
+- TOTP supplements exact-action confirmation and permission checks; it does not replace them.
 
 ## 4. Threats and limitations
 
-SMS is a practical step-up channel but is not phishing-resistant and is vulnerable to SIM swap, number port-out, SS7 interception, message forwarding, malware, and phone-number recycling. A compromised Google account or compromised local operating-system/browser session may also undermine the flow.
+TOTP avoids SMS fees, SIM-swap and carrier-delivery dependencies, but is **not phishing-resistant** and can be phished or relayed in real time. A compromised authenticator device, Google account, or local operating-system/browser session may undermine the flow.
 
-Therefore:
+- Do not describe TOTP as eliminating account takeover or proving absolute human presence.
+- Preserve the local-first boundary; do not expose the application to the public internet as part of this decision.
+- A4 must review identity, session, lost-device handling, exact-action binding, rate limits, and audit behavior before any side-effecting capability.
+- WebAuthn/passkeys may be considered as a future hardening option, but are not selected by this decision.
 
-- Do not describe SMS OTP as eliminating account takeover or proving absolute human presence.
-- Keep the current local-first boundary and do not expose the application to the public internet as part of this decision.
-- Before any side-effecting capability, A4 must review the complete identity, session, recovery, exact-action binding, rate-limit, and audit design.
-- Consider a stronger phishing-resistant authenticator (for example, WebAuthn/passkeys) as a future hardening option; it is not selected by this decision and must not be silently substituted for the approved SMS direction.
+## 5. External data flow and remaining implementation choices
 
-## 5. External data flow and unresolved implementation choices
+Google sign-in requires outbound communication with Google for identity only. TOTP generation and verification are local and require no authenticator-vendor integration or paid messaging service. Do not send prompts, plans, files, machine data, or Windows telemetry to Google.
 
-Google sign-in and SMS delivery require outbound communication with external providers. This is a deliberate exception for identity and verification only; it does not authorize sending prompts, plans, files, or machine data to those providers.
-
-The following remain open and must be decided before runtime implementation:
-
+Remaining details to resolve before runtime implementation:
 1. Google OAuth client/project ownership, redirect URI, consent configuration, and secret management.
-2. SMS provider selection, country coverage, cost, delivery behavior, webhook security, and provider data retention.
-3. Owner phone enrollment and recovery ceremony, including lost-phone and account-recovery scenarios.
-4. Session lifetime, refresh/reauthentication policy, and logout/revocation behavior.
-5. Exact backend risk categories that trigger SMS step-up.
-6. Security review of the selected provider integrations and data-processing terms.
+2. Trusted-setup authenticator enrollment, encrypted secret storage/key protection, and lost-device replacement ceremony.
+3. Session lifetime, reauthentication, logout, and revocation behavior.
+4. Exact backend risk categories that trigger TOTP step-up.
+5. Security review of the Google OIDC integration and its data-processing terms.
 
-No provider, account, phone number, credential, or production integration is selected by this document.
+No provider account, credential, or production integration is selected by this document.
 
 ## 6. Scope and explicit exclusions
 
 This decision does **not** authorize:
-
-- implementation of Google OAuth, SMS provider integration, OTP endpoints, or phone enrollment;
-- storage or use of real Google/SMS credentials;
+- implementation of Google OAuth or authenticator runtime endpoints;
+- use of paid SMS, SMS provider integration, email OTP, or recovery codes;
+- storage or use of real Google credentials in this documentation-only task;
 - changing current approval behavior or enabling a new approval route;
 - enabling P2 machine inspection or P3 machine-changing execution;
 - installing software, running commands, accessing files/processes, or changing Windows settings;
 - opening the local application to a public network;
 - starting Phase 6.
 
-The existing P1 workflow remains dry-run/plan-only. The F-516-01 finding is not closed by this design record; it remains open until the approved design is implemented, tested, and independently reviewed.
+The existing P1 workflow remains dry-run/plan-only. F-516-01 remains open until the approved design is implemented, tested, and independently reviewed.
 
-## 7. Acceptance criteria for a future implementation proposal
+## 7. Acceptance criteria for future implementation
 
-A separately authorized implementation proposal must demonstrate:
-
-- only the enrolled Google `sub` can sign in as owner;
+A separately authorized implementation must demonstrate:
+- only the enrolled Google `sub` can sign in as Master User;
 - forged, expired, wrong-audience, replayed, or otherwise invalid Google identity responses are rejected;
-- the OTP is sent only to the enrolled phone number;
-- the OTP is bound to the authenticated owner, session, and exact immutable action digest;
-- action mutation, expiry, replay, concurrent verification, wrong code, and rate-limit cases fail closed;
-- no OTP or provider secret appears in logs, API responses, audit events, or frontend storage;
-- SMS delivery/provider failure cannot bypass step-up verification;
-- phone change and account recovery cannot be performed using only the same possibly compromised session/phone;
-- all current local-first, backend-owned policy, exact-action confirmation, audit privacy, and dry-run-only boundaries remain intact;
+- only the enrolled authenticator can complete step-up;
+- TOTP is bound to the authenticated owner, session, and exact immutable action digest;
+- action mutation, expiry, replay, concurrent verification, wrong code, clock skew, and rate-limit cases fail closed;
+- no TOTP or authenticator secret appears in logs, API responses, audit events, or frontend storage;
+- missing or unavailable authenticator secret cannot bypass step-up;
+- lost-device replacement cannot be performed using only the same possibly compromised session;
+- all local-first, backend-owned policy, exact-action confirmation, audit privacy, and dry-run-only boundaries remain intact;
 - A4 security review and targeted regression tests pass before F-516-01 can be marked resolved.
 
 ## 8. Current status and next gate
 
-**Approved:** Google sign-in plus SMS OTP to the owner's pre-registered phone for high-risk action approval.
+**Approved:** Google sign-in plus authenticator-app TOTP (QR enrollment) for high-risk action approval; SMS delivery is rejected.
 
-**Proposed, not yet approved:** detailed protocol defaults and implementation controls in Sections 3–5.
+**Still requiring a separate procedure decision:** trusted-setup replacement after loss of the authenticator device.
 
-**Not implemented:** all authentication and SMS runtime behavior.
+**Not implemented:** Google OIDC and TOTP runtime behavior.
 
-**F-516-01:** Open — design direction recorded; implementation and independent verification remain outstanding.
+**F-516-01:** Open — approved direction recorded; implementation and independent verification remain outstanding.
 
 **Phase 6 / real PC execution:** NOT AUTHORIZED.
 
-Next step: Product Owner review of the detailed controls and external-provider/data-flow decisions, followed by a separate implementation task only after explicit authorization.
+Next step: reconcile the project status and Phase 5 documents, then prepare bounded, separately authorized runtime workstreams using mocked OIDC and local/test TOTP only.
