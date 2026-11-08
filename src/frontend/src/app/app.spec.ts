@@ -155,6 +155,8 @@ describe('App chat UI (T-202)', () => {
     if (httpTestingController) {
       const authRequest = httpTestingController.expectOne('/api/auth/session');
       authRequest.flush({ enabled: false, authenticated: false, authenticator_enrolled: false });
+      await fixture.whenStable();
+      fixture.detectChanges();
       const statusRequest = httpTestingController.expectOne('/api/settings/gemini');
       statusRequest.flush({ configured: false, model: 'gemini-3.1-flash-lite' });
     }
