@@ -1,5 +1,23 @@
 import { expect, test } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      enabled: false,
+      authenticated: false,
+      authenticator_enrolled: false,
+    }),
+  }));
+  await page.route('**/api/settings/gemini', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ configured: false, model: 'test-model' }),
+  }));
+});
+
+
 const mobileViewports = [
   { name: 'small-320x568', width: 320, height: 568 },
   { name: 'iphone-se-375x667', width: 375, height: 667 },
