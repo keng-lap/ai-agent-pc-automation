@@ -24,6 +24,9 @@ ACTION_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CHALLENGE_TTL_SECONDS = 120
 MAX_CHALLENGES = 128
 MAX_FAILED_ATTEMPTS = 5
+OWNER_SESSION_FAILURE_WINDOW_SECONDS = 300
+MAX_OWNER_SESSION_FAILURES = 5
+MAX_OWNER_FAILURE_ENTRIES = 128
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +75,7 @@ class StepUpChallengeStore:
         self._ttl_seconds = ttl_seconds
         self._capacity = capacity
         self._challenges: dict[str, StepUpChallenge] = {}
+        self._owner_failures: dict[tuple[str, str], tuple[float, int]] = {}
         self._lock = threading.RLock()
 
     def create(
@@ -103,6 +107,7 @@ class StepUpChallengeStore:
             raise RuntimeError("system clock is invalid")
         with self._lock:
             self._remove_expired(now)
+            self._prune_owner_failures(now)
             if len(self._challenges) >= self._capacity:
                 raise RuntimeError("active challenge capacity reached")
             challenge_id = secrets.token_hex(16)
@@ -168,6 +173,19 @@ class StepUpChallengeStore:
                 self._replace(challenge, status="invalidated")
                 return False
 
+            owner_session = (owner_sub, session_id)
+            failure_window = self._owner_failures.get(owner_session)
+            if failure_window is not None:
+                window_started, failure_count = failure_window
+                if now < window_started:
+                    self._replace(challenge, status="locked")
+                    return False
+                if now - window_started >= OWNER_SESSION_FAILURE_WINDOW_SECONDS:
+                    self._owner_failures.pop(owner_session, None)
+                elif failure_count >= MAX_OWNER_SESSION_FAILURES:
+                    self._replace(challenge, status="locked")
+                    return False
+
             if challenge.failed_attempts >= MAX_FAILED_ATTEMPTS:
                 self._replace(challenge, status="locked")
                 return False
@@ -180,8 +198,17 @@ class StepUpChallengeStore:
             )
             if not accepted:
                 attempts = challenge.failed_attempts + 1
+                previous_window = self._owner_failures.get(owner_session)
+                if previous_window is None or now - previous_window[0] >= OWNER_SESSION_FAILURE_WINDOW_SECONDS:
+                    window_started, owner_attempts = float(now), 1
+                else:
+                    window_started, owner_attempts = previous_window[0], previous_window[1] + 1
+                self._owner_failures[owner_session] = (window_started, owner_attempts)
                 status: ChallengeStatus = (
-                    "locked" if attempts >= MAX_FAILED_ATTEMPTS else "active"
+                    "locked"
+                    if attempts >= MAX_FAILED_ATTEMPTS
+                    or owner_attempts >= MAX_OWNER_SESSION_FAILURES
+                    else "active"
                 )
                 self._replace(challenge, failed_attempts=attempts, status=status)
                 return False
@@ -215,6 +242,17 @@ class StepUpChallengeStore:
             ),
             status=challenge.status if status is None else status,
         )
+
+    def _prune_owner_failures(self, now: float) -> None:
+        stale = [
+            key
+            for key, (started, _count) in self._owner_failures.items()
+            if now < started or now - started >= OWNER_SESSION_FAILURE_WINDOW_SECONDS
+        ]
+        for key in stale:
+            self._owner_failures.pop(key, None)
+        if len(self._owner_failures) > MAX_OWNER_FAILURE_ENTRIES:
+            raise RuntimeError("owner/session rate-limit capacity reached")
 
     def _remove_expired(self, now: float) -> None:
         expired_ids = [
