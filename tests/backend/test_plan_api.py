@@ -389,3 +389,22 @@ def test_plan_creation_does_not_depend_on_a_second_gemini_call(monkeypatch):
     assert body["tool_result"] is None
     assert body["approved"] is False
     assert body["questions"] == []
+
+
+
+def test_plan_creation_records_minimal_in_memory_audit_event():
+    from agent_backend.audit import AUDIT_SINK
+
+    AUDIT_SINK.clear()
+    response = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+
+    assert response.status_code == 200
+    events = AUDIT_SINK.snapshot()
+    assert len(events) == 1
+    assert events[0].event_type == "plan.created"
+    assert events[0].tool_id == "software.install"
+    assert events[0].outcome == "allowed"
+    assert "Google Chrome" not in str(events[0].model_dump())

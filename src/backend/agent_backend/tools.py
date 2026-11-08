@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agent_backend.audit import record_optional_audit_event
 from agent_backend.planner import IntentKind, TaskIntent
 
 ToolId = Literal["software.install", "software.remove"]
@@ -125,12 +126,38 @@ def execute_tool(request: ToolRequest) -> ToolResult:
     handlers = _HANDLERS
     handler = handlers.get(request.tool_id)
     if handler is None:
+        record_optional_audit_event(
+            event_type="policy.denied",
+            tool_id=request.tool_id,
+            outcome="denied",
+            deny_reason="handler_unavailable",
+        )
         raise PolicyDeniedError("handler_unavailable")
 
-    require_tool_allowed(request.tool_id)
+    try:
+        require_tool_allowed(request.tool_id)
+    except PolicyDeniedError as exc:
+        record_optional_audit_event(
+            event_type="policy.denied",
+            tool_id=request.tool_id,
+            outcome="denied",
+            deny_reason=exc.reason,
+        )
+        raise
 
     if _HANDLERS is not handlers or _HANDLERS.get(request.tool_id) is not handler:
+        record_optional_audit_event(
+            event_type="policy.denied",
+            tool_id=request.tool_id,
+            outcome="denied",
+            deny_reason="handler_unavailable",
+        )
         raise PolicyDeniedError("handler_unavailable")
 
+    record_optional_audit_event(
+        event_type="policy.allowed",
+        tool_id=request.tool_id,
+        outcome="allowed",
+    )
     result = handler(request)
     return ToolResult.model_validate(result.model_dump())

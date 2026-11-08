@@ -106,3 +106,29 @@ def make_audit_event(
         outcome=outcome,
         deny_reason=deny_reason,
     )
+
+
+
+# One process-local sink is shared by the approved runtime event producers.
+# It is intentionally not exposed through an HTTP endpoint or persisted.
+AUDIT_SINK = AuditEventSink()
+
+
+def record_optional_audit_event(
+    *,
+    event_type: AuditEventType,
+    tool_id: AuditToolId,
+    outcome: AuditOutcome,
+    deny_reason: AuditDenyReason | None = None,
+) -> bool:
+    """Record allowlisted runtime metadata without affecting the safe operation."""
+    try:
+        event = make_audit_event(
+            event_type=event_type,
+            tool_id=tool_id,
+            outcome=outcome,
+            deny_reason=deny_reason,
+        )
+        return AUDIT_SINK.record_optional(event)
+    except Exception:  # noqa: BLE001 - optional audit must never affect the safe path
+        return False
