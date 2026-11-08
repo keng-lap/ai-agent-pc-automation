@@ -19,3 +19,11 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid #8b80e8; outli
   html, body { background: #171725; color: #f0effa; }
   body { background: radial-gradient(ellipse at 14% 0%, #2b2845 0, transparent 34%), #171725; }
 }
+
+
+html { min-height:100%; background:#edf2ef; scroll-behavior:smooth; }
+body { background:#edf2ef; color:#1d302d; }
+button,textarea,input { font:inherit; }
+button:focus-visible,textarea:focus-visible,input:focus-visible,a:focus-visible { outline:3px solid #82a991; outline-offset:3px; }
+@media (prefers-color-scheme:dark) { html,body { background:#14221d; color:#e7f0eb; } }
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
