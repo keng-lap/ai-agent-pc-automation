@@ -105,4 +105,44 @@ export class ChatApi {
   testGeminiConnection(): Observable<GeminiTestResult> {
     return this.http.post<GeminiTestResult>('/api/settings/gemini/test', {});
   }
+
+  getAuthSession(): Observable<AuthSession> {
+    return this.http.get<AuthSession>('/api/auth/session');
+  }
+
+  startGoogleLogin(): Observable<GoogleLoginStart> {
+    return this.http.get<GoogleLoginStart>('/api/auth/google/start');
+  }
+
+  beginAuthenticatorEnrollment(): Observable<AuthenticatorEnrollment> {
+    return this.http.post<AuthenticatorEnrollment>('/api/authenticator/enrollment', {});
+  }
+
+  confirmAuthenticatorEnrollment(enrollmentId: string, code: string): Observable<{ enrolled: boolean }> {
+    return this.http.post<{ enrolled: boolean }>('/api/authenticator/enrollment/confirm', {
+      enrollment_id: enrollmentId,
+      code,
+    });
+  }
+
+  logout(): Observable<{ logged_out: boolean }> {
+    return this.http.post<{ logged_out: boolean }>('/api/auth/logout', {});
+  }
+}
+
+
+export interface AuthSession {
+  enabled: boolean;
+  authenticated: boolean;
+  authenticator_enrolled: boolean;
+}
+
+export interface GoogleLoginStart {
+  authorization_url: string;
+}
+
+export interface AuthenticatorEnrollment {
+  enrollment_id: string;
+  qr_data_uri: string;
+  expires_at: number;
 }
