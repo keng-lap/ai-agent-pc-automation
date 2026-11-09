@@ -1,0 +1,63 @@
+<section class="builder-shell" aria-labelledby="builder-title">
+  <header class="builder-header">
+    <div><p class="builder-eyebrow">JOB DESIGNER / P6-603</p><h2 id="builder-title">{{ isThai() ? 'ออกแบบ Workflow' : 'Workflow Builder' }}</h2><p class="builder-subtitle">{{ isThai() ? 'จัดลำดับงานด้วย Node และเส้นเชื่อม โดยไม่ต้องเขียนโค้ด' : 'Compose tasks with nodes and connections, without writing code.' }}</p></div>
+    <div class="builder-header-meta"><span class="draft-pill"><span></span>{{ isThai() ? 'ฉบับร่างในหน้านี้' : 'Page-only draft' }}</span><span class="prototype-pill">PROTOTYPE · NO EXECUTION</span></div>
+  </header>
+  <div class="builder-toolbar">
+    <div class="job-identity"><span class="job-icon">▦</span><div><small>{{ isThai() ? 'JOB ตัวอย่าง' : 'SAMPLE JOB' }}</small><strong>{{ isThai() ? 'เตรียมตรวจสอบซอฟต์แวร์' : 'Software verification flow' }}</strong></div></div>
+    <div class="canvas-tools" role="group" [attr.aria-label]="isThai() ? 'เครื่องมือ Canvas' : 'Canvas tools'"><button type="button" (click)="zoomOut()" [attr.aria-label]="isThai() ? 'ย่อ Canvas' : 'Zoom out'">−</button><span>{{ zoomLabel }}</span><button type="button" (click)="zoomIn()" [attr.aria-label]="isThai() ? 'ขยาย Canvas' : 'Zoom in'">+</button><button type="button" class="fit-button" (click)="resetZoom()">{{ isThai() ? 'รีเซ็ตมุมมอง' : 'Reset view' }}</button></div>
+  </div>
+  <div class="builder-layout">
+    <aside class="node-library" aria-label="Node Library">
+      <div class="panel-heading"><div><small>LIBRARY</small><h3>{{ isThai() ? 'คลัง Node' : 'Node library' }}</h3></div><span>7</span></div>
+      <p class="panel-hint">{{ isThai() ? 'ลาก Node ลงบนพื้นที่ทำงาน หรือกดเพื่อเพิ่ม' : 'Drag a node onto the canvas, or click to add it.' }}</p>
+      @for (definition of definitions; track definition.type) {
+        <button type="button" [class]="'library-item library-item--' + definition.type" draggable="true" (dragstart)="onPaletteDragStart($event, definition.type)" (click)="addNode(definition.type)">
+          <span class="library-icon" aria-hidden="true">{{ definition.icon }}</span><span class="library-copy"><strong>{{ isThai() ? definition.labelTh : definition.labelEn }}</strong><small>{{ isThai() ? definition.categoryTh : definition.categoryEn }}</small></span><span class="library-add" aria-hidden="true">+</span>
+        </button>
+      }
+      <div class="library-tip"><strong>{{ isThai() ? 'เคล็ดลับ' : 'Tip' }}</strong><span>{{ isThai() ? 'กดพอร์ตวงกลมด้านขวาเพื่อเริ่มเชื่อม แล้วเลือกพอร์ตด้านซ้ายของ Node ปลายทาง' : 'Activate an output port, then choose the input port on the target node.' }}</span></div>
+    </aside>
+    <section class="canvas-panel" aria-label="Workflow canvas">
+      <div class="canvas-heading"><div><strong>{{ isThai() ? 'พื้นที่ออกแบบ' : 'Design canvas' }}</strong><span>{{ nodes().length }} Nodes · {{ edges().length }} Connections</span></div><span class="canvas-state"><i></i>{{ isThai() ? 'แก้ไขได้' : 'Editable' }}</span></div>
+      <div class="canvas-viewport" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="endNodeDrag($event)" (pointercancel)="endNodeDrag($event)">
+        <div #canvasWorld class="canvas-world" [style.transform]="'scale(' + zoom() + ')'">
+          <svg class="edge-layer" viewBox="0 0 1800 900" role="img" [attr.aria-label]="isThai() ? 'เส้นเชื่อมระหว่าง Node' : 'Connections between workflow nodes'">
+            <defs><marker id="workflow-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" /></marker></defs>
+            @for (edge of edges(); track edge.id) {
+              <path class="edge-visible" [class.edge-visible--selected]="selectedEdgeId() === edge.id" [attr.d]="edgePath(edge)" marker-end="url(#workflow-arrow)" />
+              <path class="edge-hit" [attr.d]="edgePath(edge)" (click)="selectEdge($event, edge)" />
+              <text class="edge-label" [attr.x]="edgeLabelX(edge)" [attr.y]="edgeLabelY(edge)">{{ edgeLabel(edge) }}</text>
+            }
+          </svg>
+          @for (node of nodes(); track node.id) {
+            <article [class]="'workflow-node workflow-node--' + node.type" [class.workflow-node--selected]="selectedNodeId() === node.id" [class.workflow-node--connecting]="connectionSource()?.nodeId === node.id" [style.left.px]="node.x" [style.top.px]="node.y" (click)="selectNode(node.id)">
+              @if (node.type !== 'trigger') { <button class="node-port node-port--input" type="button" (click)="connectTo(node.id, $event)" [attr.aria-label]="(isThai() ? 'เชื่อมเข้าที่ ' : 'Connect to ') + node.label"></button> }
+              <div class="node-drag-handle" (pointerdown)="startNodeDrag($event, node)"><span class="node-type-icon">{{ definition(node.type).icon }}</span><span class="node-type-label">{{ categoryLabel(node.type) }}</span><span class="node-grip" aria-hidden="true">⠿</span></div>
+              <div class="node-content"><strong>{{ node.label }}</strong><p>{{ node.description }}</p></div>
+              @for (port of outputPorts(node.type); track port.id) {
+                <button class="node-port node-port--output" [class.node-port--yes]="port.id === 'yes'" [class.node-port--no]="port.id === 'no'" [style.top.px]="port.top" type="button" (click)="connectFrom(node.id, port.id, $event)" [attr.aria-label]="(isThai() ? 'เชื่อมออกจาก ' : 'Connect from ') + node.label + ' · ' + (isThai() ? port.labelTh : port.labelEn)"></button>
+                @if (node.type === 'condition') { <span class="node-port-label" [class.node-port-label--yes]="port.id === 'yes'" [class.node-port-label--no]="port.id === 'no'">{{ isThai() ? port.labelTh : port.labelEn }}</span> }
+              }
+            </article>
+          }
+        </div>
+      </div>
+      <div class="canvas-footer"><span><kbd>ลาก</kbd> {{ isThai() ? 'ย้าย Node' : 'to move nodes' }} · <kbd>คลิก</kbd> {{ isThai() ? 'เลือก Node/เส้นเชื่อม' : 'to select a node or edge' }}</span><span>{{ isThai() ? 'ข้อมูลตัวอย่าง · ยังไม่บันทึก' : 'Sample data · not saved' }}</span></div>
+    </section>
+    <aside class="properties-panel" aria-label="Node properties">
+      <div class="panel-heading"><div><small>PROPERTIES</small><h3>{{ isThai() ? 'รายละเอียด' : 'Properties' }}</h3></div></div>
+      @if (selectedNode(); as node) {
+        <div class="property-content"><span class="property-type">{{ categoryLabel(node.type) }}</span><label for="node-label">{{ isThai() ? 'ชื่อ Node' : 'Node name' }}</label><input id="node-label" maxlength="80" [value]="node.label" (input)="updateSelectedLabel($event)" /><label for="node-description">{{ isThai() ? 'คำอธิบาย' : 'Description' }}</label><textarea id="node-description" rows="4" maxlength="240" [value]="node.description" (input)="updateSelectedDescription($event)"></textarea><div class="property-info"><strong>{{ isThai() ? 'การทำงาน' : 'Behavior' }}</strong><p>{{ nodeDescription(node.type) }}</p></div><div class="property-info"><strong>{{ isThai() ? 'พอร์ตเชื่อมต่อ' : 'Ports' }}</strong><p>{{ node.type === 'trigger' ? (isThai() ? 'Output เท่านั้น' : 'Output only') : (isThai() ? 'มี Input 1 จุด' : 'One input') }} · {{ outputPorts(node.type).length }} {{ isThai() ? 'Output' : 'outputs' }}</p></div><button type="button" class="danger-button" (click)="removeSelectedNode()">{{ isThai() ? 'ลบ Node' : 'Remove node' }}</button></div>
+      } @else if (selectedEdge(); as edge) {
+        <div class="property-content"><span class="property-type">{{ isThai() ? 'เส้นเชื่อม' : 'Connection' }}</span><strong>{{ edge.fromNodeId }} → {{ edge.toNodeId }}</strong><p class="property-muted">{{ isThai() ? 'เส้นเชื่อมกำหนดลำดับและทิศทางของ Workflow' : 'Connections define workflow order and direction.' }}</p><button type="button" class="danger-button" (click)="removeSelectedEdge()">{{ isThai() ? 'ลบเส้นเชื่อม' : 'Remove connection' }}</button></div>
+      } @else {
+        <div class="properties-empty"><span>◇</span><strong>{{ isThai() ? 'ยังไม่ได้เลือก Node' : 'Nothing selected' }}</strong><p>{{ isThai() ? 'เลือก Node หรือเส้นเชื่อมบน Canvas เพื่อดูรายละเอียด' : 'Select a node or connection to inspect it.' }}</p></div>
+      }
+      <div class="safety-note"><span>◇</span><div><strong>{{ isThai() ? 'โหมดออกแบบเท่านั้น' : 'Design mode only' }}</strong><p>{{ isThai() ? 'Prototype นี้ไม่เรียก Backend ไม่บันทึกข้อมูล และไม่สั่งงาน Windows' : 'This prototype does not call the backend, save data, or perform Windows actions.' }}</p></div></div>
+    </aside>
+  </div>
+  @if (connectionSource()) { <p class="builder-message builder-message--active" role="status">{{ isThai() ? 'กำลังเชื่อมต่อ: เลือกพอร์ต Input ของ Node ปลายทาง หรือกดพอร์ตเดิมเพื่อยกเลิก' : 'Connecting: choose a target input, or activate the same output to cancel.' }}</p> }
+  @else if (message()) { <p class="builder-message" role="status">{{ message() }}</p> }
+  <footer class="builder-footer"><span><i></i>{{ isThai() ? 'ข้อมูลอยู่ในหน่วยความจำของหน้านี้เท่านั้น' : 'In-memory prototype only' }}</span><span>{{ nodes().length }} nodes · {{ edges().length }} edges · {{ zoomLabel }}</span></footer>
+</section>
