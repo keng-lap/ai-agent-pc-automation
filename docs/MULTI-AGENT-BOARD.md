@@ -11,7 +11,7 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 - Phase 4 implementation PRs #45–#47 are merged. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed.
 - Phase 5 planning was authorized by the Product Owner on 2026-11-02. Planning baseline: docs/PHASE-5.md.
 - No Phase 5 runtime implementation, permission grant, or real PC execution is authorized yet.
-- Machine-changing operations remain dry-run/mock until Phase 5 is complete and explicitly approved; Phase 6 and each capability require separate authorization.
+- Phase 5 closeout was approved 2026-11-09. Phase 6 planning is authorized 2026-11-09; no individual real PC-changing capability is authorized without its own bounded task, explicit Product Owner approval, and security gates.
 - No AI provider, provider credentials, live model calls, or external data transfer are approved.
 
 ## Roles
@@ -25,8 +25,11 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 ## Phase 4 closeout
 Phase 4 is complete. PRs #45–#47 are merged; the Product Owner's focused Windows verification passed. See docs/PHASE-4.md.
 
-## Phase 5 planning board
-See docs/PHASE-5.md for P5-501 through P5-508, dependencies, workstream assignments, and the planning-only safety boundary.
+## Phase 5 closeout
+Phase 5 was closed by explicit Product Owner approval on 2026-11-09. The accepted F-516-01 targeted A4 review gap is recorded in `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`.
+
+## Phase 6 planning board
+See `docs/PHASE-6.md` for the authorized Phase 6 planning baseline, capability gates, and first bounded task. No real machine-changing capability is currently authorized.
 
 ## Archived Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
@@ -56,7 +59,7 @@ See docs/PHASE-5.md for P5-501 through P5-508, dependencies, workstream assignme
 - No provider integration, credentials, live model calls, or external data transfer.
 - Preserve loopback binding and local API token enforcement.
 - Do not persist chat messages/history or task history.
-- Phase 5 remains mandatory before real machine-changing actions.
+- Phase 5 is closed. Phase 6 planning is authorized, but real machine-changing actions remain prohibited until each capability passes its own explicit authorization and security gates.
 
 ## Completed rollout history
 - PR #30 — T-307 duplicate-token regression test — merged.
