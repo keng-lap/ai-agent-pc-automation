@@ -169,3 +169,47 @@ test('workflow builder supports full-screen mode and independently toggles side 
   await expect(page.locator('html')).not.toHaveClass(/workflow-fullscreen/);
   await expect(page.locator('.side-rail')).toBeVisible();
 });
+
+
+test('canvas pans by dragging blank space and with Space plus left-drag without moving nodes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /ออกแบบ Workflow/ }).click();
+  const viewport = page.locator('.canvas-viewport');
+  const node = page.locator('.workflow-node').first();
+  const beforeNode = await node.evaluate((element) => ({
+    left: Number.parseFloat(getComputedStyle(element).left),
+    top: Number.parseFloat(getComputedStyle(element).top),
+  }));
+
+  const box = await viewport.boundingBox();
+  expect(box).not.toBeNull();
+  const startX = box!.x + box!.width - 55;
+  const startY = box!.y + box!.height - 55;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX - 90, startY - 65, { steps: 6 });
+  await page.mouse.up();
+
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  const afterBlankPan = await node.evaluate((element) => ({
+    left: Number.parseFloat(getComputedStyle(element).left),
+    top: Number.parseFloat(getComputedStyle(element).top),
+  }));
+  expect(afterBlankPan).toEqual(beforeNode);
+
+  await viewport.focus();
+  await page.keyboard.down('Space');
+  const currentBox = await viewport.boundingBox();
+  expect(currentBox).not.toBeNull();
+  const secondX = currentBox!.x + currentBox!.width - 55;
+  const secondY = currentBox!.y + currentBox!.height - 55;
+  const previousScrollLeft = await viewport.evaluate((element) => element.scrollLeft);
+  await page.mouse.move(secondX, secondY);
+  await page.mouse.down();
+  await page.mouse.move(secondX - 45, secondY, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Space');
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(previousScrollLeft);
+});
