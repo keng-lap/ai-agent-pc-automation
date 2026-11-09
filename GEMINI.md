@@ -1,7 +1,7 @@
 # Gemini Project Instructions
 
 > Read this file at the start of every project session before proposing or changing anything.
-> This file governs AI coding assistants working in this repository when their host tool loads repository instructions. It is not automatically sent to the Gemini Chat API used by the running application; see [the runtime instruction task](docs/GEMINI-RUNTIME-INSTRUCTION.md).
+> This file governs AI coding assistants working in this repository when their host tool loads this file. It is not automatically sent to the Gemini Chat API used by the running application; see [the runtime instruction task](docs/GEMINI-RUNTIME-INSTRUCTION.md).
 
 ## 1. Project context and source of truth
 
@@ -47,9 +47,10 @@
 3. Restate the task scope internally and identify the applicable safety boundary.
 4. Reuse existing decisions and defaults; do not ask the user to repeat them.
 5. For documentation-only work, make the smallest consistent change and verify links/claims.
-6. For runtime work, confirm explicit authorization exists before editing code; add/update tests and request the required review.
-7. Report only: what changed, validation evidence, blockers (if any), and the next required approval/action.
-8. Do not claim a test, CI run, local Windows test, PR merge, or runtime behavior succeeded unless verified.
+6. For frontend design or implementation, read `.agents/skills/frontend-design/SKILL.md` and only the relevant references. Inspect the current Angular application and reuse its design system; do not add another framework or graph library without compatibility review and required approval.
+7. For runtime work, confirm explicit authorization exists before editing code; add/update tests and request the required review.
+8. Report only: what changed, validation evidence, blockers (if any), and the next required approval/action.
+9. Do not claim a test, CI run, local Windows test, PR merge, or runtime behavior succeeded unless verified.
 
 ## 5. Communication format
 
@@ -64,7 +65,7 @@
 
 At the start of a new session:
 - Read this file.
-- Inspect current `main`, open PRs, and the active task/phase documents.
+- Inspect current `main`, open PRs, and the active phase/task documents.
 - Read the latest relevant decision and handoff/status document.
 - Summarize the current position in no more than five bullets, then continue the next already-authorized task.
 - Do not assume that model memory or a previous chat is available.
