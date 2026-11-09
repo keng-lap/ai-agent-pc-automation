@@ -116,7 +116,7 @@ Phase 6 planning is active. P6-601 is the first bounded task. The next action is
 
 ## Trusted Software Discovery — planning requirement
 
-Software installation must begin with source discovery and trust assessment, not direct execution of a package-manager command. This is planning only; it does not authorize an installer, package-manager invocation, download, or machine change.
+Software installation must begin with source discovery and trust assessment, not direct execution of a package-manager command. This is planning only; it does not authorize an installer, package-manager invocation, download, or machine change. The detailed checklist and example are in `docs/P6-601-TRUSTED-SOFTWARE-DISCOVERY.md`.
 
 ### Source strategy
 
@@ -155,3 +155,4 @@ For "install DBeaver", begin at the official DBeaver download/documentation site
 ### Later implementation boundary
 
 A future software-install capability must use a fixed backend-owned package-source adapter and typed fields (source enum, exact package ID, exact version, architecture, and approved scope), never free-form command text or model-supplied executable/handler. The discovery report and immutable install proposal must be bound to the exact approval digest. A change to package ID, version, source, installer URL/hash, architecture, scope, or privilege requirement invalidates prior approval and requires new review. Package-manager execution remains disabled until a separate bounded runtime task, F-516-01 A4 prerequisite, independent A4 review, negative tests, CI, and explicit Product Owner enablement approval are complete.
+
