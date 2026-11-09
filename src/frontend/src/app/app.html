@@ -4,8 +4,9 @@
     <div class="rail-rule"></div>
     <p class="rail-caption">พื้นที่ทำงาน</p>
     <nav class="rail-nav" aria-label="นำทาง">
-      <a class="rail-link" href="#workspace"><span class="rail-icon" aria-hidden="true">⌘</span>สนทนากับ Agent</a>
-      <a class="rail-link" href="#provider-settings"><span class="rail-icon" aria-hidden="true">✳</span>ตั้งค่า Gemini</a>
+      <a class="rail-link" href="#workspace" [class.active]="activeView() === 'chat'" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">⌘</span>สนทนากับ Agent</a>
+      <button type="button" class="rail-link" [class.active]="activeView() === 'workflow'" [attr.aria-current]="activeView() === 'workflow' ? 'page' : null" (click)="setActiveView('workflow')"><span class="rail-icon" aria-hidden="true">◇</span>ออกแบบ Workflow</button>
+      <a class="rail-link" href="#provider-settings" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">✳</span>ตั้งค่า Gemini</a>
     </nav>
     <section class="rail-safety" aria-label="ขอบเขตความปลอดภัย">
       <span class="safety-symbol" aria-hidden="true">◇</span>
@@ -83,6 +84,9 @@
         @if (authError()) { <p class="conversation-notice" role="alert">{{ authError() }}</p> }
       </section>
     }
+    @if (activeView() === 'workflow') {
+      <app-workflow-builder [language]="language()"></app-workflow-builder>
+    } @else {
     <div class="workspace-grid">
       <app-gemini-settings id="provider-settings"></app-gemini-settings>
 
@@ -433,6 +437,7 @@
     </form>
     </section>
     </div>
+    }
   }
   </div>
 
