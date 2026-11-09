@@ -44,9 +44,9 @@ test('workflow builder supports node creation, connection, editing, keyboard mov
   expect(after!.x).toBeGreaterThan(before!.x);
 
   await page.getByRole('button', { name: 'ขยาย Canvas' }).click();
-  await expect(page.getByText('110%', { exact: true })).toBeVisible();
+  await expect(page.locator('.canvas-tools').getByText('110%', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'รีเซ็ตมุมมอง' }).click();
-  await expect(page.getByText('100%', { exact: true })).toBeVisible();
+  await expect(page.locator('.canvas-tools').getByText('100%', { exact: true })).toBeVisible();
 });
 
 test('workflow builder keeps the page within a narrow mobile viewport', async ({ page }) => {
