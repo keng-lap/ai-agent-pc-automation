@@ -370,7 +370,7 @@ export class App implements AfterViewChecked {
       });
   }
 
-  protected setActiveView(view: 'chat' | 'workflow'): void {
+  protected setActiveView(view: 'chat' | 'workflow' | 'jobs'): void {
     this.activeView.set(view);
   }
 
