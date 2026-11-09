@@ -26,6 +26,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 - P6-602 Frontend Design Skill is merged in PR #133.
 - P6-603 Visual Workflow Builder UX Prototype is tracked in PR #134. Its scope is frontend-only, synthetic, in-memory, and does not call the backend or execute Windows actions.
 - P6-605 adds Run Custom Script, Install Software, Batch Install node types and a mock-only Job Monitor with Active Jobs, Run History, per-node status, and sanitized sample logs. No Job Engine, persistence, real logs, or Windows execution is connected.
+- P6-608 defines the Professional Workflow Builder UX Blueprint in `docs/P6-608-PROFESSIONAL-WORKFLOW-BUILDER-UX-BLUEPRINT.md`; it is a documentation/design contract only. Mobile Builder remains deferred as an optional follow-up.
 - F-516-01 independent A4 follow-up remains an accepted Phase 5 residual verification gap; it is not claimed as passed.
 - No side-effecting capability is enabled. Each future capability still requires its own bounded design, independent review, tests, and explicit Product Owner enablement approval.
 
@@ -58,7 +59,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
 | 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. |
-| 6 | Planning + frontend UX prototype in progress; real PC-changing execution not authorized |
+| 6 | Planning + frontend UX prototype in progress; P6-608 blueprint proposed; real PC-changing execution not authorized |
 | 7 | Not Started |
 | 8 | Not Started |
 | 9 | Not Started |
