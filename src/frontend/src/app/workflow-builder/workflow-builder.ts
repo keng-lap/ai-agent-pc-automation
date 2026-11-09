@@ -106,7 +106,7 @@ export class WorkflowBuilderComponent {
   }
   protected addNode(type: WorkflowNodeType): void {
     const index = Math.max(0, this.nodes().length - 7);
-    this.addNodeAt(type, 70 + (index % 4) * 270, 590 + Math.floor(index / 4) * 175);
+    this.addNodeAt(type, 70 + (index % 4) * 270, 420 + Math.floor(index / 4) * 175);
   }
   private addNodeAt(type: WorkflowNodeType, x: number, y: number): void {
     const definition = this.definition(type);
