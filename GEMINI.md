@@ -1,17 +1,17 @@
 # Gemini Project Instructions
 
 > Read this file at the start of every project session before proposing or changing anything.
-> This file governs AI coding assistants working in this repository when their host tool loads repository instructions. It is not automatically sent to the Gemini Chat API used by the running application; see [the runtime instruction task](docs/GEMINI-RUNTIME-INSTRUCTION.md).
+> This file governs AI coding assistants working in this repository when their host tool loads it. It is not automatically sent to the Gemini Chat API used by the running application; see docs/GEMINI-RUNTIME-INSTRUCTION.md.
 
 ## 1. Project context and source of truth
 
-- Repository: `keng-lap/ai-agent-pc-automation`.
+- Repository: keng-lap/ai-agent-pc-automation.
 - Product: a local web application and backend for a personal Windows 11 AI agent.
-- Read the relevant current phase/task document, `docs/PROJECT.md`, `docs/ROADMAP.md`, and relevant approved decision records before acting.
-- Check the current `main` branch, open/merged PRs, and the active task branch before reporting project status. Do not rely on an old chat summary.
+- Read the relevant current phase/task document, docs/PROJECT.md, docs/ROADMAP.md, and relevant approved decision records before acting.
+- Check the current main branch, open/merged PRs, and the active task branch before reporting project status. Do not rely on an old chat summary.
 - If documents conflict, do not guess silently. Prefer explicit Product Owner decisions and current task-specific approved documents; identify the conflict and reconcile documentation before implementation.
 - Treat proposals and assumptions as non-binding until approved.
-- Default UI language is Thai. Preserve the approved branch convention: `<type>/<task-id>-<short-name>`.
+- Default UI language is Thai. Preserve the approved branch convention: <type>/<task-id>-<short-name>.
 
 ## 2. Minimize user questions — mandatory
 
@@ -47,9 +47,10 @@
 3. Restate the task scope internally and identify the applicable safety boundary.
 4. Reuse existing decisions and defaults; do not ask the user to repeat them.
 5. For documentation-only work, make the smallest consistent change and verify links/claims.
-6. For runtime work, confirm explicit authorization exists before editing code; add/update tests and request the required review.
-7. Report only: what changed, validation evidence, blockers (if any), and the next required approval/action.
-8. Do not claim a test, CI run, local Windows test, PR merge, or runtime behavior succeeded unless verified.
+6. For frontend design or implementation, read .agents/skills/frontend-design/SKILL.md and only the relevant references. Inspect the current Angular application and reuse its design system; do not add another framework or graph library without compatibility review and required approval.
+7. For runtime work, confirm explicit authorization exists before editing code; add/update tests and request the required review.
+8. Report only: what changed, validation evidence, blockers (if any), and the next required approval/action.
+9. Do not claim a test, CI run, local Windows test, PR merge, or runtime behavior succeeded unless verified.
 
 ## 5. Communication format
 
@@ -64,7 +65,7 @@
 
 At the start of a new session:
 - Read this file.
-- Inspect current `main`, open PRs, and the active task/phase documents.
+- Inspect current main, open PRs, and the active phase/task documents.
 - Read the latest relevant decision and handoff/status document.
 - Summarize the current position in no more than five bullets, then continue the next already-authorized task.
 - Do not assume that model memory or a previous chat is available.
@@ -76,4 +77,4 @@ At the end of a session:
 
 ## 7. Important runtime distinction
 
-These repository instructions guide coding assistants only when their host environment loads this file. The Gemini Chat API in the running application does not automatically read `GEMINI.md`. Its persistent behavior requires a backend-owned system instruction to be supplied on every relevant provider request. That is a separate runtime change and is tracked in [docs/GEMINI-RUNTIME-INSTRUCTION.md](docs/GEMINI-RUNTIME-INSTRUCTION.md). Do not claim that this file alone changes the application's Gemini chat behavior.
+These repository instructions guide coding assistants only when their host environment loads this file. The Gemini Chat API in the running application does not automatically read GEMINI.md. Its persistent behavior requires a backend-owned system instruction to be supplied on every relevant provider request. That is a separate runtime change and is tracked in docs/GEMINI-RUNTIME-INSTRUCTION.md. Do not claim that this file alone changes the application's Gemini chat behavior.
