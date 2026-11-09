@@ -250,6 +250,13 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ยืนยันตัวตนเพื่ออนุมัติ');
     expect(fixture.nativeElement.textContent).not.toContain('Mock reply');
     expect(fixture.nativeElement.querySelector('.installer-card')).not.toBeNull();
+    const flow = fixture.nativeElement.querySelector('.execution-flow') as HTMLElement;
+    expect(flow).not.toBeNull();
+    expect(flow.querySelectorAll('.flow-node').length).toBe(5);
+    expect(flow.textContent).toContain('ขั้นตอนการทำงาน');
+    expect(flow.textContent).toContain('รอผู้ใช้ยืนยัน');
+    expect(flow.querySelectorAll('.flow-node--done').length).toBe(2);
+    expect(flow.querySelectorAll('.flow-node--ready').length).toBe(3);
     expect((fixture.nativeElement.querySelector('.installer-details') as HTMLDetailsElement).open).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
 
@@ -263,6 +270,8 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
 
     expect(api.stepUpCalls).toEqual(['a'.repeat(32)]);
+    expect(flow.textContent).toContain('รอรหัส Authenticator');
+    expect(flow.querySelector('.flow-node--waiting')).not.toBeNull();
     const codeInput = fixture.nativeElement.querySelector('input[id^="totp-"]') as HTMLInputElement;
     expect(codeInput).not.toBeNull();
     codeInput.value = '123456';
@@ -277,6 +286,8 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
 
     expect(api.approvalCalls).toEqual(['a'.repeat(32)]);
+    expect(flow.querySelectorAll('.flow-node--done').length).toBe(5);
+    expect(flow.textContent).toContain('เสร็จสมบูรณ์');
     expect(fixture.nativeElement.textContent).toContain('ผลการจำลอง');
     expect(fixture.nativeElement.textContent).toContain('Dry run only; no changes made.');
   });

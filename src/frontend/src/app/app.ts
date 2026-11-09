@@ -34,6 +34,7 @@ interface ChatEntry {
   clarificationDraft?: string;
   refineError?: boolean;
   approvalError?: boolean;
+  approvalStage?: 'challenge' | 'dry_run' | null;
   stepUpChallengeId?: string;
   totpCode?: string;
   stepUpError?: boolean;
@@ -209,7 +210,7 @@ function writeStoredConversationId(conversationId: string): void {
 @Component({
   selector: 'app-root',
   imports: [GeminiSettingsComponent],
-  styleUrl: './app.css',
+  styleUrls: ['./app.css', './dry-run-flow.css'],
   templateUrl: './app.html',
 })
 export class App implements AfterViewChecked {
@@ -470,6 +471,32 @@ export class App implements AfterViewChecked {
     );
   }
 
+  protected flowEligibilityLabel(review: PlanReviewResponse): string {
+    if (review.approved) return this.language() === 'th' ? 'Backend ยืนยันแล้ว' : 'Backend confirmed';
+    return this.canApproveReview(review)
+      ? (this.language() === 'th' ? 'ข้อมูลครบ' : 'Ready')
+      : (this.language() === 'th' ? 'ติดเงื่อนไข' : 'Blocked');
+  }
+
+  protected flowApprovalLabel(entry: ChatEntry, review: PlanReviewResponse): string {
+    if (review.approved) return this.language() === 'th' ? 'ยืนยันแล้ว' : 'Confirmed';
+    if (entry.approvalStage === 'challenge') return this.language() === 'th' ? 'กำลังสร้างคำขอ' : 'Requesting challenge';
+    if (entry.approvalStage === 'dry_run') return this.language() === 'th' ? 'กำลังตรวจสอบ' : 'Verifying';
+    if (entry.stepUpChallengeId) return this.language() === 'th' ? 'รอรหัส Authenticator' : 'Waiting for code';
+    return this.canApproveReview(review)
+      ? (this.language() === 'th' ? 'รอผู้ใช้ยืนยัน' : 'Waiting for user')
+      : (this.language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready');
+  }
+
+  protected flowDryRunLabel(entry: ChatEntry, review: PlanReviewResponse): string {
+    if (review.approved && review.tool_result) return this.language() === 'th' ? 'เสร็จสมบูรณ์' : 'Completed';
+    if (entry.approvalStage === 'dry_run') return this.language() === 'th' ? 'กำลังประมวลผลคำขอ' : 'Processing request';
+    if (entry.stepUpChallengeId) return this.language() === 'th' ? 'รอการยืนยัน' : 'Waiting for approval';
+    return this.canApproveReview(review)
+      ? (this.language() === 'th' ? 'รอเริ่มจำลอง' : 'Ready to start')
+      : (this.language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready');
+  }
+
   protected approvePlan(entry: ChatEntry): void {
     const review = entry.review;
     const planId = review?.dry_run_plan?.plan_id;
@@ -477,13 +504,18 @@ export class App implements AfterViewChecked {
 
     this.planning.set(true);
     this.entries.update((entries) => entries.map((item) =>
-      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false } : item,
+      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false, approvalStage: 'challenge' } : item,
     ));
     defer(() => this.chatApi.createPlanStepUpChallenge(planId))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
         take(1),
-        finalize(() => this.planning.set(false)),
+        finalize(() => {
+          this.planning.set(false);
+          this.entries.update((entries) => entries.map((item) =>
+            item.id === entry.id ? { ...item, approvalStage: null } : item,
+          ));
+        }),
       )
       .subscribe({
         next: (challenge) => this.entries.update((entries) => entries.map((item) =>
@@ -515,13 +547,18 @@ export class App implements AfterViewChecked {
 
     this.planning.set(true);
     this.entries.update((entries) => entries.map((item) =>
-      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false } : item,
+      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false, approvalStage: 'dry_run' } : item,
     ));
     defer(() => this.chatApi.approvePlan(planId, challengeId, code))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
         take(1),
-        finalize(() => this.planning.set(false)),
+        finalize(() => {
+          this.planning.set(false);
+          this.entries.update((entries) => entries.map((item) =>
+            item.id === entry.id ? { ...item, approvalStage: null } : item,
+          ));
+        }),
       )
       .subscribe({
         next: (result) => this.entries.update((entries) => entries.map((item) =>
