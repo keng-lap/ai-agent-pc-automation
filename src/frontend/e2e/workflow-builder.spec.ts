@@ -35,14 +35,13 @@ test('workflow builder supports node creation, connection, editing, keyboard mov
   const editedNode = page.getByRole('group', { name: 'ตรวจสอบซ้ำ' });
   await expect(editedNode).toBeVisible();
 
-  const before = await editedNode.boundingBox();
-  expect(before).not.toBeNull();
+  const beforeX = await editedNode.evaluate((element) => Number.parseFloat(getComputedStyle(element).left));
+  expect(Number.isFinite(beforeX)).toBe(true);
   await editedNode.focus();
   await expect(editedNode).toBeFocused();
   await editedNode.press('ArrowRight');
-  const after = await editedNode.boundingBox();
-  expect(after).not.toBeNull();
-  expect(after!.x).toBeGreaterThan(before!.x);
+  await expect.poll(() => editedNode.evaluate((element) => Number.parseFloat(getComputedStyle(element).left)))
+    .toBeGreaterThan(beforeX);
 
   await page.getByRole('button', { name: 'ขยาย Canvas' }).click();
   await expect(page.locator('.canvas-tools').getByText('110%', { exact: true })).toBeVisible();
@@ -108,4 +107,33 @@ test('workflow builder remains available before sign-in while chat stays protect
   await page.getByRole('link', { name: /สนทนากับ Agent/ }).click();
   await expect(page.getByRole('heading', { name: 'เข้าสู่ระบบก่อนใช้งาน' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'ออกแบบ Workflow' })).toHaveCount(0);
+});
+
+test('workflow builder exposes script and software installation node types as non-executing design items', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /ออกแบบ Workflow/ }).click();
+
+  await expect(page.getByRole('button', { name: /รัน Custom Script/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /ติดตั้งโปรแกรม/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /ติดตั้งหลายโปรแกรม/ })).toBeVisible();
+
+  await page.getByRole('button', { name: /รัน Custom Script/ }).click();
+  await expect(page.locator('.canvas-heading')).toContainText('8 Nodes · 6 Connections');
+  await expect(page.getByText('PROTOTYPE · NO EXECUTION')).toBeVisible();
+});
+
+test('job monitor shows active jobs and previous run details without real execution', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /ติดตามงาน/ }).click();
+
+  await expect(page.getByRole('heading', { name: 'ติดตามการทำงาน' })).toBeVisible();
+  await expect(page.getByText('PROTOTYPE · MOCK DATA')).toBeVisible();
+  await expect(page.getByText('RUN-2026-0118 · Workstation setup · v3', { exact: true })).toBeVisible();
+  await expect(page.getByText('ติดตั้ง Visual Studio Code').first()).toBeVisible();
+
+  await page.getByRole('button', { name: /ประวัติการทำงาน/ }).click();
+  await expect(page.getByText('RUN-2026-0115')).toBeVisible();
+  await page.getByRole('button', { name: /รันสคริปต์สำรองข้อมูล/ }).click();
+  await expect(page.getByText('Simulated failure · exit code 1 · no script executed')).toBeVisible();
+  await expect(page.getByText(/ไม่มีการเชื่อมต่อ Job Engine/)).toBeVisible();
 });

@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Component, ElementRef, Input, ViewChild, computed, inject, signal } from '@angular/core';
 import { UiLanguage } from '../chat/chat-api';
 
-type WorkflowNodeType = 'trigger' | 'ai' | 'approval' | 'condition' | 'software' | 'success' | 'blocked';
+type WorkflowNodeType = 'trigger' | 'ai' | 'approval' | 'condition' | 'software' | 'script' | 'install' | 'batchInstall' | 'success' | 'blocked';
 type PortId = 'next' | 'yes' | 'no';
 interface NodeDefinition {
   type: WorkflowNodeType; categoryTh: string; categoryEn: string; labelTh: string; labelEn: string;
@@ -21,7 +21,10 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
   { type: 'ai', categoryTh: 'AI', categoryEn: 'AI', labelTh: 'วิเคราะห์ด้วย AI', labelEn: 'AI analysis', descriptionTh: 'วิเคราะห์คำขอและสร้างผลลัพธ์ที่มีโครงสร้าง', descriptionEn: 'Analyze the request and produce structured output', icon: '✳', outputs: [{ id: 'next', labelTh: 'ถัดไป', labelEn: 'Next', top: 70 }] },
   { type: 'approval', categoryTh: 'อนุมัติ', categoryEn: 'Approval', labelTh: 'รอการอนุมัติ', labelEn: 'Request approval', descriptionTh: 'หยุดรอผู้ใช้ตรวจสอบและอนุมัติ', descriptionEn: 'Pause for explicit user review and approval', icon: '✓', outputs: [{ id: 'next', labelTh: 'อนุมัติแล้ว', labelEn: 'Approved', top: 70 }] },
   { type: 'condition', categoryTh: 'เงื่อนไข', categoryEn: 'Logic', labelTh: 'ตรวจสอบเงื่อนไข', labelEn: 'Check condition', descriptionTh: 'แยกเส้นทางตามผลตรวจสอบ', descriptionEn: 'Choose a path based on a condition', icon: '◇', outputs: [{ id: 'yes', labelTh: 'ผ่าน', labelEn: 'Yes', top: 52 }, { id: 'no', labelTh: 'ไม่ผ่าน', labelEn: 'No', top: 96 }] },
-  { type: 'software', categoryTh: 'Software Hub', categoryEn: 'Software Hub', labelTh: 'ตรวจสอบซอฟต์แวร์', labelEn: 'Check software', descriptionTh: 'แสดงขั้นตอนค้นหาและตรวจสอบซอฟต์แวร์ (ตัวอย่าง)', descriptionEn: 'Represent software discovery and verification (sample only)', icon: '▦', outputs: [{ id: 'next', labelTh: 'ตรวจสอบแล้ว', labelEn: 'Checked', top: 70 }] },
+  { type: 'software', categoryTh: 'Software Hub', categoryEn: 'Software Hub', labelTh: 'ตรวจสอบซอฟต์แวร์', labelEn: 'Check software', descriptionTh: 'ค้นหาและตรวจสอบข้อมูลซอฟต์แวร์ (ตัวอย่าง)', descriptionEn: 'Discover and verify software metadata (sample)', icon: '▦', outputs: [{ id: 'next', labelTh: 'ตรวจสอบแล้ว', labelEn: 'Checked', top: 70 }] },
+  { type: 'script', categoryTh: 'Execution', categoryEn: 'Execution', labelTh: 'รัน Custom Script', labelEn: 'Run custom script', descriptionTh: 'PowerShell, BAT/CMD, Python หรือ Node.js · ต้นแบบเท่านั้น ไม่รันจริง', descriptionEn: 'PowerShell, BAT/CMD, Python, or Node.js · prototype only, no execution', icon: '⌘', outputs: [{ id: 'next', labelTh: 'ทำงานต่อ', labelEn: 'Continue', top: 70 }] },
+  { type: 'install', categoryTh: 'Software Hub', categoryEn: 'Software Hub', labelTh: 'ติดตั้งโปรแกรม', labelEn: 'Install software', descriptionTh: 'เลือก Package และตรวจสอบ Publisher / Version / Source · Dry Run เท่านั้น', descriptionEn: 'Select package and review publisher, version, and source · Dry Run only', icon: '↓', outputs: [{ id: 'next', labelTh: 'ตามแผน', labelEn: 'Planned', top: 70 }] },
+  { type: 'batchInstall', categoryTh: 'Software Hub', categoryEn: 'Software Hub', labelTh: 'ติดตั้งหลายโปรแกรม', labelEn: 'Batch install', descriptionTh: 'จัดชุดรายการติดตั้งและกำหนดนโยบายเมื่อบางรายการล้มเหลว · ไม่ติดตั้งจริง', descriptionEn: 'Compose package batch and failure policy · no real installation', icon: '▤', outputs: [{ id: 'next', labelTh: 'จบชุดรายการ', labelEn: 'Batch complete', top: 70 }] },
   { type: 'success', categoryTh: 'สิ้นสุด', categoryEn: 'End', labelTh: 'จบงานสำเร็จ', labelEn: 'Finish successfully', descriptionTh: 'สิ้นสุดเส้นทางที่ผ่านเงื่อนไข', descriptionEn: 'End the successful path', icon: '●', outputs: [] },
   { type: 'blocked', categoryTh: 'สิ้นสุด', categoryEn: 'End', labelTh: 'จบงาน / ถูกระงับ', labelEn: 'Finish / blocked', descriptionTh: 'สิ้นสุดเส้นทางที่ไม่ผ่านเงื่อนไข', descriptionEn: 'End the path that did not pass the condition', icon: '■', outputs: [] },
 ];

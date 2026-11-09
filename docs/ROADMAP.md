@@ -25,6 +25,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 - P6-601 safety baseline is tracked in PR #132 (separate documentation/planning work; A4 review remains pending).
 - P6-602 Frontend Design Skill is merged in PR #133.
 - P6-603 Visual Workflow Builder UX Prototype is tracked in PR #134. Its scope is frontend-only, synthetic, in-memory, and does not call the backend or execute Windows actions.
+- P6-605 adds Run Custom Script, Install Software, Batch Install node types and a mock-only Job Monitor with Active Jobs, Run History, per-node status, and sanitized sample logs. No Job Engine, persistence, real logs, or Windows execution is connected.
 - F-516-01 independent A4 follow-up remains an accepted Phase 5 residual verification gap; it is not claimed as passed.
 - No side-effecting capability is enabled. Each future capability still requires its own bounded design, independent review, tests, and explicit Product Owner enablement approval.
 

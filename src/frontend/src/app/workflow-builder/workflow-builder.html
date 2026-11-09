@@ -9,7 +9,7 @@
   </div>
   <div class="builder-layout">
     <aside class="node-library" aria-label="Node Library">
-      <div class="panel-heading"><div><small>LIBRARY</small><h3>{{ isThai() ? 'คลัง Node' : 'Node library' }}</h3></div><span>7</span></div>
+      <div class="panel-heading"><div><small>LIBRARY</small><h3>{{ isThai() ? 'คลัง Node' : 'Node library' }}</h3></div><span>{{ definitions.length }}</span></div>
       <p class="panel-hint">{{ isThai() ? 'ลาก Node ลงบนพื้นที่ทำงาน หรือกดเพื่อเพิ่ม' : 'Drag a node onto the canvas, or click to add it.' }}</p>
       @for (definition of definitions; track definition.type) {
         <button type="button" [class]="'library-item library-item--' + definition.type" draggable="true" (dragstart)="onPaletteDragStart($event, definition.type)" (click)="addNode(definition.type)">
