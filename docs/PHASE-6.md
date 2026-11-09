@@ -79,7 +79,7 @@ Deliverables:
 2. Threat model for the transition from Dry Run to real side effects, including browser same-origin/script risks, local process risks, parameter substitution, replay, TOCTOU, partial failure, rollback, privilege boundaries, and compromised model/provider output.
 3. Capability onboarding template and explicit gate checklist.
 4. Dependency plan separating shared authorization hardening from per-capability implementation.
-5. A4 review of the Phase 6 architecture baseline and explicit list of unresolved Product Owner decisions.
+5. Independent A4 review of the Phase 6 architecture baseline and explicit list of unresolved Product Owner decisions. Review packet: `docs/P6-601-A4-REVIEW-PACKET.md` (prepared by A1; A4 review remains pending).
 
 Exclusions:
 - No runtime source changes.
@@ -111,7 +111,7 @@ The initial capability is **not selected or authorized** by this phase-start dec
 
 ## Current status / handoff
 
-Phase 6 planning is active. P6-601 is the first bounded task. The next action is a read-only source map and A4 threat review; no live Windows operation is permitted.
+Phase 6 planning is active. P6-601 is the first bounded task. The read-only source map and Trusted Software Discovery baseline are prepared. The independent A4 review remains pending; see `docs/P6-601-A4-REVIEW-PACKET.md`. No live Windows operation is permitted.
 
 
 ## Trusted Software Discovery — planning requirement
