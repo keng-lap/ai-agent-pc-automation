@@ -1,7 +1,7 @@
 # Multi-Agent Development Workflow — Four-Agent Plan
 
 ## Current status
-Phase 4 closeout was approved by the Product Owner on 2026-11-02. Implementation PRs #45–#47 are merged; Product Owner Windows 11 verification passed (75 backend tests, Ruff, 22 frontend tests), recorded at commit 8233af5. Phase 5 planning was authorized on 2026-11-02; see docs/PHASE-5.md. No Phase 5 runtime implementation or real PC execution is authorized yet.
+Phase 4 closeout was approved by the Product Owner on 2026-11-02. Implementation PRs #45–#47 are merged; Product Owner Windows 11 verification passed (75 backend tests, Ruff, 22 frontend tests), recorded at commit 8233af5. Phase 5 closeout was approved on 2026-11-09; see `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`. Phase 6 planning was authorized on 2026-11-09; see `docs/PHASE-6.md`. No individual real PC-changing capability is authorized.
 
 The Four-Agent process is coordinator-managed with four separated roles. It is not four autonomous LLM processes or a runtime orchestrator. No provider/runtime/credential decisions are made by this workflow.
 
@@ -33,10 +33,10 @@ The Product Owner remains final decision-maker. The coordinator is not a privile
 12. If requirements conflict, stop and surface the conflict rather than guessing.
 
 ## Safety gates
-- All PC-changing tools remain dry-run/mock until Phase 5 Safety and Permission System is implemented and explicitly approved.
+- All PC-changing tools remain dry-run/mock. Phase 5 is closed; Phase 6 planning is authorized, but each real PC-changing capability requires its own bounded task, explicit Product Owner authorization, independent A4 review, tests, CI evidence, and separate enablement approval.
 - No arbitrary shell/PowerShell/command execution; no raw model text passed to a command interpreter.
 - No PC inspection or read-only discovery without separate proposal and approval.
-- No AI-provider integration, provider sign-in, credentials, live model calls, or external data transfer without explicit decisions.
+- No new AI-provider integration, provider sign-in, credentials, live model calls, or external data transfer without a separate explicit decision. The existing Gemini text-chat MVP is separately approved under T-601 only; tool/function calling and PC actions remain disabled.
 - Preserve loopback binding and local API authorization.
 - Secrets remain server-side and must not enter frontend bundles, logs, PR diffs, or committed files.
 - Do not persist chat messages/history or task history.
@@ -48,8 +48,11 @@ Product Owner authorizes scope -> A1 defines contracts/tasks/dependencies -> A2 
 ## Phase 4 closeout
 Phase 4 is closed by Product Owner approval on 2026-11-02. PRs #45–#47 are merged and Windows verification passed. See docs/PHASE-4.md.
 
-## Phase 5 rollout
-See docs/PHASE-5.md for the authorized planning baseline, four-role workstreams, task dependencies, and safety gates. Planning only; no runtime implementation is authorized.
+## Phase 5 closeout
+Phase 5 was closed by explicit Product Owner approval on 2026-11-09. The accepted F-516-01 targeted A4 review gap is recorded as a residual, not an A4 pass, in `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`.
+
+## Phase 6 planning
+See `docs/PHASE-6.md` for the authorized planning baseline, capability gates, and P6-601 deliverables. No real PC-changing capability is authorized.
 
 ### Archived Phase 4 task history
 | Task | Owner | Deliverable | Status |
