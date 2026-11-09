@@ -157,3 +157,10 @@ P5-515 is **in progress**, not closed: merge-commit CI is green, but complete ma
 ## 10. P5-515 matrix-to-test traceability
 
 The current source-level mapping of Q01–Q35 to concrete backend/frontend test names, including partial and uncovered cases, is maintained in [P5-515-MATRIX-TRACEABILITY.md](P5-515-MATRIX-TRACEABILITY.md). This mapping does not itself constitute a test run or close the verification gate.
+
+
+## 11. Phase 5 closeout disposition — 2026-11-09
+
+The Product Owner explicitly approved Phase 5 closeout on 2026-11-09 while accepting that the targeted independent A4 review of the post-implementation F-516-01 Google OIDC + authenticator-app TOTP changes had not been performed. This is a **deferred/accepted verification gap**, not a passed review and not evidence that F-516-01's residual security concern has been eliminated. The existing P5-516 findings remain authoritative. The Phase 5 closeout report records the decision and constraints in `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`.
+
+Q30 and Q35 remain Partial as documented in the P5-515 closeout report. Phase 5 closure does not authorize Phase 6, P2/P3 permissions, or real Windows machine-changing operations. Any future real-execution capability requires a separate explicit Product Owner authorization and the applicable security review/verification gates.
