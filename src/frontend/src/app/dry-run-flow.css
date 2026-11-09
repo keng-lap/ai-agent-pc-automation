@@ -1,0 +1,49 @@
+/* P5-518: node-based Dry Run workflow */
+.message-row.message-row--plan { width: 100%; }
+.message-row.message-row--plan .message-bubble { width: min(calc(100% - 40px), 1120px); max-width: min(calc(100% - 40px), 1120px); }
+.execution-flow { margin: 15px 0 17px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); }
+.execution-flow-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.execution-flow-heading .eyebrow { margin-bottom: 3px; }
+.execution-flow-heading h4 { margin: 0; font-size: 13px; }
+.flow-mode { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.execution-flow-nodes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.flow-node { position: relative; display: flex; min-width: 0; min-height: 142px; flex-direction: column; gap: 10px; padding: 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
+.flow-node:not(:last-child)::after { position: absolute; top: 28px; right: -11px; z-index: 1; width: 10px; color: var(--muted); content: "›"; font-size: 20px; font-weight: 700; line-height: 1; text-align: center; }
+.flow-node-index { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--muted); background: var(--surface-raised); font-size: 10px; font-weight: 800; }
+.flow-node-copy { display: grid; gap: 5px; min-width: 0; }
+.flow-node-copy strong { font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.flow-node-copy span { color: var(--muted); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.flow-state { align-self: start; margin-top: 2px; color: var(--muted); font-size: 9px; font-weight: 750; line-height: 1.4; }
+.flow-node--done { border-color: #a9cdb5; background: #f1f8f3; }
+.flow-node--done .flow-node-index { border-color: #8eb99b; color: #286744; background: #e1f1e5; }
+.flow-node--done .flow-state { color: #286744; }
+.flow-node--ready { border-color: #b8cfc1; background: #f5f9f6; }
+.flow-node--ready .flow-node-index { color: #386b50; }
+.flow-node--waiting { border-color: #d7bd83; background: #fffaf0; }
+.flow-node--waiting .flow-state { color: #8a6421; }
+.flow-node--running { border-color: #9ab8d5; background: #f1f7fc; }
+.flow-node--running .flow-node-index { border-color: #89a9ca; color: #315f8b; }
+.flow-node--running .flow-state { color: #315f8b; }
+.flow-node--blocked { border-color: #e0c5be; background: #fff7f5; }
+.flow-node--blocked .flow-state { color: #9a4f43; }
+.flow-safety-note { margin: 13px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+@media (max-width: 760px) {
+  .execution-flow { padding: 12px; }
+  .execution-flow-nodes { grid-template-columns: minmax(0, 1fr); gap: 9px; }
+  .flow-node { min-height: 0; flex-direction: row; align-items: flex-start; gap: 11px; padding: 10px; }
+  .flow-node:not(:last-child)::after { top: auto; right: auto; bottom: -12px; left: 19px; width: 12px; content: "⌄"; font-size: 16px; }
+  .flow-node-copy { flex: 1; }
+}
+@media (prefers-color-scheme: dark) {
+  .flow-node--done { border-color: #426b50; background: #20372a; }
+  .flow-node--done .flow-node-index { border-color: #527e60; color: #bce2c5; background: #294834; }
+  .flow-node--done .flow-state { color: #bce2c5; }
+  .flow-node--ready { border-color: #456b55; background: #22372b; }
+  .flow-node--ready .flow-node-index { color: #c2ddca; }
+  .flow-node--waiting { border-color: #78633d; background: #3b3323; }
+  .flow-node--waiting .flow-state { color: #e6c989; }
+  .flow-node--running { border-color: #496782; background: #243343; }
+  .flow-node--running .flow-node-index, .flow-node--running .flow-state { color: #c1d9ef; }
+  .flow-node--blocked { border-color: #704a43; background: #3a2926; }
+  .flow-node--blocked .flow-state { color: #edb4aa; }
+}
