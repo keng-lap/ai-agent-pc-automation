@@ -37,7 +37,7 @@ This guide explains how ChatGPT should work on this repository when the user ask
 - Never perform real Windows machine-changing actions. Installation/removal, file changes, administrator commands, process control, and system/network/security changes remain blocked unless separately authorized under the approved phase and capability gates.
 - Never execute arbitrary model text, shell/PowerShell/CMD, scripts, dynamic imports, or unapproved tools.
 - Preserve local-first/loopback boundaries. Do not introduce public remote access, mobile remote PC control, new providers, external data flows, credentials, or retention behavior without explicit approval.
-- Phase 6 remains unauthorized unless the Product Owner explicitly authorizes it after the required Phase 5 closeout.
+- Phase 6 planning is authorized by the Product Owner (2026-11-09). This does not authorize any individual real PC-changing capability; each requires a bounded task, separate explicit approval, and applicable security gates.
 
 ## Reporting standard
 
