@@ -181,14 +181,27 @@ test('canvas pans by dragging blank space and with Space plus left-drag without 
     top: Number.parseFloat(getComputedStyle(element).top),
   }));
 
-  const box = await viewport.boundingBox();
-  expect(box).not.toBeNull();
-  const startX = box!.x + box!.width - 55;
-  const startY = box!.y + box!.height - 55;
+  const panStart = await viewport.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      x: Math.min(rect.right, window.innerWidth) - 32,
+      y: Math.min(rect.bottom, window.innerHeight) - 32,
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    };
+  });
+  expect(panStart.scrollWidth).toBeGreaterThan(panStart.clientWidth);
+  expect(panStart.scrollHeight).toBeGreaterThan(panStart.clientHeight);
+  const startX = panStart.x;
+  const startY = panStart.y;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
+  await expect(viewport).toHaveClass(/is-panning/);
   await page.mouse.move(startX - 90, startY - 65, { steps: 6 });
   await page.mouse.up();
+  await expect(viewport).not.toHaveClass(/is-panning/);
 
   await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
@@ -201,10 +214,15 @@ test('canvas pans by dragging blank space and with Space plus left-drag without 
 
   await viewport.focus();
   await page.keyboard.down('Space');
-  const currentBox = await viewport.boundingBox();
-  expect(currentBox).not.toBeNull();
-  const secondX = currentBox!.x + currentBox!.width - 55;
-  const secondY = currentBox!.y + currentBox!.height - 55;
+  const secondStart = await viewport.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      x: Math.min(rect.right, window.innerWidth) - 32,
+      y: Math.min(rect.bottom, window.innerHeight) - 32,
+    };
+  });
+  const secondX = secondStart.x;
+  const secondY = secondStart.y;
   const previousScrollLeft = await viewport.evaluate((element) => element.scrollLeft);
   await page.mouse.move(secondX, secondY);
   await page.mouse.down();
