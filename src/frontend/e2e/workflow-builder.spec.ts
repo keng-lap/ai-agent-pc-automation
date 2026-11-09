@@ -35,14 +35,13 @@ test('workflow builder supports node creation, connection, editing, keyboard mov
   const editedNode = page.getByRole('group', { name: 'ตรวจสอบซ้ำ' });
   await expect(editedNode).toBeVisible();
 
-  const before = await editedNode.boundingBox();
-  expect(before).not.toBeNull();
+  const beforeX = await editedNode.evaluate((element) => Number.parseFloat(getComputedStyle(element).left));
+  expect(Number.isFinite(beforeX)).toBe(true);
   await editedNode.focus();
   await expect(editedNode).toBeFocused();
   await editedNode.press('ArrowRight');
-  const after = await editedNode.boundingBox();
-  expect(after).not.toBeNull();
-  expect(after!.x).toBeGreaterThan(before!.x);
+  await expect.poll(() => editedNode.evaluate((element) => Number.parseFloat(getComputedStyle(element).left)))
+    .toBeGreaterThan(beforeX);
 
   await page.getByRole('button', { name: 'ขยาย Canvas' }).click();
   await expect(page.locator('.canvas-tools').getByText('110%', { exact: true })).toBeVisible();
