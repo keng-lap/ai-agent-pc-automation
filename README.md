@@ -27,7 +27,7 @@ User -> Local Web App (loopback) -> FastAPI Backend -> Gemini API (text chat onl
 3. No raw model text may be executed as a command.
 4. Machine-changing tools remain mock/dry-run only. Phase 6 planning is authorized. Each real machine-changing capability still requires separate explicit authorization.
 5. Preserve loopback binding and local API authorization.
-6. No provider integration, credentials, or external data transfer without explicit approval.
+6. No provider integration, credentials, or external data transfer without separate explicit approval. The Gemini text-chat flow is approved only within T-601's documented limits; this does not authorize Gemini tool/function calling or PC actions.
 7. Do not persist chat messages/history or task history unless a future decision explicitly authorizes it.
 8. Use Git branches and reviewable changes; code/runtime PRs require Product Owner merge approval.
 9. Documentation/planning may proceed when consistent with approved scope and decisions.
