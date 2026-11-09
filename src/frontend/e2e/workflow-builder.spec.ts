@@ -129,7 +129,7 @@ test('job monitor shows active jobs and previous run details without real execut
 
   await expect(page.getByRole('heading', { name: 'ติดตามการทำงาน' })).toBeVisible();
   await expect(page.getByText('PROTOTYPE · MOCK DATA')).toBeVisible();
-  await expect(page.getByText('RUN-2026-0118')).toBeVisible();
+  await expect(page.getByText('RUN-2026-0118 · Workstation setup · v3', { exact: true })).toBeVisible();
   await expect(page.getByText('ติดตั้ง Visual Studio Code').first()).toBeVisible();
 
   await page.getByRole('button', { name: /ประวัติการทำงาน/ }).click();
