@@ -210,7 +210,7 @@
                         <div class="flow-node-copy">
                           <strong>{{ language() === 'th' ? 'ตรวจความพร้อม' : 'Eligibility checks' }}</strong>
                           <span>{{ language() === 'th' ? 'ตรวจข้อมูลแผนและสถานะบัญชีเบื้องต้น' : 'Check plan completeness and sign-in state' }}</span>
-                          <small class="flow-state">{{ review.approved ? (language() === 'th' ? 'Backend ยืนยันแล้ว' : 'Backend confirmed') : (canApproveReview(review) ? (language() === 'th' ? 'ข้อมูลครบ' : 'Ready') : (language() === 'th' ? 'ติดเงื่อนไข' : 'Blocked')) }}</small>
+                          <small class="flow-state">{{ flowEligibilityLabel(review) }}</small>
                         </div>
                       </li>
                       <li class="flow-node"
@@ -223,7 +223,7 @@
                         <div class="flow-node-copy">
                           <strong>{{ language() === 'th' ? 'ยืนยันตัวตนและอนุมัติ' : 'Verify & approve' }}</strong>
                           <span>{{ language() === 'th' ? 'Authenticator และการตรวจสอบโดย Backend' : 'Authenticator step-up and backend validation' }}</span>
-                          <small class="flow-state">{{ review.approved ? (language() === 'th' ? 'ยืนยันแล้ว' : 'Confirmed') : (entry.approvalStage === 'challenge' ? (language() === 'th' ? 'กำลังสร้างคำขอ' : 'Requesting challenge') : (entry.approvalStage === 'dry_run' ? (language() === 'th' ? 'กำลังตรวจสอบ' : 'Verifying') : (entry.stepUpChallengeId ? (language() === 'th' ? 'รอรหัส Authenticator' : 'Waiting for code') : (canApproveReview(review) ? (language() === 'th' ? 'รอผู้ใช้ยืนยัน' : 'Waiting for user') : (language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready')))) }}</small>
+                          <small class="flow-state">{{ flowApprovalLabel(entry, review) }}</small>
                         </div>
                       </li>
                       <li class="flow-node"
@@ -236,7 +236,7 @@
                         <div class="flow-node-copy">
                           <strong>Dry Run</strong>
                           <span>{{ language() === 'th' ? 'จำลองด้วย Backend โดยไม่เปลี่ยนเครื่อง' : 'Backend simulation; no PC changes' }}</span>
-                          <small class="flow-state">{{ review.approved && review.tool_result ? (language() === 'th' ? 'เสร็จสมบูรณ์' : 'Completed') : (entry.approvalStage === 'dry_run' ? (language() === 'th' ? 'กำลังประมวลผลคำขอ' : 'Processing request') : (entry.stepUpChallengeId ? (language() === 'th' ? 'รอการยืนยัน' : 'Waiting for approval') : (canApproveReview(review) ? (language() === 'th' ? 'รอเริ่มจำลอง' : 'Ready to start') : (language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready')))) }}</small>
+                          <small class="flow-state">{{ flowDryRunLabel(entry, review) }}</small>
                         </div>
                       </li>
                     </ol>
