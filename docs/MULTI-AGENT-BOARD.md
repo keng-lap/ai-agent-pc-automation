@@ -12,7 +12,7 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 - Phase 5 planning was authorized by the Product Owner on 2026-11-02. Planning baseline: docs/PHASE-5.md.
 - No Phase 5 runtime implementation, permission grant, or real PC execution is authorized yet.
 - Phase 5 closeout was approved 2026-11-09. Phase 6 planning is authorized 2026-11-09; no individual real PC-changing capability is authorized without its own bounded task, explicit Product Owner approval, and security gates.
-- No AI provider, provider credentials, live model calls, or external data transfer are approved.
+- The Gemini text-chat MVP is separately approved under T-601 only: bounded current/recent conversation context, in-memory handling, and no tool/function calling or PC actions. No additional provider, credential, or external data flow is approved.
 
 ## Roles
 | Role | Responsibility | Phase 4 assignment |
@@ -29,7 +29,7 @@ Phase 4 is complete. PRs #45–#47 are merged; the Product Owner's focused Windo
 Phase 5 was closed by explicit Product Owner approval on 2026-11-09. The accepted F-516-01 targeted A4 review gap is recorded in `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`.
 
 ## Phase 6 planning board
-See `docs/PHASE-6.md` for the authorized Phase 6 planning baseline, capability gates, and first bounded task. No real machine-changing capability is currently authorized.
+See `docs/PHASE-6.md` for the authorized Phase 6 planning baseline, capability gates, and first bounded task. P6-601 source map and Trusted Software Discovery requirements are documented; independent A4 review is still pending. No real machine-changing capability is currently authorized.
 
 ## Archived Phase 4 task board
 | ID | Owner | Deliverable | Dependencies | Status |
@@ -56,7 +56,7 @@ See `docs/PHASE-6.md` for the authorized Phase 6 planning baseline, capability g
 - No arbitrary shell/PowerShell/script execution or raw model output execution.
 - No real installation/removal, file changes, process actions, registry/system/network/security changes.
 - No PC inspection or read-only discovery without separate proposal and approval.
-- No provider integration, credentials, live model calls, or external data transfer.
+- No additional provider integration, credentials, live model calls, or external data transfer beyond the separately approved T-601 Gemini text-chat flow.
 - Preserve loopback binding and local API token enforcement.
 - Do not persist chat messages/history or task history.
 - Phase 5 is closed. Phase 6 planning is authorized, but real machine-changing actions remain prohibited until each capability passes its own explicit authorization and security gates.
