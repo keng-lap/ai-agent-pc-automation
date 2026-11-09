@@ -3,6 +3,7 @@ import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } fr
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
 import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
+import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11' | 'MSG-12' | 'MSG-13' | 'MSG-14' | 'MSG-15' | 'MSG-16' | 'MSG-17' | 'MSG-18' | 'MSG-19' | 'MSG-20' | 'MSG-21' | 'MSG-22' | 'MSG-23';
@@ -209,7 +210,7 @@ function writeStoredConversationId(conversationId: string): void {
 
 @Component({
   selector: 'app-root',
-  imports: [GeminiSettingsComponent],
+  imports: [GeminiSettingsComponent, WorkflowBuilderComponent],
   styleUrls: ['./app.css', './dry-run-flow.css'],
   templateUrl: './app.html',
 })
@@ -221,6 +222,7 @@ export class App implements AfterViewChecked {
   @ViewChild('messageLog') private messageLog?: ElementRef<HTMLElement>;
 
   protected readonly title = 'AI Agent PC Automation';
+  protected readonly activeView = signal<'chat' | 'workflow'>('chat');
   protected readonly language = signal<UiLanguage>(readStoredLanguage());
   protected readonly draft = signal('');
   protected readonly entries = signal<ChatEntry[]>([]);
@@ -365,6 +367,10 @@ export class App implements AfterViewChecked {
           ? 'ออกจากระบบไม่สำเร็จ'
           : 'Could not sign out.'),
       });
+  }
+
+  protected setActiveView(view: 'chat' | 'workflow'): void {
+    this.activeView.set(view);
   }
 
   protected setLanguage(language: UiLanguage): void {

@@ -21,7 +21,12 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 **CLOSED — Product Owner approval recorded 2026-11-09.** P5-510–P5-515 are complete; the P5-515 matrix remains 33 Covered / 2 Partial (Q30 physical-device/screen-reader evidence deferred; Q35 Static Check limitation accepted). P5-516 findings are documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`; F-516-02 (#109) and F-516-03 (#108) are resolved. F-516-01 Google OIDC + authenticator-app TOTP implementation is merged (#114–#119; setup fixes #122–#127), and the Product Owner reports local testing passed. The targeted independent A4 review of the post-implementation F-516-01 changes remains unperformed and is explicitly accepted as a residual verification gap for closeout; it is not claimed as passed. P5-517 (#99) and P5-518 (#130) are merged. Full decision and limitations: `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`. Phase 6 and real machine-changing execution remain unauthorized.
 
 ## Phase 6 — Real PC Automation
-**Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
+**Planning and UX prototype in progress; real PC-changing execution is not authorized.**
+- P6-601 safety baseline is tracked in PR #132 (separate documentation/planning work; A4 review remains pending).
+- P6-602 Frontend Design Skill is merged in PR #133.
+- P6-603 Visual Workflow Builder UX Prototype is tracked in PR #134. Its scope is frontend-only, synthetic, in-memory, and does not call the backend or execute Windows actions.
+- F-516-01 independent A4 follow-up remains an accepted Phase 5 residual verification gap; it is not claimed as passed.
+- No side-effecting capability is enabled. Each future capability still requires its own bounded design, independent review, tests, and explicit Product Owner enablement approval.
 
 ## Phase 7 — Monitoring and Logging
 **Not Started.** Future observability scope must respect data minimization and explicit retention decisions.
@@ -51,8 +56,8 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. Phase 6 unauthorized |
-| 6 | Not Started |
+| 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. |
+| 6 | Planning + frontend UX prototype in progress; real PC-changing execution not authorized |
 | 7 | Not Started |
 | 8 | Not Started |
 | 9 | Not Started |
