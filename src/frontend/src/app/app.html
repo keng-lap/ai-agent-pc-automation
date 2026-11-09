@@ -6,6 +6,7 @@
     <nav class="rail-nav" aria-label="นำทาง">
       <a class="rail-link" href="#workspace" [class.active]="activeView() === 'chat'" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">⌘</span>สนทนากับ Agent</a>
       <button type="button" class="rail-link" [class.active]="activeView() === 'workflow'" [attr.aria-current]="activeView() === 'workflow' ? 'page' : null" (click)="setActiveView('workflow')"><span class="rail-icon" aria-hidden="true">◇</span>ออกแบบ Workflow</button>
+      <button type="button" class="rail-link" [class.active]="activeView() === 'jobs'" [attr.aria-current]="activeView() === 'jobs' ? 'page' : null" (click)="setActiveView('jobs')"><span class="rail-icon" aria-hidden="true">◷</span>ติดตามงาน</button>
       <a class="rail-link" href="#provider-settings" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">✳</span>ตั้งค่า Gemini</a>
     </nav>
     <section class="rail-safety" aria-label="ขอบเขตความปลอดภัย">
@@ -38,6 +39,8 @@
     </section>
   } @else if (activeView() === 'workflow') {
     <app-workflow-builder [language]="language()"></app-workflow-builder>
+  } @else if (activeView() === 'jobs') {
+    <app-job-monitor [language]="language()"></app-job-monitor>
   } @else if (authEnabled() && !authenticated()) {
     <section class="chat-card auth-card" aria-labelledby="auth-title">
       <p class="eyebrow">MASTER USER</p>
