@@ -169,3 +169,83 @@ test('workflow builder supports full-screen mode and independently toggles side 
   await expect(page.locator('html')).not.toHaveClass(/workflow-fullscreen/);
   await expect(page.locator('.side-rail')).toBeVisible();
 });
+
+
+test('canvas pans by dragging blank space and with Space plus left-drag without moving nodes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /ออกแบบ Workflow/ }).click();
+  const viewport = page.locator('.canvas-viewport');
+  const node = page.locator('.workflow-node').first();
+  const beforeNode = await node.evaluate((element) => ({
+    left: Number.parseFloat(getComputedStyle(element).left),
+    top: Number.parseFloat(getComputedStyle(element).top),
+  }));
+
+  await viewport.scrollIntoViewIfNeeded();
+  const panStart = await viewport.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const left = Math.max(rect.left, 0);
+    const right = Math.min(rect.right, window.innerWidth);
+    const top = Math.max(rect.top, 0);
+    const bottom = Math.min(rect.bottom, window.innerHeight);
+    const x = right - 32;
+    const y = bottom - 32;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      x, y,
+      hitIsInsideViewport: !!hit && (hit === element || element.contains(hit)),
+      visibleWidth: right - left,
+      visibleHeight: bottom - top,
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    };
+  });
+  expect(panStart.visibleWidth).toBeGreaterThan(32);
+  expect(panStart.visibleHeight).toBeGreaterThan(32);
+  expect(panStart.hitIsInsideViewport).toBe(true);
+  expect(panStart.scrollWidth).toBeGreaterThan(panStart.clientWidth);
+  expect(panStart.scrollHeight).toBeGreaterThan(panStart.clientHeight);
+  const startX = panStart.x;
+  const startY = panStart.y;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await expect(viewport).toHaveClass(/is-panning/);
+  await page.mouse.move(startX - 90, startY - 65, { steps: 6 });
+  await page.mouse.up();
+  await expect(viewport).not.toHaveClass(/is-panning/);
+
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  const afterBlankPan = await node.evaluate((element) => ({
+    left: Number.parseFloat(getComputedStyle(element).left),
+    top: Number.parseFloat(getComputedStyle(element).top),
+  }));
+  expect(afterBlankPan).toEqual(beforeNode);
+
+  await viewport.focus();
+  await page.keyboard.down('Space');
+  await viewport.scrollIntoViewIfNeeded();
+  const secondStart = await viewport.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const x = Math.min(rect.right, window.innerWidth) - 32;
+    const y = Math.min(rect.bottom, window.innerHeight) - 32;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      x, y,
+      hitIsInsideViewport: !!hit && (hit === element || element.contains(hit)),
+    };
+  });
+  expect(secondStart.hitIsInsideViewport).toBe(true);
+  const secondX = secondStart.x;
+  const secondY = secondStart.y;
+  const previousScrollLeft = await viewport.evaluate((element) => element.scrollLeft);
+  await page.mouse.move(secondX, secondY);
+  await page.mouse.down();
+  await page.mouse.move(secondX - 45, secondY, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Space');
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(previousScrollLeft);
+});
