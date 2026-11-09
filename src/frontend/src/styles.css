@@ -93,3 +93,8 @@ main.app-frame .content-stage .empty-icon,main.app-frame .content-stage .user-av
 main.app-frame .content-stage .message-row--error .message-bubble{border-color:#63413d}main.app-frame .content-stage .message-row--error .message-label{color:#e7a49b}
 main.app-frame .content-stage .message-row--user .message-bubble{border-color:#477e68;background:#326a58}
 }
+
+
+/* P6-603 navigation control */
+button.rail-link{width:100%;border:1px solid transparent;text-align:left;font:inherit;background:transparent;cursor:pointer}
+.rail-link.active{color:#fff;background:#ffffff18;border-color:#ffffff20}
