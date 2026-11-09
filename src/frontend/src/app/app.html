@@ -36,6 +36,8 @@
     <section class="chat-card" aria-live="polite">
       <p>{{ language() === 'th' ? 'กำลังตรวจสอบสถานะการเข้าสู่ระบบ...' : 'Checking sign-in status...' }}</p>
     </section>
+  } @else if (activeView() === 'workflow') {
+    <app-workflow-builder [language]="language()"></app-workflow-builder>
   } @else if (authEnabled() && !authenticated()) {
     <section class="chat-card auth-card" aria-labelledby="auth-title">
       <p class="eyebrow">MASTER USER</p>
@@ -84,9 +86,6 @@
         @if (authError()) { <p class="conversation-notice" role="alert">{{ authError() }}</p> }
       </section>
     }
-    @if (activeView() === 'workflow') {
-      <app-workflow-builder [language]="language()"></app-workflow-builder>
-    } @else {
     <div class="workspace-grid">
       <app-gemini-settings id="provider-settings"></app-gemini-settings>
 
@@ -437,7 +436,6 @@
     </form>
     </section>
     </div>
-    }
   }
   </div>
 

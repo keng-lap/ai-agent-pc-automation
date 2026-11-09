@@ -89,3 +89,23 @@ test('supports dragging an output port directly onto a target input port', async
   await expect(page.locator('.canvas-heading')).toContainText('9 Nodes · 7 Connections');
   await expect(page.locator('.builder-message')).toContainText('เชื่อม Node สำเร็จ');
 });
+
+test('workflow builder remains available before sign-in while chat stays protected', async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ enabled: true, authenticated: false, authenticator_enrolled: false }),
+  }));
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'เข้าสู่ระบบก่อนใช้งาน' })).toBeVisible();
+
+  await page.getByRole('button', { name: /ออกแบบ Workflow/ }).click();
+  await expect(page.getByRole('heading', { name: 'ออกแบบ Workflow' })).toBeVisible();
+  await expect(page.getByText('PROTOTYPE · NO EXECUTION')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'เข้าสู่ระบบก่อนใช้งาน' })).toHaveCount(0);
+
+  await page.getByRole('link', { name: /สนทนากับ Agent/ }).click();
+  await expect(page.getByRole('heading', { name: 'เข้าสู่ระบบก่อนใช้งาน' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ออกแบบ Workflow' })).toHaveCount(0);
+});
