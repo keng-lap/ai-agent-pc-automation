@@ -38,6 +38,7 @@ test('workflow builder supports node creation, connection, editing, keyboard mov
   const before = await editedNode.boundingBox();
   expect(before).not.toBeNull();
   await editedNode.focus();
+  await expect(editedNode).toBeFocused();
   await editedNode.press('ArrowRight');
   const after = await editedNode.boundingBox();
   expect(after).not.toBeNull();
