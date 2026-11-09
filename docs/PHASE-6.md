@@ -112,3 +112,46 @@ The initial capability is **not selected or authorized** by this phase-start dec
 ## Current status / handoff
 
 Phase 6 planning is active. P6-601 is the first bounded task. The next action is a read-only source map and A4 threat review; no live Windows operation is permitted.
+
+
+## Trusted Software Discovery — planning requirement
+
+Software installation must begin with source discovery and trust assessment, not direct execution of a package-manager command. This is planning only; it does not authorize an installer, package-manager invocation, download, or machine change.
+
+### Source strategy
+
+| Priority / use | Source | Policy |
+|---|---|---|
+| Primary Windows package source | WinGet (winget source) | Search first for Windows desktop applications. A catalog hit is a candidate, not proof of safety or publisher endorsement. |
+| Vendor-of-record | Official publisher website, documentation, release page, or publisher-controlled repository | Establish product identity, supported versions, official distribution channels, and expected publisher. Cross-check package metadata against it. |
+| Secondary Windows source | Chocolatey Community Repository | Consider only when no suitable verified WinGet package exists or the publisher explicitly recommends it. Inspect package scripts and download origin; moderation is a signal, not a guarantee. |
+| Developer package source | npm Registry | Use for Node.js libraries and developer tools where appropriate. Verify exact package/scope, repository and publisher links, provenance/integrity, maintainers, dependency tree, and lifecycle scripts. Not a general desktop-app source. |
+| Other vendor channel | Microsoft Store or publisher-operated repository | Consider when the publisher identifies it as an official channel and its package identity can be verified. |
+
+### Required discovery and verification workflow
+
+1. Resolve exact product, edition, publisher, platform, architecture, and requested version.
+2. Find the publisher's official product/download/documentation page first. Record product identity, publisher, supported Windows version, and distribution channels the publisher documents.
+3. Search WinGet first for Windows applications. Record exact PackageIdentifier, source, manifest version, package URL, installer URL, installer type, architecture, scope, version, and SHA-256.
+4. Cross-check manifest publisher and installer domain against the publisher's official site. Prefer direct publisher-controlled HTTPS locations; flag redirects, mirrors, URL shorteners, aggregators, and unrelated domains.
+5. Verify installer hash and, where applicable, Authenticode signature: signer identity, certificate chain, validity, timestamp, and revocation/status where available. A valid signature proves signer/integrity context, not that software is harmless.
+6. Check package freshness against the publisher's current stable release. If the package-manager version lags, is unexpectedly newer, or differs from the official channel, disclose the discrepancy; do not silently substitute another edition/channel.
+7. If WinGet has no suitable verified package, evaluate Chocolatey only after reviewing nuspec, install/uninstall scripts, download URLs, checksums, moderation/verification status, and publisher linkage. A moderated community package is not equivalent to a vendor-signed installer.
+8. Use npm only for an explicitly requested Node.js package/tool. Check exact package name/scope, metadata, repository/homepage ownership, release provenance or attestations when available, integrity digest, maintainer history, dependency risks, and lifecycle scripts (preinstall/install/postinstall). Lifecycle scripts are executable code and must be disclosed and assessed.
+9. Produce a source-evidence report with links, checked-at time, exact version/package identity, publisher match, installer origin, hash/signature findings, freshness, caveats, and confidence. Mark unknown fields unknown; never fabricate evidence.
+10. If publisher identity, package identity, download origin, hash, signature, or version cannot be reconciled, mark the candidate BLOCKED. Do not fall back to an arbitrary URL or run a command to test it.
+
+### Trust decision outcomes
+
+- **VERIFIED CANDIDATE** — identity, origin, version, integrity, and signature checks are supported; may be presented for separate install approval.
+- **CONDITIONAL** — a bounded evidence gap remains; disclose it and request a Product Owner decision before any install proposal.
+- **BLOCKED** — material mismatch, suspicious origin, failed integrity/signature, unknown publisher, or insufficient evidence; no installation proposal.
+- **NOT FOUND** — no suitable package in approved sources; report honestly rather than inventing a package ID.
+
+### Example: DBeaver Community
+
+For "install DBeaver", begin at the official DBeaver download/documentation site to distinguish Community from Enterprise and identify the current stable release. Then search WinGet for the exact package ID and inspect the current manifest. The known identifier DBeaver.DBeaver.Community is an example candidate only; revalidate its live manifest and current official release at request time. If the WinGet package is stale or fails publisher/origin checks, disclose that and evaluate an official vendor channel or Chocolatey only if DBeaver itself documents that channel. Do not infer that a package is current merely because it exists in the catalog.
+
+### Later implementation boundary
+
+A future software-install capability must use a fixed backend-owned package-source adapter and typed fields (source enum, exact package ID, exact version, architecture, and approved scope), never free-form command text or model-supplied executable/handler. The discovery report and immutable install proposal must be bound to the exact approval digest. A change to package ID, version, source, installer URL/hash, architecture, scope, or privilege requirement invalidates prior approval and requires new review. Package-manager execution remains disabled until a separate bounded runtime task, F-516-01 A4 prerequisite, independent A4 review, negative tests, CI, and explicit Product Owner enablement approval are complete.
