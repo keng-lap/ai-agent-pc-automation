@@ -63,6 +63,14 @@ export class WorkflowBuilderComponent {
   protected outputPorts(type: WorkflowNodeType): NodeDefinition['outputs'] { return this.definition(type).outputs; }
   protected categoryLabel(type: WorkflowNodeType): string { const item = this.definition(type); return this.isThai() ? item.categoryTh : item.categoryEn; }
   protected nodeDescription(type: WorkflowNodeType): string { const item = this.definition(type); return this.isThai() ? item.descriptionTh : item.descriptionEn; }
+  protected nodeLabel(node: WorkflowNode): string {
+    const definition = this.definition(node.type);
+    return !this.isThai() && node.label === definition.labelTh ? definition.labelEn : node.label;
+  }
+  protected nodeDetail(node: WorkflowNode): string {
+    const definition = this.definition(node.type);
+    return !this.isThai() && node.description === definition.descriptionTh ? definition.descriptionEn : node.description;
+  }
   protected edgeLabel(edge: WorkflowEdge): string {
     const definition = this.definition(this.nodes().find((node) => node.id === edge.fromNodeId)?.type ?? 'trigger');
     const port = definition.outputs.find((item) => item.id === edge.fromPort);
@@ -88,7 +96,7 @@ export class WorkflowBuilderComponent {
     return (source.y + (port?.top ?? 70) + 8 + target.y + 78) / 2 - 8;
   }
   protected addNode(type: WorkflowNodeType): void {
-    const index = this.nodes().length - 7;
+    const index = Math.max(0, this.nodes().length - 7);
     this.addNodeAt(type, 70 + (index % 4) * 270, 590 + Math.floor(index / 4) * 175);
   }
   private addNodeAt(type: WorkflowNodeType, x: number, y: number): void {
@@ -135,9 +143,21 @@ export class WorkflowBuilderComponent {
       ? { ...node, x: Math.max(0, Math.min(WORLD_WIDTH - NODE_WIDTH, x)), y: Math.max(0, Math.min(WORLD_HEIGHT - NODE_HEIGHT, y)) } : node));
   }
   protected endNodeDrag(event: PointerEvent): void { if (this.dragState?.pointerId === event.pointerId) this.dragState = null; }
+  protected onNodeKeydown(event: KeyboardEvent, node: WorkflowNode): void {
+    if (event.target !== event.currentTarget) return;
+    const step = event.shiftKey ? 40 : 10;
+    const offsets: Record<string, [number, number]> = { ArrowUp: [0, -step], ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0] };
+    const offset = offsets[event.key];
+    if (!offset) return;
+    event.preventDefault();
+    this.selectNode(node.id);
+    this.nodes.update((items) => items.map((item) => item.id === node.id
+      ? { ...item, x: Math.max(0, Math.min(WORLD_WIDTH - NODE_WIDTH, item.x + offset[0])), y: Math.max(0, Math.min(WORLD_HEIGHT - NODE_HEIGHT, item.y + offset[1])) }
+      : item));
+  }
   protected selectNode(nodeId: string): void { this.selectedNodeId.set(nodeId); this.selectedEdgeId.set(null); }
   protected selectCanvas(): void { this.selectedNodeId.set(null); this.selectedEdgeId.set(null); }
-  protected selectEdge(event: MouseEvent, edge: WorkflowEdge): void { event.stopPropagation(); this.selectedEdgeId.set(edge.id); this.selectedNodeId.set(null); }
+  protected selectEdge(event: Event, edge: WorkflowEdge): void { event.stopPropagation(); this.selectedEdgeId.set(edge.id); this.selectedNodeId.set(null); }
   protected connectFrom(nodeId: string, portId: PortId, event: MouseEvent): void {
     event.stopPropagation();
     if (this.connectionSource()?.nodeId === nodeId && this.connectionSource()?.portId === portId) {
