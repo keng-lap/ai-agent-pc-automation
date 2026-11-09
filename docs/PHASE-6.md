@@ -156,3 +156,12 @@ For "install DBeaver", begin at the official DBeaver download/documentation site
 
 A future software-install capability must use a fixed backend-owned package-source adapter and typed fields (source enum, exact package ID, exact version, architecture, and approved scope), never free-form command text or model-supplied executable/handler. The discovery report and immutable install proposal must be bound to the exact approval digest. A change to package ID, version, source, installer URL/hash, architecture, scope, or privilege requirement invalidates prior approval and requires new review. Package-manager execution remains disabled until a separate bounded runtime task, F-516-01 A4 prerequisite, independent A4 review, negative tests, CI, and explicit Product Owner enablement approval are complete.
 
+
+
+## Background Job System — approved planning direction
+
+The Product Owner approved planning for a reusable backend-owned Background Job System for long-running operations. The initiating HTTP request must return a Job ID promptly; a fixed worker performs the approved task, and the user checks status later. Software installation is the first motivating use case, not the only supported job category.
+
+The architecture, lifecycle, BAT/process-launch boundary, idempotency, restart recovery, retention decision gate, and test requirements are specified in `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`.
+
+This is documentation-only approval. It does not authorize a BAT launcher, worker implementation, package-manager invocation, installer execution, persistence of task history, or any real PC-changing action. A4 must independently review this architecture before runtime work is proposed. The unresolved persistence/retention decision must return to the Product Owner before implementation.
