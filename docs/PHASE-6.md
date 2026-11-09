@@ -28,7 +28,7 @@ Introduce real Windows automation only through narrowly scoped, backend-owned ca
 - Unknown tools, malformed/extra parameters, policy uncertainty, missing authentication, missing user presence, stale/mismatched/replayed approval, handler drift, and audit/policy failure must fail closed.
 - Existing `software.install` and `software.remove` handlers remain mock/dry-run until their own capability-specific gates are passed. Phase 6 approval does not switch them to real execution.
 - No new provider, provider tool/function calling, external data flow, credential type, or network destination without a separate approved decision.
-- Do not persist chat messages, chat history, or task history. Preserve approved in-memory retention limits and audit data minimization; any retention change requires a new Product Owner decision.
+- Do not persist chat messages, chat history, Gemini prompts/responses, or unrestricted task transcripts. The Product Owner has explicitly approved persistence of minimal operational Job Definitions, Job Runs, lifecycle state, and bounded redacted logs for the Background Job System, subject to `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`, A4 review, local ACL/integrity, and retention controls. This is not permission for general task-history or conversation persistence.
 - Do not inspect or mutate the user's live PC during planning or tests. Use synthetic fixtures, isolated temporary test directories, mocks, and spy handlers.
 - The accepted F-516-01 Phase 5 closeout residual is not a waiver for Phase 6: targeted independent A4 review of the post-implementation Google OIDC + TOTP path and proof of backend-enforced exact-action user presence are prerequisites before any side-effecting capability can be enabled.
 - P5-515 Q30 and Q35 remain Partial; do not claim physical-device/screen-reader coverage or runtime sandboxing.
@@ -86,7 +86,7 @@ Exclusions:
 - No real Windows inspection, file/process/registry/network inspection, or machine-changing actions.
 - No installer, shell, PowerShell, CMD, script runner, or arbitrary command execution.
 - No enabling of existing install/remove tools.
-- No new provider/tool-calling/data flow or persistence.
+- No new provider/tool-calling/external data flow. Persistence is limited to the explicitly approved operational Job data described in `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`; no chat or prompt history.
 
 Acceptance criteria:
 - All Phase 5 constraints and accepted residuals are represented accurately.
@@ -162,6 +162,6 @@ A future software-install capability must use a fixed backend-owned package-sour
 
 The Product Owner approved planning for a reusable backend-owned Background Job System for long-running operations. The initiating HTTP request must return a Job ID promptly; a fixed worker performs the approved task, and the user checks status later. Software installation is the first motivating use case, not the only supported job category.
 
-The architecture, lifecycle, BAT/process-launch boundary, idempotency, restart recovery, retention decision gate, and test requirements are specified in `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`.
+The architecture, Jenkins-inspired declarative Job Definitions and scheduler, lifecycle, BAT/process-launch boundary, idempotency, operational persistence, restart recovery, retention controls, and test requirements are specified in `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`.
 
-This is documentation-only approval. It does not authorize a BAT launcher, worker implementation, package-manager invocation, installer execution, persistence of task history, or any real PC-changing action. A4 must independently review this architecture before runtime work is proposed. The unresolved persistence/retention decision must return to the Product Owner before implementation.
+This is documentation-only approval. It does not authorize a BAT launcher, worker implementation, package-manager invocation, installer execution, arbitrary scripts/pipelines, standing approval for recurring side effects, or any real PC-changing action. Operational Job Definitions and Job Run records may be persisted within the narrow scope above; chat/prompt history remains prohibited. A4 must independently review this architecture and its storage/scheduler controls before runtime work is proposed.
