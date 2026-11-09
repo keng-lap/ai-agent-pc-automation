@@ -21,7 +21,7 @@
     </aside>
     <section class="canvas-panel" aria-label="Workflow canvas">
       <div class="canvas-heading"><div><strong>{{ isThai() ? 'พื้นที่ออกแบบ' : 'Design canvas' }}</strong><span>{{ nodes().length }} Nodes · {{ edges().length }} Connections</span></div><span class="canvas-state"><i></i>{{ isThai() ? 'แก้ไขได้' : 'Editable' }}</span></div>
-      <div class="canvas-viewport" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="endNodeDrag($event)" (pointercancel)="endNodeDrag($event)">
+      <div class="canvas-viewport" tabindex="0" (keydown)="onCanvasKeyDown($event)" (keyup)="onCanvasKeyUp($event)" (blur)="onCanvasBlur()" (pointerdown)="startCanvasPan($event)" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="endNodeDrag($event); endCanvasPan($event)" (pointercancel)="endNodeDrag($event); endCanvasPan($event)">
         <div class="canvas-world-wrap" [style.width.px]="1800 * zoom()" [style.height.px]="900 * zoom()">
         <div #canvasWorld class="canvas-world" [style.transform]="'scale(' + zoom() + ')'">
           <svg class="edge-layer" viewBox="0 0 1800 900" role="group" [attr.aria-label]="isThai() ? 'เส้นเชื่อมระหว่าง Node' : 'Connections between workflow nodes'">
