@@ -19,6 +19,7 @@ This packet is not an A4 review, approval, penetration test, or authorization to
 - `docs/PHASE-6.md`
 - `docs/P6-601-SOURCE-MAP.md`
 - `docs/P6-601-TRUSTED-SOFTWARE-DISCOVERY.md`
+- `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`
 - `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`
 - `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`
 - `docs/P5-516-01-USER-PRESENCE-DESIGN-DECISION.md`
@@ -91,3 +92,18 @@ A4 must publish a separate review report with:
 ## Acceptance gate
 
 P6-601 cannot be marked complete and no side-effecting capability may be proposed for implementation until the independent A4 report is recorded and all blocking findings are fixed or explicitly dispositioned by the Product Owner. This packet itself does not satisfy that gate.
+
+### E. Background Job System and long-running process boundary
+
+Independently review `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md` and assess:
+
+- Whether asynchronous job creation, worker claiming, state transitions, polling, and terminal verification are sufficiently specified and fail closed.
+- Whether the BAT option is safely constrained to a fixed launcher and whether direct fixed-process invocation is preferable. Explicitly assess command/argument injection, quoting, environment, working directory, executable identity, privilege, and process ownership.
+- Whether exact-action approval is consumed at execution start and remains bound to immutable parameters/evidence; retries and duplicate submissions must not launch duplicate side effects.
+- Whether status access is owner/session-bound and read-only; polling, client disconnects, and timeouts must never re-run or cancel a job implicitly.
+- Whether exit-code mapping, independent post-condition verification, reboot-required handling, cancellation races, partial completion, and ambiguous outcomes are handled honestly.
+- Whether restart recovery can be made safe without violating the current no-task-history-persistence decision. Assess the proposed Product Owner decision gate for minimal operational job-state persistence, retention, ACL/integrity, atomicity, and duplicate-execution prevention.
+- Whether a process/job discovered in an ambiguous state after restart must remain UNKNOWN and require human resolution rather than automatic retry.
+- Whether mandatory fail-closed audit/ledger behavior, bounded logs, redaction, concurrency limits, and negative tests are adequate.
+
+A4 must not treat this planning document as implementation evidence or as authorization to enable real execution. Identify unresolved Product Owner decisions separately from technical findings.
