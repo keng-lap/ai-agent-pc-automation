@@ -33,11 +33,11 @@
           </svg>
           @for (node of nodes(); track node.id) {
             <article tabindex="0" role="group" [attr.aria-label]="nodeLabel(node)" (keydown)="onNodeKeydown($event, node)" [class]="'workflow-node workflow-node--' + node.type" [class.workflow-node--selected]="selectedNodeId() === node.id" [class.workflow-node--connecting]="connectionSource()?.nodeId === node.id" [style.left.px]="node.x" [style.top.px]="node.y" (click)="selectNode(node.id)">
-              @if (node.type !== 'trigger') { <button class="node-port node-port--input" type="button" (click)="connectTo(node.id, $event)" [attr.aria-label]="(isThai() ? 'เชื่อมเข้าที่ ' : 'Connect to ') + node.label"></button> }
+              @if (node.type !== 'trigger') { <button class="node-port node-port--input" type="button" (click)="connectTo(node.id, $event)" [attr.aria-label]="(isThai() ? 'เชื่อมเข้าที่ ' : 'Connect to ') + nodeLabel(node)"></button> }
               <div class="node-drag-handle" (pointerdown)="startNodeDrag($event, node)"><span class="node-type-icon">{{ definition(node.type).icon }}</span><span class="node-type-label">{{ categoryLabel(node.type) }}</span><span class="node-grip" aria-hidden="true">⠿</span></div>
               <div class="node-content"><strong>{{ nodeLabel(node) }}</strong><p>{{ nodeDetail(node) }}</p></div>
               @for (port of outputPorts(node.type); track port.id) {
-                <button class="node-port node-port--output" [class.node-port--yes]="port.id === 'yes'" [class.node-port--no]="port.id === 'no'" [style.top.px]="port.top" type="button" (click)="connectFrom(node.id, port.id, $event)" [attr.aria-label]="(isThai() ? 'เชื่อมออกจาก ' : 'Connect from ') + node.label + ' · ' + (isThai() ? port.labelTh : port.labelEn)"></button>
+                <button class="node-port node-port--output" [class.node-port--yes]="port.id === 'yes'" [class.node-port--no]="port.id === 'no'" [style.top.px]="port.top" type="button" (click)="connectFrom(node.id, port.id, $event)" [attr.aria-label]="(isThai() ? 'เชื่อมออกจาก ' : 'Connect from ') + nodeLabel(node) + ' · ' + (isThai() ? port.labelTh : port.labelEn)"></button>
                 @if (node.type === 'condition') { <span class="node-port-label" [class.node-port-label--yes]="port.id === 'yes'" [class.node-port-label--no]="port.id === 'no'">{{ isThai() ? port.labelTh : port.labelEn }}</span> }
               }
             </article>
