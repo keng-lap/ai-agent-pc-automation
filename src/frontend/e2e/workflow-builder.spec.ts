@@ -181,17 +181,30 @@ test('canvas pans by dragging blank space and with Space plus left-drag without 
     top: Number.parseFloat(getComputedStyle(element).top),
   }));
 
+  await viewport.scrollIntoViewIfNeeded();
   const panStart = await viewport.evaluate((element) => {
     const rect = element.getBoundingClientRect();
+    const left = Math.max(rect.left, 0);
+    const right = Math.min(rect.right, window.innerWidth);
+    const top = Math.max(rect.top, 0);
+    const bottom = Math.min(rect.bottom, window.innerHeight);
+    const x = right - 32;
+    const y = bottom - 32;
+    const hit = document.elementFromPoint(x, y);
     return {
-      x: Math.min(rect.right, window.innerWidth) - 32,
-      y: Math.min(rect.bottom, window.innerHeight) - 32,
+      x, y,
+      hitIsInsideViewport: !!hit && (hit === element || element.contains(hit)),
+      visibleWidth: right - left,
+      visibleHeight: bottom - top,
       scrollWidth: element.scrollWidth,
       clientWidth: element.clientWidth,
       scrollHeight: element.scrollHeight,
       clientHeight: element.clientHeight,
     };
   });
+  expect(panStart.visibleWidth).toBeGreaterThan(32);
+  expect(panStart.visibleHeight).toBeGreaterThan(32);
+  expect(panStart.hitIsInsideViewport).toBe(true);
   expect(panStart.scrollWidth).toBeGreaterThan(panStart.clientWidth);
   expect(panStart.scrollHeight).toBeGreaterThan(panStart.clientHeight);
   const startX = panStart.x;
@@ -214,13 +227,18 @@ test('canvas pans by dragging blank space and with Space plus left-drag without 
 
   await viewport.focus();
   await page.keyboard.down('Space');
+  await viewport.scrollIntoViewIfNeeded();
   const secondStart = await viewport.evaluate((element) => {
     const rect = element.getBoundingClientRect();
+    const x = Math.min(rect.right, window.innerWidth) - 32;
+    const y = Math.min(rect.bottom, window.innerHeight) - 32;
+    const hit = document.elementFromPoint(x, y);
     return {
-      x: Math.min(rect.right, window.innerWidth) - 32,
-      y: Math.min(rect.bottom, window.innerHeight) - 32,
+      x, y,
+      hitIsInsideViewport: !!hit && (hit === element || element.contains(hit)),
     };
   });
+  expect(secondStart.hitIsInsideViewport).toBe(true);
   const secondX = secondStart.x;
   const secondY = secondStart.y;
   const previousScrollLeft = await viewport.evaluate((element) => element.scrollLeft);
