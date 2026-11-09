@@ -25,7 +25,7 @@ User -> Local Web App (loopback) -> FastAPI Backend -> Gemini API (text chat onl
 1. No unrestricted PC control.
 2. All automation passes through backend-controlled tool contracts, allowlists, and validation.
 3. No raw model text may be executed as a command.
-4. Machine-changing tools remain mock/dry-run only. Phase 6 and each real machine-changing capability require separate authorization.
+4. Machine-changing tools remain mock/dry-run only. Phase 6 and each real machine-changing capability require separate explicit authorization.
 5. Preserve loopback binding and local API authorization.
 6. No provider integration, credentials, or external data transfer without explicit approval.
 7. Do not persist chat messages/history or task history unless a future decision explicitly authorizes it.
