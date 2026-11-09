@@ -149,13 +149,18 @@ test('workflow builder supports full-screen mode and independently toggles side 
   await expect(page.locator('.side-rail')).toBeHidden();
   await expect(page.getByRole('button', { name: 'ออกจากเต็มหน้าจอ' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'คลัง Node' }).click();
+  await page.getByRole('button', { name: /เมนูหลัก/ }).click();
+  await expect(page.locator('.side-rail')).toBeVisible();
+  await page.getByRole('button', { name: /เมนูหลัก/ }).click();
+  await expect(page.locator('.side-rail')).toBeHidden();
+
+  await page.getByRole('button', { name: /คลัง Node/ }).click();
   await expect(page.locator('.node-library')).toBeHidden();
   await expect(page.locator('.canvas-panel')).toBeVisible();
 
-  await page.getByRole('button', { name: 'คลัง Node' }).click();
+  await page.getByRole('button', { name: /คลัง Node/ }).click();
   await expect(page.locator('.node-library')).toBeVisible();
-  await page.getByRole('button', { name: 'รายละเอียด' }).click();
+  await page.getByRole('button', { name: /รายละเอียด/ }).click();
   await expect(page.locator('.properties-panel')).toBeHidden();
   await page.getByRole('button', { name: 'รายละเอียด' }).click();
   await expect(page.locator('.properties-panel')).toBeVisible();
