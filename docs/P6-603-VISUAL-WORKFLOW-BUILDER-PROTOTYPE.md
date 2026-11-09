@@ -9,7 +9,7 @@ Validate the Job Designer user experience and the library-independent workflow g
 ## Scope
 - Add a Thai-first Workflow Builder workspace to the existing Angular application.
 - Provide a Node Library, graph Canvas, selected-node/edge Properties panel, and clear prototype/safety state.
-- Support palette drag-and-drop and click-to-add, node dragging, output-to-input connection, labelled true/false branches, selection, editing, deletion, and zoom controls.
+- Support palette drag-and-drop and click-to-add, node dragging, direct output-to-input edge dragging plus click/keyboard connection, labelled true/false branches, selection, editing, deletion, and zoom controls.
 - Use synthetic in-memory graph data only.
 - Keep the graph model independent of any canvas library.
 - Add no third-party dependency and no backend API integration.
