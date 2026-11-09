@@ -16,7 +16,7 @@
           <span class="library-icon" aria-hidden="true">{{ definition.icon }}</span><span class="library-copy"><strong>{{ isThai() ? definition.labelTh : definition.labelEn }}</strong><small>{{ isThai() ? definition.categoryTh : definition.categoryEn }}</small></span><span class="library-add" aria-hidden="true">+</span>
         </button>
       }
-      <div class="library-tip"><strong>{{ isThai() ? 'เคล็ดลับ' : 'Tip' }}</strong><span>{{ isThai() ? 'กดพอร์ตวงกลมด้านขวาเพื่อเริ่มเชื่อม แล้วเลือกพอร์ตด้านซ้ายของ Node ปลายทาง' : 'Activate an output port, then choose the input port on the target node.' }}</span></div>
+      <div class="library-tip"><strong>{{ isThai() ? 'เคล็ดลับ' : 'Tip' }}</strong><span>{{ isThai() ? 'ลากจากพอร์ต Output ไปยังพอร์ต Input ได้ทันที หรือคลิก Output แล้วคลิก Input' : 'Activate an output port, then choose the input port on the target node.' }}</span></div>
     </aside>
     <section class="canvas-panel" aria-label="Workflow canvas">
       <div class="canvas-heading"><div><strong>{{ isThai() ? 'พื้นที่ออกแบบ' : 'Design canvas' }}</strong><span>{{ nodes().length }} Nodes · {{ edges().length }} Connections</span></div><span class="canvas-state"><i></i>{{ isThai() ? 'แก้ไขได้' : 'Editable' }}</span></div>
