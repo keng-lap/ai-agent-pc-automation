@@ -210,7 +210,7 @@ function writeStoredConversationId(conversationId: string): void {
 @Component({
   selector: 'app-root',
   imports: [GeminiSettingsComponent],
-  styleUrl: './app.css',
+  styleUrls: ['./app.css', './dry-run-flow.css'],
   templateUrl: './app.html',
 })
 export class App implements AfterViewChecked {
