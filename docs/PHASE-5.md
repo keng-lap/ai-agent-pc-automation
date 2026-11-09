@@ -124,7 +124,7 @@ The Product Owner authorized bounded runtime implementation on 2026-11-08. The a
 - Lost-authenticator replacement remains intentionally unavailable pending a separately approved trusted-setup procedure.
 - The targeted independent A4 review of the post-implementation F-516-01 changes was not performed; the Product Owner accepted this as an explicit residual verification gap for Phase 5 closeout on 2026-11-09. Do not claim this review passed. The Product Owner reported local testing passed.
 
-**Phase 6 is NOT AUTHORIZED.** Phase 5 closeout and separate Phase 6 approval are still required; F-516-01 completion alone does not grant permission to execute on Windows.
+**Phase 5 is CLOSED by Product Owner approval (2026-11-09). Phase 6 is NOT AUTHORIZED.** F-516-01 implementation completion and Phase 5 closeout do not grant permission to execute on Windows; Phase 6 and each capability require separate explicit authorization.
 
 
 ## Phase 5 final closeout — 2026-11-09
