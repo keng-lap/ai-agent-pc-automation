@@ -8,7 +8,7 @@ interface NodeDefinition {
   descriptionTh: string; descriptionEn: string; icon: string;
   outputs: Array<{ id: PortId; labelTh: string; labelEn: string; top: number }>;
 }
-interface WorkflowNode { id: string; type: WorkflowNodeType; label: string; description: string; x: number; y: number; }
+interface WorkflowNode { id: string; type: WorkflowNodeType; labelTh: string; labelEn: string; descriptionTh: string; descriptionEn: string; x: number; y: number; }
 interface WorkflowEdge { id: string; fromNodeId: string; fromPort: PortId; toNodeId: string; }
 
 const NODE_WIDTH = 224;
@@ -36,13 +36,13 @@ export class WorkflowBuilderComponent {
   protected readonly selectedEdgeId = signal<string | null>(null);
   protected readonly message = signal('');
   protected readonly nodes = signal<WorkflowNode[]>([
-    { id: 'node-1', type: 'trigger', label: 'รับคำขอ', description: 'เริ่มเมื่อได้รับคำขอจากผู้ใช้', x: 70, y: 210 },
-    { id: 'node-2', type: 'ai', label: 'วิเคราะห์คำขอ', description: 'จัดประเภทและเตรียมข้อมูลสำหรับขั้นตอนถัดไป', x: 350, y: 210 },
-    { id: 'node-3', type: 'approval', label: 'ขออนุมัติจากผู้ใช้', description: 'แสดงรายละเอียดให้ผู้ใช้ตรวจสอบก่อนดำเนินการ', x: 630, y: 210 },
-    { id: 'node-4', type: 'condition', label: 'ผ่านการตรวจสอบหรือไม่?', description: 'แยกเส้นทางตามผลการตรวจสอบ', x: 910, y: 210 },
-    { id: 'node-5', type: 'software', label: 'ตรวจสอบ Software Hub', description: 'ค้นหาและตรวจสอบข้อมูลซอฟต์แวร์ในโหมดตัวอย่าง', x: 1220, y: 70 },
-    { id: 'node-6', type: 'success', label: 'พร้อมสำหรับขั้นตอนถัดไป', description: 'จบตัวอย่างเส้นทางที่ผ่านเงื่อนไข', x: 1520, y: 70 },
-    { id: 'node-7', type: 'blocked', label: 'หยุดและแจ้งผู้ใช้', description: 'จบเส้นทางเมื่อไม่ผ่านเงื่อนไข', x: 1220, y: 370 },
+    { id: 'node-1', type: 'trigger', labelTh: 'รับคำขอ', labelEn: 'Request received', descriptionTh: 'เริ่มเมื่อได้รับคำขอจากผู้ใช้', descriptionEn: 'Starts when a user request is received', x: 70, y: 210 },
+    { id: 'node-2', type: 'ai', labelTh: 'วิเคราะห์คำขอ', labelEn: 'Analyze request', descriptionTh: 'จัดประเภทและเตรียมข้อมูลสำหรับขั้นตอนถัดไป', descriptionEn: 'Classify the request and prepare structured input', x: 350, y: 210 },
+    { id: 'node-3', type: 'approval', labelTh: 'ขออนุมัติจากผู้ใช้', labelEn: 'Request user approval', descriptionTh: 'แสดงรายละเอียดให้ผู้ใช้ตรวจสอบก่อนดำเนินการ', descriptionEn: 'Show the exact details for user review before proceeding', x: 630, y: 210 },
+    { id: 'node-4', type: 'condition', labelTh: 'ผ่านการตรวจสอบหรือไม่?', labelEn: 'Did the review pass?', descriptionTh: 'แยกเส้นทางตามผลการตรวจสอบ', descriptionEn: 'Choose a path based on the review result', x: 910, y: 210 },
+    { id: 'node-5', type: 'software', labelTh: 'ตรวจสอบ Software Hub', labelEn: 'Check Software Hub', descriptionTh: 'ค้นหาและตรวจสอบข้อมูลซอฟต์แวร์ในโหมดตัวอย่าง', descriptionEn: 'Discover and verify software metadata in this sample only', x: 1220, y: 70 },
+    { id: 'node-6', type: 'success', labelTh: 'พร้อมสำหรับขั้นตอนถัดไป', labelEn: 'Ready for next step', descriptionTh: 'จบตัวอย่างเส้นทางที่ผ่านเงื่อนไข', descriptionEn: 'End the sample path that passed validation', x: 1520, y: 70 },
+    { id: 'node-7', type: 'blocked', labelTh: 'หยุดและแจ้งผู้ใช้', labelEn: 'Stop and notify user', descriptionTh: 'จบเส้นทางเมื่อไม่ผ่านเงื่อนไข', descriptionEn: 'End the path when the condition is not met', x: 1220, y: 370 },
   ]);
   protected readonly edges = signal<WorkflowEdge[]>([
     { id: 'edge-1', fromNodeId: 'node-1', fromPort: 'next', toNodeId: 'node-2' },
@@ -63,14 +63,8 @@ export class WorkflowBuilderComponent {
   protected outputPorts(type: WorkflowNodeType): NodeDefinition['outputs'] { return this.definition(type).outputs; }
   protected categoryLabel(type: WorkflowNodeType): string { const item = this.definition(type); return this.isThai() ? item.categoryTh : item.categoryEn; }
   protected nodeDescription(type: WorkflowNodeType): string { const item = this.definition(type); return this.isThai() ? item.descriptionTh : item.descriptionEn; }
-  protected nodeLabel(node: WorkflowNode): string {
-    const definition = this.definition(node.type);
-    return !this.isThai() && node.label === definition.labelTh ? definition.labelEn : node.label;
-  }
-  protected nodeDetail(node: WorkflowNode): string {
-    const definition = this.definition(node.type);
-    return !this.isThai() && node.description === definition.descriptionTh ? definition.descriptionEn : node.description;
-  }
+  protected nodeLabel(node: WorkflowNode): string { return this.isThai() ? node.labelTh : node.labelEn; }
+  protected nodeDetail(node: WorkflowNode): string { return this.isThai() ? node.descriptionTh : node.descriptionEn; }
   protected edgeLabel(edge: WorkflowEdge): string {
     const definition = this.definition(this.nodes().find((node) => node.id === edge.fromNodeId)?.type ?? 'trigger');
     const port = definition.outputs.find((item) => item.id === edge.fromPort);
@@ -102,7 +96,7 @@ export class WorkflowBuilderComponent {
   private addNodeAt(type: WorkflowNodeType, x: number, y: number): void {
     const definition = this.definition(type);
     const node: WorkflowNode = {
-      id: 'node-' + this.nextNodeNumber++, type, label: definition.labelTh, description: definition.descriptionTh,
+      id: 'node-' + this.nextNodeNumber++, type, labelTh: definition.labelTh, labelEn: definition.labelEn, descriptionTh: definition.descriptionTh, descriptionEn: definition.descriptionEn,
       x: Math.max(20, Math.min(WORLD_WIDTH - NODE_WIDTH - 20, x)),
       y: Math.max(20, Math.min(WORLD_HEIGHT - NODE_HEIGHT - 20, y)),
     };
@@ -191,12 +185,12 @@ export class WorkflowBuilderComponent {
   protected updateSelectedLabel(event: Event): void {
     const value = (event.target as HTMLInputElement).value.slice(0, 80), id = this.selectedNodeId();
     if (!id) return;
-    this.nodes.update((items) => items.map((node) => node.id === id ? { ...node, label: value } : node));
+    this.nodes.update((items) => items.map((node) => node.id === id ? (this.isThai() ? { ...node, labelTh: value } : { ...node, labelEn: value }) : node));
   }
   protected updateSelectedDescription(event: Event): void {
     const value = (event.target as HTMLTextAreaElement).value.slice(0, 240), id = this.selectedNodeId();
     if (!id) return;
-    this.nodes.update((items) => items.map((node) => node.id === id ? { ...node, description: value } : node));
+    this.nodes.update((items) => items.map((node) => node.id === id ? (this.isThai() ? { ...node, descriptionTh: value } : { ...node, descriptionEn: value }) : node));
   }
   protected removeSelectedNode(): void {
     const id = this.selectedNodeId();
