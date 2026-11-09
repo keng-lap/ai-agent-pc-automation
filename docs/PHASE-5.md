@@ -2,7 +2,7 @@
 
 ## Status
 
-**Phase 5 planning was authorized on 2026-11-02. P5-510 through P5-514 are complete and merged. P5-515 was authorized on 2026-11-07; increments #66, #73, #74, #75, #77, #81, #82, #84, #85, and #104 are merged. WP1–WP4 are complete. The final matrix is 33 Covered / 2 Partial / 0 Not covered or not evidenced. Q30 remains Partial: browser-emulated viewport evidence is CI-verified, while physical-device and screen-reader evidence are explicitly deferred by the Product Owner on 2026-11-08 and were not performed. Q35 remains Partial: the Product Owner accepted that Static Check is not a Runtime Sandbox; no sandbox was added. A4 final reconciliation is recorded in `docs/P5-515-CLOSEOUT-REPORT.md`. The Product Owner explicitly approved P5-515 closeout on 2026-11-08. Final main CI for P5-515 closeout merge commit `b4136b9` passed in run #42399589297. P5-516 A4 independent security review is complete; findings F-516-01 through F-516-04 and limitations are recorded in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. F-516-01 direction is now approved as Google OIDC plus authenticator-app TOTP (RFC 6238 with one-time QR enrollment), replacing the previously documented SMS step-up; paid SMS is not used. The decision record is `docs/P5-516-01-USER-PRESENCE-DESIGN-DECISION.md`, and the parallel workstream plan is merged in PR #112. Runtime implementation and independent A4 verification remain outstanding. P5-517 approval-gated P1 Dry Run was separately authorized and merged in PR #99. Phase 6 and all real PC execution remain unauthorized.**
+**Phase 5 — CLOSED by explicit Product Owner approval on 2026-11-09.** P5-510–P5-515 are complete; P5-515 retains 33 Covered / 2 Partial (Q30 and Q35). P5-516 findings and limitations are recorded in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`; F-516-02 (#109) and F-516-03 (#108) are resolved. F-516-01 Google OIDC + authenticator-app TOTP runtime work is merged (#114–#119), and the Product Owner reports local testing passed. The targeted independent A4 review of the completed F-516-01 implementation is **not performed**; the Product Owner explicitly accepted this outstanding verification item as a residual risk for Phase 5 closeout on 2026-11-09. It is not recorded as an A4 pass or as a finding technically eliminated. F-516-04 documentation reconciliation is included in this closeout. P5-517 approval-gated P1 Dry Run (#99) and P5-518 visual Dry Run flow (#130) are merged. See `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`. **Phase 6 and all real PC execution remain unauthorized.**
 
 Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02. Its Windows verification evidence is recorded in the conversation and commit `8233af5`: 75 backend tests passed, 22 frontend tests passed, and Ruff passed. The repository status documents record this verification evidence.
 
@@ -122,6 +122,15 @@ The Product Owner authorized bounded runtime implementation on 2026-11-08. The a
 - High-risk approval must fail closed if authentication or TOTP is unavailable. No legacy approval fallback is permitted.
 - Runtime remains loopback-only and P1 dry-run-only. No Windows command or machine-changing operation is enabled.
 - Lost-authenticator replacement remains intentionally unavailable pending a separately approved trusted-setup procedure.
-- F-516-01 remains OPEN until independent A4 review passes and Product Owner completes real Google OIDC + Windows DPAPI/authenticator smoke tests.
+- The targeted independent A4 review of the post-implementation F-516-01 changes was not performed; the Product Owner accepted this as an explicit residual verification gap for Phase 5 closeout on 2026-11-09. Do not claim this review passed. The Product Owner reported local testing passed.
 
-**Phase 6 is NOT AUTHORIZED.** Phase 5 closeout and separate Phase 6 approval are still required; F-516-01 completion alone does not grant permission to execute on Windows.
+**Phase 5 is CLOSED by Product Owner approval (2026-11-09). Phase 6 is NOT AUTHORIZED.** F-516-01 implementation completion and Phase 5 closeout do not grant permission to execute on Windows; Phase 6 and each capability require separate explicit authorization.
+
+
+## Phase 5 final closeout — 2026-11-09
+
+Phase 5 is **CLOSED by explicit Product Owner approval**. The Product Owner chose to accept the outstanding targeted A4 review of the F-516-01 post-implementation changes as a documented residual verification gap rather than keep Phase 5 open. The closeout does not convert that review into a pass, does not claim F-516-01 has been independently re-reviewed, and does not erase the residual finding/limitations in the P5-516 review record.
+
+The implementation remains loopback-only and Dry Run-only. P1 approval produces only a mock/dry-run report; no real Windows command, installer, filesystem mutation, process action, registry change, or system/network/security modification is authorized. P2/P3 remain denied. Phase 6 and each real machine-changing capability require separate explicit Product Owner authorization.
+
+The authoritative decision and residual-risk statement are in `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`.
