@@ -137,3 +137,30 @@ test('job monitor shows active jobs and previous run details without real execut
   await expect(page.getByText('Simulated failure · exit code 1 · no script executed')).toBeVisible();
   await expect(page.getByText(/ไม่มีการเชื่อมต่อ Job Engine/)).toBeVisible();
 });
+
+
+test('workflow builder supports full-screen mode and independently toggles side panels', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /ออกแบบ Workflow/ }).click();
+
+  const fullScreenButton = page.getByRole('button', { name: 'เต็มหน้าจอ' });
+  await fullScreenButton.click();
+  await expect(page.locator('html')).toHaveClass(/workflow-fullscreen/);
+  await expect(page.locator('.side-rail')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'ออกจากเต็มหน้าจอ' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'คลัง Node' }).click();
+  await expect(page.locator('.node-library')).toBeHidden();
+  await expect(page.locator('.canvas-panel')).toBeVisible();
+
+  await page.getByRole('button', { name: 'คลัง Node' }).click();
+  await expect(page.locator('.node-library')).toBeVisible();
+  await page.getByRole('button', { name: 'รายละเอียด' }).click();
+  await expect(page.locator('.properties-panel')).toBeHidden();
+  await page.getByRole('button', { name: 'รายละเอียด' }).click();
+  await expect(page.locator('.properties-panel')).toBeVisible();
+
+  await page.getByRole('button', { name: 'ออกจากเต็มหน้าจอ' }).click();
+  await expect(page.locator('html')).not.toHaveClass(/workflow-fullscreen/);
+  await expect(page.locator('.side-rail')).toBeVisible();
+});
