@@ -25,7 +25,7 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
   { type: 'blocked', categoryTh: 'สิ้นสุด', categoryEn: 'End', labelTh: 'จบงาน / ถูกระงับ', labelEn: 'Finish / blocked', descriptionTh: 'สิ้นสุดเส้นทางที่ไม่ผ่านเงื่อนไข', descriptionEn: 'End the path that did not pass the condition', icon: '■', outputs: [] },
 ];
 
-@Component({ selector: 'app-workflow-builder', standalone: true, templateUrl: './workflow-builder.html', styleUrl: './workflow-builder.css' })
+@Component({ selector: 'app-workflow-builder', standalone: true, templateUrl: './workflow-builder.html' })
 export class WorkflowBuilderComponent {
   @Input() language: UiLanguage = 'th';
   @ViewChild('canvasWorld') private canvasWorld?: ElementRef<HTMLDivElement>;
