@@ -471,6 +471,32 @@ export class App implements AfterViewChecked {
     );
   }
 
+  protected flowEligibilityLabel(review: PlanReviewResponse): string {
+    if (review.approved) return this.language() === 'th' ? 'Backend ยืนยันแล้ว' : 'Backend confirmed';
+    return this.canApproveReview(review)
+      ? (this.language() === 'th' ? 'ข้อมูลครบ' : 'Ready')
+      : (this.language() === 'th' ? 'ติดเงื่อนไข' : 'Blocked');
+  }
+
+  protected flowApprovalLabel(entry: ChatEntry, review: PlanReviewResponse): string {
+    if (review.approved) return this.language() === 'th' ? 'ยืนยันแล้ว' : 'Confirmed';
+    if (entry.approvalStage === 'challenge') return this.language() === 'th' ? 'กำลังสร้างคำขอ' : 'Requesting challenge';
+    if (entry.approvalStage === 'dry_run') return this.language() === 'th' ? 'กำลังตรวจสอบ' : 'Verifying';
+    if (entry.stepUpChallengeId) return this.language() === 'th' ? 'รอรหัส Authenticator' : 'Waiting for code';
+    return this.canApproveReview(review)
+      ? (this.language() === 'th' ? 'รอผู้ใช้ยืนยัน' : 'Waiting for user')
+      : (this.language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready');
+  }
+
+  protected flowDryRunLabel(entry: ChatEntry, review: PlanReviewResponse): string {
+    if (review.approved && review.tool_result) return this.language() === 'th' ? 'เสร็จสมบูรณ์' : 'Completed';
+    if (entry.approvalStage === 'dry_run') return this.language() === 'th' ? 'กำลังประมวลผลคำขอ' : 'Processing request';
+    if (entry.stepUpChallengeId) return this.language() === 'th' ? 'รอการยืนยัน' : 'Waiting for approval';
+    return this.canApproveReview(review)
+      ? (this.language() === 'th' ? 'รอเริ่มจำลอง' : 'Ready to start')
+      : (this.language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready');
+  }
+
   protected approvePlan(entry: ChatEntry): void {
     const review = entry.review;
     const planId = review?.dry_run_plan?.plan_id;
