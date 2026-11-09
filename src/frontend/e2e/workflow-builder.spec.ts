@@ -73,8 +73,11 @@ test('supports dragging an output port directly onto a target input port', async
   await page.locator('.node-library .library-item').filter({ hasText: 'เริ่ม Workflow' }).click();
   await page.locator('.node-library .library-item').filter({ hasText: 'วิเคราะห์ด้วย AI' }).click();
 
-  const source = await page.getByRole('button', { name: 'เชื่อมออกจาก เริ่ม Workflow · ถัดไป' }).boundingBox();
-  const target = await page.getByRole('button', { name: 'เชื่อมเข้าที่ วิเคราะห์ด้วย AI' }).boundingBox();
+  const sourcePort = page.getByRole('button', { name: 'เชื่อมออกจาก เริ่ม Workflow · ถัดไป' });
+  const targetPort = page.getByRole('button', { name: 'เชื่อมเข้าที่ วิเคราะห์ด้วย AI' });
+  await targetPort.scrollIntoViewIfNeeded();
+  const source = await sourcePort.boundingBox();
+  const target = await targetPort.boundingBox();
   expect(source).not.toBeNull();
   expect(target).not.toBeNull();
 
