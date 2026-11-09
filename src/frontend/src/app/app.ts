@@ -34,6 +34,7 @@ interface ChatEntry {
   clarificationDraft?: string;
   refineError?: boolean;
   approvalError?: boolean;
+  approvalStage?: 'challenge' | 'dry_run' | null;
   stepUpChallengeId?: string;
   totpCode?: string;
   stepUpError?: boolean;
@@ -477,13 +478,18 @@ export class App implements AfterViewChecked {
 
     this.planning.set(true);
     this.entries.update((entries) => entries.map((item) =>
-      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false } : item,
+      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false, approvalStage: 'challenge' } : item,
     ));
     defer(() => this.chatApi.createPlanStepUpChallenge(planId))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
         take(1),
-        finalize(() => this.planning.set(false)),
+        finalize(() => {
+          this.planning.set(false);
+          this.entries.update((entries) => entries.map((item) =>
+            item.id === entry.id ? { ...item, approvalStage: null } : item,
+          ));
+        }),
       )
       .subscribe({
         next: (challenge) => this.entries.update((entries) => entries.map((item) =>
@@ -515,13 +521,18 @@ export class App implements AfterViewChecked {
 
     this.planning.set(true);
     this.entries.update((entries) => entries.map((item) =>
-      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false } : item,
+      item.id === entry.id ? { ...item, approvalError: false, stepUpError: false, approvalStage: 'dry_run' } : item,
     ));
     defer(() => this.chatApi.approvePlan(planId, challengeId, code))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
         take(1),
-        finalize(() => this.planning.set(false)),
+        finalize(() => {
+          this.planning.set(false);
+          this.entries.update((entries) => entries.map((item) =>
+            item.id === entry.id ? { ...item, approvalStage: null } : item,
+          ));
+        }),
       )
       .subscribe({
         next: (result) => this.entries.update((entries) => entries.map((item) =>
