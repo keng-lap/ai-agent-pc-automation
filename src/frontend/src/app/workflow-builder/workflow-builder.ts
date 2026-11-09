@@ -69,6 +69,8 @@ export class WorkflowBuilderComponent implements OnDestroy {
   private dragState: { nodeId: string; pointerId: number; offsetX: number; offsetY: number } | null = null;
   private connectionDragState: { nodeId: string; portId: PortId; pointerId: number; startX: number; startY: number; moved: boolean } | null = null;
   private suppressNextPortClick = false;
+  private spacePressed = false;
+  private canvasPanState: { pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null = null;
 
   protected isThai(): boolean { return this.language === 'th'; }
   protected toggleNodeLibrary(): void { this.showNodeLibrary.update((value) => !value); }
@@ -170,7 +172,41 @@ export class WorkflowBuilderComponent implements OnDestroy {
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     this.selectNode(node.id);
   }
+  protected onCanvasKeyDown(event: KeyboardEvent): void {
+    if (event.code === 'Space') { this.spacePressed = true; event.preventDefault(); }
+  }
+  protected onCanvasKeyUp(event: KeyboardEvent): void {
+    if (event.code === 'Space') { this.spacePressed = false; event.preventDefault(); }
+  }
+  protected onCanvasBlur(): void { this.spacePressed = false; }
+  protected startCanvasPan(event: PointerEvent): void {
+    const viewport = event.currentTarget as HTMLElement;
+    const target = event.target as HTMLElement;
+    const isCanvasContent = !!target.closest('.workflow-node, .node-port, .edge-hit');
+    const panGesture = event.button === 1 || (event.button === 0 && (this.spacePressed || !isCanvasContent));
+    if (!panGesture || (event.button !== 0 && event.button !== 1)) return;
+    event.preventDefault();
+    viewport.focus({ preventScroll: true });
+    viewport.setPointerCapture(event.pointerId);
+    this.canvasPanState = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };
+    viewport.classList.add('is-panning');
+  }
+  protected onCanvasPanMove(event: PointerEvent): void {
+    const state = this.canvasPanState;
+    const viewport = event.currentTarget as HTMLElement;
+    if (!state || state.pointerId !== event.pointerId) return;
+    viewport.scrollLeft = state.scrollLeft - (event.clientX - state.startX);
+    viewport.scrollTop = state.scrollTop - (event.clientY - state.startY);
+  }
+  protected endCanvasPan(event: PointerEvent): void {
+    const viewport = event.currentTarget as HTMLElement;
+    if (this.canvasPanState?.pointerId !== event.pointerId) return;
+    this.canvasPanState = null;
+    viewport.classList.remove('is-panning');
+    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+  }
   protected onCanvasPointerMove(event: PointerEvent): void {
+    this.onCanvasPanMove(event);
     const world = this.canvasWorld?.nativeElement;
     const connection = this.connectionDragState;
     if (connection && world && connection.pointerId === event.pointerId) {
