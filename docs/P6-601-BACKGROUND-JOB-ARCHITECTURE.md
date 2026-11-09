@@ -2,11 +2,11 @@
 
 ## Status and authority
 
-**Status: Product Owner-approved planning direction; documentation only.**
+**Status: Product Owner-approved planning direction; documentation only.** The Product Owner has explicitly approved persistence of operational Job records and configuration, subject to the data boundaries and retention controls below.
 
 The Product Owner agrees that long-running PC tasks should run asynchronously and be checked later. This decision approves architecture planning only. It does not authorize implementation, launching a BAT file, invoking a package manager, or performing any real machine-changing action.
 
-The first motivating use case is software installation, but the architecture should support other bounded long-running capabilities (for example, approved uninstall or update tasks) without becoming a general-purpose command runner.
+The first motivating use case is software installation, but the architecture should support other bounded long-running capabilities (for example, approved uninstall or update tasks) without becoming a general-purpose command runner. The user also requested Jenkins-inspired job configuration and scheduling; this is a planning requirement, not authorization for arbitrary pipeline scripts or unrestricted CI/CD.
 
 ## Design decision
 
@@ -21,6 +21,34 @@ Use a backend-owned **Background Job System**:
 7. The worker verifies the outcome independently before marking the job successful.
 
 Gemini/model output may help interpret the user's intent, but it must never create job commands, scripts, handler names, executable paths, or process arguments.
+
+## Jenkins-inspired Job Configuration and Scheduler
+
+Provide a local Job Management UI inspired by the useful parts of Jenkins: saved job definitions, manual “Run now”, schedules, run history, logs, enable/disable controls, and clear execution status. This is not a full Jenkins clone and must not expose arbitrary build agents, plugins, shell steps, or user-authored scripts.
+
+### Job definition model
+
+A saved Job Definition should be declarative, versioned, and validated by the backend. It may contain:
+- Stable Job Definition ID, human-readable name, description, enabled/disabled state, and configuration version.
+- One fixed backend-owned tool/capability ID selected from the approved catalog.
+- Strictly typed parameters with schema validation, bounds, and safe defaults; secret values must use a separately approved secret-storage design and never appear in logs.
+- Trigger type: manual, one-time schedule, or recurring schedule using an explicit timezone (default Asia/Bangkok for the UI).
+- Optional fixed, backend-owned workflow steps only where each step maps to an approved tool ID and a typed schema. No free-form shell/BAT/PowerShell/CMD, inline script, arbitrary executable, dynamic plugin, or model-authored pipeline.
+- Execution timeout, concurrency policy, and a bounded retry policy. Retries for side-effecting actions are disabled by default and may be enabled only when the capability proves idempotency and independently verifies that repeating the action cannot duplicate or compound side effects.
+- Notification preference from a fixed allowlist, without adding an unapproved external provider or data flow.
+
+### Scheduling and run controls
+
+- Support manual run, one-time run, and recurring schedules. Persist the timezone and schedule expression; define daylight-saving and missed-run behavior explicitly.
+- Provide pause/disable, edit, clone, and run-now controls. Editing a definition creates a new version; every run records the exact immutable definition version and parameter digest used.
+- Enforce per-job and global concurrency limits, queue bounds, overlap policy, and scheduler misfire policy. Never silently launch a backlog of missed runs after downtime.
+- Scheduled triggers create a run request; they do not bypass policy, source verification, or authorization.
+- Read-only scheduled jobs may run under a separately approved bounded policy. A scheduled side-effecting job must not silently inherit a one-time approval: by default it enters an approval-required state for each run. Any standing authorization for recurring side effects would require a separate Product Owner decision, narrow scope, explicit expiry, exact parameter/version binding, and independent A4 review.
+- Webhooks, remote triggers, distributed agents, cloud runners, and LAN-accessible scheduler endpoints are out of scope for the current local-first phase.
+
+### Safe workflow model
+
+Jenkins-style stages may be represented as a fixed DAG or ordered list of typed steps, but only if every step has a stable backend-owned tool ID, strict schema, explicit dependency, bounded output, and its own policy/approval requirements. The frontend and model may select only among approved definitions and parameters; they cannot author executable pipeline content. Unknown step types, cycles, dynamic references, and undeclared outputs fail closed.
 
 ## BAT / process-launch boundary
 
@@ -75,18 +103,30 @@ The API should return a small, stable job summary: Job ID, tool ID, current stat
 - The UI should distinguish “accepted/queued”, “running”, “verifying”, “reboot required”, “completed”, “failed”, and “unknown”.
 - A timeout or lost browser connection means only that the client stopped waiting; it does not mean the job failed or was cancelled.
 
-## Restart recovery and retention — unresolved design gate
+## Persistence, restart recovery, and retention — Product Owner-approved scope
 
-The current project policy prohibits persisting chat messages, chat history, or task history, and existing plan/challenge state is process-local. Reliable recovery after backend/process/Windows restart therefore requires an explicit design decision; do not silently introduce durable task-history storage.
+The Product Owner explicitly approved persisting **operational Job data** so users can inspect run history and the system can recover safely after backend/Windows restart. This approval does not authorize persistence of chat messages, chat history, Gemini prompts/responses, or unrestricted task transcripts.
 
-Before runtime implementation, A1 must present a minimal job-state persistence proposal for Product Owner approval. It must specify:
-- Which operational fields are persisted (and explicitly exclude chat prompts/history and secrets).
-- Local storage location, ACL, integrity/tamper protection, atomic state transitions, and corruption handling.
-- Retention and deletion policy, including logs and installer output.
-- Recovery rules for jobs found in QUEUED, STARTING, RUNNING, VERIFYING, or CANCEL_REQUESTED after restart.
-- How to prevent duplicate execution when the prior process may still be running or may have completed before the crash.
+Persist only the minimum required operational data:
+- Job Definition ID, version, validated typed configuration, enabled state, and schedule/timezone.
+- Job Run ID, definition version, tool ID, canonical parameter/evidence digest, owner reference, approval reference/status, lifecycle timestamps, state transitions, normalized exit/result code, reboot requirement, and verification outcome.
+- Bounded, redacted operational logs and references to retained artifacts only when required for diagnosis.
+- Worker lease/claim metadata and process identity needed for safe recovery, with integrity protection and expiry.
 
-Until that decision is approved and implemented, a job whose execution state cannot be proven after restart must be marked UNKNOWN and must not be automatically re-run. Never infer success from a missing process or missing log.
+Security and storage requirements:
+- Local storage only, protected by restrictive Windows ACLs for the application/user context; use atomic writes/transactions and integrity checks.
+- Never persist secrets, TOTP/QR/provisioning data, access tokens, chat prompts/responses, raw model output, arbitrary command lines, or unrestricted machine inventory.
+- Encrypt sensitive operational fields at rest where appropriate; document key protection and recovery behavior. Do not invent a key-management scheme in implementation.
+- Define configurable retention with conservative defaults, bounded storage/log sizes, automatic expiry, and user-visible deletion of Job Definitions and run records subject to audit/security obligations.
+- Keep security audit ledger records logically distinct from user-visible job history; mandatory fail-closed execution auditing remains required for side effects.
+- A4 must review the exact schema, ACL, integrity, retention, deletion, corruption, backup, and recovery behavior before runtime enablement.
+
+Recovery rules:
+- QUEUED jobs may be re-queued only after revalidating definition version, approval validity, and all preconditions.
+- STARTING/RUNNING/VERIFYING jobs discovered after an unclean shutdown must be reconciled against a trustworthy worker lease/process identity and capability-specific post-condition evidence. If execution ownership or outcome is ambiguous, mark UNKNOWN and require user resolution; never automatically re-run.
+- CANCEL_REQUESTED jobs require proof of process termination before becoming CANCELLED.
+- REBOOT_REQUIRED jobs may transition to SUCCEEDED only after restart and independent post-condition verification.
+- Never infer success from a missing process, missing log, or exit code alone.
 
 ## Failure, cancellation, and partial completion
 
@@ -109,7 +149,7 @@ Use synthetic fixtures, isolated temporary directories, fake executables, and sp
 - Exit-code mapping, reboot-required, independent post-condition verification, partial failure, cancellation races, log redaction, and retention are tested.
 - Unknown job IDs and cross-session/owner status access are denied.
 - Concurrency limits and queue exhaustion are enforced.
-- A4 independently reviews the state machine, process-launch boundary, persistence/retention decision, failure semantics, and negative-test evidence.
+- A4 independently reviews the state machine, process-launch boundary, persistence/retention controls, scheduler authorization, failure semantics, and negative-test evidence.
 
 ## Explicit non-goals
 
