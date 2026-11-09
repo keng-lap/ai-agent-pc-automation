@@ -151,7 +151,7 @@ The available GitHub run/job metadata confirms successful step conclusions but d
 
 Existing backend tests provide deterministic fake-clock coverage for expiry and clock rollback, process-local store restart invalidation, plan digest binding/tamper detection, and audit sink capacity/restart/clear behavior. PR #66 adds synthetic HTTP-boundary and spy-handler regression cases. The suite uses in-process test clients, synthetic values, and dry-run handlers; it does not execute OS commands, installers, package managers, filesystem mutations, registry operations, or real PC changes.
 
-P5-515 is **in progress**, not closed: merge-commit CI is green, but complete matrix-to-test traceability and A4 independent review/evidence closeout remain outstanding. P5-516 remains a separately gated independent review.
+P5-515 is **CLOSED by Product Owner approval on 2026-11-08** with 33 Covered / 2 Partial; see `docs/P5-515-CLOSEOUT-REPORT.md` for the retained limitations and evidence. P5-516 independent review is complete and its findings are recorded in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. The separate targeted A4 review of the post-implementation F-516-01 changes was not performed and was explicitly accepted as a residual verification gap for Phase 5 closeout on 2026-11-09; see Section 11 and `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`.
 
 
 ## 10. P5-515 matrix-to-test traceability
