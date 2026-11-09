@@ -10,7 +10,7 @@ This is a coordinator-managed Four-Agent workflow with four separated responsibi
 - Phase 4 closeout was explicitly approved by the Product Owner on 2026-11-02.
 - Phase 4 implementation PRs #45–#47 are merged. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed.
 - Phase 5 planning was authorized by the Product Owner on 2026-11-02. Planning baseline: docs/PHASE-5.md.
-- No Phase 5 runtime implementation, permission grant, or real PC execution is authorized yet.
+- Phase 5 runtime work was completed and closed by Product Owner approval on 2026-11-09; the accepted F-516-01 A4 review gap remains a residual, not a passed review.
 - Phase 5 closeout was approved 2026-11-09. Phase 6 planning is authorized 2026-11-09; no individual real PC-changing capability is authorized without its own bounded task, explicit Product Owner approval, and security gates.
 - The Gemini text-chat MVP is separately approved under T-601 only: bounded current/recent conversation context, in-memory handling, and no tool/function calling or PC actions. No additional provider, credential, or external data flow is approved.
 
