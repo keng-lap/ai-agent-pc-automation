@@ -18,7 +18,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 **Complete — Product Owner closeout approved 2026-11-02.** T-402, T-403, and T-404 runtime implementation merged in PRs #45–#47. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5. See docs/PHASE-4.md.
 
 ## Phase 5 — Safety and Permission System
-**P5-510–P5-514 complete and merged (PRs #58–#65). P5-515 closeout approved by the Product Owner on 2026-11-08 and recorded in `docs/P5-515-CLOSEOUT-REPORT.md`. The matrix remains 33 Covered / 2 Partial / 0 Not covered. Q30 physical-device/screen-reader evidence is deferred and remains Partial; Q35 remains Partial under the accepted Static Check limitation. Final A4 reconciliation is complete. P5-516 A4 independent security review is complete with findings documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`. F-516-02 runtime audit producers are merged in PR #109; F-516-03 legacy `run_agent()` plan-only hardening is merged in PR #108. F-516-01 Google OIDC + authenticator-app TOTP runtime integration is merged in PRs #114–#119, with local setup-script fixes in PRs #122–#127; it remains OPEN pending independent A4 review and real local Google OIDC + Windows DPAPI/authenticator smoke tests. F-516-04 documentation reconciliation is tracked by the current status-sync change. P5-517 approval-gated P1 Dry Run is separately authorized and merged in PR #99.** Phase 5 remains a mandatory safety gate; Phase 6 and real machine-changing execution remain unauthorized. See docs/PHASE-5.md and docs/P5-515-REMAINING-GAP-CLOSURE-PLAN.md.
+**CLOSED — Product Owner approval recorded 2026-11-09.** P5-510–P5-515 are complete; the P5-515 matrix remains 33 Covered / 2 Partial (Q30 physical-device/screen-reader evidence deferred; Q35 Static Check limitation accepted). P5-516 findings are documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`; F-516-02 (#109) and F-516-03 (#108) are resolved. F-516-01 Google OIDC + authenticator-app TOTP implementation is merged (#114–#119; setup fixes #122–#127), and the Product Owner reports local testing passed. The targeted independent A4 review of the post-implementation F-516-01 changes remains unperformed and is explicitly accepted as a residual verification gap for closeout; it is not claimed as passed. P5-517 (#99) and P5-518 (#130) are merged. Full decision and limitations: `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`. Phase 6 and real machine-changing execution remain unauthorized.
 
 ## Phase 6 — Real PC Automation
 **Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
@@ -51,7 +51,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | P5-510–P5-515 closed; P5-516 F-516-02/#109 and F-516-03/#108 resolved; F-516-01 runtime merged but open pending A4 review + local Windows smoke tests; F-516-04 docs sync in progress; P5-517 P1 Dry Run merged; Phase 6 unauthorized |
+| 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. Phase 6 unauthorized |
 | 6 | Not Started |
 | 7 | Not Started |
 | 8 | Not Started |
