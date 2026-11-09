@@ -14,3 +14,12 @@
 - [ ] Existing chat and authentication regressions are checked.
 - [ ] Build, unit, and browser E2E results are recorded against the exact commit.
 - [ ] Performance claims are omitted unless measured with reproducible fixtures and environment.
+
+## Deferred before production UX sign-off
+- [ ] Reconnect existing edge endpoints by dragging.
+- [ ] Multi-select and group node movement.
+- [ ] Dedicated pan and fit-to-view controls.
+- [ ] Minimap and auto-layout evaluation.
+- [ ] Undo and redo.
+- [ ] Workflow validation panel based on an approved graph contract.
+- [ ] Execution panel based on the separately approved Workflow Engine contract.
