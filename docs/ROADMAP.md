@@ -18,10 +18,10 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 **Complete — Product Owner closeout approved 2026-11-02.** T-402, T-403, and T-404 runtime implementation merged in PRs #45–#47. Product Owner Windows 11 verification: 75 backend tests passed, Ruff passed, and 22 frontend tests passed. Verification commit: 8233af5. See docs/PHASE-4.md.
 
 ## Phase 5 — Safety and Permission System
-**CLOSED — Product Owner approval recorded 2026-11-09.** P5-510–P5-515 are complete; the P5-515 matrix remains 33 Covered / 2 Partial (Q30 physical-device/screen-reader evidence deferred; Q35 Static Check limitation accepted). P5-516 findings are documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`; F-516-02 (#109) and F-516-03 (#108) are resolved. F-516-01 Google OIDC + authenticator-app TOTP implementation is merged (#114–#119; setup fixes #122–#127), and the Product Owner reports local testing passed. The targeted independent A4 review of the post-implementation F-516-01 changes remains unperformed and is explicitly accepted as a residual verification gap for closeout; it is not claimed as passed. P5-517 (#99) and P5-518 (#130) are merged. Full decision and limitations: `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`. Phase 6 and real machine-changing execution remain unauthorized.
+**CLOSED — Product Owner approval recorded 2026-11-09.** P5-510–P5-515 are complete; the P5-515 matrix remains 33 Covered / 2 Partial (Q30 physical-device/screen-reader evidence deferred; Q35 Static Check limitation accepted). P5-516 findings are documented in `docs/P5-516-INDEPENDENT-SECURITY-REVIEW.md`; F-516-02 (#109) and F-516-03 (#108) are resolved. F-516-01 Google OIDC + authenticator-app TOTP implementation is merged (#114–#119; setup fixes #122–#127), and the Product Owner reports local testing passed. The targeted independent A4 review of the post-implementation F-516-01 changes remains unperformed and is explicitly accepted as a residual verification gap for closeout; it is not claimed as passed. P5-517 (#99) and P5-518 (#130) are merged. Full decision and limitations: `docs/P5-519-PHASE-5-CLOSEOUT-REPORT.md`. Phase 6 planning is authorized by the Product Owner on 2026-11-09. Individual real PC-changing capabilities remain separately gated; no execution capability is enabled by this phase-level approval.
 
 ## Phase 6 — Real PC Automation
-**Not Started.** Any real PC-changing execution is blocked until Phase 5 is complete and explicitly approved, and each tool is separately authorized.
+**Planning authorized — 2026-11-09.** See `docs/PHASE-6.md`. Phase 5 is closed. Phase 6 begins with architecture, capability boundaries, threat review, and test strategy. No individual real PC-changing capability is yet authorized; each requires a bounded task, explicit Product Owner approval, independent security review, and verified controls before implementation/execution.
 
 ## Phase 7 — Monitoring and Logging
 **Not Started.** Future observability scope must respect data minimization and explicit retention decisions.
@@ -39,7 +39,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 - Never skip or reorder phases without an explicit Product Owner decision.
 - Documentation/planning can proceed without per-document approval when consistent with approved decisions and current scope.
 - Runtime/code changes require bounded tasks, tests, review, and explicit Product Owner merge approval.
-- No real PC-changing action before Phase 5 is complete and explicitly approved.
+- Phase 5 is closed. Phase 6 planning is authorized; no real PC-changing action is authorized until its individual capability gate is explicitly approved and verified.
 - T-601 separately authorizes Gemini text-only chat and temporary context (2026-11-03): the current message plus up to 10 recent user/assistant pairs may be sent to Gemini. Context remains in backend process memory, expires after 1 hour of inactivity, is not written to disk or browser storage, and can be cleared by the user. The API key remains in backend memory only; function/tool calling and PC actions remain disabled. Any broader provider integration or external data flow still requires explicit Product Owner decisions.
 - Phase closeout requires evidence and explicit Product Owner approval.
 
@@ -52,7 +52,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
 | 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. Phase 6 unauthorized |
-| 6 | Not Started |
+| 6 | **Planning authorized — 2026-11-09.** No individual real-execution capability authorized yet; see `docs/PHASE-6.md` |
 | 7 | Not Started |
 | 8 | Not Started |
 | 9 | Not Started |
