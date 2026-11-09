@@ -37,6 +37,7 @@ export class WorkflowBuilderComponent implements OnDestroy {
   protected readonly definitions = NODE_DEFINITIONS;
   protected readonly zoom = signal(1);
   protected readonly fullScreen = signal(false);
+  protected readonly showMainMenu = signal(false);
   protected readonly showNodeLibrary = signal(true);
   protected readonly showProperties = signal(true);
   protected readonly connectionSource = signal<{ nodeId: string; portId: PortId } | null>(null);
@@ -76,13 +77,20 @@ export class WorkflowBuilderComponent implements OnDestroy {
     const next = !this.fullScreen();
     this.fullScreen.set(next);
     this.document.documentElement.classList.toggle('workflow-fullscreen', next);
+    if (!next) { this.showMainMenu.set(false); this.document.documentElement.classList.remove('workflow-nav-visible'); }
+  }
+  protected toggleMainMenu(): void {
+    const next = !this.showMainMenu();
+    this.showMainMenu.set(next);
+    this.document.documentElement.classList.toggle('workflow-nav-visible', next);
   }
   protected exitFullScreen(): void {
     if (!this.fullScreen()) return;
     this.fullScreen.set(false);
-    this.document.documentElement.classList.remove('workflow-fullscreen');
+    this.document.documentElement.classList.remove('workflow-fullscreen', 'workflow-nav-visible');
+    this.showMainMenu.set(false);
   }
-  ngOnDestroy(): void { this.document.documentElement.classList.remove('workflow-fullscreen'); }
+  ngOnDestroy(): void { this.document.documentElement.classList.remove('workflow-fullscreen', 'workflow-nav-visible'); }
   protected definition(type: WorkflowNodeType): NodeDefinition { return NODE_DEFINITIONS.find((item) => item.type === type) ?? NODE_DEFINITIONS[0]; }
   protected outputPorts(type: WorkflowNodeType): NodeDefinition['outputs'] { return this.definition(type).outputs; }
   protected categoryLabel(type: WorkflowNodeType): string { const item = this.definition(type); return this.isThai() ? item.categoryTh : item.categoryEn; }
