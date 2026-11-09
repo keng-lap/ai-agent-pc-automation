@@ -201,7 +201,6 @@ export class WorkflowBuilderComponent {
   protected selectEdge(event: Event, edge: WorkflowEdge): void { event.stopPropagation(); this.selectedEdgeId.set(edge.id); this.selectedNodeId.set(null); }
   protected startConnectionDrag(event: PointerEvent, nodeId: string, portId: PortId): void {
     if (event.button !== 0) return;
-    event.preventDefault();
     event.stopPropagation();
     this.suppressNextPortClick = false;
     this.connectionDragState = { nodeId, portId, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
