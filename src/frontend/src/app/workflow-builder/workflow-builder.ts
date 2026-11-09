@@ -15,7 +15,7 @@ interface WorkflowEdge { id: string; fromNodeId: string; fromPort: PortId; toNod
 const NODE_WIDTH = 224;
 const NODE_HEIGHT = 144;
 const WORLD_WIDTH = 1800;
-const WORLD_HEIGHT = 900;
+const WORLD_HEIGHT = 1400;
 const NODE_DEFINITIONS: NodeDefinition[] = [
   { type: 'trigger', categoryTh: 'เริ่มต้น', categoryEn: 'Trigger', labelTh: 'เริ่ม Workflow', labelEn: 'Start workflow', descriptionTh: 'จุดเริ่มต้นของงาน', descriptionEn: 'Entry point for this workflow', icon: '▶', outputs: [{ id: 'next', labelTh: 'ถัดไป', labelEn: 'Next', top: 70 }] },
   { type: 'ai', categoryTh: 'AI', categoryEn: 'AI', labelTh: 'วิเคราะห์ด้วย AI', labelEn: 'AI analysis', descriptionTh: 'วิเคราะห์คำขอและสร้างผลลัพธ์ที่มีโครงสร้าง', descriptionEn: 'Analyze the request and produce structured output', icon: '✳', outputs: [{ id: 'next', labelTh: 'ถัดไป', labelEn: 'Next', top: 70 }] },
