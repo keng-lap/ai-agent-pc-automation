@@ -53,5 +53,16 @@ Validate the Job Designer user experience and the library-independent workflow g
 ## Technology note
 A small native SVG + HTML canvas prototype avoids a graph-library dependency while testing core interactions. It does not settle the production graph technology. A separate decision must compare Angular-compatible candidates against maintenance, licensing, Angular compatibility, accessibility, custom ports/edges, bundle size, and measured graph performance before any dependency is approved.
 
+
+## Deliberate prototype gaps
+This first UX slice validates the primary authoring loop; it is not the complete production canvas contract. The following remain open for the next design iteration:
+- Reconnecting an existing edge by dragging its endpoint.
+- Multi-select and group movement.
+- Dedicated pan and fit-to-view controls; the current canvas uses native scrolling and zoom.
+- Minimap, auto-layout, undo, and redo.
+- A real validation/execution panel. Execution state and logs depend on a later approved Workflow Definition and Workflow Engine contract; this prototype only displays its no-execution boundary.
+
+These gaps must be reviewed before the Builder is declared production-ready. Do not infer that the current graph interactions are a final backend contract.
+
 ## Handoff
 After review, collect Product Owner feedback on the user journey and node contracts. Only then prepare a separate Workflow Definition/API contract and a library-selection decision. Workflow Engine work remains a separate task and requires its own authorization and safety review.
