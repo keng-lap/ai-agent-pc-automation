@@ -87,5 +87,5 @@ test('supports dragging an output port directly onto a target input port', async
   await page.mouse.up();
 
   await expect(page.locator('.canvas-heading')).toContainText('9 Nodes · 7 Connections');
-  await expect(page.getByRole('status')).toContainText('เชื่อม Node สำเร็จ');
+  await expect(page.locator('.builder-message')).toContainText('เชื่อม Node สำเร็จ');
 });
