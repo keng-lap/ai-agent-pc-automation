@@ -119,7 +119,7 @@
         </div>
       } @else {
         @for (entry of entries(); track entry.id) {
-          <article class="message-row" [class.message-row--user]="entry.kind === 'user'" [class.message-row--error]="entry.kind === 'error'">
+          <article class="message-row" [class.message-row--user]="entry.kind === 'user'" [class.message-row--error]="entry.kind === 'error'" [class.message-row--plan]="!!entry.review?.dry_run_plan">
             @if (entry.kind !== 'user') {
               <div class="message-avatar" [class.message-avatar--error]="entry.kind === 'error'" aria-hidden="true">{{ entry.kind === 'error' ? '!' : 'A' }}</div>
             }
@@ -176,6 +176,72 @@
                       <span class="status-pill installer-status--pending">{{ language() === 'th' ? 'รอข้อมูล' : 'Needs information' }}</span>
                     }
                   </div>
+
+                  <section class="execution-flow" [attr.aria-label]="language() === 'th' ? 'ลำดับการทำงาน Dry Run' : 'Dry Run workflow'">
+                    <div class="execution-flow-heading">
+                      <div>
+                        <p class="eyebrow">VISUAL WORKFLOW</p>
+                        <h4>{{ language() === 'th' ? 'ขั้นตอนการทำงาน' : 'Execution workflow' }}</h4>
+                      </div>
+                      <span class="flow-mode">DRY RUN ONLY</span>
+                    </div>
+                    <ol class="execution-flow-nodes">
+                      <li class="flow-node flow-node--done">
+                        <span class="flow-node-index">01</span>
+                        <div class="flow-node-copy">
+                          <strong>{{ language() === 'th' ? 'รับคำขอ' : 'Request received' }}</strong>
+                          <span>{{ language() === 'th' ? 'ได้รับคำสั่งจากผู้ใช้แล้ว' : 'User request received' }}</span>
+                          <small class="flow-state">{{ language() === 'th' ? 'เสร็จแล้ว' : 'Completed' }}</small>
+                        </div>
+                      </li>
+                      <li class="flow-node" [class.flow-node--done]="!!review.dry_run_plan" [class.flow-node--blocked]="!review.dry_run_plan">
+                        <span class="flow-node-index">02</span>
+                        <div class="flow-node-copy">
+                          <strong>{{ language() === 'th' ? 'สร้างแผน' : 'Create plan' }}</strong>
+                          <span>{{ language() === 'th' ? 'Backend สร้างแผนตรวจสอบ' : 'Backend created the review plan' }}</span>
+                          <small class="flow-state">{{ review.dry_run_plan ? (language() === 'th' ? 'เสร็จแล้ว' : 'Completed') : (language() === 'th' ? 'ไม่สำเร็จ' : 'Unavailable') }}</small>
+                        </div>
+                      </li>
+                      <li class="flow-node"
+                        [class.flow-node--done]="review.approved"
+                        [class.flow-node--ready]="canApproveReview(review) && !review.approved"
+                        [class.flow-node--blocked]="!canApproveReview(review) && !review.approved">
+                        <span class="flow-node-index">03</span>
+                        <div class="flow-node-copy">
+                          <strong>{{ language() === 'th' ? 'ตรวจความพร้อม' : 'Eligibility checks' }}</strong>
+                          <span>{{ language() === 'th' ? 'ตรวจข้อมูลแผนและสถานะบัญชีเบื้องต้น' : 'Check plan completeness and sign-in state' }}</span>
+                          <small class="flow-state">{{ review.approved ? (language() === 'th' ? 'Backend ยืนยันแล้ว' : 'Backend confirmed') : (canApproveReview(review) ? (language() === 'th' ? 'ข้อมูลครบ' : 'Ready') : (language() === 'th' ? 'ติดเงื่อนไข' : 'Blocked')) }}</small>
+                        </div>
+                      </li>
+                      <li class="flow-node"
+                        [class.flow-node--done]="review.approved"
+                        [class.flow-node--running]="entry.approvalStage === 'challenge' || entry.approvalStage === 'dry_run'"
+                        [class.flow-node--waiting]="!!entry.stepUpChallengeId && !review.approved"
+                        [class.flow-node--ready]="canApproveReview(review) && !entry.stepUpChallengeId && !review.approved && !entry.approvalStage"
+                        [class.flow-node--blocked]="!canApproveReview(review) && !review.approved">
+                        <span class="flow-node-index">04</span>
+                        <div class="flow-node-copy">
+                          <strong>{{ language() === 'th' ? 'ยืนยันตัวตนและอนุมัติ' : 'Verify & approve' }}</strong>
+                          <span>{{ language() === 'th' ? 'Authenticator และการตรวจสอบโดย Backend' : 'Authenticator step-up and backend validation' }}</span>
+                          <small class="flow-state">{{ review.approved ? (language() === 'th' ? 'ยืนยันแล้ว' : 'Confirmed') : (entry.approvalStage === 'challenge' ? (language() === 'th' ? 'กำลังสร้างคำขอ' : 'Requesting challenge') : (entry.approvalStage === 'dry_run' ? (language() === 'th' ? 'กำลังตรวจสอบ' : 'Verifying') : (entry.stepUpChallengeId ? (language() === 'th' ? 'รอรหัส Authenticator' : 'Waiting for code') : (canApproveReview(review) ? (language() === 'th' ? 'รอผู้ใช้ยืนยัน' : 'Waiting for user') : (language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready')))) }}</small>
+                        </div>
+                      </li>
+                      <li class="flow-node"
+                        [class.flow-node--done]="review.approved && !!review.tool_result"
+                        [class.flow-node--running]="entry.approvalStage === 'dry_run'"
+                        [class.flow-node--waiting]="!!entry.stepUpChallengeId && !review.approved"
+                        [class.flow-node--ready]="canApproveReview(review) && !review.approved && !entry.stepUpChallengeId"
+                        [class.flow-node--blocked]="!canApproveReview(review) && !review.approved">
+                        <span class="flow-node-index">05</span>
+                        <div class="flow-node-copy">
+                          <strong>Dry Run</strong>
+                          <span>{{ language() === 'th' ? 'จำลองด้วย Backend โดยไม่เปลี่ยนเครื่อง' : 'Backend simulation; no PC changes' }}</span>
+                          <small class="flow-state">{{ review.approved && review.tool_result ? (language() === 'th' ? 'เสร็จสมบูรณ์' : 'Completed') : (entry.approvalStage === 'dry_run' ? (language() === 'th' ? 'กำลังประมวลผลคำขอ' : 'Processing request') : (entry.stepUpChallengeId ? (language() === 'th' ? 'รอการยืนยัน' : 'Waiting for approval') : (canApproveReview(review) ? (language() === 'th' ? 'รอเริ่มจำลอง' : 'Ready to start') : (language() === 'th' ? 'ยังไม่พร้อม' : 'Not ready')))) }}</small>
+                        </div>
+                      </li>
+                    </ol>
+                    <p class="flow-safety-note">{{ language() === 'th' ? 'สถานะอัปเดตตามคำตอบจาก Backend · API ปัจจุบันยังไม่ส่งความคืบหน้ารายขั้นตอน · Dry Run ไม่ติดตั้งหรือเปลี่ยนแปลงเครื่องจริง' : 'States update from backend responses. The current API does not stream per-step progress. Dry Run does not install or change this PC.' }}</p>
+                  </section>
 
                   @if (review.dry_run_plan; as dryRun) {
                     <div class="installer-program-list">
