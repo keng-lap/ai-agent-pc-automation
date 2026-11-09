@@ -138,7 +138,7 @@ export class WorkflowBuilderComponent {
   }
   protected endNodeDrag(event: PointerEvent): void { if (this.dragState?.pointerId === event.pointerId) this.dragState = null; }
   protected onNodeKeydown(event: KeyboardEvent, node: WorkflowNode): void {
-    if (event.target !== event.currentTarget) return;
+    if (event.target instanceof HTMLElement && event.target.closest('button, input, textarea, select')) return;
     const step = event.shiftKey ? 40 : 10;
     const offsets: Record<string, [number, number]> = { ArrowUp: [0, -step], ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0] };
     const offset = offsets[event.key];
