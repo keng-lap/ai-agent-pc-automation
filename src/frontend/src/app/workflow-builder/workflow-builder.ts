@@ -169,7 +169,8 @@ export class WorkflowBuilderComponent {
     const connection = this.connectionDragState;
     if (connection?.pointerId === event.pointerId) {
       if (connection.moved && event.type === 'pointerup') {
-        const target = this.document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+        const eventTarget = event.target instanceof HTMLElement ? event.target : null;
+        const target = eventTarget ?? this.document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
         const input = target?.closest('.node-port--input') as HTMLElement | null;
         const targetNodeId = input?.dataset['nodeId'];
         if (targetNodeId) this.completeConnection(targetNodeId);
@@ -204,7 +205,6 @@ export class WorkflowBuilderComponent {
     event.stopPropagation();
     this.suppressNextPortClick = false;
     this.connectionDragState = { nodeId, portId, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
   protected connectFrom(nodeId: string, portId: PortId, event: MouseEvent): void {
     event.stopPropagation();
