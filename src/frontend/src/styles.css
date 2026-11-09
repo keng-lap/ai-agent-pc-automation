@@ -111,3 +111,53 @@ app-workflow-builder{display:block;min-width:0;color:var(--ink,#1d302d)}app-work
 
 /* P6-605 Job Monitor mock-only styles */
 app-job-monitor{display:block;color:var(--ink,#1d302d)}app-job-monitor .job-monitor{display:grid;gap:14px}app-job-monitor .jm-head,app-job-monitor .jm-detail>header,app-job-monitor .jm-list>header{display:flex;justify-content:space-between;gap:12px;align-items:center}app-job-monitor .jm-head p{font-size:9px;letter-spacing:.14em;color:#829188;margin:0 0 5px}app-job-monitor .jm-head h2{font-size:23px;margin:0}app-job-monitor .jm-head span{display:block;font-size:11px;color:#829188;margin-top:5px}app-job-monitor .jm-head>b{font-size:9px;color:#876a35;background:#fbf7ed;border:1px solid #e6d6b3;border-radius:6px;padding:7px}app-job-monitor .jm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}app-job-monitor .jm-stats article,app-job-monitor .jm-list,app-job-monitor .jm-detail,app-job-monitor .jm-tabs{border:1px solid var(--line,#dfe8e3);border-radius:9px;background:var(--surface,#fff)}app-job-monitor .jm-stats article{padding:12px;display:grid;gap:5px}app-job-monitor .jm-stats small{font-size:9px;color:#829188}app-job-monitor .jm-stats strong{font-size:20px}app-job-monitor .jm-tabs{display:flex;align-items:center;gap:7px;padding:7px}app-job-monitor .jm-tabs button{border:0;border-radius:6px;padding:9px 12px;background:transparent;color:inherit;font-size:10px;cursor:pointer}app-job-monitor .jm-tabs button.active{background:#eaf3ed;color:#285d50;font-weight:800}app-job-monitor .jm-tabs label{margin-left:auto;display:flex;align-items:center;gap:6px;border:1px solid var(--line,#dfe8e3);border-radius:6px;padding:0 9px}app-job-monitor .jm-tabs input{height:32px;border:0;background:transparent;color:inherit;font-size:10px;min-width:190px}app-job-monitor .jm-layout{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.7fr);gap:12px}app-job-monitor .jm-list{overflow:hidden}app-job-monitor .jm-list>header{padding:13px;border-bottom:1px solid var(--line,#dfe8e3)}app-job-monitor .jm-list>header strong{font-size:11px}app-job-monitor .jm-list>header small{font-size:9px;color:#829188}app-job-monitor .jm-run{display:flex;align-items:flex-start;gap:9px;width:100%;padding:12px;border:0;border-bottom:1px solid var(--line,#edf1ee);background:transparent;color:inherit;text-align:left;cursor:pointer}app-job-monitor .jm-run.selected,app-job-monitor .jm-run:hover{background:#f3f8f4}app-job-monitor .jm-run>span{display:grid;gap:5px;flex:1;min-width:0}app-job-monitor .jm-run strong{font-size:10px}app-job-monitor .jm-run small{font-size:8px;color:#829188}app-job-monitor .jm-run em,app-job-monitor .jm-progress>i{display:block;height:5px;background:#e9efeb;border-radius:8px;overflow:hidden}app-job-monitor .jm-run em i{display:block;height:100%;background:#5b9a70}app-job-monitor .dot{width:8px;height:8px;border-radius:50%;margin-top:4px;background:#5b9a70}app-job-monitor .dot.waiting{background:#c39a4e}app-job-monitor .dot.failed{background:#c16e63}app-job-monitor .status{font-size:8px;white-space:nowrap}app-job-monitor .status.running,app-job-monitor .status.succeeded{color:#39765d}app-job-monitor .status.waiting{color:#98713a}app-job-monitor .status.failed{color:#a45d55}app-job-monitor .jm-detail{padding:15px;min-width:0}app-job-monitor .jm-detail h3{font-size:15px;margin:5px 0}app-job-monitor .jm-detail header small,app-job-monitor .jm-detail header p{font-size:9px;color:#829188;margin:0}app-job-monitor .jm-progress{display:grid;gap:7px;margin:15px 0;padding:12px;border:1px solid var(--line,#dfe8e3);border-radius:7px}app-job-monitor .jm-progress>div{display:flex;justify-content:space-between;font-size:10px}app-job-monitor .jm-progress>i span{display:block;height:100%;background:#5b9a70;border-radius:8px}app-job-monitor .jm-progress>small{font-size:8px;color:#829188}app-job-monitor .jm-current{display:flex;gap:9px;padding:10px;background:#f3f8f4;border-radius:7px;color:#39765d;font-size:12px}app-job-monitor .jm-current span{display:grid;gap:3px}app-job-monitor .jm-current small{font-size:8px;color:#829188}app-job-monitor .jm-current strong{font-size:10px;color:var(--ink,#1d302d)}app-job-monitor .jm-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}app-job-monitor .jm-columns h4{font-size:10px;margin:0 0 8px}app-job-monitor .jm-columns ol{list-style:none;padding:0;margin:0}app-job-monitor .jm-columns li{display:grid;grid-template-columns:20px 1fr auto;gap:7px;padding:8px 0;border-bottom:1px solid var(--line,#edf1ee)}app-job-monitor .jm-columns li>i{font-style:normal;background:#eaf3ed;color:#39765d;border-radius:50%;width:19px;height:19px;text-align:center;font-size:9px;padding-top:3px}app-job-monitor .jm-columns li span{display:grid;gap:3px}app-job-monitor .jm-columns li strong{font-size:9px}app-job-monitor .jm-columns li small,app-job-monitor .jm-columns time{font-size:8px;color:#829188}app-job-monitor .jm-logs{max-height:240px;overflow:auto;background:#17251f;color:#d5e3da;border-radius:7px;padding:8px}app-job-monitor .jm-logs p{display:grid;grid-template-columns:48px 40px 1fr;gap:6px;font:8px/1.5 Consolas,monospace;margin:0;padding:5px 0;border-bottom:1px solid #2b4036}app-job-monitor .jm-logs time{color:#91a99a}app-job-monitor .jm-logs .WARN{color:#e6c27d}app-job-monitor .jm-logs .ERROR{color:#e69a8e}app-job-monitor .jm-columns>section>small,app-job-monitor footer{font-size:8px;color:#829188}app-job-monitor footer{line-height:1.5}app-job-monitor .jm-empty{text-align:center;padding:25px;font-size:10px;color:#829188}@media(max-width:950px){app-job-monitor .jm-layout{grid-template-columns:1fr}}@media(max-width:650px){app-job-monitor .jm-stats{grid-template-columns:repeat(2,1fr)}app-job-monitor .jm-tabs{flex-wrap:wrap}app-job-monitor .jm-tabs label{width:100%;margin:0}app-job-monitor .jm-tabs input{width:100%}app-job-monitor .jm-columns{grid-template-columns:1fr}app-job-monitor .jm-detail>header{align-items:flex-start;flex-direction:column}}@media(prefers-color-scheme:dark){app-job-monitor .jm-stats article,app-job-monitor .jm-list,app-job-monitor .jm-detail,app-job-monitor .jm-tabs{background:#1d2c27;border-color:#344a42}app-job-monitor .jm-run{color:#e7f0eb;border-color:#344a42}app-job-monitor .jm-run.selected,app-job-monitor .jm-run:hover{background:#293f33}app-job-monitor .jm-tabs button.active{background:#2a4437;color:#c6e2d1}app-job-monitor .jm-current{background:#263c30}app-job-monitor .jm-progress>i,app-job-monitor .jm-run em{background:#344a42}}
+
+
+/* P6-606: Full-screen Workflow workspace and independently collapsible side panels */
+app-workflow-builder .workspace-toggle,
+app-workflow-builder .workspace-panel-toggles button {
+  min-height: 32px; padding: 0 10px; border: 1px solid var(--line-strong,#cbd9d2);
+  border-radius: 7px; color: var(--ink,#1d302d); background: var(--surface,#fff);
+  font-size: 10px; font-weight: 650; cursor: pointer;
+}
+app-workflow-builder .workspace-toggle:hover,
+app-workflow-builder .workspace-panel-toggles button:hover { border-color:#7da58b; background:#f2f7f3; }
+app-workflow-builder .workspace-panel-toggles { display:flex; justify-content:flex-end; gap:7px; margin:0 0 9px; }
+app-workflow-builder .builder-layout.library-hidden { grid-template-columns:minmax(0,1fr) 230px; }
+app-workflow-builder .builder-layout.properties-hidden { grid-template-columns:206px minmax(0,1fr); }
+app-workflow-builder .builder-layout.library-hidden.properties-hidden { grid-template-columns:minmax(0,1fr); }
+app-workflow-builder .panel-collapsed { display:none !important; }
+html.workflow-fullscreen, html.workflow-fullscreen body { width:100%; height:100%; min-height:100%; overflow:hidden; }
+html.workflow-fullscreen main.app-frame { display:block; width:100%; height:100vh; min-height:0; overflow:hidden; }
+html.workflow-fullscreen .side-rail,
+html.workflow-fullscreen main.app-frame > .main-column > .topbar { display:none !important; }
+html.workflow-fullscreen main.app-frame > .main-column { width:100%; height:100vh; min-height:0; padding:10px 14px; overflow:auto; }
+html.workflow-fullscreen .content-stage { width:100%; max-width:none; height:100%; margin:0; }
+html.workflow-fullscreen app-workflow-builder { display:block; width:100%; min-height:100%; }
+html.workflow-fullscreen app-workflow-builder .builder-shell { min-height:calc(100vh - 20px); }
+html.workflow-fullscreen app-workflow-builder .builder-layout { grid-template-columns:206px minmax(0,1fr) 230px; min-height:calc(100vh - 210px); height:calc(100vh - 210px); }
+html.workflow-fullscreen app-workflow-builder .builder-layout.library-hidden { grid-template-columns:minmax(0,1fr) 230px; }
+html.workflow-fullscreen app-workflow-builder .builder-layout.properties-hidden { grid-template-columns:206px minmax(0,1fr); }
+html.workflow-fullscreen app-workflow-builder .builder-layout.library-hidden.properties-hidden { grid-template-columns:minmax(0,1fr); }
+html.workflow-fullscreen app-workflow-builder .canvas-panel { min-height:0; }
+html.workflow-fullscreen app-workflow-builder .canvas-viewport { min-height:0; }
+html.workflow-fullscreen app-workflow-builder .builder-header { margin-bottom:8px; }
+html.workflow-fullscreen app-workflow-builder .builder-header h2 { font-size:19px; }
+html.workflow-fullscreen app-workflow-builder .builder-subtitle { margin-top:3px; }
+html.workflow-fullscreen app-workflow-builder .builder-toolbar { margin-bottom:8px; }
+@media(max-width:760px) {
+  app-workflow-builder .builder-layout.library-hidden,
+  app-workflow-builder .builder-layout.properties-hidden,
+  app-workflow-builder .builder-layout.library-hidden.properties-hidden { grid-template-columns:minmax(0,1fr); }
+  html.workflow-fullscreen main.app-frame > .main-column { padding:8px; }
+  html.workflow-fullscreen app-workflow-builder .builder-layout,
+  html.workflow-fullscreen app-workflow-builder .builder-layout.library-hidden,
+  html.workflow-fullscreen app-workflow-builder .builder-layout.properties-hidden,
+  html.workflow-fullscreen app-workflow-builder .builder-layout.library-hidden.properties-hidden { display:grid; grid-template-columns:minmax(0,1fr); height:auto; min-height:0; }
+  html.workflow-fullscreen app-workflow-builder .canvas-viewport { min-height:55vh; }
+}
+
+html.workflow-fullscreen.workflow-nav-visible .side-rail {
+  display:flex !important; position:fixed; z-index:1000; inset:0 auto 0 0;
+  width:248px; height:100vh; min-height:100vh; box-shadow:12px 0 36px #10282045;
+}

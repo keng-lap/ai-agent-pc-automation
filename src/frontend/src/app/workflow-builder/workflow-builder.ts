@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Component, ElementRef, Input, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, Input, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { UiLanguage } from '../chat/chat-api';
 
 type WorkflowNodeType = 'trigger' | 'ai' | 'approval' | 'condition' | 'software' | 'script' | 'install' | 'batchInstall' | 'success' | 'blocked';
@@ -30,12 +30,16 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
 ];
 
 @Component({ selector: 'app-workflow-builder', standalone: true, templateUrl: './workflow-builder.html' })
-export class WorkflowBuilderComponent {
+export class WorkflowBuilderComponent implements OnDestroy {
   private readonly document = inject(DOCUMENT);
   @Input() language: UiLanguage = 'th';
   @ViewChild('canvasWorld') private canvasWorld?: ElementRef<HTMLDivElement>;
   protected readonly definitions = NODE_DEFINITIONS;
   protected readonly zoom = signal(1);
+  protected readonly fullScreen = signal(false);
+  protected readonly showMainMenu = signal(false);
+  protected readonly showNodeLibrary = signal(true);
+  protected readonly showProperties = signal(true);
   protected readonly connectionSource = signal<{ nodeId: string; portId: PortId } | null>(null);
   protected readonly connectionPointer = signal<{ x: number; y: number } | null>(null);
   protected readonly selectedNodeId = signal<string | null>('node-4');
@@ -67,6 +71,26 @@ export class WorkflowBuilderComponent {
   private suppressNextPortClick = false;
 
   protected isThai(): boolean { return this.language === 'th'; }
+  protected toggleNodeLibrary(): void { this.showNodeLibrary.update((value) => !value); }
+  protected toggleProperties(): void { this.showProperties.update((value) => !value); }
+  protected toggleFullScreen(): void {
+    const next = !this.fullScreen();
+    this.fullScreen.set(next);
+    this.document.documentElement.classList.toggle('workflow-fullscreen', next);
+    if (!next) { this.showMainMenu.set(false); this.document.documentElement.classList.remove('workflow-nav-visible'); }
+  }
+  protected toggleMainMenu(): void {
+    const next = !this.showMainMenu();
+    this.showMainMenu.set(next);
+    this.document.documentElement.classList.toggle('workflow-nav-visible', next);
+  }
+  protected exitFullScreen(): void {
+    if (!this.fullScreen()) return;
+    this.fullScreen.set(false);
+    this.document.documentElement.classList.remove('workflow-fullscreen', 'workflow-nav-visible');
+    this.showMainMenu.set(false);
+  }
+  ngOnDestroy(): void { this.document.documentElement.classList.remove('workflow-fullscreen', 'workflow-nav-visible'); }
   protected definition(type: WorkflowNodeType): NodeDefinition { return NODE_DEFINITIONS.find((item) => item.type === type) ?? NODE_DEFINITIONS[0]; }
   protected outputPorts(type: WorkflowNodeType): NodeDefinition['outputs'] { return this.definition(type).outputs; }
   protected categoryLabel(type: WorkflowNodeType): string { const item = this.definition(type); return this.isThai() ? item.categoryTh : item.categoryEn; }
