@@ -221,6 +221,10 @@ export class WorkflowBuilderComponent {
   }
   protected connectTo(nodeId: string, event: MouseEvent): void {
     event.stopPropagation();
+    if (this.suppressNextPortClick) {
+      this.suppressNextPortClick = false;
+      if (event.detail > 0) return;
+    }
     if (!this.connectionSource()) {
       this.selectNode(nodeId);
       this.message.set(this.isThai() ? 'เริ่มจากพอร์ต Output ด้านขวาของ Node ต้นทาง' : 'Start from an output port on a source node.');
