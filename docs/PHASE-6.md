@@ -75,7 +75,7 @@ No capability may inherit approval from another tool, a prior phase, a successfu
 **Status: Planning authorized; documentation/review only.**
 
 Deliverables:
-1. Read-only source map of current tool catalog, policy decision point, approval API, authenticator step-up, handler registry, audit events, and task result flow.
+1. Read-only source map of current tool catalog, policy decision point, approval API, authenticator step-up, handler registry, audit events, and task result flow. See `docs/P6-601-SOURCE-MAP.md` for the initial source map and A4 review gaps.
 2. Threat model for the transition from Dry Run to real side effects, including browser same-origin/script risks, local process risks, parameter substitution, replay, TOCTOU, partial failure, rollback, privilege boundaries, and compromised model/provider output.
 3. Capability onboarding template and explicit gate checklist.
 4. Dependency plan separating shared authorization hardening from per-capability implementation.
