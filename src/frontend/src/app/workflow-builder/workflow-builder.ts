@@ -1,4 +1,5 @@
-import { Component, ElementRef, Input, ViewChild, computed, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { Component, ElementRef, Input, ViewChild, computed, inject, signal } from '@angular/core';
 import { UiLanguage } from '../chat/chat-api';
 
 type WorkflowNodeType = 'trigger' | 'ai' | 'approval' | 'condition' | 'software' | 'success' | 'blocked';
@@ -27,11 +28,13 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
 
 @Component({ selector: 'app-workflow-builder', standalone: true, templateUrl: './workflow-builder.html' })
 export class WorkflowBuilderComponent {
+  private readonly document = inject(DOCUMENT);
   @Input() language: UiLanguage = 'th';
   @ViewChild('canvasWorld') private canvasWorld?: ElementRef<HTMLDivElement>;
   protected readonly definitions = NODE_DEFINITIONS;
   protected readonly zoom = signal(1);
   protected readonly connectionSource = signal<{ nodeId: string; portId: PortId } | null>(null);
+  protected readonly connectionPointer = signal<{ x: number; y: number } | null>(null);
   protected readonly selectedNodeId = signal<string | null>('node-4');
   protected readonly selectedEdgeId = signal<string | null>(null);
   protected readonly message = signal('');
@@ -57,6 +60,8 @@ export class WorkflowBuilderComponent {
   private nextNodeNumber = 8;
   private nextEdgeNumber = 7;
   private dragState: { nodeId: string; pointerId: number; offsetX: number; offsetY: number } | null = null;
+  private connectionDragState: { nodeId: string; portId: PortId; pointerId: number; startX: number; startY: number; moved: boolean } | null = null;
+  private suppressNextPortClick = false;
 
   protected isThai(): boolean { return this.language === 'th'; }
   protected definition(type: WorkflowNodeType): NodeDefinition { return NODE_DEFINITIONS.find((item) => item.type === type) ?? NODE_DEFINITIONS[0]; }
@@ -78,6 +83,16 @@ export class WorkflowBuilderComponent {
     const x1 = source.x + NODE_WIDTH, y1 = source.y + (port?.top ?? 70) + 8;
     const x2 = target.x, y2 = target.y + 78, bend = Math.max(52, Math.abs(x2 - x1) * 0.42);
     return 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + bend) + ' ' + y1 + ', ' + (x2 - bend) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+  }
+  protected connectionPreviewPath(): string {
+    const source = this.connectionSource(), point = this.connectionPointer();
+    if (!source || !point) return '';
+    const node = this.nodes().find((item) => item.id === source.nodeId);
+    if (!node) return '';
+    const port = this.definition(node.type).outputs.find((item) => item.id === source.portId);
+    const x1 = node.x + NODE_WIDTH, y1 = node.y + (port?.top ?? 70) + 8;
+    const bend = Math.max(45, Math.abs(point.x - x1) * 0.35);
+    return 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + bend) + ' ' + y1 + ', ' + (point.x - bend) + ' ' + point.y + ', ' + point.x + ' ' + point.y;
   }
   protected edgeLabelX(edge: WorkflowEdge): number {
     const source = this.nodes().find((node) => node.id === edge.fromNodeId), target = this.nodes().find((node) => node.id === edge.toNodeId);
@@ -129,14 +144,46 @@ export class WorkflowBuilderComponent {
     this.selectNode(node.id);
   }
   protected onCanvasPointerMove(event: PointerEvent): void {
-    const drag = this.dragState, world = this.canvasWorld?.nativeElement;
+    const world = this.canvasWorld?.nativeElement;
+    const connection = this.connectionDragState;
+    if (connection && world && connection.pointerId === event.pointerId) {
+      if (!connection.moved && Math.hypot(event.clientX - connection.startX, event.clientY - connection.startY) > 5) {
+        connection.moved = true;
+        this.connectionSource.set({ nodeId: connection.nodeId, portId: connection.portId });
+        this.selectNode(connection.nodeId);
+        this.message.set(this.isThai() ? 'ลากเส้นไปวางบนพอร์ต Input ของ Node ปลายทาง' : 'Drop the connection on a target node input.');
+      }
+      if (connection.moved && world) {
+        const rect = world.getBoundingClientRect(), scale = this.zoom();
+        this.connectionPointer.set({ x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale });
+      }
+    }
+    const drag = this.dragState;
     if (!drag || !world || drag.pointerId !== event.pointerId) return;
     const rect = world.getBoundingClientRect(), scale = this.zoom();
     const x = (event.clientX - rect.left) / scale - drag.offsetX, y = (event.clientY - rect.top) / scale - drag.offsetY;
     this.nodes.update((items) => items.map((node) => node.id === drag.nodeId
       ? { ...node, x: Math.max(0, Math.min(WORLD_WIDTH - NODE_WIDTH, x)), y: Math.max(0, Math.min(WORLD_HEIGHT - NODE_HEIGHT, y)) } : node));
   }
-  protected endNodeDrag(event: PointerEvent): void { if (this.dragState?.pointerId === event.pointerId) this.dragState = null; }
+  protected endNodeDrag(event: PointerEvent): void {
+    const connection = this.connectionDragState;
+    if (connection?.pointerId === event.pointerId) {
+      if (connection.moved && event.type === 'pointerup') {
+        const target = this.document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+        const input = target?.closest('.node-port--input') as HTMLElement | null;
+        const targetNodeId = input?.dataset['nodeId'];
+        if (targetNodeId) this.completeConnection(targetNodeId);
+        else {
+          this.connectionSource.set(null);
+          this.message.set(this.isThai() ? 'วางเส้นเชื่อมบนพอร์ต Input เพื่อเชื่อม Node' : 'Drop the connection on a node input port.');
+        }
+        this.suppressNextPortClick = true;
+      }
+      this.connectionDragState = null;
+      this.connectionPointer.set(null);
+    }
+    if (this.dragState?.pointerId === event.pointerId) this.dragState = null;
+  }
   protected onNodeKeydown(event: KeyboardEvent, node: WorkflowNode): void {
     if (event.target instanceof HTMLElement && event.target.closest('button, input, textarea, select')) return;
     const step = event.shiftKey ? 40 : 10;
@@ -152,24 +199,46 @@ export class WorkflowBuilderComponent {
   protected selectNode(nodeId: string): void { this.selectedNodeId.set(nodeId); this.selectedEdgeId.set(null); }
   protected selectCanvas(): void { this.selectedNodeId.set(null); this.selectedEdgeId.set(null); }
   protected selectEdge(event: Event, edge: WorkflowEdge): void { event.stopPropagation(); this.selectedEdgeId.set(edge.id); this.selectedNodeId.set(null); }
+  protected startConnectionDrag(event: PointerEvent, nodeId: string, portId: PortId): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.suppressNextPortClick = false;
+    this.connectionDragState = { nodeId, portId, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
   protected connectFrom(nodeId: string, portId: PortId, event: MouseEvent): void {
     event.stopPropagation();
+    if (this.suppressNextPortClick) {
+      this.suppressNextPortClick = false;
+      if (event.detail > 0) return;
+    }
     if (this.connectionSource()?.nodeId === nodeId && this.connectionSource()?.portId === portId) {
-      this.connectionSource.set(null); this.message.set(this.isThai() ? 'ยกเลิกการเชื่อมต่อ' : 'Connection cancelled.'); return;
+      this.connectionSource.set(null); this.connectionPointer.set(null);
+      this.message.set(this.isThai() ? 'ยกเลิกการเชื่อมต่อ' : 'Connection cancelled.'); return;
     }
     this.connectionSource.set({ nodeId, portId }); this.selectNode(nodeId);
-    this.message.set(this.isThai() ? 'เลือก Node ปลายทาง แล้วกดพอร์ตด้านซ้ายของ Node นั้น' : 'Choose a target node, then activate its input port.');
+    this.message.set(this.isThai() ? 'ลากไปยังพอร์ต Input หรือคลิกพอร์ตด้านซ้ายของ Node ปลายทาง' : 'Drag to a target input, or click its input port.');
   }
   protected connectTo(nodeId: string, event: MouseEvent): void {
     event.stopPropagation();
+    if (!this.connectionSource()) {
+      this.selectNode(nodeId);
+      this.message.set(this.isThai() ? 'เริ่มจากพอร์ต Output ด้านขวาของ Node ต้นทาง' : 'Start from an output port on a source node.');
+      return;
+    }
+    this.completeConnection(nodeId);
+  }
+  private completeConnection(nodeId: string): void {
     const source = this.connectionSource();
-    if (!source) { this.selectNode(nodeId); this.message.set(this.isThai() ? 'เริ่มเชื่อมต่อโดยกดพอร์ตด้านขวาของ Node ต้นทางก่อน' : 'Start by activating an output port on a source node.'); return; }
+    if (!source) return;
     if (source.nodeId === nodeId) { this.message.set(this.isThai() ? 'ไม่สามารถเชื่อม Node เข้าหาตัวเองได้' : 'A node cannot connect to itself.'); return; }
     if (this.edges().some((edge) => edge.fromNodeId === source.nodeId && edge.fromPort === source.portId && edge.toNodeId === nodeId)) { this.message.set(this.isThai() ? 'เส้นเชื่อมนี้มีอยู่แล้ว' : 'This connection already exists.'); return; }
     if (this.edges().some((edge) => edge.toNodeId === nodeId)) { this.message.set(this.isThai() ? 'พอร์ตปลายทางนี้มีเส้นเชื่อมแล้ว' : 'This input already has a connection.'); return; }
     if (this.wouldCreateCycle(source.nodeId, nodeId)) { this.message.set(this.isThai() ? 'ไม่อนุญาตให้สร้างวงจรย้อนกลับใน Prototype นี้' : 'Cycles are not supported in this prototype.'); return; }
     this.edges.update((items) => [...items, { id: 'edge-' + this.nextEdgeNumber++, fromNodeId: source.nodeId, fromPort: source.portId, toNodeId: nodeId }]);
-    this.connectionSource.set(null); this.selectNode(nodeId); this.message.set(this.isThai() ? 'เชื่อม Node สำเร็จ' : 'Nodes connected.');
+    this.connectionSource.set(null); this.connectionPointer.set(null); this.selectNode(nodeId);
+    this.message.set(this.isThai() ? 'เชื่อม Node สำเร็จ' : 'Nodes connected.');
   }
   private wouldCreateCycle(fromNodeId: string, toNodeId: string): boolean {
     const visited = new Set<string>(), stack = [toNodeId];
