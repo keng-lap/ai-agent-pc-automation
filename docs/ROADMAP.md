@@ -51,7 +51,7 @@ The project is developed incrementally. Each phase has a defined scope, safety b
 | 2 | Complete |
 | 3 | Complete — closeout approved |
 | 4 | Complete — Product Owner closeout approved 2026-11-02 |
-| 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. Phase 6 unauthorized |
+| 5 | **Complete — Product Owner closeout approved 2026-11-09.** F-516-01 targeted A4 follow-up remains an accepted residual verification gap; P5-515 retains 2 Partial items. P5-517 and P5-518 merged. Phase 6 planning authorized; individual capabilities separately gated |
 | 6 | **Planning authorized — 2026-11-09.** No individual real-execution capability authorized yet; see `docs/PHASE-6.md` |
 | 7 | Not Started |
 | 8 | Not Started |
