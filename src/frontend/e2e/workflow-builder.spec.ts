@@ -65,3 +65,24 @@ test('workflow builder keeps the page within a narrow mobile viewport', async ({
   expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
   expect(dimensions.canvasWidth).toBeGreaterThan(dimensions.canvasClientWidth);
 });
+
+
+test('supports dragging an output port directly onto a target input port', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /ออกแบบ Workflow/ }).click();
+  await page.locator('.node-library .library-item').filter({ hasText: 'เริ่ม Workflow' }).click();
+  await page.locator('.node-library .library-item').filter({ hasText: 'วิเคราะห์ด้วย AI' }).click();
+
+  const source = await page.getByRole('button', { name: 'เชื่อมออกจาก เริ่ม Workflow · ถัดไป' }).boundingBox();
+  const target = await page.getByRole('button', { name: 'เชื่อมเข้าที่ วิเคราะห์ด้วย AI' }).boundingBox();
+  expect(source).not.toBeNull();
+  expect(target).not.toBeNull();
+
+  await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(page.locator('.canvas-heading')).toContainText('9 Nodes · 7 Connections');
+  await expect(page.getByRole('status')).toContainText('เชื่อม Node สำเร็จ');
+});
