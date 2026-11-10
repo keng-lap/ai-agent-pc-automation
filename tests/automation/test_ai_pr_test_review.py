@@ -20,14 +20,14 @@ class FakeHTTPError:
 
 class ReviewInputTests(unittest.TestCase):
     def test_uses_supported_flash_lite_model_and_endpoint(self):
-        self.assertEqual(reviewer.MODEL, "gemini-3.1-flash-lite")
+        self.assertEqual(reviewer.MODEL, "gemini-3.8-flash")
         self.assertTrue(reviewer.ENDPOINT.endswith(
-            "/v1beta/models/gemini-3.1-flash-lite:generateContent"
+            "/v1beta/models/gemini-3.8-flash:generateContent"
         ))
 
     def test_model_preflight_accepts_exact_model_with_generate_content(self):
         payload = {"models": [{
-            "name": "models/gemini-3.1-flash-lite",
+            "name": "models/gemini-3.8-flash",
             "supportedGenerationMethods": ["generateContent", "countTokens"],
         }]}
 
@@ -47,7 +47,7 @@ class ReviewInputTests(unittest.TestCase):
 
     def test_model_preflight_rejects_model_without_generate_content(self):
         payload = {"models": [{
-            "name": "models/gemini-3.1-flash-lite",
+            "name": "models/gemini-3.8-flash",
             "supportedGenerationMethods": ["countTokens"],
         }]}
 
@@ -144,7 +144,7 @@ class ReviewInputTests(unittest.TestCase):
             "error": {
                 "code": 404,
                 "status": "NOT_FOUND",
-                "message": "Model gemini-3.1-flash-lite was not found",
+                "message": "Model gemini-3.8-flash was not found",
                 "details": [
                     {
                         "@type": "type.googleapis.com/google.rpc.ErrorInfo",
