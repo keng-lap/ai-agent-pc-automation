@@ -18,6 +18,23 @@ class FakeHTTPError:
 
 
 class ReviewInputTests(unittest.TestCase):
+    def test_uses_supported_flash_lite_model_and_endpoint(self):
+        self.assertEqual(reviewer.MODEL, "gemini-3.5-flash-lite")
+        self.assertTrue(reviewer.ENDPOINT.endswith(
+            "/v1beta/models/gemini-3.5-flash-lite:generateContent"
+        ))
+
+    def test_generation_payload_omits_deprecated_sampling_parameters(self):
+        payload = reviewer.build_payload("system rules", "review this diff")
+        self.assertEqual(
+            payload["generationConfig"],
+            {
+                "maxOutputTokens": reviewer.MAX_OUTPUT_TOKENS,
+                "responseMimeType": "application/json",
+            },
+        )
+        self.assertEqual(payload["contents"][0]["role"], "user")
+
     def test_only_reviewable_source_and_workflow_files_are_included(self):
         self.assertTrue(reviewer.reviewable_path("src/backend/authenticator.py"))
         self.assertTrue(reviewer.reviewable_path(".github/workflows/ci.yml"))
