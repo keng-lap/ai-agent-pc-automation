@@ -107,17 +107,17 @@ class FakeChatApi {
   }
 
   getGeminiStatus(): Observable<{ configured: boolean; model: string }> {
-    return of({ configured: this.configured, model: 'gemini-3.1-flash-lite' });
+    return of({ configured: this.configured, model: 'gemini-3.8-flash' });
   }
 
   saveGeminiKey(_apiKey: string): Observable<{ configured: boolean; model: string }> {
     this.configured = true;
-    return of({ configured: true, model: 'gemini-3.1-flash-lite' });
+    return of({ configured: true, model: 'gemini-3.8-flash' });
   }
 
   testGeminiConnection(): Observable<{ connected: boolean; model: string }> {
     if (this.testError !== undefined) return throwError(() => this.testError);
-    return of({ connected: true, model: 'gemini-3.1-flash-lite' });
+    return of({ connected: true, model: 'gemini-3.8-flash' });
   }
 }
 
@@ -159,7 +159,7 @@ describe('App chat UI (T-202)', () => {
       await fixture.whenStable();
       fixture.detectChanges();
       const statusRequest = httpTestingController.expectOne('/api/settings/gemini');
-      statusRequest.flush({ configured: false, model: 'gemini-3.1-flash-lite' });
+      statusRequest.flush({ configured: false, model: 'gemini-3.8-flash' });
     }
     await fixture.whenStable();
     fixture.detectChanges();
