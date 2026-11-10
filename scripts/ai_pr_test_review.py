@@ -4,6 +4,7 @@ from __future__ import annotations
 import html, json, os, re, sys, urllib.error, urllib.request
 from pathlib import PurePosixPath
 from typing import Any
+
 MODEL = "gemini-2.5-flash"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 MAX_FILES, MAX_FILE_CHARS, MAX_DIFF_CHARS, MAX_OUTPUT_TOKENS = 20, 4000, 28000, 2500
@@ -16,23 +17,28 @@ PATTERNS = [
  re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]{12,}"),
  re.compile(r"""(?i)\b([A-Z0-9_]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|key|token|secret|password|passwd)[A-Z0-9_]*)\b(\s*[:=]\s*)(["']?)[^\s"' ,;]{8,}""")
 ]
+
 def reviewable_path(path: str) -> bool:
  p=PurePosixPath(path)
  if {part.lower() for part in p.parts} & SENSITIVE: return False
  n=p.name.lower()
  if n.startswith(".env") or n in {"package-lock.json","pnpm-lock.yaml","yarn.lock","poetry.lock","uv.lock","requirements.lock"}: return False
  return p.suffix.lower() in EXTENSIONS
+
 def redact(text: str) -> str:
  for pattern in PATTERNS:
   if pattern is PATTERNS[-1]: text=pattern.sub(lambda m:f"{m.group(1)}{m.group(2)}[REDACTED]",text)
   else: text=pattern.sub("[REDACTED_SECRET]",text)
  return text
+
 def gh_get(url: str, token: str) -> Any:
  req=urllib.request.Request(url,headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}","X-GitHub-Api-Version":"2022-11-28","User-Agent":"ai-agent-gemini-review"})
  with urllib.request.urlopen(req,timeout=20) as response: return json.loads(response.read().decode())
+
 def collect_diff(repo: str, number: int, token: str) -> tuple[str,list[str],int]:
  base=f"https://api.github.com/repos/{repo}/pulls/{number}/files"
- chunks,included,omitted,size=[],[],[],0
+ chunks,included,omitted=[],[],[]
+ size=0
  for page in range(1,4):
   files=gh_get(f"{base}?per_page=100&page={page}",token)
   if not isinstance(files,list) or not files: break
@@ -44,6 +50,7 @@ def collect_diff(repo: str, number: int, token: str) -> tuple[str,list[str],int]
    chunks.append(chunk); included.append(path); size+=len(chunk)
   if len(files)<100: break
  return "".join(chunks),included,len(omitted)
+
 def review(diff: str, number: int, key: str) -> dict[str,Any]:
  system_instruction = """
 You are an independent test-design reviewer for a security-sensitive Windows PC automation project.
@@ -64,15 +71,34 @@ Test commands are suggestions only; never claim they were executed.
  result=json.loads(body["candidates"][0]["content"]["parts"][0]["text"])
  if not isinstance(result,dict): raise ValueError("Invalid response")
  return result
+
 def safe(value: Any, limit: int=600) -> str:
  text = " ".join(str(value if value is not None else "").split())
  text = text.replace("[","").replace("]","").replace("(","").replace(")","")
  return html.escape(text,quote=True).replace("|",r"\|")[:limit]
+
+def http_error_summary(exc: urllib.error.HTTPError) -> str:
+ """Return a bounded provider diagnostic without exposing response headers or credentials."""
+ message = ""
+ try:
+  payload = json.loads(exc.read(4096).decode("utf-8", errors="replace"))
+  if isinstance(payload, dict):
+   error = payload.get("error", {})
+   if isinstance(error, dict):
+    message = str(error.get("message", ""))
+ except (OSError, ValueError, TypeError):
+  message = ""
+ if not message:
+  message = str(exc.reason or "No provider message supplied")
+ message = redact(message)
+ return f"GEMINI_API_ERROR: HTTP {exc.code}: {safe(message, 300)}"
+
 def summary(text: str) -> None:
  path=os.environ.get("GITHUB_STEP_SUMMARY")
  if path:
   with open(path,"a",encoding="utf-8") as f: f.write(text+"\n")
  print(text)
+
 def main() -> int:
  key=os.environ.get("GEMINI_API_KEY","")
  if not key: summary("## AI Test Review\n\nSKIPPED: repository secret GEMINI_API_KEY is not configured."); return 0
@@ -97,7 +123,15 @@ def main() -> int:
   lines += ["","### Missing test cases"] + ([f"- {safe(x,400)}" for x in missing[:15]] or ["- None identified."])
   lines += ["","### Suggested commands (not executed)"] + ([f"- {safe(x,200)}" for x in commands[:10]] or ["- None supplied."])
   summary("\n".join(lines))
- except (urllib.error.URLError,urllib.error.HTTPError,KeyError,ValueError,TypeError) as exc:
-  summary(f"## Gemini AI Test Review\n\nUNAVAILABLE: review failed ({type(exc).__name__}). Deterministic CI is unchanged.")
+ except urllib.error.HTTPError as exc:
+  summary("## Gemini AI Test Review\n\n" + http_error_summary(exc) + "\n\nReview unavailable; deterministic CI is unchanged.")
+  return 1
+ except urllib.error.URLError as exc:
+  summary(f"## Gemini AI Test Review\n\nGEMINI_NETWORK_ERROR: {safe(exc.reason, 200)}\n\nReview unavailable; deterministic CI is unchanged.")
+  return 1
+ except (KeyError, ValueError, TypeError) as exc:
+  summary(f"## Gemini AI Test Review\n\nGEMINI_REVIEW_ERROR: {type(exc).__name__}: {safe(exc, 200)}\n\nReview unavailable; deterministic CI is unchanged.")
+  return 1
  return 0
+
 if __name__=="__main__": sys.exit(main())
