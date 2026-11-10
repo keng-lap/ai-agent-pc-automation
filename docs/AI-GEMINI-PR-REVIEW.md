@@ -31,9 +31,10 @@ A repository administrator must add a GitHub Actions repository secret:
 1. Open repository Settings.
 2. Go to Secrets and variables → Actions.
 3. Select New repository secret.
-4. Name it GEMINI_API_KEY and paste the Google AI Studio Gemini API key as the value.
+4. Create a new Gemini API key in [Google AI Studio](https://aistudio.google.com/app/apikey). Prefer the current authorization-key type and restrict it to the Gemini API.
+5. Name the GitHub secret GEMINI_API_KEY and paste the key as its value.
 
-The key is not committed and cannot be configured by this workflow. If absent, the review is reported as SKIPPED.
+The key is not committed and cannot be configured by this workflow. If absent, the review is reported as SKIPPED. Monitor usage and quotas in AI Studio.
 
 ## Limits
 - The first associated PR is reviewed; unusual runs associated with multiple PRs are not expanded into multiple paid requests.
