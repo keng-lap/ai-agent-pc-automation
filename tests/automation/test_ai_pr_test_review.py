@@ -1,9 +1,20 @@
+import json
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import ai_pr_test_review as reviewer
+
+
+class FakeHTTPError:
+    def __init__(self, code, reason, body):
+        self.code = code
+        self.reason = reason
+        self._body = body
+
+    def read(self, limit):
+        return self._body[:limit]
 
 
 class ReviewInputTests(unittest.TestCase):
@@ -45,6 +56,24 @@ class ReviewInputTests(unittest.TestCase):
         self.assertNotIn("<script>", result)
         self.assertIn("&lt;script&gt;", result)
         self.assertIn(r"\|", result)
+
+    def test_http_error_summary_reports_status_and_safe_provider_message(self):
+        body = json.dumps({
+            "error": {
+                "message": "API key not valid. Example leaked key AIza0123456789abcdefghijklmnopqrstuvwxyzABCDE"
+            }
+        }).encode()
+        error = FakeHTTPError(403, "Forbidden", body)
+        result = reviewer.http_error_summary(error)
+        self.assertIn("GEMINI_API_ERROR: HTTP 403", result)
+        self.assertIn("API key not valid", result)
+        self.assertNotIn("AIza", result)
+
+    def test_http_error_summary_handles_non_json_provider_response(self):
+        error = FakeHTTPError(429, "Too Many Requests", b"not-json")
+        result = reviewer.http_error_summary(error)
+        self.assertIn("GEMINI_API_ERROR: HTTP 429", result)
+        self.assertIn("Too Many Requests", result)
 
 
 if __name__ == "__main__":

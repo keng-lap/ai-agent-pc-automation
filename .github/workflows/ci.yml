@@ -29,6 +29,9 @@ jobs:
           FRONTEND_PORT: "4200"
           LOCAL_AGENT_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         run: python -m pytest ../../tests/backend
+      - name: Run AI reviewer unit tests
+        working-directory: src/backend
+        run: python -m unittest discover -s ../../tests/automation -v
       - name: Run Ruff
         working-directory: src/backend
         run: ruff check agent_backend ../../tests/backend

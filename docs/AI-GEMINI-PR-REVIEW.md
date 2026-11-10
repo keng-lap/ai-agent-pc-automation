@@ -16,7 +16,7 @@ Status: Approved for implementation by the Product Owner on 2026-11-10. Advisory
 - The Gemini API key is available only to the trusted review step and is sent in the x-goog-api-key header, never in the prompt or logs.
 - PR diff text is untrusted input. The prompt treats it as data, not instructions. Model output is escaped and bounded before appearing in the run summary.
 - Gemini output is advisory. It cannot satisfy deterministic CI, certify security, change tests, run commands, write to GitHub, or approve/merge a PR.
-- Gemini/API failures do not fail or weaken existing CI.
+- Gemini/API failures do not fail or weaken deterministic CI. The separate AI review workflow reports provider/network failures as a failed AI-review job so the status is not confused with a successful review.
 
 ## Data minimization
 - Only patches for selected source, test, and workflow extensions are considered.
@@ -35,6 +35,12 @@ A repository administrator must add a GitHub Actions repository secret:
 5. Name the GitHub secret GEMINI_API_KEY and paste the key as its value.
 
 The key is not committed and cannot be configured by this workflow. If absent, the review is reported as SKIPPED. Monitor usage and quotas in AI Studio.
+
+## Failure reporting
+- HTTP failures are reported with the HTTP status and a bounded provider error message; response headers and credentials are never printed.
+- Network failures and malformed/unexpected responses receive distinct GEMINI_NETWORK_ERROR or GEMINI_REVIEW_ERROR statuses.
+- A Gemini API or network failure exits the AI-review step unsuccessfully. This marks only the separate advisory AI-review workflow as failed; it does not change deterministic CI results or merge requirements.
+- A failed AI-review job is not evidence that the PR's deterministic tests failed. Conversely, a successful job is only meaningful when its summary contains a Gemini review, not SKIPPED or an error status.
 
 ## Limits
 - The first associated PR is reviewed; unusual runs associated with multiple PRs are not expanded into multiple paid requests.
