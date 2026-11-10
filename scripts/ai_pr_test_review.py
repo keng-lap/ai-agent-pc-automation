@@ -7,6 +7,7 @@ from typing import Any
 
 MODEL = "gemini-3.1-flash-lite"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+MODELS_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 MAX_FILES, MAX_FILE_CHARS, MAX_DIFF_CHARS, MAX_OUTPUT_TOKENS = 20, 4000, 28000, 2500
 EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".html", ".scss", ".css", ".java", ".go", ".rs", ".yml", ".yaml"}
 SENSITIVE = {".env", "secrets", "secret", "credentials", "credential", "certificates", "private", "keys"}
@@ -60,6 +61,35 @@ def build_payload(system_instruction: str, prompt: str) -> dict[str, Any]:
    "responseMimeType": "application/json",
   },
  }
+
+def model_supports_generate_content(key: str) -> bool:
+ """Verify the Developer API exposes the configured model and method."""
+ from urllib.parse import urlencode
+ page_token = None
+ for _ in range(5):
+  params = {"pageSize": 100}
+  if page_token:
+   params["pageToken"] = page_token
+  req = urllib.request.Request(
+   MODELS_ENDPOINT + "?" + urlencode(params),
+   headers={"Accept": "application/json", "x-goog-api-key": key},
+  )
+  with urllib.request.urlopen(req, timeout=20) as response:
+   payload = json.loads(response.read().decode("utf-8"))
+  models = payload.get("models", []) if isinstance(payload, dict) else []
+  if not isinstance(models, list):
+   raise ValueError("Gemini models response has an invalid shape")
+  for item in models:
+   if not isinstance(item, dict):
+    continue
+   if item.get("name") == f"models/{MODEL}":
+    methods = item.get("supportedGenerationMethods", [])
+    return isinstance(methods, list) and "generateContent" in methods
+  page_token = payload.get("nextPageToken") if isinstance(payload, dict) else None
+  if not page_token:
+   return False
+ return False
+
 
 def review(diff: str, number: int, key: str) -> dict[str,Any]:
  system_instruction = """
@@ -144,6 +174,13 @@ def main() -> int:
   if not isinstance(prs,list) or not prs: summary("## AI Test Review\n\nSKIPPED: no associated pull request found."); return 0
   number=int(prs[0]["number"]); diff,files,omitted=collect_diff(repo,number,token)
   if not diff: summary(f"## AI Test Review — PR #{number}\n\nLIMITED: no eligible source/test/workflow patch available."); return 0
+  if not model_supports_generate_content(key):
+   summary(
+    f"## Gemini AI Test Review — PR #{number}\\n\\n"
+    f"GEMINI_MODEL_UNAVAILABLE: {MODEL} is not listed with generateContent support "
+    "for this API key. Check the key's Gemini Developer API project and model access."
+   )
+   return 1
   result=review(diff,number,key)
   findings,missing,commands=result.get("findings",[]),result.get("missing_tests",[]),result.get("test_commands",[])
   if not isinstance(findings,list): findings=[]
