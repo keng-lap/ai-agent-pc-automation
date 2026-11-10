@@ -183,6 +183,7 @@ def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
     )
     assert store.load(owner_sub="owner-sub") == RFC_SECRET
 
+
 def test_dpapi_output_cleanup_releases_data_and_description_allocations():
     target_buffer = ctypes.create_string_buffer(b"decrypted-secret")
     target = WindowsDpapiProtector._DataBlob(
