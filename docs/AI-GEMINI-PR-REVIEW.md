@@ -6,7 +6,7 @@ Status: Approved for implementation by the Product Owner on 2026-11-10. Advisory
 1. A minimal pull_request workflow receives PR open/update events with empty token permissions; it does not check out or execute PR content.
 2. A separate workflow_run workflow runs from the trusted default branch after that trigger completes.
 3. The trusted reviewer fetches changed-file patches through the GitHub API, filters eligible source/test/workflow files, redacts common secret formats, and applies strict limits.
-4. It sends one bounded request to Google Gemini API using gemini-2.5-flash.
+4. It sends one bounded request to Google Gemini API using the stable `gemini-3.5-flash-lite` model.
 5. The result is written to the GitHub Actions run summary. It does not post PR comments, create checks, modify files, run generated commands, or merge.
 
 ## Trust boundaries
@@ -48,8 +48,12 @@ The key is not committed and cannot be configured by this workflow. If absent, t
 - Redaction is heuristic and cannot guarantee detection of every secret format.
 - The reviewer does not execute tests and cannot certify generated suggestions.
 - The report is in the Actions run summary, not a PR comment. This preserves read-only GitHub permissions.
+- The model is `gemini-3.5-flash-lite`, the documented replacement for Gemini 2.5 Flash. Gemini 2.5 API access is restricted to existing users who actively used those models; this repository must not depend on legacy access.
+- The Gemini 3.5 request omits deprecated sampling parameters such as `temperature`, `top_p`, and `top_k`.
 - Model and endpoint changes require reviewed repository changes.
 
 ## References
+- Google Gemini models: https://ai.google.dev/gemini-api/docs/models
+- Gemini 3.5 Flash-Lite migration: https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.6
 - Google Gemini API: https://ai.google.dev/api/generate-content
 - GitHub secure use: https://docs.github.com/en/actions/reference/security/secure-use
