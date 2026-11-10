@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
@@ -23,6 +24,58 @@ class ReviewInputTests(unittest.TestCase):
         self.assertTrue(reviewer.ENDPOINT.endswith(
             "/v1beta/models/gemini-3.1-flash-lite:generateContent"
         ))
+
+    def test_model_preflight_accepts_exact_model_with_generate_content(self):
+        payload = {"models": [{
+            "name": "models/gemini-3.1-flash-lite",
+            "supportedGenerationMethods": ["generateContent", "countTokens"],
+        }]}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return json.dumps(payload).encode()
+
+        with mock.patch.object(reviewer.urllib.request, "urlopen", return_value=FakeResponse()) as urlopen:
+            self.assertTrue(reviewer.model_supports_generate_content("test-key"))
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, reviewer.MODELS_ENDPOINT + "?pageSize=100")
+        self.assertEqual(request.get_header("X-goog-api-key"), "test-key")
+
+    def test_model_preflight_rejects_model_without_generate_content(self):
+        payload = {"models": [{
+            "name": "models/gemini-3.1-flash-lite",
+            "supportedGenerationMethods": ["countTokens"],
+        }]}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return json.dumps(payload).encode()
+
+        with mock.patch.object(reviewer.urllib.request, "urlopen", return_value=FakeResponse()):
+            self.assertFalse(reviewer.model_supports_generate_content("test-key"))
+
+    def test_model_preflight_rejects_unlisted_model(self):
+        payload = {"models": [{"name": "models/gemini-2.5-flash",
+                               "supportedGenerationMethods": ["generateContent"]}]}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return json.dumps(payload).encode()
+
+        with mock.patch.object(reviewer.urllib.request, "urlopen", return_value=FakeResponse()):
+            self.assertFalse(reviewer.model_supports_generate_content("test-key"))
 
     def test_generation_payload_omits_deprecated_sampling_parameters(self):
         payload = reviewer.build_payload("system rules", "review this diff")
