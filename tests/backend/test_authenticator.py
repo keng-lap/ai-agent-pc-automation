@@ -1,4 +1,5 @@
 import base64
+import ctypes
 import json
 import os
 
@@ -181,3 +182,44 @@ def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
         code=code_at(RFC_SECRET, 90),
     )
     assert store.load(owner_sub="owner-sub") == RFC_SECRET
+
+def test_dpapi_output_cleanup_releases_data_and_description_allocations():
+    target_buffer = ctypes.create_string_buffer(b"decrypted-secret")
+    target = WindowsDpapiProtector._DataBlob(
+        len(b"decrypted-secret"),
+        ctypes.cast(target_buffer, ctypes.POINTER(ctypes.c_byte)),
+    )
+    description_buffer = ctypes.create_unicode_buffer("DPAPI description")
+    description = ctypes.cast(description_buffer, ctypes.c_wchar_p)
+    freed = []
+
+    class FakeKernel32:
+        def LocalFree(self, pointer):
+            freed.append(ctypes.cast(pointer, ctypes.c_void_p).value)
+
+    expected = {
+        ctypes.cast(target.pbData, ctypes.c_void_p).value,
+        ctypes.cast(description, ctypes.c_void_p).value,
+    }
+
+    WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target, description)
+
+    assert len(freed) == 2
+    assert set(freed) == expected
+
+
+def test_dpapi_output_cleanup_handles_missing_description_allocation():
+    target_buffer = ctypes.create_string_buffer(b"encrypted-secret")
+    target = WindowsDpapiProtector._DataBlob(
+        len(b"encrypted-secret"),
+        ctypes.cast(target_buffer, ctypes.POINTER(ctypes.c_byte)),
+    )
+    freed = []
+
+    class FakeKernel32:
+        def LocalFree(self, pointer):
+            freed.append(ctypes.cast(pointer, ctypes.c_void_p).value)
+
+    WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target)
+
+    assert freed == [ctypes.cast(target.pbData, ctypes.c_void_p).value]
