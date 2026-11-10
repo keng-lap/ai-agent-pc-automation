@@ -14,7 +14,7 @@ PATTERNS = [
  re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"), re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
  re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b"), re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
  re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]{12,}"),
- re.compile(r"""(?i)\b([A-Z0-9_]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd)[A-Z0-9_]*)\b(\s*[:=]\s*)(["']?)[^\s"' ,;]{8,}""")
+ re.compile(r"""(?i)\b([A-Z0-9_]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|key|token|secret|password|passwd)[A-Z0-9_]*)\b(\s*[:=]\s*)(["']?)[^\s"' ,;]{8,}""")
 ]
 def reviewable_path(path: str) -> bool:
  p=PurePosixPath(path)
@@ -24,7 +24,7 @@ def reviewable_path(path: str) -> bool:
  return p.suffix.lower() in EXTENSIONS
 def redact(text: str) -> str:
  for pattern in PATTERNS:
-  if "api[_-]?" in pattern.pattern: text=pattern.sub(lambda m:f"{m.group(1)}{m.group(2)}[REDACTED]",text)
+  if pattern is PATTERNS[-1]: text=pattern.sub(lambda m:f"{m.group(1)}{m.group(2)}[REDACTED]",text)
   else: text=pattern.sub("[REDACTED_SECRET]",text)
  return text
 def gh_get(url: str, token: str) -> Any:
@@ -67,7 +67,9 @@ PR number: {number}
  if not isinstance(result,dict): raise ValueError("Invalid response")
  return result
 def safe(value: Any, limit: int=600) -> str:
- return html.escape(str(value if value is not None else "").strip(),quote=True).replace("|",r"\|")[:limit]
+ text = " ".join(str(value if value is not None else "").split())
+ text = text.replace("[","").replace("]","").replace("(","").replace(")","")
+ return html.escape(text,quote=True).replace("|",r"\|")[:limit]
 def summary(text: str) -> None:
  path=os.environ.get("GITHUB_STEP_SUMMARY")
  if path:
