@@ -44,7 +44,7 @@ class ReviewInputTests(unittest.TestCase):
         result = reviewer.safe('<script>alert("x")</script>|bad', 100)
         self.assertNotIn("<script>", result)
         self.assertIn("&lt;script&gt;", result)
-        self.assertIn(r"\\|", result)
+        self.assertIn(r"\|", result)
 
 
 if __name__ == "__main__":
