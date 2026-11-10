@@ -184,7 +184,7 @@ def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
 
 
 def test_dpapi_output_cleanup_releases_data_and_description_allocations(monkeypatch):
-    import agent_backend.authenticator as authenticator
+    from agent_backend import authenticator
 
     data_pointer = object()
     description_pointer = object()
@@ -212,7 +212,7 @@ def test_dpapi_output_cleanup_releases_data_and_description_allocations(monkeypa
 
 
 def test_dpapi_output_cleanup_handles_missing_description_allocation(monkeypatch):
-    import agent_backend.authenticator as authenticator
+    from agent_backend import authenticator
 
     data_pointer = object()
     target = type("DataBlobStub", (), {"pbData": data_pointer})()
