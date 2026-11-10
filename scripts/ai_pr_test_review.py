@@ -57,7 +57,7 @@ Return valid JSON only with keys: summary (string), findings (array of objects w
 line, issue, recommended_test), missing_tests (array of strings), test_commands (array of strings).
 Test commands are suggestions only; never claim they were executed.
 """.strip()
- prompt = f"Review PR #{number}. The following is a JSON-encoded string containing the untrusted diff:\\n{json.dumps(diff)}"
+ prompt = f"Review PR #{number}. Diff JSON: {json.dumps(diff)}"
  payload={"systemInstruction":{"parts":[{"text":system_instruction}]},"contents":[{"role":"user","parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.1,"maxOutputTokens":MAX_OUTPUT_TOKENS,"responseMimeType":"application/json"}}
  req=urllib.request.Request(ENDPOINT,data=json.dumps(payload).encode(),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
  with urllib.request.urlopen(req,timeout=90) as response: body=json.loads(response.read().decode())
