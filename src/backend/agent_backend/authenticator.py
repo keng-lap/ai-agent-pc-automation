@@ -84,53 +84,61 @@ class WindowsDpapiProtector:
             ctypes.cast(buffer, ctypes.POINTER(ctypes.c_byte)),
         )
         target = cls._DataBlob()
-        if protect:
-            function = crypt32.CryptProtectData
-            function.argtypes = [
-                ctypes.POINTER(cls._DataBlob),
-                ctypes.c_wchar_p,
-                ctypes.POINTER(cls._DataBlob),
-                ctypes.c_void_p,
-                ctypes.c_void_p,
-                wintypes.DWORD,
-                ctypes.POINTER(cls._DataBlob),
-            ]
-            succeeded = function(
-                ctypes.byref(source),
-                "AI Agent TOTP authenticator",
-                None,
-                None,
-                None,
-                cls._CRYPTPROTECT_UI_FORBIDDEN,
-                ctypes.byref(target),
-            )
-        else:
-            description = ctypes.c_wchar_p()
-            function = crypt32.CryptUnprotectData
-            function.argtypes = [
-                ctypes.POINTER(cls._DataBlob),
-                ctypes.POINTER(ctypes.c_wchar_p),
-                ctypes.POINTER(cls._DataBlob),
-                ctypes.c_void_p,
-                ctypes.c_void_p,
-                wintypes.DWORD,
-                ctypes.POINTER(cls._DataBlob),
-            ]
-            succeeded = function(
-                ctypes.byref(source),
-                ctypes.byref(description),
-                None,
-                None,
-                None,
-                cls._CRYPTPROTECT_UI_FORBIDDEN,
-                ctypes.byref(target),
-            )
-        if not succeeded:
-            raise SecretStoreError("Windows secret protection operation failed.")
+        description = ctypes.c_wchar_p() if not protect else None
         try:
+            if protect:
+                function = crypt32.CryptProtectData
+                function.argtypes = [
+                    ctypes.POINTER(cls._DataBlob),
+                    ctypes.c_wchar_p,
+                    ctypes.POINTER(cls._DataBlob),
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    wintypes.DWORD,
+                    ctypes.POINTER(cls._DataBlob),
+                ]
+                succeeded = function(
+                    ctypes.byref(source),
+                    "AI Agent TOTP authenticator",
+                    None,
+                    None,
+                    None,
+                    cls._CRYPTPROTECT_UI_FORBIDDEN,
+                    ctypes.byref(target),
+                )
+            else:
+                function = crypt32.CryptUnprotectData
+                function.argtypes = [
+                    ctypes.POINTER(cls._DataBlob),
+                    ctypes.POINTER(ctypes.c_wchar_p),
+                    ctypes.POINTER(cls._DataBlob),
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    wintypes.DWORD,
+                    ctypes.POINTER(cls._DataBlob),
+                ]
+                succeeded = function(
+                    ctypes.byref(source),
+                    ctypes.byref(description),
+                    None,
+                    None,
+                    None,
+                    cls._CRYPTPROTECT_UI_FORBIDDEN,
+                    ctypes.byref(target),
+                )
+            if not succeeded:
+                raise SecretStoreError("Windows secret protection operation failed.")
             return ctypes.string_at(target.pbData, target.cbData)
         finally:
-            kernel32.LocalFree(target.pbData)
+            cls._free_output_buffers(kernel32, target, description)
+
+    @staticmethod
+    def _free_output_buffers(kernel32, target, description=None) -> None:
+        """Release every allocation returned by a DPAPI operation."""
+        if target.pbData:
+            kernel32.LocalFree(ctypes.cast(target.pbData, wintypes.HLOCAL))
+        if description:
+            kernel32.LocalFree(ctypes.cast(description, wintypes.HLOCAL))
 
 
 class EncryptedTotpSecretFileStore:

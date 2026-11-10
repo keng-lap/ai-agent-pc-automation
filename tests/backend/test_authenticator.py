@@ -181,3 +181,54 @@ def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
         code=code_at(RFC_SECRET, 90),
     )
     assert store.load(owner_sub="owner-sub") == RFC_SECRET
+
+
+def test_dpapi_output_cleanup_releases_data_and_description_allocations(monkeypatch):
+    from agent_backend import authenticator
+
+    data_pointer = object()
+    description_pointer = object()
+    target = type("DataBlobStub", (), {"pbData": data_pointer})()
+    freed = []
+
+    class FakeCtypes:
+        @staticmethod
+        def cast(pointer, _pointer_type):
+            return pointer
+
+    class FakeKernel32:
+        def LocalFree(self, pointer):
+            freed.append(pointer)
+
+    monkeypatch.setattr(authenticator, "ctypes", FakeCtypes)
+
+    WindowsDpapiProtector._free_output_buffers(
+        FakeKernel32(),
+        target,
+        description_pointer,
+    )
+
+    assert freed == [data_pointer, description_pointer]
+
+
+def test_dpapi_output_cleanup_handles_missing_description_allocation(monkeypatch):
+    from agent_backend import authenticator
+
+    data_pointer = object()
+    target = type("DataBlobStub", (), {"pbData": data_pointer})()
+    freed = []
+
+    class FakeCtypes:
+        @staticmethod
+        def cast(pointer, _pointer_type):
+            return pointer
+
+    class FakeKernel32:
+        def LocalFree(self, pointer):
+            freed.append(pointer)
+
+    monkeypatch.setattr(authenticator, "ctypes", FakeCtypes)
+
+    WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target)
+
+    assert freed == [data_pointer]
