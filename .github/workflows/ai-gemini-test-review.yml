@@ -1,0 +1,31 @@
+name: AI Gemini Test Review
+on:
+  workflow_run:
+    workflows: ["AI PR Diff Trigger"]
+    types: [completed]
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ai-gemini-review-\${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+jobs:
+  review:
+    if: \${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out trusted default branch only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: \${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Run bounded Gemini PR review
+        env:
+          GITHUB_TOKEN: \${{ github.token }}
+          GITHUB_REPOSITORY: \${{ github.repository }}
+          WORKFLOW_RUN_ID: \${{ github.event.workflow_run.id }}
+          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+        run: python3 scripts/ai_pr_test_review.py
