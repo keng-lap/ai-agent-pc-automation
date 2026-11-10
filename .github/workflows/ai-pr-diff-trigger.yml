@@ -1,0 +1,15 @@
+name: AI PR Diff Trigger
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions: {}
+concurrency:
+  group: ai-pr-diff-trigger-\${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Signal PR update
+        run: echo "PR update received; trusted reviewer will fetch patches through GitHub API."
