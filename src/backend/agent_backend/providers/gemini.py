@@ -13,7 +13,7 @@ import httpx2
 from google import genai
 from google.genai import errors, types
 
-MODEL_NAME = "gemini-3.1-flash-lite"
+MODEL_NAME = "gemini-3.8-flash"
 
 # Backend-owned instruction is supplied on every chat generation request.
 CHAT_SYSTEM_INSTRUCTION = """You are the concise assistant in a local Windows PC automation application.
