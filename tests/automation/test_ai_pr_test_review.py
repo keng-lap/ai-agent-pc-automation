@@ -1,12 +1,20 @@
-import io
 import json
 import sys
 import unittest
 from pathlib import Path
-from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import ai_pr_test_review as reviewer
+
+
+class FakeHTTPError:
+    def __init__(self, code, reason, body):
+        self.code = code
+        self.reason = reason
+        self._body = body
+
+    def read(self, limit):
+        return self._body[:limit]
 
 
 class ReviewInputTests(unittest.TestCase):
@@ -55,26 +63,14 @@ class ReviewInputTests(unittest.TestCase):
                 "message": "API key not valid. Example leaked key AIza0123456789abcdefghijklmnopqrstuvwxyzABCDE"
             }
         }).encode()
-        error = HTTPError(
-            "https://generativelanguage.googleapis.com/",
-            403,
-            "Forbidden",
-            hdrs=None,
-            fp=io.BytesIO(body),
-        )
+        error = FakeHTTPError(403, "Forbidden", body)
         result = reviewer.http_error_summary(error)
         self.assertIn("GEMINI_API_ERROR: HTTP 403", result)
         self.assertIn("API key not valid", result)
         self.assertNotIn("AIza", result)
 
     def test_http_error_summary_handles_non_json_provider_response(self):
-        error = HTTPError(
-            "https://generativelanguage.googleapis.com/",
-            429,
-            "Too Many Requests",
-            hdrs=None,
-            fp=io.BytesIO(b"not-json"),
-        )
+        error = FakeHTTPError(429, "Too Many Requests", b"not-json")
         result = reviewer.http_error_summary(error)
         self.assertIn("GEMINI_API_ERROR: HTTP 429", result)
         self.assertIn("Too Many Requests", result)
