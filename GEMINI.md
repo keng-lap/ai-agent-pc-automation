@@ -49,9 +49,10 @@
 5. For documentation-only work, make the smallest consistent change and verify links/claims.
 6. For frontend design or implementation, read `.agents/skills/frontend-design/SKILL.md` and only the relevant references. Inspect the current Angular application and reuse its design system; do not add another framework or graph library without compatibility review and required approval.
 7. For non-trivial or security-sensitive work, read .agents/skills/secure-development/SKILL.md and follow docs/SECURE-DEVELOPMENT-STANDARD.md before implementation.
-8. For runtime work, confirm explicit authorization exists before editing code; add/update tests and request the required review.
-9. Report only: what changed, validation evidence, blockers (if any), and the next required approval/action.
-10. Do not claim a test, CI run, local Windows test, PR merge, or runtime behavior succeeded unless verified.
+8. Before proposing or integrating any external tool, AI provider, API, or reviewer, read `.agents/skills/evidence-first-tool-adoption/SKILL.md` and satisfy its evidence, credential-safety, bounded-pilot, and end-to-end verification gates.
+9. For runtime work, confirm explicit authorization exists before editing code; add/update tests and request the required review.
+10. Report only: what changed, validation evidence, blockers (if any), and the next required approval/action.
+11. Do not claim a test, CI run, local Windows test, PR merge, or runtime behavior succeeded unless verified.
 
 ## 5. Communication format
 
