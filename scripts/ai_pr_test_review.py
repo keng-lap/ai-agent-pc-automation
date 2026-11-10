@@ -5,7 +5,7 @@ import html, json, os, re, sys, urllib.error, urllib.request
 from pathlib import PurePosixPath
 from typing import Any
 
-MODEL = "gemini-3.1-flash-lite"
+MODEL = "gemini-3.8-flash"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 MODELS_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 MAX_FILES, MAX_FILE_CHARS, MAX_DIFF_CHARS, MAX_OUTPUT_TOKENS = 20, 4000, 28000, 2500
