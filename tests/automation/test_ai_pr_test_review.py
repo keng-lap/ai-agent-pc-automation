@@ -17,7 +17,7 @@ class ReviewInputTests(unittest.TestCase):
 
     def test_common_provider_and_repository_tokens_are_redacted(self):
         sample = (
-            "token=github_pat_abcdefghijklmnopqrstuvwxyz1234567890 "
+            "id=github_pat_abcdefghijklmnopqrstuvwxyz1234567890 "
             "AIza0123456789abcdefghijklmnopqrstuvwxyzABCDE"
         )
         result = reviewer.redact(sample)
