@@ -1,5 +1,4 @@
 import base64
-import ctypes
 import json
 import os
 
@@ -184,43 +183,52 @@ def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
     assert store.load(owner_sub="owner-sub") == RFC_SECRET
 
 
-def test_dpapi_output_cleanup_releases_data_and_description_allocations():
-    target_buffer = ctypes.create_string_buffer(b"decrypted-secret")
-    target = WindowsDpapiProtector._DataBlob(
-        len(b"decrypted-secret"),
-        ctypes.cast(target_buffer, ctypes.POINTER(ctypes.c_byte)),
-    )
-    description_buffer = ctypes.create_unicode_buffer("DPAPI description")
-    description = ctypes.cast(description_buffer, ctypes.c_wchar_p)
+def test_dpapi_output_cleanup_releases_data_and_description_allocations(monkeypatch):
+    import agent_backend.authenticator as authenticator
+
+    data_pointer = object()
+    description_pointer = object()
+    target = type("DataBlobStub", (), {"pbData": data_pointer})()
     freed = []
+
+    class FakeCtypes:
+        @staticmethod
+        def cast(pointer, _pointer_type):
+            return pointer
 
     class FakeKernel32:
         def LocalFree(self, pointer):
-            freed.append(ctypes.cast(pointer, ctypes.c_void_p).value)
+            freed.append(pointer)
 
-    expected = {
-        ctypes.cast(target.pbData, ctypes.c_void_p).value,
-        ctypes.cast(description, ctypes.c_void_p).value,
-    }
+    monkeypatch.setattr(authenticator, "ctypes", FakeCtypes)
 
-    WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target, description)
-
-    assert len(freed) == 2
-    assert set(freed) == expected
-
-
-def test_dpapi_output_cleanup_handles_missing_description_allocation():
-    target_buffer = ctypes.create_string_buffer(b"encrypted-secret")
-    target = WindowsDpapiProtector._DataBlob(
-        len(b"encrypted-secret"),
-        ctypes.cast(target_buffer, ctypes.POINTER(ctypes.c_byte)),
+    WindowsDpapiProtector._free_output_buffers(
+        FakeKernel32(),
+        target,
+        description_pointer,
     )
+
+    assert freed == [data_pointer, description_pointer]
+
+
+def test_dpapi_output_cleanup_handles_missing_description_allocation(monkeypatch):
+    import agent_backend.authenticator as authenticator
+
+    data_pointer = object()
+    target = type("DataBlobStub", (), {"pbData": data_pointer})()
     freed = []
+
+    class FakeCtypes:
+        @staticmethod
+        def cast(pointer, _pointer_type):
+            return pointer
 
     class FakeKernel32:
         def LocalFree(self, pointer):
-            freed.append(ctypes.cast(pointer, ctypes.c_void_p).value)
+            freed.append(pointer)
+
+    monkeypatch.setattr(authenticator, "ctypes", FakeCtypes)
 
     WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target)
 
-    assert freed == [ctypes.cast(target.pbData, ctypes.c_void_p).value]
+    assert freed == [data_pointer]
