@@ -10,7 +10,7 @@ import { ChatApi } from './chat/chat-api';
         <div>
           <p class="eyebrow">AI PROVIDER</p>
           <h2 id="gemini-settings-title">ตั้งค่า Google Gemini</h2>
-          <p class="model">Model: gemini-3.1-flash-lite</p>
+          <p class="model">Model: gemini-3.8-flash</p>
         </div>
         <span class="state" [class.ready]="configured()">{{ configured() ? 'บันทึกแล้ว' : 'ยังไม่ตั้งค่า' }}</span>
       </div>
