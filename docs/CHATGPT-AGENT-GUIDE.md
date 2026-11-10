@@ -27,6 +27,7 @@ This guide explains how ChatGPT should work on this repository when the user ask
    - `debugging-token` for diagnosis and concise reporting
    - `documentation-decisions` for documentation and decision records
    - `frontend-design` for Angular UX/UI, design system, workflow canvas, accessibility, and frontend performance; also read only the relevant reference files in its references folder
+   - `evidence-first-tool-adoption` before proposing or integrating external tools, providers, API keys, CI integrations, or AI reviewers
 6. Report a checkpoint in no more than five concise Thai bullets, then continue the next already-authorized task.
 
 ## Work and approval rules

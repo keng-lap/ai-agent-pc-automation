@@ -10,6 +10,7 @@ Before acting, read README.md, docs/PROJECT.md, docs/ROADMAP.md, the active phas
 - Use fixed backend-owned tool IDs, strict typed schemas, policy checks, exact-action approvals, and fixed dispatch only. Never add arbitrary shell/PowerShell/CMD/script execution, dynamic imports, eval, or model-selected handlers.
 - Use synthetic fixtures, mocks, spies, and isolated temporary directories. Never inspect or mutate the user's live PC.
 - Run documented checks and relevant security tests. Report PASS, FAIL, PENDING, and NOT VERIFIED accurately.
+- Before recommending or integrating any external tool, AI provider, API, or reviewer, read `.agents/skills/evidence-first-tool-adoption/SKILL.md`; require independent usage evidence and end-to-end proof of the intended workflow before asking the Product Owner to configure credentials or adopting it.
 - Inspect the full diff for unrelated changes, weakened tests, secrets, and scope expansion.
 - Stop with BLOCKED when authorization, a security invariant, or meaningful verification is missing.
 

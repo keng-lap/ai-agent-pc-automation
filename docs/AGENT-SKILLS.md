@@ -23,6 +23,7 @@ Skills use the Agent Skills format: one folder per skill with a required `SKILL.
 | `debugging-token` | Root-cause diagnosis and safe context/token compression |
 | `documentation-decisions` | Consistent docs, decision records, status, and handoff |
 | `frontend-design` | Thai-first UX, Angular UI, design system, accessibility, workflow canvas, and measured frontend performance |
+| `evidence-first-tool-adoption` | Verify independent usage, safe credentials, bounded pilots, and real end-to-end outcomes before adopting external tools or AI reviewers |
 
 ## Operating principles
 
