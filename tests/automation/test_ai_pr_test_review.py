@@ -19,9 +19,9 @@ class FakeHTTPError:
 
 class ReviewInputTests(unittest.TestCase):
     def test_uses_supported_flash_lite_model_and_endpoint(self):
-        self.assertEqual(reviewer.MODEL, "gemini-3.5-flash-lite")
+        self.assertEqual(reviewer.MODEL, "gemini-3.1-flash-lite")
         self.assertTrue(reviewer.ENDPOINT.endswith(
-            "/v1beta/models/gemini-3.5-flash-lite:generateContent"
+            "/v1beta/models/gemini-3.1-flash-lite:generateContent"
         ))
 
     def test_generation_payload_omits_deprecated_sampling_parameters(self):
@@ -85,6 +85,34 @@ class ReviewInputTests(unittest.TestCase):
         self.assertIn("GEMINI_API_ERROR: HTTP 403", result)
         self.assertIn("API key not valid", result)
         self.assertNotIn("AIza", result)
+
+    def test_http_error_summary_includes_structured_status_and_safe_detail(self):
+        body = json.dumps({
+            "error": {
+                "code": 404,
+                "status": "NOT_FOUND",
+                "message": "Model gemini-3.1-flash-lite was not found",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": "MODEL_NOT_FOUND",
+                        "domain": "generativelanguage.googleapis.com",
+                        "metadata": {
+                            "api_key": "must-not-be-logged",
+                            "project": "private-project"
+                        }
+                    }
+                ],
+            }
+        }).encode()
+        error = FakeHTTPError(404, "Not Found", body)
+        result = reviewer.http_error_summary(error)
+        self.assertIn("HTTP 404", result)
+        self.assertIn("status=NOT_FOUND", result)
+        self.assertIn("MODEL_NOT_FOUND", result)
+        self.assertIn("generativelanguage.googleapis.com", result)
+        self.assertNotIn("must-not-be-logged", result)
+        self.assertNotIn("private-project", result)
 
     def test_http_error_summary_handles_non_json_provider_response(self):
         error = FakeHTTPError(429, "Too Many Requests", b"not-json")

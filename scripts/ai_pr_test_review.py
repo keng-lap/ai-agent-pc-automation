@@ -5,7 +5,7 @@ import html, json, os, re, sys, urllib.error, urllib.request
 from pathlib import PurePosixPath
 from typing import Any
 
-MODEL = "gemini-3.5-flash-lite"
+MODEL = "gemini-3.1-flash-lite"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 MAX_FILES, MAX_FILE_CHARS, MAX_DIFF_CHARS, MAX_OUTPUT_TOKENS = 20, 4000, 28000, 2500
 EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".html", ".scss", ".css", ".java", ".go", ".rs", ".yml", ".yaml"}
@@ -88,20 +88,45 @@ def safe(value: Any, limit: int=600) -> str:
  return html.escape(text,quote=True).replace("|",r"\|")[:limit]
 
 def http_error_summary(exc: urllib.error.HTTPError) -> str:
- """Return a bounded provider diagnostic without exposing response headers or credentials."""
- message = ""
+ """Return bounded structured diagnostics without exposing headers or credentials."""
+ error: dict[str, Any] = {}
  try:
   payload = json.loads(exc.read(4096).decode("utf-8", errors="replace"))
-  if isinstance(payload, dict):
-   error = payload.get("error", {})
-   if isinstance(error, dict):
-    message = str(error.get("message", ""))
+  if isinstance(payload, dict) and isinstance(payload.get("error"), dict):
+   error = payload["error"]
  except (OSError, ValueError, TypeError):
-  message = ""
- if not message:
-  message = str(exc.reason or "No provider message supplied")
- message = redact(message)
- return f"GEMINI_API_ERROR: HTTP {exc.code}: {safe(message, 300)}"
+  pass
+
+ http_code = safe(exc.code, 12)
+ provider_code = safe(error.get("code", ""), 12)
+ status = safe(error.get("status", ""), 48)
+ message = redact(str(error.get("message", "") or exc.reason or "No provider message supplied"))
+
+ # Keep only non-sensitive identifiers from structured detail records. In
+ # particular, do not print arbitrary metadata, headers, URLs, or raw bodies.
+ details: list[str] = []
+ raw_details = error.get("details", [])
+ if isinstance(raw_details, list):
+  for item in raw_details[:4]:
+   if not isinstance(item, dict):
+    continue
+   fields = []
+   for name in ("@type", "reason", "domain"):
+    value = item.get(name)
+    if isinstance(value, str) and value:
+     fields.append(f"{name}={safe(redact(value), 100)}")
+   if fields:
+    details.append(", ".join(fields))
+
+ parts = [f"GEMINI_API_ERROR: HTTP {http_code}"]
+ if provider_code and provider_code != http_code:
+  parts.append(f"code={provider_code}")
+ if status:
+  parts.append(f"status={status}")
+ parts.append(f"message={safe(message, 300)}")
+ if details:
+  parts.append("details=" + "; ".join(details))
+ return " | ".join(parts)
 
 def summary(text: str) -> None:
  path=os.environ.get("GITHUB_STEP_SUMMARY")

@@ -6,7 +6,7 @@ Status: Approved for implementation by the Product Owner on 2026-11-10. Advisory
 1. A minimal pull_request workflow receives PR open/update events with empty token permissions; it does not check out or execute PR content.
 2. A separate workflow_run workflow runs from the trusted default branch after that trigger completes.
 3. The trusted reviewer fetches changed-file patches through the GitHub API, filters eligible source/test/workflow files, redacts common secret formats, and applies strict limits.
-4. It sends one bounded request to Google Gemini API using the stable `gemini-3.5-flash-lite` model.
+4. It sends one bounded request to Google Gemini API using the same `gemini-3.1-flash-lite` model as the local application's Gemini provider.
 5. The result is written to the GitHub Actions run summary. It does not post PR comments, create checks, modify files, run generated commands, or merge.
 
 ## Trust boundaries
@@ -37,7 +37,7 @@ A repository administrator must add a GitHub Actions repository secret:
 The key is not committed and cannot be configured by this workflow. If absent, the review is reported as SKIPPED. Monitor usage and quotas in AI Studio.
 
 ## Failure reporting
-- HTTP failures are reported with the HTTP status and a bounded provider error message; response headers and credentials are never printed.
+- HTTP failures are reported with the HTTP status, provider code/status/message, and a small allowlist of structured detail identifiers; arbitrary metadata, response headers, credentials, and raw bodies are never printed.
 - Network failures and malformed/unexpected responses receive distinct GEMINI_NETWORK_ERROR or GEMINI_REVIEW_ERROR statuses.
 - A Gemini API or network failure exits the AI-review step unsuccessfully. This marks only the separate advisory AI-review workflow as failed; it does not change deterministic CI results or merge requirements.
 - A failed AI-review job is not evidence that the PR's deterministic tests failed. Conversely, a successful job is only meaningful when its summary contains a Gemini review, not SKIPPED or an error status.
@@ -48,7 +48,7 @@ The key is not committed and cannot be configured by this workflow. If absent, t
 - Redaction is heuristic and cannot guarantee detection of every secret format.
 - The reviewer does not execute tests and cannot certify generated suggestions.
 - The report is in the Actions run summary, not a PR comment. This preserves read-only GitHub permissions.
-- The model is `gemini-3.5-flash-lite`, the documented replacement for Gemini 2.5 Flash. Gemini 2.5 API access is restricted to existing users who actively used those models; this repository must not depend on legacy access.
+- The reviewer model is `gemini-3.1-flash-lite`, intentionally aligned with `src/backend/agent_backend/providers/gemini.py` so the app and GitHub Actions exercise the same Gemini model. The reviewer still uses the documented Gemini Developer API REST `generateContent` endpoint; the app uses the Google `google-genai` SDK.
 - The Gemini 3.5 request omits deprecated sampling parameters such as `temperature`, `top_p`, and `top_k`.
 - Model and endpoint changes require reviewed repository changes.
 
