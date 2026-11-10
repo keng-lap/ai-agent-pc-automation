@@ -37,7 +37,7 @@ def test_status_does_not_expose_api_key():
     assert response.status_code == 200
     assert response.json() == {
         "configured": False,
-        "model": "gemini-3.1-flash-lite",
+        "model": "gemini-3.8-flash",
     }
 
 
@@ -80,7 +80,7 @@ def test_test_connection_uses_saved_key(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "connected": True,
-        "model": "gemini-3.1-flash-lite",
+        "model": "gemini-3.8-flash",
     }
     assert calls == ["tested"]
 
@@ -102,7 +102,7 @@ def test_chat_uses_gemini_and_returns_plain_reply(monkeypatch):
     assert response.json() == {
         "reply": "สวัสดีจาก Gemini",
         "provider": "gemini",
-        "model": "gemini-3.1-flash-lite",
+        "model": "gemini-3.8-flash",
         "provider_connected": True,
     }
     assert len(calls) == 1
@@ -137,7 +137,7 @@ def test_structured_plan_uses_gemini_json_schema(monkeypatch):
     result = gemini.generate_structured_plan("Create a plan", Schema)
 
     assert result == Response.text
-    assert calls[0]["model"] == "gemini-3.1-flash-lite"
+    assert calls[0]["model"] == "gemini-3.8-flash"
     assert calls[0]["contents"] == "Create a plan"
     assert calls[0]["config"].response_mime_type == "application/json"
     assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
@@ -165,7 +165,7 @@ def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
 
     assert len(calls) == 2
     for call in calls:
-        assert call["model"] == "gemini-3.1-flash-lite"
+        assert call["model"] == "gemini-3.8-flash"
         assert call["config"].system_instruction == gemini.CHAT_SYSTEM_INSTRUCTION
         assert (
             "Do not ask follow-up questions for optional preferences"
