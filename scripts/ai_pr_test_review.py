@@ -5,7 +5,7 @@ import html, json, os, re, sys, urllib.error, urllib.request
 from pathlib import PurePosixPath
 from typing import Any
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.5-flash-lite"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 MAX_FILES, MAX_FILE_CHARS, MAX_DIFF_CHARS, MAX_OUTPUT_TOKENS = 20, 4000, 28000, 2500
 EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".html", ".scss", ".css", ".java", ".go", ".rs", ".yml", ".yaml"}
@@ -51,6 +51,16 @@ def collect_diff(repo: str, number: int, token: str) -> tuple[str,list[str],int]
   if len(files)<100: break
  return "".join(chunks),included,len(omitted)
 
+def build_payload(system_instruction: str, prompt: str) -> dict[str, Any]:
+ return {
+  "systemInstruction": {"parts": [{"text": system_instruction}]},
+  "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+  "generationConfig": {
+   "maxOutputTokens": MAX_OUTPUT_TOKENS,
+   "responseMimeType": "application/json",
+  },
+ }
+
 def review(diff: str, number: int, key: str) -> dict[str,Any]:
  system_instruction = """
 You are an independent test-design reviewer for a security-sensitive Windows PC automation project.
@@ -65,7 +75,7 @@ line, issue, recommended_test), missing_tests (array of strings), test_commands 
 Test commands are suggestions only; never claim they were executed.
 """.strip()
  prompt = f"Review PR #{number}. Diff JSON: {json.dumps(diff)}"
- payload={"systemInstruction":{"parts":[{"text":system_instruction}]},"contents":[{"role":"user","parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.1,"maxOutputTokens":MAX_OUTPUT_TOKENS,"responseMimeType":"application/json"}}
+ payload=build_payload(system_instruction, prompt)
  req=urllib.request.Request(ENDPOINT,data=json.dumps(payload).encode(),headers={"Content-Type":"application/json","x-goog-api-key":key},method="POST")
  with urllib.request.urlopen(req,timeout=90) as response: body=json.loads(response.read().decode())
  result=json.loads(body["candidates"][0]["content"]["parts"][0]["text"])
