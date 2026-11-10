@@ -23,7 +23,7 @@ from google.genai import errors, types  # noqa: E402
 
 from agent_backend.plan_api import GeminiPlanDraft  # noqa: E402
 
-MODEL_NAME = "gemini-3.1-flash-lite"
+MODEL_NAME = "gemini-3.8-flash"
 TEST_PROMPT = (
     "Return a short display-only plan for preparing a computer for Java development. "
     "Do not provide commands or claim that any action was performed."
