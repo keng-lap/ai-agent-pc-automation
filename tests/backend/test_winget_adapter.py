@@ -1,5 +1,3 @@
-import subprocess
-
 import pytest
 from pydantic import ValidationError
 
@@ -73,7 +71,7 @@ def test_execution_uses_fixed_alias_and_shell_false(tmp_path, monkeypatch):
 
     def runner(command, **kwargs):
         calls.append((command, kwargs))
-        return subprocess.CompletedProcess(command, 0, "installed", "")
+        return winget_adapter.subprocess.CompletedProcess(command, 0, "installed", "")
 
     result = winget_adapter.install_verified_package(_request(), runner=runner)
 
@@ -86,7 +84,7 @@ def test_execution_uses_fixed_alias_and_shell_false(tmp_path, monkeypatch):
     assert kwargs["shell"] is False
     assert kwargs["check"] is False
     assert kwargs["timeout"] == winget_adapter.INSTALL_TIMEOUT_SECONDS
-    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["stdin"] is winget_adapter.subprocess.DEVNULL
 
 
 def test_missing_fixed_alias_fails_closed(tmp_path, monkeypatch):
@@ -107,7 +105,7 @@ def test_timeout_is_reported_without_claiming_success(tmp_path, monkeypatch):
     _install_alias(tmp_path, monkeypatch)
 
     def runner(*args, **kwargs):
-        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"], output="still running")
+        raise winget_adapter.subprocess.TimeoutExpired(args[0], kwargs["timeout"], output="still running")
 
     result = winget_adapter.install_verified_package(_request(), runner=runner)
 
