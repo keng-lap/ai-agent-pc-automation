@@ -164,6 +164,34 @@ def test_windows_dpapi_protects_and_unprotects_secret_bytes():
 
 
 
+def test_enrollment_expiry_uses_monotonic_time_after_wall_clock_rollback(tmp_path):
+    wall_time = [100000.0]
+    monotonic_time = [200.0]
+    store = EncryptedTotpSecretFileStore(
+        tmp_path / "authenticator.json",
+        FakeProtector(),
+    )
+    manager = AuthenticatorEnrollmentManager(
+        secret_store=store,
+        clock=lambda: wall_time[0],
+        monotonic_clock=lambda: monotonic_time[0],
+        secret_factory=lambda: RFC_SECRET,
+    )
+    enrollment = manager.begin(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+
+    wall_time[0] -= 86_400
+    monotonic_time[0] += 300
+
+    assert not manager.confirm(
+        enrollment_id=enrollment.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 100000.0),
+    )
+
+
 def test_new_enrollment_replaces_an_abandoned_pending_qr(tmp_path):
     manager, store = build_manager(tmp_path, now=90)
     first = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
