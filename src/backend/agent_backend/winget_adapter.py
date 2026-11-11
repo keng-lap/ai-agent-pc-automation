@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 _PACKAGE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,127}$")
