@@ -189,6 +189,41 @@ def test_redirect_uri_must_be_loopback_http(redirect_uri):
 
 
 
+def test_oidc_transaction_expiry_uses_monotonic_time_after_wall_clock_rollback():
+    wall_time = [100000.0]
+    monotonic_time = [50.0]
+    store = OidcTransactionStore(
+        clock=lambda: wall_time[0],
+        monotonic_clock=lambda: monotonic_time[0],
+    )
+    transaction = store.create()
+
+    wall_time[0] -= 86_400
+    monotonic_time[0] += 300
+
+    assert store.consume(transaction.state) is None
+
+
+def test_session_expiry_uses_monotonic_time_after_wall_clock_rollback():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    wall_time = [100000.0]
+    monotonic_time = [80.0]
+    store = ApplicationSessionStore(
+        ttl_seconds=60,
+        clock=lambda: wall_time[0],
+        monotonic_clock=lambda: monotonic_time[0],
+    )
+    identity = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    credential = store.create(identity=identity, allowlist=allowlist)
+
+    wall_time[0] -= 86_400
+    monotonic_time[0] += 60
+
+    assert store.resolve(credential.token) is None
+
+
 def test_session_store_requires_explicit_ttl_and_master_allowlist():
     from agent_backend.oidc import ApplicationSessionStore
 
