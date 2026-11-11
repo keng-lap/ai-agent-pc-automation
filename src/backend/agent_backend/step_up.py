@@ -41,6 +41,7 @@ class StepUpChallenge:
     risk_class: str
     created_at: float
     expires_at: float
+    monotonic_deadline: float
     failed_attempts: int = 0
     status: ChallengeStatus = "active"
 
@@ -63,6 +64,7 @@ class StepUpChallengeStore:
         *,
         replay_guard: TotpReplayGuard | None = None,
         clock=None,
+        monotonic_clock=None,
         ttl_seconds: int = CHALLENGE_TTL_SECONDS,
         capacity: int = MAX_CHALLENGES,
     ) -> None:
@@ -72,6 +74,9 @@ class StepUpChallengeStore:
             raise ValueError("challenge capacity must be between 1 and 128")
         self._replay_guard = replay_guard or TotpReplayGuard()
         self._clock = clock or time.time
+        self._monotonic_clock = monotonic_clock or (
+            time.monotonic if clock is None else clock
+        )
         self._ttl_seconds = ttl_seconds
         self._capacity = capacity
         self._challenges: dict[str, StepUpChallenge] = {}
@@ -105,9 +110,17 @@ class StepUpChallengeStore:
             or now < 0
         ):
             raise RuntimeError("system clock is invalid")
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            raise RuntimeError("elapsed-time clock is invalid")
         with self._lock:
-            self._remove_expired(now)
-            self._prune_owner_failures(now)
+            self._remove_expired(float(monotonic_now))
+            self._prune_owner_failures(float(monotonic_now))
             if len(self._challenges) >= self._capacity:
                 raise RuntimeError("active challenge capacity reached")
             challenge_id = secrets.token_hex(16)
@@ -120,6 +133,7 @@ class StepUpChallengeStore:
                 risk_class=risk_class,
                 created_at=float(now),
                 expires_at=float(now) + self._ttl_seconds,
+                monotonic_deadline=float(monotonic_now) + self._ttl_seconds,
             )
             self._challenges[challenge_id] = challenge
             return StepUpChallengeReceipt(
@@ -153,11 +167,19 @@ class StepUpChallengeStore:
         ):
             return False
 
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return False
         with self._lock:
             challenge = self._challenges.get(challenge_id)
             if challenge is None or challenge.status != "active":
                 return False
-            if now >= challenge.expires_at:
+            if float(monotonic_now) >= challenge.monotonic_deadline:
                 self._replace(challenge, status="expired")
                 return False
             if challenge.owner_sub != owner_sub or challenge.session_id != session_id:
@@ -177,10 +199,7 @@ class StepUpChallengeStore:
             failure_window = self._owner_failures.get(owner_session)
             if failure_window is not None:
                 window_started, failure_count = failure_window
-                if now < window_started:
-                    self._replace(challenge, status="locked")
-                    return False
-                if now - window_started >= OWNER_SESSION_FAILURE_WINDOW_SECONDS:
+                if float(monotonic_now) - window_started >= OWNER_SESSION_FAILURE_WINDOW_SECONDS:
                     self._owner_failures.pop(owner_session, None)
                 elif failure_count >= MAX_OWNER_SESSION_FAILURES:
                     self._replace(challenge, status="locked")
@@ -202,10 +221,16 @@ class StepUpChallengeStore:
                 if previous_window is None and len(self._owner_failures) >= MAX_OWNER_FAILURE_ENTRIES:
                     self._replace(challenge, failed_attempts=attempts, status="locked")
                     return False
-                if previous_window is None or now - previous_window[0] >= OWNER_SESSION_FAILURE_WINDOW_SECONDS:
-                    window_started, owner_attempts = float(now), 1
+                if (
+                    previous_window is None
+                    or float(monotonic_now) - previous_window[0]
+                    >= OWNER_SESSION_FAILURE_WINDOW_SECONDS
+                ):
+                    window_started, owner_attempts = float(monotonic_now), 1
                 else:
-                    window_started, owner_attempts = previous_window[0], previous_window[1] + 1
+                    window_started, owner_attempts = (
+                        previous_window[0], previous_window[1] + 1
+                    )
                 self._owner_failures[owner_session] = (window_started, owner_attempts)
                 status: ChallengeStatus = (
                     "locked"
@@ -240,28 +265,29 @@ class StepUpChallengeStore:
             risk_class=challenge.risk_class,
             created_at=challenge.created_at,
             expires_at=challenge.expires_at,
+            monotonic_deadline=challenge.monotonic_deadline,
             failed_attempts=(
                 challenge.failed_attempts if failed_attempts is None else failed_attempts
             ),
             status=challenge.status if status is None else status,
         )
 
-    def _prune_owner_failures(self, now: float) -> None:
+    def _prune_owner_failures(self, monotonic_now: float) -> None:
         stale = [
             key
             for key, (started, _count) in self._owner_failures.items()
-            if now < started or now - started >= OWNER_SESSION_FAILURE_WINDOW_SECONDS
+            if monotonic_now - started >= OWNER_SESSION_FAILURE_WINDOW_SECONDS
         ]
         for key in stale:
             self._owner_failures.pop(key, None)
         if len(self._owner_failures) > MAX_OWNER_FAILURE_ENTRIES:
             raise RuntimeError("owner/session rate-limit capacity reached")
 
-    def _remove_expired(self, now: float) -> None:
+    def _remove_expired(self, monotonic_now: float) -> None:
         expired_ids = [
             challenge_id
             for challenge_id, challenge in self._challenges.items()
-            if now >= challenge.expires_at
+            if monotonic_now >= challenge.monotonic_deadline
         ]
         for challenge_id in expired_ids:
             self._challenges.pop(challenge_id, None)
