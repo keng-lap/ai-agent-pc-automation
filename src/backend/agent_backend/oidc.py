@@ -46,6 +46,7 @@ class OidcTransaction:
     code_verifier: str
     created_at: float
     expires_at: float
+    monotonic_deadline: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,10 +67,18 @@ class GoogleIdentity:
 class OidcTransactionStore:
     """Bounded, one-time, process-local storage for OIDC anti-CSRF state."""
 
-    def __init__(self, *, clock=None, ttl_seconds: int = OIDC_TRANSACTION_TTL_SECONDS):
+    def __init__(
+        self, *, clock=None, monotonic_clock=None,
+        ttl_seconds: int = OIDC_TRANSACTION_TTL_SECONDS,
+    ):
         if type(ttl_seconds) is not int or not 60 <= ttl_seconds <= 600:
             raise ValueError("OIDC transaction TTL must be between 60 and 600 seconds")
         self._clock = clock or time.time
+        # A supplied test clock remains deterministic unless an independent
+        # monotonic clock is explicitly injected. Production uses time.monotonic.
+        self._monotonic_clock = monotonic_clock or (
+            time.monotonic if clock is None else clock
+        )
         self._ttl_seconds = ttl_seconds
         self._transactions: dict[str, OidcTransaction] = {}
         self._lock = threading.RLock()
@@ -83,8 +92,16 @@ class OidcTransactionStore:
             or now < 0
         ):
             raise OidcAuthenticationError("OIDC clock is invalid.")
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            raise OidcAuthenticationError("OIDC elapsed-time clock is invalid.")
         with self._lock:
-            self._remove_expired(float(now))
+            self._remove_expired(float(monotonic_now))
             if len(self._transactions) >= MAX_PENDING_OIDC_TRANSACTIONS:
                 raise OidcAuthenticationError("Too many pending sign-in attempts.")
             verifier = secrets.token_urlsafe(48)
@@ -94,6 +111,7 @@ class OidcTransactionStore:
                 code_verifier=verifier,
                 created_at=float(now),
                 expires_at=float(now) + self._ttl_seconds,
+                monotonic_deadline=float(monotonic_now) + self._ttl_seconds,
             )
             self._transactions[transaction.state] = transaction
             return transaction
@@ -109,17 +127,25 @@ class OidcTransactionStore:
             or now < 0
         ):
             return None
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return None
         with self._lock:
             transaction = self._transactions.pop(state, None)
-            if transaction is None or float(now) >= transaction.expires_at:
+            if transaction is None or float(monotonic_now) >= transaction.monotonic_deadline:
                 return None
             return transaction
 
-    def _remove_expired(self, now: float) -> None:
+    def _remove_expired(self, monotonic_now: float) -> None:
         expired = [
             state
             for state, transaction in self._transactions.items()
-            if now >= transaction.expires_at
+            if monotonic_now >= transaction.monotonic_deadline
         ]
         for state in expired:
             self._transactions.pop(state, None)
@@ -345,6 +371,7 @@ class _SessionRecord:
     owner_sub: str
     session_id: str
     expires_at: float
+    monotonic_deadline: float
 
 
 class ApplicationSessionStore:
@@ -355,13 +382,18 @@ class ApplicationSessionStore:
     Sessions are invalidated on process restart.
     """
 
-    def __init__(self, *, ttl_seconds: int, clock=None, capacity: int = 128):
+    def __init__(
+        self, *, ttl_seconds: int, clock=None, monotonic_clock=None, capacity: int = 128
+    ):
         if type(ttl_seconds) is not int or not 60 <= ttl_seconds <= 86400:
             raise ValueError("session TTL must be between 60 and 86400 seconds")
         if type(capacity) is not int or not 1 <= capacity <= 128:
             raise ValueError("session capacity must be between 1 and 128")
         self._ttl_seconds = ttl_seconds
         self._clock = clock or time.time
+        self._monotonic_clock = monotonic_clock or (
+            time.monotonic if clock is None else clock
+        )
         self._capacity = capacity
         self._sessions: dict[str, _SessionRecord] = {}
         self._lock = threading.RLock()
@@ -381,18 +413,28 @@ class ApplicationSessionStore:
             or now < 0
         ):
             raise OidcAuthenticationError("Session clock is invalid.")
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            raise OidcAuthenticationError("Session elapsed-time clock is invalid.")
         token = secrets.token_urlsafe(32)
         token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
         session_id = secrets.token_urlsafe(24)
         expires_at = float(now) + self._ttl_seconds
+        monotonic_deadline = float(monotonic_now) + self._ttl_seconds
         with self._lock:
-            self._remove_expired(float(now))
+            self._remove_expired(float(monotonic_now))
             if len(self._sessions) >= self._capacity:
                 raise OidcAuthenticationError("Session capacity reached.")
             self._sessions[token_digest] = _SessionRecord(
                 owner_sub=identity.sub,
                 session_id=session_id,
                 expires_at=expires_at,
+                monotonic_deadline=monotonic_deadline,
             )
         return SessionCredential(
             token=token,
@@ -415,11 +457,19 @@ class ApplicationSessionStore:
             or now < 0
         ):
             return None
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return None
         with self._lock:
             record = self._sessions.get(token_digest)
             if record is None:
                 return None
-            if float(now) >= record.expires_at:
+            if float(monotonic_now) >= record.monotonic_deadline:
                 self._sessions.pop(token_digest, None)
                 return None
             return SessionPrincipal(
@@ -437,11 +487,11 @@ class ApplicationSessionStore:
         with self._lock:
             return self._sessions.pop(token_digest, None) is not None
 
-    def _remove_expired(self, now: float) -> None:
+    def _remove_expired(self, monotonic_now: float) -> None:
         expired = [
             digest
             for digest, record in self._sessions.items()
-            if now >= record.expires_at
+            if monotonic_now >= record.monotonic_deadline
         ]
         for digest in expired:
             self._sessions.pop(digest, None)
