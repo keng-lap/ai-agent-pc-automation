@@ -39,9 +39,10 @@ Acceptance: Windows CI executes the native tests; Linux skip is not Windows evid
 ### SEC-602-02 — Windows secret-file ACL and path hardening
 **Files:** `authenticator.py`, `tests/backend/test_authenticator.py`
 
-- Establish and verify an owner-only Windows DACL; do not rely on POSIX mode bits.
-- Verify effective ACLs on file and parent directory.
-- Use a race-resistant Windows handle/open strategy that rejects reparse points.
+- **Approved principal policy: current Windows user SID only.** Derive the SID from the running process token; do not add SYSTEM, Administrators, Users, or caller-supplied principals.
+- Establish and verify a protected Windows DACL granting the current user the required file access; verify owner and effective DACL from the opened handle. Reject unexpected ACEs; do not silently broaden access.
+- Do not rely on POSIX mode bits. Do not recursively modify arbitrary parent-directory ACLs. Require a trusted, user-owned parent path and fail closed when it cannot be established.
+- Use a race-resistant Windows handle/open strategy that rejects final-component reparse points and validates path components; perform all I/O through the same validated handle.
 - Preserve exclusive creation, atomicity and fail-closed behavior.
 - Document that DPAPI current-user scope does not protect against compromise of that logged-in account.
 
