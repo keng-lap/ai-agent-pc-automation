@@ -258,6 +258,7 @@ class _PendingEnrollment:
     owner_sub: str
     secret: str
     expires_at: float
+    monotonic_deadline: float
     failed_attempts: int = 0
 
 
@@ -270,11 +271,15 @@ class AuthenticatorEnrollmentManager:
         secret_store: EncryptedTotpSecretFileStore,
         replay_guard: TotpReplayGuard | None = None,
         clock=None,
+        monotonic_clock=None,
         secret_factory=generate_secret,
     ) -> None:
         self._secret_store = secret_store
         self._replay_guard = replay_guard or TotpReplayGuard()
         self._clock = clock or time.time
+        self._monotonic_clock = monotonic_clock or (
+            time.monotonic if clock is None else clock
+        )
         self._secret_factory = secret_factory
         self._pending: dict[str, _PendingEnrollment] = {}
         self._lock = threading.RLock()
@@ -292,6 +297,15 @@ class AuthenticatorEnrollmentManager:
             or now < 0
         ):
             raise RuntimeError("system clock is invalid")
+
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            raise RuntimeError("elapsed-time clock is invalid")
 
         with self._lock:
             if self._secret_store.is_configured():
@@ -318,6 +332,7 @@ class AuthenticatorEnrollmentManager:
                 owner_sub=owner_sub,
                 secret=secret,
                 expires_at=expires_at,
+                monotonic_deadline=float(monotonic_now) + ENROLLMENT_TTL_SECONDS,
             )
             return EnrollmentStart(
                 enrollment_id=enrollment_id,
@@ -337,11 +352,20 @@ class AuthenticatorEnrollmentManager:
         ):
             return False
 
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return False
+
         with self._lock:
             pending = self._pending.get(enrollment_id)
             if pending is None or pending.owner_sub != owner_sub:
                 return False
-            if now >= pending.expires_at:
+            if float(monotonic_now) >= pending.monotonic_deadline:
                 self._pending.pop(enrollment_id, None)
                 return False
 
