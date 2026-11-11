@@ -94,7 +94,7 @@ def test_non_high_risk_challenge_is_rejected():
 
 
 def test_expired_challenge_fails_closed():
-    now = [90.0]
+    now = [100000.0]
     store = StepUpChallengeStore(clock=lambda: now[0])
     receipt = create(store)
     now[0] += 120
@@ -159,7 +159,7 @@ def test_challenge_capacity_is_bounded():
 
 
 def test_failed_attempts_are_rate_limited_across_challenges_for_one_session():
-    now = [90.0]
+    now = [100000.0]
     store = StepUpChallengeStore(clock=lambda: now[0])
 
     for _ in range(MAX_FAILED_ATTEMPTS):
@@ -173,7 +173,7 @@ def test_failed_attempts_are_rate_limited_across_challenges_for_one_session():
 
 
 def test_challenge_expiry_uses_monotonic_time_after_wall_clock_rollback():
-    wall_time = [90.0]
+    wall_time = [100000.0]
     monotonic_time = [500.0]
     store = StepUpChallengeStore(
         clock=lambda: wall_time[0],
@@ -189,7 +189,7 @@ def test_challenge_expiry_uses_monotonic_time_after_wall_clock_rollback():
 
 
 def test_totp_failure_window_does_not_reset_after_wall_clock_rollback():
-    wall_time = [90.0]
+    wall_time = [100000.0]
     monotonic_time = [500.0]
     store = StepUpChallengeStore(
         clock=lambda: wall_time[0],
@@ -202,12 +202,12 @@ def test_totp_failure_window_does_not_reset_after_wall_clock_rollback():
 
     wall_time[0] -= 86_400
     receipt = create(store)
-    assert verify(store, receipt, code=code_at(RFC_SECRET, wall_time[0])) is False
+    assert verify(store, receipt, code=code_at(RFC_SECRET, 100000.0)) is False
     assert store.get(receipt.challenge_id).status == "locked"
 
 
 def test_owner_session_failure_window_resets_after_five_minutes():
-    now = [90.0]
+    now = [100000.0]
     store = StepUpChallengeStore(clock=lambda: now[0])
     receipt = create(store)
 
