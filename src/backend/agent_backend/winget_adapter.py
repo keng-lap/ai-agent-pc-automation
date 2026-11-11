@@ -35,17 +35,19 @@ class VerifiedInstallRequest(BaseModel):
     source: Literal["winget"] = "winget"
     evidence_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
+    @field_validator("package_id")
     @classmethod
-    def validate_identity(cls, value: str, pattern: re.Pattern[str], field: str) -> str:
-        if not pattern.fullmatch(value):
-            raise ValueError(f"invalid {field}")
+    def validate_package_id(cls, value: str) -> str:
+        if not _PACKAGE_ID.fullmatch(value):
+            raise ValueError("invalid package_id")
         return value
 
+    @field_validator("version")
     @classmethod
-    def model_validate(cls, obj, **kwargs):
-        # Pydantic performs strict shape/type checks; explicit regex checks below
-        # are kept in field validators so validation cannot be bypassed by callers.
-        return super().model_validate(obj, **kwargs)
+    def validate_version(cls, value: str) -> str:
+        if not _VERSION.fullmatch(value):
+            raise ValueError("invalid version")
+        return value
 
 
 class WinGetInstallResult(BaseModel):
