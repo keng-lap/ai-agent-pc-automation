@@ -305,9 +305,9 @@ def approve_plan_review(
             raise HTTPException(status_code=410, detail="Plan expired.") from None
         except PlanNotFoundError:
             raise HTTPException(status_code=404, detail="Plan not found.") from None
-        cached = _approval_results.get(plan_id)
-        if cached is not None:
-            return PlanApprovalResponse(plan_id=plan_id, tool_result=cached)
+        # Do not return a cached approval result before authenticating this request.
+        # A plan ID is an opaque reference, not a bearer authorization token.
+        # A retry must prove a fresh owner/session-bound TOTP challenge first.
 
         # These fields are server-generated and digest-bound; never accept them from a client.
         if plan.risk_class != "R1" or plan.required_permission != "P1" or plan.mode != "dry_run":
@@ -361,6 +361,13 @@ def approve_plan_review(
                 )
                 raise HTTPException(status_code=403, detail="Step-up verification failed.")
             record_auth_audit_event(event_type="auth.step_up", outcome="success")
+
+        # Idempotency is checked only after a fresh, exact-action authentication.
+        # A consumed challenge cannot be replayed to retrieve a cached approval.
+        cached = _approval_results.get(plan_id)
+        if cached is not None:
+            return PlanApprovalResponse(plan_id=plan_id, tool_result=cached)
+
         action = "ติดตั้ง" if plan.tool_id == "software.install" else "ถอนการติดตั้ง"
         try:
             # A plan can contain several programs. Dry-run every listed item;
