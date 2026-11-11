@@ -76,7 +76,7 @@ def test_begin_login_uses_code_flow_pkce_nonce_and_minimal_scopes():
 
 
 def test_oidc_transaction_is_one_time_and_expires():
-    now = [1000.0]
+    now = [100000.0]
     store = OidcTransactionStore(clock=lambda: now[0])
     transaction = store.create()
 
@@ -191,7 +191,7 @@ def test_redirect_uri_must_be_loopback_http(redirect_uri):
 
 
 def test_oidc_transaction_expiry_uses_monotonic_time_after_wall_clock_rollback():
-    wall_time = [1000.0]
+    wall_time = [100000.0]
     monotonic_time = [50.0]
     store = OidcTransactionStore(
         clock=lambda: wall_time[0],
@@ -199,7 +199,7 @@ def test_oidc_transaction_expiry_uses_monotonic_time_after_wall_clock_rollback()
     )
     transaction = store.create()
 
-    wall_time[0] -= 10_000
+    wall_time[0] -= 86_400
     monotonic_time[0] += 300
 
     assert store.consume(transaction.state) is None
@@ -208,7 +208,7 @@ def test_oidc_transaction_expiry_uses_monotonic_time_after_wall_clock_rollback()
 def test_session_expiry_uses_monotonic_time_after_wall_clock_rollback():
     from agent_backend.oidc import ApplicationSessionStore
 
-    wall_time = [1100.0]
+    wall_time = [100000.0]
     monotonic_time = [80.0]
     store = ApplicationSessionStore(
         ttl_seconds=60,
@@ -256,7 +256,7 @@ def test_session_store_rejects_non_master_identity():
 def test_session_store_expires_and_revokes_tokens():
     from agent_backend.oidc import ApplicationSessionStore
 
-    now = [1100.0]
+    now = [100000.0]
     store = ApplicationSessionStore(ttl_seconds=60, clock=lambda: now[0])
     identity = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
     allowlist = MasterUserAllowlist("stable-google-sub")
