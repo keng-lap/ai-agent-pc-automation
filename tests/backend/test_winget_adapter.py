@@ -118,7 +118,7 @@ def test_process_output_is_bounded(tmp_path, monkeypatch):
     _install_alias(tmp_path, monkeypatch)
 
     def runner(command, **kwargs):
-        return subprocess.CompletedProcess(command, 1603, "x" * 9000, "")
+        return winget_adapter.subprocess.CompletedProcess(command, 1603, "x" * 9000, "")
 
     result = winget_adapter.install_verified_package(_request(), runner=runner)
 
