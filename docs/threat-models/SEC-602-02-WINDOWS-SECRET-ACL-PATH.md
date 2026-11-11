@@ -74,7 +74,7 @@ No security decision may rely solely on a pre-open `Path.is_symlink()`, `exists(
 
 | Decision | Chosen design | Alternatives rejected | Reason |
 |---|---|---|---|
-| Windows ACL enforcement | Pending native design review; explicit protected DACL plus read-back verification is required | Rely on `0o600` or inherited defaults | POSIX mode does not establish Windows DACL |
+| Windows ACL enforcement | **Decision A:** protected DACL grants access only to the SID of the Windows user running the agent; verify owner and effective DACL from the opened handle | Grant SYSTEM or Administrators an explicit ACE; rely on inherited defaults or `0o600` | Least privilege; no additional principal is required for the current interactive, per-user local agent |
 | Path access | Pending native API design; open/validate/use same handle | `is_symlink()` then `Path.open()` | Check-then-open race |
 | Parent directory | Do not silently modify arbitrary custom parent ACLs | Recursively harden configured parent | Could change access to unrelated user data |
 | Fallback behavior | Fail closed when native guarantees cannot be established | Fallback to ordinary pathlib I/O | Would bypass security invariant |
@@ -101,18 +101,20 @@ Do not log secret bytes, ciphertext, DPAPI blobs, raw security descriptors, or s
 
 ## 10. Residual risks and decisions required
 
-- Exact Windows principal policy (current user SID, SYSTEM, Administrators, or another set) must be explicitly justified and independently reviewed before implementation.
+- **Product Owner decision (2026-11-11): A — only the current Windows user SID that runs the agent is authorized.** Do not add SYSTEM, Administrators, or broad groups to the file DACL. The implementation must derive the SID from the process token; it must not accept a caller-supplied SID.
+- Verify the file owner and effective DACL from the same native handle used for I/O. Require a protected DACL with only the current-user allow ACE; reject unexpected allow or deny ACEs rather than silently broadening access.
+- If a future Windows service or SYSTEM-run agent is required, treat it as a new security design and obtain a separate Product Owner decision; do not silently add SYSTEM now.
 - Parent-directory guarantees for custom `AUTHENTICATOR_SECRET_PATH` values need an explicit fail-closed policy.
 - Windows reparse-point handling for every parent component, including junctions/mount points, must be specified and tested.
 - Native API implementation requires Windows CI evidence; mocks alone are insufficient.
 
 ## 11. Review disposition
 
-- [ ] Scope and source-of-truth decisions reconciled
+- [x] Scope and source-of-truth decisions reconciled (current-user SID only; Product Owner decision A)
 - [ ] Trust boundaries and data flow reviewed
 - [ ] Threats and abuse cases covered
 - [ ] Security invariants are testable
 - [ ] Negative tests are defined
 - [ ] Platform-specific evidence is identified
-- **Disposition:** BLOCKED pending native design and independent review
+- **Disposition:** BLOCKED pending native implementation, Windows CI evidence, and independent review
 - **Reviewer rationale:** Draft threat model only. No implementation authorization is implied by this document.
