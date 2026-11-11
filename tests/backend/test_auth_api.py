@@ -268,10 +268,37 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     assert approved.json()["notice"] == "DRY_RUN_ONLY_NO_CHANGES_MADE"
     assert len(calls) == 1
 
-    # Cached dry-run result is idempotent and does not dispatch again.
+    # A consumed challenge cannot be replayed to retrieve a cached result.
+    replayed = client.post(
+        f"/api/plans/{plan_id}/approve",
+        json={
+            "challenge_id": challenge_id,
+            "totp_code": code_at(RFC_SECRET, now[0]),
+        },
+    )
+    assert replayed.status_code == 403
+    assert len(calls) == 1
+
+    # Idempotent retry is permitted only after a fresh TOTP step and challenge.
+    now[0] += 30
+    retry_challenge = client.post(f"/api/plans/{plan_id}/step-up", json={})
+    assert retry_challenge.status_code == 200
     repeated = client.post(
         f"/api/plans/{plan_id}/approve",
-        json={"challenge_id": challenge_id, "totp_code": "000000"},
+        json={
+            "challenge_id": retry_challenge.json()["challenge_id"],
+            "totp_code": code_at(RFC_SECRET, now[0]),
+        },
     )
     assert repeated.status_code == 200
+    assert repeated.json()["tool_result"] == approved.json()["tool_result"]
+    assert len(calls) == 1
+
+    # Cached results remain protected by the authenticated route dependency.
+    client.cookies.clear()
+    unauthenticated = client.post(
+        f"/api/plans/{plan_id}/approve",
+        json={"challenge_id": retry_challenge.json()["challenge_id"], "totp_code": "000000"},
+    )
+    assert unauthenticated.status_code == 401
     assert len(calls) == 1
