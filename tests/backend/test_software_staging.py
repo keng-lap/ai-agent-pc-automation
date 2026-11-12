@@ -172,3 +172,22 @@ def test_staging_directory_must_be_absolute_and_not_a_symlink(tmp_path):
             candidate,
             staging_root=Path("relative"),
         )
+
+
+
+class AcceptSignatureWithSubject:
+    def verify_with_subject(self, path):
+        assert Path(path).is_file()
+        return True, "CN=Trusted Test Publisher, O=Trusted Test Publisher"
+
+
+def test_stager_carries_subject_only_from_signature_verifier(tmp_path):
+    body = b"verified-installer-bytes"
+    staged = InstallerStager(
+        http_get=lambda *args, **kwargs: FakeResponse(body),
+        signature_verifier=AcceptSignatureWithSubject(),
+        clock=lambda: "2026-11-12T00:00:00Z",
+    ).stage(make_candidate(body), staging_root=tmp_path)
+
+    assert staged.authenticode_valid is True
+    assert staged.signature_subject == "CN=Trusted Test Publisher, O=Trusted Test Publisher"
