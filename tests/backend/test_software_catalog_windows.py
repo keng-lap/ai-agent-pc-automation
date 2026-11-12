@@ -23,6 +23,9 @@ def test_live_microsoft_source2_catalog_signature_and_search():
     assert index.source_signer_subject
     assert "CN=" in index.source_signer_subject
     assert "Microsoft Corporation" in index.source_signer_subject
+    assert index.source_signer_sha256
+    assert len(index.source_signer_sha256) == 64
+    assert all(char in "0123456789abcdef" for char in index.source_signer_sha256)
 
 
 
