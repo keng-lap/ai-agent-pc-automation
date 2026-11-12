@@ -108,12 +108,18 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && ['x86', 'x64', 'arm64'].includes(String(candidate['architecture']))
     && candidate['scope'] === 'user'
     && typeof candidate['installer_type'] === 'string'
+    && typeof candidate['installer_url'] === 'string'
+    && candidate['installer_url'].startsWith('https://')
     && typeof candidate['installer_domain'] === 'string'
     && typeof candidate['installer_sha256'] === 'string'
     && /^[0-9a-f]{64}$/i.test(candidate['installer_sha256'])
     && typeof candidate['manifest_sha256'] === 'string'
     && /^[0-9a-f]{64}$/i.test(candidate['manifest_sha256'])
+    && typeof candidate['repository_commit'] === 'string'
+    && /^[0-9a-f]{40}$/.test(candidate['repository_commit'])
     && typeof candidate['manifest_source_url'] === 'string'
+    && candidate['manifest_source_url'].startsWith('https://github.com/microsoft/winget-pkgs/')
+    && typeof candidate['checked_at'] === 'string'
     && Array.isArray(candidate['limitations'])
     && candidate['limitations'].every((item) => typeof item === 'string');
 }
