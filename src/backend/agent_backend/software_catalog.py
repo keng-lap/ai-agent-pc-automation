@@ -60,25 +60,35 @@ class CatalogSearchResponse(BaseModel):
 
 
 class WindowsMsixSignatureVerifier:
-    """Use WinVerifyTrust and, when requested, extract the verified signer subject."""
+    """Use WinVerifyTrust and extract the verified primary signer identity."""
 
     def verify(self, package_path: Path) -> bool:
-        trusted, _subject = self._verify_and_read_signer(package_path, include_subject=False)
+        trusted, _subject, _thumbprint = self._verify_and_read_signer(
+            package_path,
+            include_identity=False,
+        )
         return trusted
 
     def verify_and_get_signer_subject(self, package_path: Path) -> str | None:
-        """Return the subject of the primary signer only after WinVerifyTrust succeeds."""
-        trusted, subject = self._verify_and_read_signer(package_path, include_subject=True)
+        """Return the primary signer subject after successful WinVerifyTrust."""
+        trusted, subject, _thumbprint = self.verify_and_get_signer_identity(package_path)
         return subject if trusted else None
+
+    def verify_and_get_signer_identity(
+        self,
+        package_path: Path,
+    ) -> tuple[bool, str | None, str | None]:
+        """Return signer subject and SHA-256 of the signer certificate DER."""
+        return self._verify_and_read_signer(package_path, include_identity=True)
 
     @staticmethod
     def _verify_and_read_signer(
         package_path: Path,
         *,
-        include_subject: bool,
-    ) -> tuple[bool, str | None]:
+        include_identity: bool,
+    ) -> tuple[bool, str | None, str | None]:
         if os.name != "nt" or not package_path.is_file():
-            return False, None
+            return False, None, None
 
         class _Guid(ctypes.Structure):
             _fields_ = [
@@ -119,6 +129,15 @@ class WindowsMsixSignatureVerifier:
                 ("pCert", ctypes.c_void_p),
             ]
 
+        class _CertContext(ctypes.Structure):
+            _fields_ = [
+                ("dwCertEncodingType", ctypes.c_uint32),
+                ("pbCertEncoded", ctypes.POINTER(ctypes.c_ubyte)),
+                ("cbCertEncoded", ctypes.c_uint32),
+                ("pCertInfo", ctypes.c_void_p),
+                ("hCertStore", ctypes.c_void_p),
+            ]
+
         action = _Guid.from_buffer_copy(
             uuid.UUID("00AAC56B-CD44-11D0-8CC2-00C04FC295EE").bytes_le
         )
@@ -136,8 +155,6 @@ class WindowsMsixSignatureVerifier:
         trust_data.pFile = ctypes.pointer(file_info)
 
         wintrust = None
-        trusted = False
-        subject = None
         try:
             wintrust = ctypes.WinDLL("wintrust", use_last_error=True)
             verify = wintrust.WinVerifyTrust
@@ -152,17 +169,15 @@ class WindowsMsixSignatureVerifier:
                 ctypes.byref(action),
                 ctypes.byref(trust_data),
             ) == 0
-            if not trusted or not include_subject:
-                return trusted, None
+            if not trusted or not include_identity:
+                return trusted, None, None
 
-            # These documented WinTrust helpers expose the signer certificate
-            # from the state created by the successful WinVerifyTrust call.
             get_provider_data = wintrust.WTHelperProvDataFromStateData
             get_provider_data.restype = ctypes.c_void_p
             get_provider_data.argtypes = [ctypes.c_void_p]
             provider_data = get_provider_data(trust_data.hWVTStateData)
             if not provider_data:
-                return False, None
+                return False, None, None
 
             get_signer = wintrust.WTHelperGetProvSignerFromChain
             get_signer.restype = ctypes.c_void_p
@@ -174,21 +189,33 @@ class WindowsMsixSignatureVerifier:
             ]
             signer = get_signer(provider_data, 0, 0, 0)
             if not signer:
-                return False, None
+                return False, None, None
 
             get_provider_cert = wintrust.WTHelperGetProvCertFromChain
             get_provider_cert.restype = ctypes.c_void_p
             get_provider_cert.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
             provider_cert = get_provider_cert(signer, 0)
             if not provider_cert:
-                return False, None
+                return False, None, None
 
-            cert_context = ctypes.cast(
+            cert_context_pointer = ctypes.cast(
                 provider_cert,
                 ctypes.POINTER(_CryptProviderCertPrefix),
             ).contents.pCert
-            if not cert_context:
-                return False, None
+            if not cert_context_pointer:
+                return False, None, None
+            cert = ctypes.cast(
+                cert_context_pointer,
+                ctypes.POINTER(_CertContext),
+            ).contents
+            if (
+                not cert.pbCertEncoded
+                or cert.cbCertEncoded < 1
+                or cert.cbCertEncoded > 1_000_000
+            ):
+                return False, None, None
+            certificate_der = ctypes.string_at(cert.pbCertEncoded, cert.cbCertEncoded)
+            thumbprint = hashlib.sha256(certificate_der).hexdigest()
 
             crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
             get_name = crypt32.CertGetNameStringW
@@ -203,7 +230,7 @@ class WindowsMsixSignatureVerifier:
             ]
             x500_name_format = ctypes.c_uint32(3)  # CERT_X500_NAME_STR
             required = get_name(
-                cert_context,
+                cert_context_pointer,
                 2,
                 0,
                 ctypes.byref(x500_name_format),
@@ -211,10 +238,10 @@ class WindowsMsixSignatureVerifier:
                 0,
             )  # CERT_NAME_RDN_TYPE
             if required < 2 or required > 1024:
-                return False, None
+                return False, None, None
             buffer = ctypes.create_unicode_buffer(required)
             written = get_name(
-                cert_context,
+                cert_context_pointer,
                 2,
                 0,
                 ctypes.byref(x500_name_format),
@@ -222,13 +249,13 @@ class WindowsMsixSignatureVerifier:
                 required,
             )
             if written != required:
-                return False, None
+                return False, None, None
             subject = buffer.value.strip()
-            if not subject or len(subject) > 1000:
-                return False, None
-            return True, subject
+            if not subject or len(subject) > 1000 or len(thumbprint) != 64:
+                return False, None, None
+            return True, subject, thumbprint
         except (AttributeError, OSError, TypeError, ValueError):
-            return False, None
+            return False, None, None
         finally:
             if wintrust is not None:
                 trust_data.dwStateAction = 2  # WTD_STATEACTION_CLOSE
