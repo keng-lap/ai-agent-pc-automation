@@ -88,6 +88,13 @@ class AcceptSignature:
         return self.accepted
 
 
+class TamperDuringSignatureCheck(AcceptSignature):
+    def verify(self, path):
+        self.paths.append(path)
+        path.write_bytes(b"tampered after trust check")
+        return True
+
+
 def make_index(source, verifier=None):
     return MicrosoftWinGetCatalogIndex(
         http_get=source.get,
@@ -143,6 +150,11 @@ def test_loaded_catalog_connection_is_read_only():
 def test_catalog_signature_failure_blocks_search():
     with pytest.raises(CatalogUnavailable):
         make_index(FakeSource(), AcceptSignature(accepted=False)).search("DBeaver")
+
+
+def test_catalog_changed_after_signature_validation_is_rejected():
+    with pytest.raises(CatalogUnavailable):
+        make_index(FakeSource(), TamperDuringSignatureCheck()).search("DBeaver")
 
 
 def test_catalog_wrong_publisher_is_rejected_after_signature_check():
