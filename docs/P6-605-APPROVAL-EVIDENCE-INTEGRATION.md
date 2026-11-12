@@ -17,42 +17,47 @@ The registry accepts only backend model instances:
 - `InstallerCandidate` with official publisher release verification marked
   `VERIFIED` and exact official version/hash/release URL;
 - `StagedInstaller` with matching package ID, version, architecture, hash,
-  official release URL, successful Authenticode validation, and a non-empty
-  signer subject.
+  official release URL, successful Authenticode validation, signer subject,
+  and a 64-character SHA-256 fingerprint of the signer's certificate DER.
 
 The frontend and HTTP request schema accept only an opaque evidence ID. They
 cannot submit or override package ID, publisher, version, URL, hashes,
-architecture, scope, signer subject, timestamps, or approval digest. The
-approval challenge response displays the package identity, publisher, exact
-version, installer URL and hashes, signer subject, and evidence expiry so the
-user can inspect the proposal before entering TOTP.
+architecture, scope, signer subject, certificate fingerprint, timestamps, or
+approval digest. The approval challenge response displays the package identity,
+publisher, exact version, installer URL and hashes, signer subject, certificate
+fingerprint, and evidence expiry so the user can inspect the proposal before
+entering TOTP.
 
 Evidence is immutable, process-local, bounded to 128 records, and expires no
 later than 15 minutes after verification. A binding hashes the complete
-evidence snapshot and the server-owned plan digest. Approval re-resolves the
-evidence, revalidates freshness, and compares the digest before consuming TOTP.
+evidence snapshot, including the signer certificate fingerprint, and the
+server-owned plan digest. Approval re-resolves the evidence, revalidates
+freshness, and compares the digest before consuming TOTP. A successful TOTP
+confirmation consumes the plan binding as well; repeated confirmation or a
+new challenge for that consumed binding is rejected until the evidence expires.
 
-## Signer identity extraction — implemented, Windows validation pending
+## Signer certificate identity — implemented, Windows validation pending
 
-`WindowsMsixSignatureVerifier` now retains the WinVerifyTrust state long enough
-to retrieve the primary signer certificate through the documented WinTrust
-provider helper functions, then reads its X.500 subject with `CertGetNameStringW`.
-`WindowsAuthenticodeVerifier` passes that subject into `StagedInstaller` only
-when trust validation and subject extraction both succeed. Missing or malformed
-subject data causes staging to fail closed. The catalog loader also exposes the
-verified source package's extracted subject for Windows acceptance testing.
+`WindowsMsixSignatureVerifier` retains the WinVerifyTrust state long enough to
+retrieve the primary signer certificate through the documented WinTrust
+provider helper functions. It extracts both the X.500 subject and SHA-256 of
+the exact certificate DER. `WindowsAuthenticodeVerifier` passes both values
+into `StagedInstaller` only when trust validation and identity extraction
+succeed. The catalog loader also exposes the verified Microsoft source package
+signer's subject and certificate fingerprint for Windows acceptance testing.
 
 The helper functions are documented by Microsoft but Microsoft notes that they
 may change or become unavailable. The implementation therefore treats every
-missing export, malformed provider state, or certificate extraction error as a
-hard failure. A Windows CI test checks extraction against a Windows-signed
-PowerShell binary; that test must pass before this capability is considered
-validated. <https://learn.microsoft.com/en-us/windows/win32/api/wintrust/nf-wintrust-wthelperprovdatafromstatedata>
+missing export, malformed provider state, invalid certificate context, or
+fingerprint extraction error as a hard failure. A Windows CI test checks the
+Microsoft source2 MSIX signer identity; this does not yet validate a third-party
+installer signer. <https://learn.microsoft.com/en-us/windows/win32/api/wintrust/nf-wintrust-wthelpergetprovcertfromchain>
 
-No publisher trust anchors are configured. Extracting a signer subject proves
-which certificate signed the file; it does not establish that the signer is the
-expected publisher. The evidence registry still rejects all evidence by default
-until an independently verified, backend-owned publisher anchor is configured.
+The certificate fingerprint is included in immutable evidence and therefore
+in the approval digest. The registry's trust callback now receives this
+fingerprint, not the subject string. No publisher trust anchors are configured;
+the registry still rejects all evidence by default until an independently
+verified, backend-owned certificate fingerprint is configured.
 Do not populate the anchor from the manifest publisher string, URL, AI output,
 or frontend data. The current DBeaver WinGet manifest also remains blocked
 because its version does not match the official release.
