@@ -21,7 +21,6 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 from yaml.tokens import AliasToken, AnchorToken
 
-
 WINGET_REPOSITORY = "microsoft/winget-pkgs"
 GITHUB_API_ORIGIN = "https://api.github.com"
 USER_AGENT = "ai-agent-pc-automation-trusted-discovery/1.0"
