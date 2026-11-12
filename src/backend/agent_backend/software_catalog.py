@@ -335,7 +335,15 @@ class MicrosoftWinGetCatalogIndex:
                 connection.execute("PRAGMA query_only = ON")
 
                 source_version = identity.attrib.get("Version", "")
-                if not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", source_version):
+                source_version_parts = source_version.split(".")
+                if (
+                    len(source_version_parts) != 4
+                    or len(source_version) > 32
+                    or any(
+                        not part.isascii() or not part.isdigit() or len(part) > 8
+                        for part in source_version_parts
+                    )
+                ):
                     raise CatalogUnavailable("Microsoft catalog package version was invalid")
 
             previous = self._connection
