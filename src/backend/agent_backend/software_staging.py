@@ -183,8 +183,12 @@ class InstallerStager:
             if callable(verify_with_identity):
                 signature_valid, signature_subject, signature_sha256 = verify_with_identity(temp_path)
             else:
-                signature_valid = self._signature_verifier.verify(temp_path) is True
-                signature_subject = None
+                verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
+                if callable(verify_with_subject):
+                    signature_valid, signature_subject = verify_with_subject(temp_path)
+                else:
+                    signature_valid = self._signature_verifier.verify(temp_path) is True
+                    signature_subject = None
                 signature_sha256 = None
             if signature_valid is not True:
                 raise InstallerStageError("Windows Authenticode trust or signer extraction failed")
