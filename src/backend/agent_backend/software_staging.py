@@ -19,7 +19,7 @@ from agent_backend.software_discovery import InstallerCandidate
 
 MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 CHUNK_SIZE = 65536
-ALLOWED_INSTALLER_SUFFIXES = frozenset({".exe", ".msi", ".msix", ".appx", ".zip"})
+ALLOWED_INSTALLER_SUFFIXES = frozenset({".exe", ".msi", ".msix", ".appx"})
 USER_AGENT = "ai-agent-pc-automation/0.1"
 
 
@@ -85,6 +85,7 @@ class InstallerStager:
 
         temp_path: Path | None = None
         response = None
+        descriptor: int | None = None
         try:
             descriptor, temp_name = tempfile.mkstemp(
                 prefix=".p6-604-download-",
@@ -92,36 +93,38 @@ class InstallerStager:
                 dir=root,
             )
             temp_path = Path(temp_name)
+            staged_file = os.fdopen(descriptor, "wb")
+            descriptor = None
             digest = hashlib.sha256()
             total = 0
             declared_length: int | None = None
-            response = self._http_get(
-                candidate.installer_url,
-                headers={
-                    "Accept": "application/octet-stream",
-                    "User-Agent": USER_AGENT,
-                },
-                timeout=(3.05, 30),
-                allow_redirects=False,
-                stream=True,
-            )
-            if response.status_code != 200:
-                raise InstallerStageError("official installer source returned an unsuccessful response")
+            with staged_file:
+                response = self._http_get(
+                    candidate.installer_url,
+                    headers={
+                        "Accept": "application/octet-stream",
+                        "User-Agent": USER_AGENT,
+                    },
+                    timeout=(3.05, 30),
+                    allow_redirects=False,
+                    stream=True,
+                )
+                if response.status_code != 200:
+                    raise InstallerStageError("official installer source returned an unsuccessful response")
 
-            headers = getattr(response, "headers", {})
-            encoding = str(headers.get("Content-Encoding", "identity")).strip().lower()
-            if encoding not in {"", "identity"}:
-                raise InstallerStageError("encoded installer responses are not accepted")
-            content_length = headers.get("Content-Length")
-            if content_length is not None:
-                try:
-                    declared_length = int(content_length)
-                except (TypeError, ValueError):
-                    raise InstallerStageError("installer content length was invalid") from None
-                if declared_length < 1 or declared_length > MAX_INSTALLER_BYTES:
-                    raise InstallerStageError("installer exceeded the staging size limit")
+                headers = getattr(response, "headers", {})
+                encoding = str(headers.get("Content-Encoding", "identity")).strip().lower()
+                if encoding not in {"", "identity"}:
+                    raise InstallerStageError("encoded installer responses are not accepted")
+                content_length = headers.get("Content-Length")
+                if content_length is not None:
+                    try:
+                        declared_length = int(content_length)
+                    except (TypeError, ValueError):
+                        raise InstallerStageError("installer content length was invalid") from None
+                    if declared_length < 1 or declared_length > MAX_INSTALLER_BYTES:
+                        raise InstallerStageError("installer exceeded the staging size limit")
 
-            with os.fdopen(descriptor, "wb") as staged_file:
                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                     if not chunk:
                         continue
@@ -165,6 +168,11 @@ class InstallerStager:
         except (OSError, requests.RequestException, TypeError, ValueError):
             raise InstallerStageError("installer could not be staged safely") from None
         finally:
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
             if response is not None:
                 close = getattr(response, "close", None)
                 if callable(close):
