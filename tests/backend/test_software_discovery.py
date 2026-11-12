@@ -11,7 +11,6 @@ from agent_backend.software_discovery import (
     WinGetManifestRepository,
 )
 
-
 COMMIT = "a" * 40
 PACKAGE_ID = "DBeaver.DBeaver.Community"
 VERSION = "25.3.0"
