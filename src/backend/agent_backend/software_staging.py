@@ -52,13 +52,23 @@ class WindowsAuthenticodeVerifier:
     def __init__(self, *, verifier=None) -> None:
         self._verifier = verifier or WindowsMsixSignatureVerifier()
 
-    def verify(self, installer_path: Path) -> bool:
+    def verify_with_subject(self, installer_path: Path) -> tuple[bool, str | None]:
         if not installer_path.is_file():
-            return False
+            return False, None
         try:
-            return self._verifier.verify(installer_path) is True
+            extract_subject = getattr(self._verifier, "verify_and_get_signer_subject", None)
+            if callable(extract_subject):
+                subject = extract_subject(installer_path)
+                if isinstance(subject, str) and subject.strip():
+                    return True, subject.strip()
+                return False, None
+            return self._verifier.verify(installer_path) is True, None
         except (OSError, TypeError, ValueError):
-            return False
+            return False, None
+
+    def verify(self, installer_path: Path) -> bool:
+        trusted, _subject = self.verify_with_subject(installer_path)
+        return trusted
 
 
 class InstallerStager:
@@ -149,8 +159,14 @@ class InstallerStager:
             if actual_sha256 != candidate.official_asset_sha256:
                 raise InstallerStageError("installer SHA-256 did not match the official release asset")
 
-            if self._signature_verifier.verify(temp_path) is not True:
-                raise InstallerStageError("Windows Authenticode trust validation failed")
+            verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
+            if callable(verify_with_subject):
+                signature_valid, signature_subject = verify_with_subject(temp_path)
+            else:
+                signature_valid = self._signature_verifier.verify(temp_path) is True
+                signature_subject = None
+            if signature_valid is not True:
+                raise InstallerStageError("Windows Authenticode trust or signer extraction failed")
 
             final_path = root / f"installer-{uuid.uuid4().hex}{suffix}"
             os.replace(temp_path, final_path)
@@ -163,6 +179,7 @@ class InstallerStager:
                 file_size=total,
                 sha256=actual_sha256,
                 authenticode_valid=True,
+                signature_subject=signature_subject,
                 official_release_url=candidate.official_release_url or "",
                 staged_at=self._clock(),
             )
