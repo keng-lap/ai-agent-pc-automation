@@ -18,6 +18,7 @@ class VerifiedPackageEvidence(BaseModel):
 
     evidence_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
     package_id: str = Field(min_length=1, max_length=160, pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+    package_name: str = Field(min_length=1, max_length=200)
     publisher: str = Field(min_length=1, max_length=200)
     version: str = Field(min_length=1, max_length=80)
     source: Literal["winget"]
@@ -30,7 +31,7 @@ class VerifiedPackageEvidence(BaseModel):
     verified_at: datetime
     expires_at: datetime
 
-    @field_validator("publisher", "version", "signature_subject")
+    @field_validator("package_name", "publisher", "version", "signature_subject")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
