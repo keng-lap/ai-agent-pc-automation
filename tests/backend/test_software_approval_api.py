@@ -22,7 +22,11 @@ def make_binding():
         publisher="DBeaver Corp",
         version="26.2.4",
         source="winget",
+        installer_type="exe",
         installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver.exe",
+        official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
+        manifest_source_url="https://github.com/microsoft/winget-pkgs/tree/cccccccccccccccccccccccccccccccccccccccc",
+        repository_commit="c" * 40,
         installer_sha256="b" * 64,
         manifest_sha256="c" * 64,
         architecture="x64",
@@ -93,6 +97,10 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.publisher == binding.evidence.publisher
     assert response.installer_sha256 == binding.evidence.installer_sha256
     assert response.manifest_sha256 == binding.evidence.manifest_sha256
+    assert response.official_release_url == binding.evidence.official_release_url
+    assert response.manifest_source_url == binding.evidence.manifest_source_url
+    assert response.repository_commit == binding.evidence.repository_commit
+    assert response.installer_type == binding.evidence.installer_type
     assert response.signature_subject == binding.evidence.signature_subject
     assert response.notice == "APPROVAL_ONLY_NOT_EXECUTED"
     assert step_up.created[0]["action_digest"] == binding.approval_digest
