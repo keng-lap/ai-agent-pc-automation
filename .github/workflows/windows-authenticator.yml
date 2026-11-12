@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "src/backend/agent_backend/authenticator.py"
+      - "src/backend/agent_backend/software_catalog.py"
       - "tests/backend/test_authenticator.py"
+      - "tests/backend/test_software_catalog_windows.py"
       - "src/backend/pyproject.toml"
       - "scripts/P516-01-setup-google-oauth.ps1"
       - ".github/workflows/windows-authenticator.yml"
@@ -50,3 +52,5 @@ jobs:
 
       - name: Test Windows DPAPI authenticator storage
         run: python -m pytest tests/backend/test_authenticator.py -q
+      - name: Verify live Microsoft WinGet catalog signature and search
+        run: python -m pytest tests/backend/test_software_catalog_windows.py -q
