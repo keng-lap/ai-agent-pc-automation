@@ -150,6 +150,12 @@ class DBeaverGitHubReleaseVerifier:
                 "arm64": f"dbeaver-ce-{official_version}-windows-aarch64.exe",
             }
             expected_asset_name = asset_name_by_architecture.get(architecture)
+            if expected_asset_name is None:
+                return PublisherVerification(
+                    status="MISMATCH",
+                    official_version=official_version,
+                    official_release_url=release_url,
+                )
             assets = release.get("assets")
             if not isinstance(assets, list) or len(assets) > 100:
                 return PublisherVerification(status="UNAVAILABLE")
