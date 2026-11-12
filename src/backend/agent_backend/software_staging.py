@@ -39,9 +39,9 @@ class StagedInstaller(BaseModel):
     file_size: int
     sha256: str
     authenticode_valid: Literal[True] = True
-    # WinVerifyTrust currently returns only a trust result, not the signer subject.
-    # Keep this unset until a verifier can extract and validate the signer identity.
+    # Subject is for display; trust decisions must use the certificate DER fingerprint.
     signature_subject: str | None = None
+    signature_sha256: str | None = None
     official_release_url: str
     staged_at: str
 
@@ -52,22 +52,42 @@ class WindowsAuthenticodeVerifier:
     def __init__(self, *, verifier=None) -> None:
         self._verifier = verifier or WindowsMsixSignatureVerifier()
 
-    def verify_with_subject(self, installer_path: Path) -> tuple[bool, str | None]:
+    def verify_with_identity(
+        self,
+        installer_path: Path,
+    ) -> tuple[bool, str | None, str | None]:
         if not installer_path.is_file():
-            return False, None
+            return False, None, None
         try:
+            extract_identity = getattr(self._verifier, "verify_and_get_signer_identity", None)
+            if callable(extract_identity):
+                trusted, subject, thumbprint = extract_identity(installer_path)
+                if (
+                    trusted is True
+                    and isinstance(subject, str)
+                    and subject.strip()
+                    and isinstance(thumbprint, str)
+                    and len(thumbprint) == 64
+                    and all(char in "0123456789abcdef" for char in thumbprint)
+                ):
+                    return True, subject.strip(), thumbprint
+                return False, None, None
             extract_subject = getattr(self._verifier, "verify_and_get_signer_subject", None)
             if callable(extract_subject):
                 subject = extract_subject(installer_path)
                 if isinstance(subject, str) and subject.strip():
-                    return True, subject.strip()
-                return False, None
-            return self._verifier.verify(installer_path) is True, None
+                    return True, subject.strip(), None
+                return False, None, None
+            return self._verifier.verify(installer_path) is True, None, None
         except (OSError, TypeError, ValueError):
-            return False, None
+            return False, None, None
+
+    def verify_with_subject(self, installer_path: Path) -> tuple[bool, str | None]:
+        trusted, subject, _thumbprint = self.verify_with_identity(installer_path)
+        return trusted, subject
 
     def verify(self, installer_path: Path) -> bool:
-        trusted, _subject = self.verify_with_subject(installer_path)
+        trusted, _subject, _thumbprint = self.verify_with_identity(installer_path)
         return trusted
 
 
@@ -159,12 +179,13 @@ class InstallerStager:
             if actual_sha256 != candidate.official_asset_sha256:
                 raise InstallerStageError("installer SHA-256 did not match the official release asset")
 
-            verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
-            if callable(verify_with_subject):
-                signature_valid, signature_subject = verify_with_subject(temp_path)
+            verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
+            if callable(verify_with_identity):
+                signature_valid, signature_subject, signature_sha256 = verify_with_identity(temp_path)
             else:
                 signature_valid = self._signature_verifier.verify(temp_path) is True
                 signature_subject = None
+                signature_sha256 = None
             if signature_valid is not True:
                 raise InstallerStageError("Windows Authenticode trust or signer extraction failed")
 
@@ -180,6 +201,7 @@ class InstallerStager:
                 sha256=actual_sha256,
                 authenticode_valid=True,
                 signature_subject=signature_subject,
+                signature_sha256=signature_sha256,
                 official_release_url=candidate.official_release_url or "",
                 staged_at=self._clock(),
             )
