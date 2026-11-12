@@ -471,8 +471,24 @@
                       <a [href]="candidate.manifest_source_url" target="_blank" rel="noopener noreferrer">{{ language() === 'th' ? 'เปิด Manifest ต้นทาง' : 'Open source manifest' }}</a>
                     </div>
                     <div class="tool-preview installer-actions--blocked" role="status">
-                      <strong>{{ discovery.status === 'source_mismatch' ? (language() === 'th' ? 'บล็อก: Manifest ไม่ตรงกับ Release ทางการ' : 'Blocked: manifest does not match the official release') : discovery.status === 'source_check_unavailable' ? (language() === 'th' ? 'บล็อก: ตรวจสอบ Release ทางการไม่ได้' : 'Blocked: official release could not be checked') : (language() === 'th' ? 'ยังไม่ใช่หลักฐานอนุญาตติดตั้ง' : 'Not installation authorization evidence') }}</strong>
-                      <span>{{ discovery.status === 'source_mismatch' ? (language() === 'th' ? 'เวอร์ชันจาก WinGet ไม่ตรงกับ Release ล่าสุดจากผู้ผลิต จึงห้ามนำรายการนี้ไปอนุมัติหรือติดตั้ง' : 'The WinGet manifest version differs from the vendor latest release. This candidate must not be approved or installed.') : discovery.status === 'source_check_unavailable' ? (language() === 'th' ? 'ระบบตรวจสอบแหล่ง Release ทางการไม่ได้ จึงปฏิเสธการยืนยันความน่าเชื่อถือในครั้งนี้' : 'The official release source could not be verified, so this candidate remains blocked.') : (language() === 'th' ? 'ผลนี้เป็น CONDITIONAL เท่านั้น ยังต้องตรวจสอบลายเซ็น Authenticode ของไฟล์ติดตั้งจริงก่อนสร้าง Approval' : 'This result is CONDITIONAL only. The downloaded installer's Authenticode signature must still be verified before approval evidence can be created.') }}</span>
+                      <strong>
+                        @if (discovery.status === 'source_mismatch') {
+                          {{ language() === 'th' ? 'บล็อก: Manifest ไม่ตรงกับ Release ทางการ' : 'Blocked: manifest does not match the official release' }}
+                        } @else if (discovery.status === 'source_check_unavailable') {
+                          {{ language() === 'th' ? 'บล็อก: ตรวจสอบ Release ทางการไม่ได้' : 'Blocked: official release could not be checked' }}
+                        } @else {
+                          {{ language() === 'th' ? 'ยังไม่ใช่หลักฐานอนุญาตติดตั้ง' : 'Not installation authorization evidence' }}
+                        }
+                      </strong>
+                      <span>
+                        @if (discovery.status === 'source_mismatch') {
+                          {{ language() === 'th' ? 'เวอร์ชันจาก WinGet ไม่ตรงกับ Release ล่าสุดจากผู้ผลิต จึงห้ามนำรายการนี้ไปอนุมัติหรือติดตั้ง' : 'The WinGet manifest version differs from the vendor latest release. This candidate must not be approved or installed.' }}
+                        } @else if (discovery.status === 'source_check_unavailable') {
+                          {{ language() === 'th' ? 'ระบบตรวจสอบแหล่ง Release ทางการไม่ได้ จึงปฏิเสธการยืนยันความน่าเชื่อถือในครั้งนี้' : 'The official release source could not be verified, so this candidate remains blocked.' }}
+                        } @else {
+                          {{ language() === 'th' ? 'ผลนี้เป็น CONDITIONAL เท่านั้น ยังต้องตรวจสอบลายเซ็น Authenticode ของไฟล์ติดตั้งจริงก่อนสร้าง Approval' : 'This result is CONDITIONAL only. The downloaded installer's Authenticode signature must still be verified before approval evidence can be created.' }}
+                        }
+                      </span>
                       @for (limitation of candidate.limitations; track limitation) {
                         <small>{{ limitation }}</small>
                       }
