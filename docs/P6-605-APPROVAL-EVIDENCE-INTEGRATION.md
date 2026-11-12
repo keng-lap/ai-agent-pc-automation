@@ -32,23 +32,29 @@ later than 15 minutes after verification. A binding hashes the complete
 evidence snapshot and the server-owned plan digest. Approval re-resolves the
 evidence, revalidates freshness, and compares the digest before consuming TOTP.
 
-## Known hard blocker — signer identity extraction
+## Signer identity extraction — implemented, Windows validation pending
 
-The current `WindowsAuthenticodeVerifier` delegates to `WindowsMsixSignatureVerifier`,
-whose WinVerifyTrust wrapper returns only a Boolean trust result. It does not
-extract the Authenticode signer subject. Therefore `StagedInstaller.signature_subject`
-is intentionally nullable, and the evidence registry rejects a staged installer
-when that field is absent.
+`WindowsMsixSignatureVerifier` now retains the WinVerifyTrust state long enough
+to retrieve the primary signer certificate through the documented WinTrust
+provider helper functions, then reads its X.500 subject with `CertGetNameStringW`.
+`WindowsAuthenticodeVerifier` passes that subject into `StagedInstaller` only
+when trust validation and subject extraction both succeed. Missing or malformed
+subject data causes staging to fail closed.
 
-This is fail-closed by design. A Boolean WinVerifyTrust success is not enough
-to assert that the signer is the expected publisher. Do not populate the field
-from the manifest publisher string, a URL, AI output, or frontend data.
+The helper functions are documented by Microsoft but Microsoft notes that they
+may change or become unavailable. The implementation therefore treats every
+missing export, malformed provider state, or certificate extraction error as a
+hard failure. A Windows CI test checks extraction against a Windows-signed
+PowerShell binary; that test must pass before this capability is considered
+validated. <https://learn.microsoft.com/en-us/windows/win32/api/wintrust/nf-wintrust-wthelperprovdatafromstatedata>
 
-Before a real staging result can be registered, a separate reviewed Windows
-signature-inspection implementation must extract the signer subject from the
-verified signature state and compare it against a backend-owned publisher
-trust anchor. The current DBeaver WinGet manifest also remains blocked because
-its version does not match the official release.
+No publisher trust anchors are configured. Extracting a signer subject proves
+which certificate signed the file; it does not establish that the signer is the
+expected publisher. The evidence registry still rejects all evidence by default
+until an independently verified, backend-owned publisher anchor is configured.
+Do not populate the anchor from the manifest publisher string, URL, AI output,
+or frontend data. The current DBeaver WinGet manifest also remains blocked
+because its version does not match the official release.
 
 ## API
 
