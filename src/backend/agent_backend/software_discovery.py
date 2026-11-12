@@ -246,10 +246,15 @@ class WinGetManifestRepository:
             document.get("ManifestVersion")
             for _, _, document in documents
         }
+        manifest_version = next(iter(manifest_versions)) if len(manifest_versions) == 1 else None
+        version_parts = manifest_version.split(".") if isinstance(manifest_version, str) else []
         if (
-            len(manifest_versions) != 1
-            or not isinstance(next(iter(manifest_versions)), str)
-            or not re.fullmatch(r"\d+\.\d+\.\d+", next(iter(manifest_versions)))
+            len(version_parts) != 3
+            or len(manifest_version) > 32
+            or any(
+                not part.isascii() or not part.isdigit() or len(part) > 8
+                for part in version_parts
+            )
         ):
             raise DiscoveryUnavailable("manifest schema versions were missing or inconsistent")
 
