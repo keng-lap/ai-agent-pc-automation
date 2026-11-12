@@ -19,9 +19,9 @@ PLAN_DIGEST = "d" * 64
 def make_registry(*, clock=lambda: NOW) -> SoftwareEvidenceRegistry:
     return SoftwareEvidenceRegistry(
         clock=clock,
-        signer_subject_verifier=lambda item, subject: (
+        signer_sha256_verifier=lambda item, fingerprint: (
             item.package_id == "DBeaver.DBeaver.Community"
-            and subject == "CN=DBeaver Corporation"
+            and fingerprint == "d" * 64
         ),
     )
 
@@ -60,6 +60,7 @@ def staged(**overrides) -> StagedInstaller:
         "sha256": "a" * 64,
         "authenticode_valid": True,
         "signature_subject": "CN=DBeaver Corporation",
+        "signature_sha256": "d" * 64,
         "official_release_url": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         "staged_at": NOW.isoformat(),
     }
@@ -78,6 +79,7 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
     assert evidence.version == "26.2.4"
     assert evidence.installer_sha256 == "a" * 64
     assert evidence.signature_subject == "CN=DBeaver Corporation"
+    assert evidence.signature_sha256 == "d" * 64
     assert registry.get(evidence.evidence_id) == evidence
 
     binding = registry.bind_to_plan(
@@ -100,6 +102,8 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
         ({}, {"architecture": "arm64"}),
         ({}, {"sha256": "e" * 64}),
         ({}, {"signature_subject": None}),
+        ({}, {"signature_sha256": None}),
+        ({}, {"signature_sha256": "e" * 64}),
         ({}, {"official_release_url": "https://evil.example/release"}),
     ],
 )
@@ -156,5 +160,5 @@ def test_registry_rejects_wrong_signer_even_when_signature_is_trusted_by_windows
     with pytest.raises(EvidenceRejected, match="trust anchor"):
         registry.register_staged_candidate(
             candidate=candidate(),
-            staged=staged(signature_subject="CN=Unrelated Publisher"),
+            staged=staged(signature_sha256="e" * 64),
         )
