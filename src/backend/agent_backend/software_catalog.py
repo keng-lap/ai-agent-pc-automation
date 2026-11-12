@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import ipaddress
 import os
 import re
-import shutil
 import sqlite3
 import tempfile
 import threading
@@ -16,7 +14,6 @@ import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path, PurePosixPath
-from typing import Any
 from datetime import UTC, datetime
 
 import requests
