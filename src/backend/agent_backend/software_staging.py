@@ -89,7 +89,7 @@ class InstallerStager:
         try:
             descriptor, temp_name = tempfile.mkstemp(
                 prefix=".p6-604-download-",
-                suffix=".part",
+                suffix=f".part{suffix}",
                 dir=root,
             )
             temp_path = Path(temp_name)
