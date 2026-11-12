@@ -1132,7 +1132,7 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    input.value = 'Install Chrome';
+    input.value = 'Prepare a plan for Chrome deployment';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
