@@ -13,7 +13,6 @@ import shutil
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
 from urllib.parse import urlsplit
 
 import yaml
