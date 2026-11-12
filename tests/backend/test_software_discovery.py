@@ -145,6 +145,36 @@ def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
         )
 
 
+def test_manifest_schema_version_with_long_digit_run_is_rejected():
+    source = FakeSource()
+    original_get = source.get
+
+    def malformed_version_get(url, **kwargs):
+        response = original_get(url, **kwargs)
+        if url.endswith("DBeaver.DBeaver.Community.yaml"):
+            payload = json.loads(response._body)
+            payload["content"] = base64.b64encode(
+                json.dumps(
+                    {
+                        "PackageIdentifier": PACKAGE_ID,
+                        "PackageVersion": VERSION,
+                        "DefaultLocale": "en-US",
+                        "ManifestType": "version",
+                        "ManifestVersion": "9" * 100_000,
+                    }
+                ).encode()
+            ).decode()
+            response._body = json.dumps(payload).encode()
+        return response
+
+    with pytest.raises(DiscoveryUnavailable):
+        WinGetManifestRepository(http_get=malformed_version_get).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+
 def test_missing_package_is_not_found():
     class MissingSource(FakeSource):
         def get(self, url, **kwargs):
