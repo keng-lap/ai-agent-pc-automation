@@ -17,6 +17,7 @@ from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 from .software_discovery_api import router as software_discovery_router
+from .software_approval_api import router as software_approval_router
 
 
 def create_app(settings=None, auth_services=None) -> FastAPI:
@@ -39,6 +40,7 @@ def create_app(settings=None, auth_services=None) -> FastAPI:
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
+    application.include_router(software_approval_router, dependencies=[Depends(require_session)])
     return application
 
 
