@@ -134,8 +134,29 @@ def build_install_arguments(
         raise TypeError("an immutable install approval binding is required")
     if not isinstance(manifest_directory, Path) or not manifest_directory.is_absolute():
         raise WinGetAdapterError("manifest directory must be an absolute backend path")
-    if not manifest_directory.is_dir() or manifest_directory.is_symlink():
-        raise WinGetAdapterError("manifest directory is unavailable or unsafe")
+    try:
+        binding.ensure_fresh(now=datetime.now(UTC))
+    except (TypeError, ValueError):
+        raise WinGetAdapterError("approval evidence is expired or invalid") from None
+    try:
+        if (
+            not manifest_directory.is_dir()
+            or manifest_directory.is_symlink()
+            or manifest_directory.resolve(strict=True) != manifest_directory
+        ):
+            raise WinGetAdapterError("manifest directory is unavailable or unsafe")
+        expected_documents = build_local_manifest_documents(binding)
+        actual_names = {entry.name for entry in manifest_directory.iterdir()}
+        if actual_names != set(expected_documents):
+            raise WinGetAdapterError("manifest file set does not match the approved package")
+        for file_name, expected_content in expected_documents.items():
+            target = manifest_directory / file_name
+            if target.is_symlink() or not target.is_file():
+                raise WinGetAdapterError("manifest file is unavailable or unsafe")
+            if target.read_text(encoding="utf-8") != expected_content:
+                raise WinGetAdapterError("manifest content no longer matches the approved evidence")
+    except OSError:
+        raise WinGetAdapterError("manifest directory could not be verified") from None
     return (
         "install",
         "--manifest",
