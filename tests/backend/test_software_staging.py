@@ -83,11 +83,11 @@ def test_stage_downloads_hashes_and_verifies_without_executing(tmp_path):
     assert staged.file_size == len(body)
     assert staged.authenticode_valid is True
     assert response.closed is True
-    assert signature.paths == [path] or signature.paths[0].suffix == ".part"
+    assert signature.paths == [path] or signature.paths[0].suffix == ".exe"
     assert calls[0][0] == make_candidate(body).installer_url
     assert calls[0][1]["allow_redirects"] is False
     assert calls[0][1]["stream"] is True
-    assert list(tmp_path.glob("*.part")) == []
+    assert list(tmp_path.glob("*.part.exe")) == []
 
 
 def test_unverified_candidate_is_rejected_before_network_or_file_creation(tmp_path):
