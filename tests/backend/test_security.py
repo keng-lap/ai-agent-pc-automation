@@ -339,6 +339,7 @@ def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
         "qrcode[pil]>=8.2",
         "google-auth>=2.62.1",
         "requests>=2.32",
+        "PyYAML>=6.0.2",
     ]
 
 
