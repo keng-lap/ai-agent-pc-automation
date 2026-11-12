@@ -113,7 +113,7 @@ def test_registry_rejects_mismatched_or_incomplete_proof(candidate_overrides, st
 
 
 def test_registry_rejects_stale_or_future_staging_proof():
-    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    registry = make_registry(clock=lambda: NOW)
     stale = staged(staged_at=(NOW - timedelta(minutes=16)).isoformat())
     future = staged(staged_at=(NOW + timedelta(seconds=1)).isoformat())
 
@@ -124,7 +124,7 @@ def test_registry_rejects_stale_or_future_staging_proof():
 
 
 def test_evidence_expires_and_is_removed_from_registry():
-    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    registry = make_registry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
     later = make_registry(clock=lambda: NOW + timedelta(minutes=16))
     later._entries[evidence.evidence_id] = evidence
@@ -134,7 +134,7 @@ def test_evidence_expires_and_is_removed_from_registry():
 
 
 def test_binding_is_digest_specific_and_revocable():
-    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    registry = make_registry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
     first = registry.bind_to_plan(evidence_id=evidence.evidence_id, plan_digest=PLAN_DIGEST)
     second = registry.bind_to_plan(evidence_id=evidence.evidence_id, plan_digest="e" * 64)
