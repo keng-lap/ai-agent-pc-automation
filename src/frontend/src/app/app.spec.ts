@@ -412,7 +412,15 @@ describe('App chat UI (T-202)', () => {
         { package_id: 'DBeaver.DBeaver.Community', name: 'DBeaver Community Edition', moniker: 'dbeaver', latest_version: '7.3.5' },
       ],
     });
-    api.discoveryResponder = (packageId, version) => of({
+    api.discoveryResponder = (packageId, version) => of(version === null
+      ? {
+        status: 'VERSION_REQUIRED',
+        package_id: packageId,
+        available_versions: ['7.3.5'],
+        candidate: null,
+        source: 'winget-community-repository',
+      }
+      : {
       status: 'SOURCE_MISMATCH',
       package_id: packageId,
       available_versions: ['7.3.5'],
