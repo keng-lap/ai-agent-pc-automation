@@ -74,7 +74,7 @@ class FakeSource:
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
         path = request_path(url)
-        if path == "/repos/dbeaver/dbeaver/releases/latest":
+        if path == "repos/dbeaver/dbeaver/releases/latest":
             official_asset = f"dbeaver-ce-{self.official_version}-windows-x86_64.exe"
             payload = {
                 "tag_name": self.official_version,
