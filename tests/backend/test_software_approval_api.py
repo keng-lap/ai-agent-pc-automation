@@ -73,6 +73,7 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         ),
     )
     api._bindings.clear()
+    api._consumed_bindings.clear()
     return step_up, principal
 
 
@@ -176,3 +177,35 @@ def test_invalid_totp_never_returns_approval(monkeypatch):
         )
     assert getattr(error.value, "status_code", None) == 403
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
+
+
+def test_successful_confirmation_consumes_plan_binding_and_rejects_replay(monkeypatch):
+    binding = make_binding()
+    step_up, _principal = setup_context(monkeypatch)
+    monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
+    api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+    payload = api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456")
+
+    first = api.confirm_software_approval(PLAN_ID, payload, request=object())
+    assert first.approved is True
+    assert api._consumed_bindings[PLAN_ID] == binding.evidence.expires_at
+
+    with pytest.raises(Exception) as error:
+        api.confirm_software_approval(PLAN_ID, payload, request=object())
+    assert getattr(error.value, "status_code", None) == 409
+    assert len(step_up.verified) == 1
+
+
+def test_consumed_binding_cannot_create_another_challenge(monkeypatch):
+    binding = make_binding()
+    setup_context(monkeypatch)
+    monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
+    api._consumed_bindings[PLAN_ID] = binding.evidence.expires_at
+
+    with pytest.raises(Exception) as error:
+        api.create_software_approval_challenge(
+            PLAN_ID,
+            api.SoftwareApprovalChallengeRequest(evidence_id="e" * 32),
+            request=object(),
+        )
+    assert getattr(error.value, "status_code", None) == 409
