@@ -18,6 +18,7 @@ def make_binding():
     evidence = VerifiedPackageEvidence(
         evidence_id="e" * 32,
         package_id="DBeaver.DBeaver.Community",
+        package_name="DBeaver Community Edition",
         publisher="DBeaver Corp",
         version="26.2.4",
         source="winget",
@@ -88,6 +89,11 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
 
     assert response.approval_digest == binding.approval_digest
     assert response.package_id == binding.evidence.package_id
+    assert response.package_name == binding.evidence.package_name
+    assert response.publisher == binding.evidence.publisher
+    assert response.installer_sha256 == binding.evidence.installer_sha256
+    assert response.manifest_sha256 == binding.evidence.manifest_sha256
+    assert response.signature_subject == binding.evidence.signature_subject
     assert response.notice == "APPROVAL_ONLY_NOT_EXECUTED"
     assert step_up.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["plan_id"] == PLAN_ID
