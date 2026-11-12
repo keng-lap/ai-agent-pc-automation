@@ -39,12 +39,16 @@ export interface SoftwareInstallerCandidate {
   repository_commit: string;
   manifest_source_url: string;
   checked_at: string;
+  publisher_verification: 'NOT_CHECKED' | 'VERIFIED' | 'MISMATCH' | 'UNAVAILABLE';
+  official_version: string | null;
+  official_release_url: string | null;
+  official_asset_sha256: string | null;
   status: 'CONDITIONAL';
   limitations: string[];
 }
 
 export interface SoftwareDiscoveryResponse {
-  status: 'VERSION_REQUIRED' | 'CONDITIONAL';
+  status: 'VERSION_REQUIRED' | 'CONDITIONAL' | 'SOURCE_MISMATCH' | 'SOURCE_CHECK_UNAVAILABLE';
   package_id: string;
   available_versions: string[];
   candidate: SoftwareInstallerCandidate | null;
