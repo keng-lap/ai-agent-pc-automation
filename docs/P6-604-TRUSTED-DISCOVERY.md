@@ -24,15 +24,20 @@ The chat UI asks the user to choose the exact Package ID and then an exact versi
 
 The catalog index is cached in memory for one hour. Its MSIX is held only in a bounded temporary file for signature validation and is deleted after loading; the SQLite index is loaded into memory, so no persistent catalog database is written to the user's PC.
 
-A catalog search result is only a package-name/ID candidate. The UI displays the exact publisher, version, architecture, user scope, installer type/domain, hashes, source commit, and source manifest link returned by the backend. A manifest result is always `CONDITIONAL`. It is not a `VerifiedPackageEvidence` and cannot be passed to the install adapter. The manifest reader records the publisher and installer URL/hash, but it does not yet independently establish the publisher's official distribution channel or inspect the downloaded binary's Authenticode signer. Those gaps are explicit limitations.
+A catalog search result is only a package-name/ID candidate. The UI displays the exact publisher, version, architecture, user scope, installer type/domain, hashes, source commit, and source manifest link returned by the backend. A manifest result is always `CONDITIONAL`. It is not a `VerifiedPackageEvidence` and cannot be passed to the install adapter.
+
+For the known DBeaver Community Package ID, a backend-owned trust anchor cross-checks the manifest against the latest release from the official `dbeaver/dbeaver` GitHub repository. It compares the exact release tag, Windows architecture asset URL, and GitHub-provided SHA-256 digest. A version, URL, or digest mismatch returns `SOURCE_MISMATCH`; inability to reach or validate the official release returns `SOURCE_CHECK_UNAVAILABLE`. Both states are blocked in the UI. Unknown publishers remain `NOT_CHECKED` and conditional; AI and frontend cannot add trust anchors.
+
+The DBeaver check demonstrates why this matters: the WinGet manifest currently reports version `7.3.5`, while the official DBeaver release is `26.2.4` (checked 2026-11-12). The manifest is therefore blocked rather than treated as a safe current release.
+
+A bounded staging service is implemented but is not wired to any API, approval route, or tool handler. It accepts only a backend `InstallerCandidate` whose official release version and SHA-256 match, downloads with HTTPS, no redirects, fixed timeouts, a 512 MiB ceiling, bounded streaming, and content-length checks, verifies both manifest and official release hashes, and then calls Windows WinVerifyTrust through the Authenticode verifier. Partial files are deleted on failure. The staged file is never executed. This service must only be called after exact-action approval is integrated; no staging download has been made on the user's PC.
 
 ## Required next stages
 
 1. Expand the backend-owned publisher trust-anchor registry only with independently verified vendor-controlled sources.
-2. Add a bounded staging downloader and file hash/Authenticode verification without executing the file.
-3. Add a backend-only evidence registry that accepts results only from the completed verifier.
-4. Bind the registry evidence to the existing exact-action approval challenge and approval digest.
-5. Keep installation dispatch disabled until independent A4 review, negative tests, CI, local acceptance, and separate Product Owner enablement approval.
+2. Add a backend-only evidence registry that accepts results only from the completed release and installer verifier.
+3. Bind the registry evidence to the existing exact-action approval challenge and approval digest.
+4. Keep installation dispatch disabled until independent A4 review, negative tests, CI, local acceptance, and separate Product Owner enablement approval.
 
 ## Security invariants
 
