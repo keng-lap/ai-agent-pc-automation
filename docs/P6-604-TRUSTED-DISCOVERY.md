@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation in progress. This task is read-only discovery only. It does not invoke WinGet, download an installer, create approval evidence, or change the Windows host.
+Implementation in progress. Discovery endpoints are read-only. A separate bounded staging service exists but is not wired to any API, approval route, or tool handler and has not been invoked. This task does not invoke WinGet, create approval evidence, or change the Windows host.
 
 ## Source and trust boundary
 
