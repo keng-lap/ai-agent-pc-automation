@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from agent_backend.software_approval import build_install_approval_binding
 from agent_backend.software_discovery import InstallerCandidate
 from agent_backend.software_evidence import (
     EvidenceNotFound,
@@ -162,3 +163,19 @@ def test_registry_rejects_wrong_signer_even_when_signature_is_trusted_by_windows
             candidate=candidate(),
             staged=staged(signature_sha256="e" * 64),
         )
+
+
+def test_approval_digest_changes_when_signer_certificate_fingerprint_changes():
+    registry = make_registry(clock=lambda: NOW)
+    evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
+    original = build_install_approval_binding(
+        plan_digest=PLAN_DIGEST,
+        evidence=evidence,
+    )
+    rotated = evidence.model_copy(update={"signature_sha256": "e" * 64})
+    changed = build_install_approval_binding(
+        plan_digest=PLAN_DIGEST,
+        evidence=rotated,
+    )
+
+    assert original.approval_digest != changed.approval_digest
