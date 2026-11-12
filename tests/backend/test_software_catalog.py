@@ -10,7 +10,6 @@ from agent_backend.software_catalog import (
     EXPECTED_PACKAGE_NAME,
     EXPECTED_PUBLISHER,
     WINGET_SOURCE2_URL,
-    EXPECTED_PUBLISHER,
     CatalogUnavailable,
     MicrosoftWinGetCatalogIndex,
     _matches_expected_publisher_subject,
