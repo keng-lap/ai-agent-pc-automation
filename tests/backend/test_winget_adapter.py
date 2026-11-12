@@ -140,7 +140,7 @@ def test_prepare_requires_fresh_approval_and_writes_only_three_files(tmp_path):
 
 
 def test_prepare_rejects_expired_approval(tmp_path):
-    binding, now = _binding()
+    binding, _now = _binding()
     with pytest.raises(WinGetAdapterError, match="expired"):
         prepare_approved_install(
             binding,
