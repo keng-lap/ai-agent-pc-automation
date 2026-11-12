@@ -28,7 +28,9 @@ def test_wintrust_returns_subject_from_verified_windows_binary():
     system_root = Path(os.environ["WINDIR"])
     signed_binary = system_root / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
 
-    subject = WindowsMsixSignatureVerifier().verify_and_get_signer_subject(signed_binary)
+    verifier = WindowsMsixSignatureVerifier()
+    assert verifier.verify(signed_binary) is True
+    subject = verifier.verify_and_get_signer_subject(signed_binary)
 
     assert subject
     assert "CN=" in subject
