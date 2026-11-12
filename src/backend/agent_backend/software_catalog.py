@@ -201,11 +201,26 @@ class WindowsMsixSignatureVerifier:
                 ctypes.c_wchar_p,
                 ctypes.c_uint32,
             ]
-            required = get_name(cert_context, 2, 0, None, None, 0)  # CERT_NAME_RDN_TYPE
+            x500_name_format = ctypes.c_uint32(3)  # CERT_X500_NAME_STR
+            required = get_name(
+                cert_context,
+                2,
+                0,
+                ctypes.byref(x500_name_format),
+                None,
+                0,
+            )  # CERT_NAME_RDN_TYPE
             if required < 2 or required > 1024:
                 return False, None
             buffer = ctypes.create_unicode_buffer(required)
-            written = get_name(cert_context, 2, 0, None, buffer, required)
+            written = get_name(
+                cert_context,
+                2,
+                0,
+                ctypes.byref(x500_name_format),
+                buffer,
+                required,
+            )
             if written != required:
                 return False, None
             subject = buffer.value.strip()
