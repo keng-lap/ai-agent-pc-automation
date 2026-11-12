@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import io
 import os
 import re
 import sqlite3
@@ -270,8 +271,14 @@ class MicrosoftWinGetCatalogIndex:
                 raise CatalogUnavailable("Microsoft catalog download was empty")
             if not self._signature_verifier.verify(temp_path):
                 raise CatalogUnavailable("Microsoft catalog MSIX signature did not pass Windows trust validation")
+            package_bytes = temp_path.read_bytes()
+            if (
+                len(package_bytes) != total
+                or hashlib.sha256(package_bytes).hexdigest() != digest.hexdigest()
+            ):
+                raise CatalogUnavailable("Microsoft catalog changed after signature validation")
 
-            with zipfile.ZipFile(temp_path, "r") as archive:
+            with zipfile.ZipFile(io.BytesIO(package_bytes), "r") as archive:
                 archive_names = archive.namelist()
                 names = set(archive_names)
                 if len(names) != len(archive_names):
