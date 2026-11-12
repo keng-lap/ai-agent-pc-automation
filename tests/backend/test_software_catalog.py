@@ -195,7 +195,7 @@ def test_catalog_retains_certificate_fingerprint_from_verified_signer():
     index = make_index(FakeSource(), AcceptSignatureWithIdentity())
     index.search("DBeaver")
 
-    assert index.source_signer_subject == "CN=Microsoft Corporation"
+    assert index.source_signer_subject == EXPECTED_PUBLISHER
     assert index.source_signer_sha256 == "d" * 64
 
 
