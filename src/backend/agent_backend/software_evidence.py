@@ -110,6 +110,7 @@ class SoftwareEvidenceRegistry:
         evidence = VerifiedPackageEvidence(
             evidence_id=secrets.token_hex(16),
             package_id=candidate.package_id,
+            package_name=candidate.package_name,
             publisher=candidate.publisher,
             version=candidate.version,
             source="winget",
