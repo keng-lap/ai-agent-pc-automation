@@ -263,6 +263,12 @@ class MicrosoftWinGetCatalogIndex:
         self._source_version = ""
         self._source_sha256 = ""
         self._checked_at = ""
+        self._source_signer_subject: str | None = None
+
+    @property
+    def source_signer_subject(self) -> str | None:
+        """Signer subject extracted from the verified source package, when available."""
+        return self._source_signer_subject
 
     def search(self, query: str, *, limit: int = 10) -> CatalogSearchResponse:
         normalized = _validate_query(query)
@@ -368,6 +374,8 @@ class MicrosoftWinGetCatalogIndex:
                 raise CatalogUnavailable("Microsoft catalog download was empty")
             if not self._signature_verifier.verify(temp_path):
                 raise CatalogUnavailable("Microsoft catalog MSIX signature did not pass Windows trust validation")
+            extract_subject = getattr(self._signature_verifier, "verify_and_get_signer_subject", None)
+            self._source_signer_subject = extract_subject(temp_path) if callable(extract_subject) else None
             package_bytes = temp_path.read_bytes()
             if (
                 len(package_bytes) != total
