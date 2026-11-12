@@ -24,7 +24,7 @@ interface StructuredAgentResponse {
 
 interface SoftwareDiscoveryUiState {
   query: string;
-  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'verifying_manifest' | 'conditional' | 'error';
+  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'verifying_manifest' | 'conditional' | 'source_mismatch' | 'source_check_unavailable' | 'error';
   catalog?: SoftwareCatalogSearchResponse;
   packageId?: string;
   result?: SoftwareDiscoveryResponse;
@@ -89,7 +89,7 @@ function isSoftwareCatalogSearchResponse(value: unknown): value is SoftwareCatal
 function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscoveryResponse {
   if (
     !isRecord(value)
-    || !['VERSION_REQUIRED', 'CONDITIONAL'].includes(String(value['status']))
+    || !['VERSION_REQUIRED', 'CONDITIONAL', 'SOURCE_MISMATCH', 'SOURCE_CHECK_UNAVAILABLE'].includes(String(value['status']))
     || value['source'] !== 'winget-community-repository'
     || typeof value['package_id'] !== 'string'
     || !Array.isArray(value['available_versions'])
@@ -120,6 +120,12 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && typeof candidate['manifest_source_url'] === 'string'
     && candidate['manifest_source_url'].startsWith('https://github.com/microsoft/winget-pkgs/')
     && typeof candidate['checked_at'] === 'string'
+    && ['NOT_CHECKED', 'VERIFIED', 'MISMATCH', 'UNAVAILABLE'].includes(String(candidate['publisher_verification']))
+    && (typeof candidate['official_version'] === 'string' || candidate['official_version'] === null)
+    && (typeof candidate['official_release_url'] === 'string' || candidate['official_release_url'] === null)
+    && (candidate['official_release_url'] === null || candidate['official_release_url'].startsWith('https://github.com/dbeaver/dbeaver/releases/tag/'))
+    && (typeof candidate['official_asset_sha256'] === 'string' || candidate['official_asset_sha256'] === null)
+    && (candidate['official_asset_sha256'] === null || /^[0-9a-f]{64}$/i.test(candidate['official_asset_sha256']))
     && Array.isArray(candidate['limitations'])
     && candidate['limitations'].every((item) => typeof item === 'string');
 }
@@ -631,7 +637,13 @@ export class App implements AfterViewChecked {
         ...entry,
         discovery: {
           ...entry.discovery,
-          status: value.status === 'VERSION_REQUIRED' ? 'version_required' : 'conditional',
+          status: value.status === 'VERSION_REQUIRED'
+            ? 'version_required'
+            : value.status === 'SOURCE_MISMATCH'
+              ? 'source_mismatch'
+              : value.status === 'SOURCE_CHECK_UNAVAILABLE'
+                ? 'source_check_unavailable'
+                : 'conditional',
           result: value,
           packageId: value.package_id,
         },
