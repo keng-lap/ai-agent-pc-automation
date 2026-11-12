@@ -2,7 +2,6 @@
 
 import base64
 import json
-from urllib.parse import urlparse
 
 import pytest
 
@@ -25,6 +24,10 @@ class FakeResponse:
 
     def iter_content(self, chunk_size):
         yield self._body
+
+
+def request_path(url):
+    return url.split("://", 1)[1].split("/", 1)[1].split("?", 1)[0]
 
 
 class FakeSource:
@@ -70,7 +73,7 @@ class FakeSource:
 
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
-        path = urlparse(url).path
+        path = request_path(url)
         if path.endswith("/commits/master"):
             payload = {"sha": COMMIT}
         elif path.endswith("/DBeaver/DBeaver/Community"):
@@ -146,7 +149,7 @@ def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
 def test_missing_package_is_not_found():
     class MissingSource(FakeSource):
         def get(self, url, **kwargs):
-            if urlparse(url).path.endswith("/DBeaver/DBeaver/Community"):
+            if request_path(url).endswith("/DBeaver/DBeaver/Community"):
                 return FakeResponse({"message": "Not Found"}, status_code=404)
             return super().get(url, **kwargs)
 
