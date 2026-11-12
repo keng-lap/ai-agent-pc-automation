@@ -28,6 +28,7 @@ router = APIRouter()
 _lock = threading.RLock()
 _bindings: dict[str, tuple[str, str, InstallApprovalBinding]] = {}
 MAX_BINDINGS = 128
+_consumed_bindings: dict[str, datetime] = {}
 
 
 def _prune_bindings() -> None:
@@ -38,6 +39,9 @@ def _prune_bindings() -> None:
     ]
     for plan_id in expired:
         _bindings.pop(plan_id, None)
+    expired_consumed = [plan_id for plan_id, expires_at in _consumed_bindings.items() if now >= expires_at]
+    for plan_id in expired_consumed:
+        _consumed_bindings.pop(plan_id, None)
 
 
 class SoftwareApprovalChallengeRequest(BaseModel):
@@ -154,6 +158,8 @@ def create_software_approval_challenge(
 
     with _lock:
         _prune_bindings()
+        if plan_id in _consumed_bindings:
+            raise HTTPException(status_code=409, detail="This software approval has already been consumed.")
         existing = _bindings.get(plan_id)
         if existing is not None and (
             existing[0] != principal.owner_sub
@@ -208,6 +214,9 @@ def confirm_software_approval(
     services, principal, secret = _authenticated_context(request)
     plan = _get_install_plan(plan_id)
     with _lock:
+        _prune_bindings()
+        if plan_id in _consumed_bindings:
+            raise HTTPException(status_code=409, detail="This software approval has already been consumed.")
         stored = _bindings.get(plan_id)
     if stored is None:
         raise HTTPException(status_code=409, detail="Software approval binding is missing.")
@@ -228,16 +237,23 @@ def confirm_software_approval(
             _bindings.pop(plan_id, None)
         raise HTTPException(status_code=409, detail="Software approval digest changed; rediscovery is required.")
 
-    accepted = services.step_up.verify_and_consume(
-        challenge_id=payload.challenge_id,
-        owner_sub=principal.owner_sub,
-        session_id=principal.session_id,
-        plan_id=plan.plan_id,
-        action_digest=binding.approval_digest,
-        risk_class="high",
-        secret=secret,
-        code=payload.totp_code,
-    )
+    # Serialize confirmation per process: distinct one-use TOTP challenges must not
+    # authorize the same plan/evidence binding more than once.
+    with _lock:
+        if plan_id in _consumed_bindings:
+            raise HTTPException(status_code=409, detail="This software approval has already been consumed.")
+        accepted = services.step_up.verify_and_consume(
+            challenge_id=payload.challenge_id,
+            owner_sub=principal.owner_sub,
+            session_id=principal.session_id,
+            plan_id=plan.plan_id,
+            action_digest=binding.approval_digest,
+            risk_class="high",
+            secret=secret,
+            code=payload.totp_code,
+        )
+        if accepted:
+            _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:
         record_auth_audit_event(
             event_type="auth.step_up",
