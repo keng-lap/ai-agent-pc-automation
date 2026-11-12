@@ -6,7 +6,7 @@ import hashlib
 import os
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -64,7 +64,7 @@ class InstallerStager:
     def __init__(self, *, http_get=None, signature_verifier=None, clock=None) -> None:
         self._http_get = http_get or requests.get
         self._signature_verifier = signature_verifier or WindowsAuthenticodeVerifier()
-        self._clock = clock or (lambda: datetime.now(timezone.utc).isoformat())
+        self._clock = clock or (lambda: datetime.now(UTC).isoformat())
 
     def stage(self, candidate: InstallerCandidate, *, staging_root: Path) -> StagedInstaller:
         self._require_official_release_match(candidate)
