@@ -60,9 +60,16 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     challenge_id: str
     expires_at: float
     package_id: str
+    package_name: str
+    publisher: str
     version: str
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
+    installer_url: str
+    installer_sha256: str
+    manifest_sha256: str
+    signature_subject: str
+    evidence_expires_at: str
     approval_digest: str
     notice: Literal["APPROVAL_ONLY_NOT_EXECUTED"] = "APPROVAL_ONLY_NOT_EXECUTED"
 
@@ -137,7 +144,8 @@ def create_software_approval_challenge(
         raise HTTPException(status_code=409, detail="Verified software evidence cannot be bound to this plan.") from None
 
     evidence = binding.evidence
-    if evidence.package_id.casefold() != plan.programs[0].program.casefold():
+    requested_target = plan.programs[0].program.casefold()
+    if requested_target not in {evidence.package_id.casefold(), evidence.package_name.casefold()}:
         raise HTTPException(status_code=409, detail="Verified package does not match the requested plan target.")
 
     with _lock:
@@ -165,9 +173,16 @@ def create_software_approval_challenge(
         challenge_id=challenge.challenge_id,
         expires_at=challenge.expires_at,
         package_id=evidence.package_id,
+        package_name=evidence.package_name,
+        publisher=evidence.publisher,
         version=evidence.version,
         architecture=evidence.architecture,
         scope=evidence.scope,
+        installer_url=evidence.installer_url,
+        installer_sha256=evidence.installer_sha256,
+        manifest_sha256=evidence.manifest_sha256,
+        signature_subject=evidence.signature_subject,
+        evidence_expires_at=evidence.expires_at.isoformat(),
         approval_digest=binding.approval_digest,
     )
 
