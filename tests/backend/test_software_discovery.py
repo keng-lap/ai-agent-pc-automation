@@ -151,19 +151,11 @@ def test_manifest_schema_version_with_long_digit_run_is_rejected():
 
     def malformed_version_get(url, **kwargs):
         response = original_get(url, **kwargs)
-        if url.endswith("DBeaver.DBeaver.Community.yaml"):
+        if url.endswith(".yaml"):
             payload = json.loads(response._body)
-            payload["content"] = base64.b64encode(
-                json.dumps(
-                    {
-                        "PackageIdentifier": PACKAGE_ID,
-                        "PackageVersion": VERSION,
-                        "DefaultLocale": "en-US",
-                        "ManifestType": "version",
-                        "ManifestVersion": "9" * 100_000,
-                    }
-                ).encode()
-            ).decode()
+            document = json.loads(base64.b64decode(payload["content"]))
+            document["ManifestVersion"] = ("9" * 100_000) + ".0.0"
+            payload["content"] = base64.b64encode(json.dumps(document).encode()).decode()
             response._body = json.dumps(payload).encode()
         return response
 
