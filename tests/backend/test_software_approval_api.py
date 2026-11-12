@@ -32,6 +32,7 @@ def make_binding():
         architecture="x64",
         scope="user",
         signature_subject="CN=DBeaver Corporation",
+        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -103,6 +104,7 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.repository_commit == binding.evidence.repository_commit
     assert response.installer_type == binding.evidence.installer_type
     assert response.signature_subject == binding.evidence.signature_subject
+    assert response.signature_sha256 == binding.evidence.signature_sha256
     assert response.notice == "APPROVAL_ONLY_NOT_EXECUTED"
     assert step_up.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["plan_id"] == PLAN_ID
