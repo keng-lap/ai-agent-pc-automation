@@ -10,8 +10,10 @@ from agent_backend.software_catalog import (
     EXPECTED_PACKAGE_NAME,
     EXPECTED_PUBLISHER,
     WINGET_SOURCE2_URL,
+    EXPECTED_PUBLISHER,
     CatalogUnavailable,
     MicrosoftWinGetCatalogIndex,
+    _matches_expected_publisher_subject,
 )
 
 
@@ -207,3 +209,18 @@ def test_catalog_rejects_trusted_but_unexpected_signer_identity():
 
     with pytest.raises(CatalogUnavailable, match="expected Microsoft publisher"):
         make_index(FakeSource(), WrongPublisherSignature()).search("DBeaver")
+
+
+@pytest.mark.parametrize(
+    "subject,expected",
+    [
+        (EXPECTED_PUBLISHER, True),
+        (EXPECTED_PUBLISHER + ", SERIALNUMBER=12345", True),
+        ("CN=Other Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US", False),
+        ("CN=Microsoft Corporation, O=Other Corporation, L=Redmond, S=Washington, C=US", False),
+        (EXPECTED_PUBLISHER + ", O=Other Corporation", False),
+        ("CN=Microsoft Corporation, O=Microsoft Corporation", False),
+    ],
+)
+def test_expected_microsoft_publisher_subject_is_attribute_pinned(subject, expected):
+    assert _matches_expected_publisher_subject(subject) is expected
