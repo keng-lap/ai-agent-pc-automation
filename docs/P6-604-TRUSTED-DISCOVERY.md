@@ -7,7 +7,7 @@ Implementation in progress. Discovery endpoints are read-only. A separate bounde
 ## Source and trust boundary
 
 - Search product names in Microsoft's official WinGet catalog index, `source2.msix`, from `https://cdn.winget.microsoft.com/cache/source2.msix`.
-- Verify the MSIX with Windows `WinVerifyTrust`, require the expected Microsoft package identity and Publisher, validate the package structure, then load its `Public/index.db` into a read-only in-memory SQLite connection.
+- Verify the MSIX with Windows `WinVerifyTrust`; extract the primary signer's X.500 subject and SHA-256 certificate fingerprint from the verified WinTrust state; require the signer subject to match the backend-pinned Microsoft publisher identity as well as the expected MSIX package identity and Publisher; validate the package structure; then load its `Public/index.db` into a read-only in-memory SQLite connection.
 - Search only the catalog's `packages` table using bound SQL parameters. The index provides candidate names, IDs, monikers and latest-version hints; it does not itself authorize installation.
 - After the user selects a candidate, read its exact multi-file manifest from the Microsoft-owned `microsoft/winget-pkgs` repository through the fixed `api.github.com` HTTPS origin.
 - Resolve one repository commit first, then pin all manifest reads to that immutable commit SHA.
@@ -30,13 +30,13 @@ For the known DBeaver Community Package ID, a backend-owned trust anchor cross-c
 
 The DBeaver check demonstrates why this matters: the WinGet manifest currently reports version `7.3.5`, while the official DBeaver release is `26.2.4` (checked 2026-11-12). The manifest is therefore blocked rather than treated as a safe current release.
 
-A bounded staging service is implemented but is not wired to any API, approval route, or tool handler. It accepts only a backend `InstallerCandidate` whose official release version and SHA-256 match, downloads with HTTPS, no redirects, fixed timeouts, a 512 MiB ceiling, bounded streaming, and content-length checks, verifies both manifest and official release hashes, and then calls Windows WinVerifyTrust through the Authenticode verifier. Partial files are deleted on failure. The staged file is never executed. This service must only be called after exact-action approval is integrated; no staging download has been made on the user's PC.
+A bounded staging service is implemented but is not wired to any API, approval route, or tool handler. It accepts only a backend `InstallerCandidate` whose official release version and SHA-256 match, downloads with HTTPS, no redirects, fixed timeouts, a 512 MiB ceiling, bounded streaming, and content-length checks, verifies both manifest and official release hashes, and then calls Windows WinVerifyTrust through the Authenticode verifier. It extracts both the signer subject and SHA-256 fingerprint of the signer's certificate DER. Partial files are deleted on failure. The staged file is never executed. This service must only be called after exact-action approval is integrated; no staging download has been made on the user's PC.
 
 ## Required next stages
 
-1. Expand the backend-owned publisher trust-anchor registry only with independently verified vendor-controlled sources.
-2. Add a backend-only evidence registry that accepts results only from the completed release and installer verifier.
-3. Bind the registry evidence to the existing exact-action approval challenge and approval digest.
+1. Keep vendor-specific installer trust anchors default-deny until each certificate fingerprint is independently verified from a trusted vendor-controlled artifact.
+2. Complete Windows acceptance for primary signer certificate fingerprint extraction and fail-closed behavior.
+3. Keep the backend-only evidence registry restricted to matching discovery, staging, release hash, and signer fingerprint evidence.
 4. Keep installation dispatch disabled until independent A4 review, negative tests, CI, local acceptance, and separate Product Owner enablement approval.
 
 ## Security invariants
