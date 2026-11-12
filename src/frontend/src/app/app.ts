@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, UiLanguage } from './chat/chat-api';
+import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 import { JobMonitorComponent } from './job-monitor/job-monitor';
@@ -22,10 +22,20 @@ interface StructuredAgentResponse {
   tool_result: { tool_id: string; target: string; status: 'dry_run'; approval_required: true; summary: string } | null;
 }
 
+interface SoftwareDiscoveryUiState {
+  query: string;
+  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'verifying_manifest' | 'conditional' | 'error';
+  catalog?: SoftwareCatalogSearchResponse;
+  packageId?: string;
+  result?: SoftwareDiscoveryResponse;
+  error?: string;
+}
+
 interface ChatEntry {
   id: number;
   kind: EntryKind;
   text: string;
+  discovery?: SoftwareDiscoveryUiState;
   errorCode?: ErrorCode;
   diagnosticType?: string;
   diagnosticStage?: string;
@@ -48,8 +58,64 @@ const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function extractSoftwareInstallQuery(message: string): string | null {
+  const match = message.match(/^\\s*(?:(?:ช่วย\\s*)?ติดตั้ง|(?:please\\s+)?install)\\s+(.+?)\\s*$/i);
+  const query = match?.[1]?.trim();
+  return query && query.length >= 2 ? query : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSoftwareCatalogSearchResponse(value: unknown): value is SoftwareCatalogSearchResponse {
+  return isRecord(value)
+    && value['status'] === 'CATALOG_MATCHES'
+    && value['source'] === 'microsoft-winget-source2'
+    && typeof value['source_version'] === 'string'
+    && typeof value['source_sha256'] === 'string'
+    && /^[0-9a-f]{64}$/i.test(value['source_sha256'])
+    && typeof value['checked_at'] === 'string'
+    && Array.isArray(value['candidates'])
+    && value['candidates'].every((candidate) => (
+      isRecord(candidate)
+      && typeof candidate['package_id'] === 'string'
+      && typeof candidate['name'] === 'string'
+      && (typeof candidate['moniker'] === 'string' || candidate['moniker'] === null)
+      && typeof candidate['latest_version'] === 'string'
+    ));
+}
+
+function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscoveryResponse {
+  if (
+    !isRecord(value)
+    || !['VERSION_REQUIRED', 'CONDITIONAL'].includes(String(value['status']))
+    || value['source'] !== 'winget-community-repository'
+    || typeof value['package_id'] !== 'string'
+    || !Array.isArray(value['available_versions'])
+    || !value['available_versions'].every((version) => typeof version === 'string')
+  ) return false;
+  if (value['status'] === 'VERSION_REQUIRED') {
+    return value['candidate'] === null;
+  }
+  const candidate = value['candidate'];
+  return isRecord(candidate)
+    && candidate['status'] === 'CONDITIONAL'
+    && candidate['package_id'] === value['package_id']
+    && typeof candidate['package_name'] === 'string'
+    && typeof candidate['publisher'] === 'string'
+    && typeof candidate['version'] === 'string'
+    && ['x86', 'x64', 'arm64'].includes(String(candidate['architecture']))
+    && candidate['scope'] === 'user'
+    && typeof candidate['installer_type'] === 'string'
+    && typeof candidate['installer_domain'] === 'string'
+    && typeof candidate['installer_sha256'] === 'string'
+    && /^[0-9a-f]{64}$/i.test(candidate['installer_sha256'])
+    && typeof candidate['manifest_sha256'] === 'string'
+    && /^[0-9a-f]{64}$/i.test(candidate['manifest_sha256'])
+    && typeof candidate['manifest_source_url'] === 'string'
+    && Array.isArray(candidate['limitations'])
+    && candidate['limitations'].every((item) => typeof item === 'string');
 }
 
 function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
@@ -413,8 +479,53 @@ export class App implements AfterViewChecked {
       { id: ++this.nextEntryId, kind: 'user', text: message },
     ]);
     this.draft.set('');
-    this.pending.set(true);
 
+    const softwareQuery = extractSoftwareInstallQuery(message);
+    if (softwareQuery) {
+      const discoveryEntryId = ++this.nextEntryId;
+      this.entries.update((entries) => [
+        ...entries,
+        {
+          id: discoveryEntryId,
+          kind: 'agent',
+          text: '',
+          discovery: { query: softwareQuery, status: 'searching' },
+        },
+      ]);
+      this.planning.set(true);
+      defer(() => this.chatApi.searchSoftwareCatalog(softwareQuery))
+        .pipe(
+          timeout({ first: REQUEST_TIMEOUT_MS }),
+          take(1),
+          finalize(() => this.planning.set(false)),
+        )
+        .subscribe({
+          next: (result: unknown) => {
+            this.entries.update((entries) => entries.map((entry) => {
+              if (entry.id !== discoveryEntryId || !entry.discovery) return entry;
+              if (!isSoftwareCatalogSearchResponse(result)) {
+                return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Catalog ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid catalog response.' } };
+              }
+              return {
+                ...entry,
+                discovery: {
+                  ...entry.discovery,
+                  status: result.candidates.length ? 'matches' : 'not_found',
+                  catalog: result,
+                },
+              };
+            }));
+          },
+          error: () => this.entries.update((entries) => entries.map((entry) => (
+            entry.id === discoveryEntryId && entry.discovery
+              ? { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'ค้นหา Microsoft Catalog ไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend แล้วลองใหม่' : 'Microsoft Catalog search failed. Check the backend connection and try again.' } }
+              : entry
+          ))),
+        });
+      return;
+    }
+
+    this.pending.set(true);
     defer(() => this.chatApi.sendMessage(message, languageAtSend, conversationId))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
@@ -464,6 +575,71 @@ export class App implements AfterViewChecked {
       });
   }
 
+
+  protected selectSoftwarePackage(entryId: number, packageId: string): void {
+    const entry = this.entries().find((item) => item.id === entryId);
+    if (!entry?.discovery || this.planning()) return;
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, status: 'checking_versions', packageId, result: undefined, error: undefined } }
+      : item));
+    this.planning.set(true);
+    defer(() => this.chatApi.discoverSoftware(packageId, null))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
+        error: () => this.setSoftwareDiscoveryError(entryId),
+      });
+  }
+
+  protected selectSoftwareVersion(entryId: number, version: string): void {
+    const entry = this.entries().find((item) => item.id === entryId);
+    const packageId = entry?.discovery?.packageId;
+    if (!packageId || this.planning()) return;
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, status: 'verifying_manifest', error: undefined } }
+      : item));
+    this.planning.set(true);
+    defer(() => this.chatApi.discoverSoftware(packageId, version))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
+        error: () => this.setSoftwareDiscoveryError(entryId),
+      });
+  }
+
+  private updateSoftwareDiscovery(entryId: number, value: unknown): void {
+    this.entries.update((entries) => entries.map((entry) => {
+      if (entry.id !== entryId || !entry.discovery) return entry;
+      if (!isSoftwareDiscoveryResponse(value)) {
+        return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
+      }
+      return {
+        ...entry,
+        discovery: {
+          ...entry.discovery,
+          status: value.status === 'VERSION_REQUIRED' ? 'version_required' : 'conditional',
+          result: value,
+          packageId: value.package_id,
+        },
+      };
+    }));
+  }
+
+  private setSoftwareDiscoveryError(entryId: number): void {
+    this.entries.update((entries) => entries.map((entry) => (
+      entry.id === entryId && entry.discovery
+        ? { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'ตรวจสอบ Manifest ไม่สำเร็จ แหล่งข้อมูลไม่พร้อมใช้งานหรือข้อมูลไม่ผ่านการตรวจสอบ' : 'Manifest verification failed. The source is unavailable or the data did not pass validation.' } }
+        : entry
+    )));
+  }
 
   protected canApproveReview(review: PlanReviewResponse): boolean {
     return Boolean(
