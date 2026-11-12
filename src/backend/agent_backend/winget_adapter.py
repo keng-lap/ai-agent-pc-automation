@@ -12,8 +12,8 @@ import os
 import re
 import shutil
 import tempfile
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
