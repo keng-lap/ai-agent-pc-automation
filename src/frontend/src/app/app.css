@@ -107,13 +107,3 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .plan-review { min-width: 0; }
 .plan-review .detail-meta { overflow-wrap: anywhere; }
 
-
-.software-discovery-card { min-width: 0; }
-.software-candidate-list, .software-version-list { display: grid; gap: 8px; margin: 8px 0 12px; }
-.software-candidate, .software-version { display: grid; gap: 4px; width: 100%; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 11px; color: var(--ink); background: var(--surface-raised); font: inherit; text-align: left; cursor: pointer; }
-.software-candidate:hover:not(:disabled), .software-version:hover:not(:disabled) { border-color: #8b80e8; background: var(--active); }
-.software-candidate:disabled, .software-version:disabled { cursor: wait; opacity: .55; }
-.software-candidate strong { font-size: 12px; }
-.software-candidate span, .software-candidate small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
-.software-version { width: fit-content; min-width: 110px; font-size: 11px; }
-.software-discovery-card .program-review a { color: #7568d8; overflow-wrap: anywhere; }
