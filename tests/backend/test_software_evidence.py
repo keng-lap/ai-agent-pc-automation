@@ -16,6 +16,16 @@ NOW = datetime(2026, 11, 12, tzinfo=UTC)
 PLAN_DIGEST = "d" * 64
 
 
+def make_registry(*, clock=lambda: NOW) -> SoftwareEvidenceRegistry:
+    return SoftwareEvidenceRegistry(
+        clock=clock,
+        signer_subject_verifier=lambda item, subject: (
+            item.package_id == "DBeaver.DBeaver.Community"
+            and subject == "CN=DBeaver Corporation"
+        ),
+    )
+
+
 def candidate() -> InstallerCandidate:
     return InstallerCandidate(
         package_id="DBeaver.DBeaver.Community",
@@ -58,7 +68,7 @@ def staged(**overrides) -> StagedInstaller:
 
 
 def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
-    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    registry = make_registry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(
         candidate=candidate(),
         staged=staged(),
@@ -116,7 +126,7 @@ def test_registry_rejects_stale_or_future_staging_proof():
 def test_evidence_expires_and_is_removed_from_registry():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
-    later = SoftwareEvidenceRegistry(clock=lambda: NOW + timedelta(minutes=16))
+    later = make_registry(clock=lambda: NOW + timedelta(minutes=16))
     later._entries[evidence.evidence_id] = evidence
 
     with pytest.raises(EvidenceNotFound):
@@ -133,3 +143,9 @@ def test_binding_is_digest_specific_and_revocable():
     registry.revoke(evidence.evidence_id)
     with pytest.raises(EvidenceNotFound):
         registry.get(evidence.evidence_id)
+
+
+def test_default_registry_rejects_signer_without_configured_trust_anchor():
+    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    with pytest.raises(EvidenceRejected, match="trust anchor"):
+        registry.register_staged_candidate(candidate=candidate(), staged=staged())
