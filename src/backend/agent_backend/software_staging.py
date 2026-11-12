@@ -39,6 +39,9 @@ class StagedInstaller(BaseModel):
     file_size: int
     sha256: str
     authenticode_valid: Literal[True] = True
+    # WinVerifyTrust currently returns only a trust result, not the signer subject.
+    # Keep this unset until a verifier can extract and validate the signer identity.
+    signature_subject: str | None = None
     official_release_url: str
     staged_at: str
 
