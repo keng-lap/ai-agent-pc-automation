@@ -13,8 +13,8 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
-from pathlib import Path, PurePosixPath
 from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
 
 import requests
 from pydantic import BaseModel, ConfigDict
@@ -273,7 +273,10 @@ class MicrosoftWinGetCatalogIndex:
                 raise CatalogUnavailable("Microsoft catalog MSIX signature did not pass Windows trust validation")
 
             with zipfile.ZipFile(temp_path, "r") as archive:
-                names = set(archive.namelist())
+                archive_names = archive.namelist()
+                names = set(archive_names)
+                if len(names) != len(archive_names):
+                    raise CatalogUnavailable("Microsoft catalog archive contained duplicate paths")
                 if not {
                     "AppxManifest.xml",
                     "AppxBlockMap.xml",
@@ -323,6 +326,7 @@ class MicrosoftWinGetCatalogIndex:
                 }
                 if not {"id", "name", "moniker", "latest_version"}.issubset(columns):
                     raise CatalogUnavailable("Microsoft catalog database schema was not recognized")
+                connection.execute("PRAGMA query_only = ON")
 
                 source_version = identity.attrib.get("Version", "")
                 if not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", source_version):
@@ -347,6 +351,7 @@ class MicrosoftWinGetCatalogIndex:
             sqlite3.Error,
             ET.ParseError,
             requests.RequestException,
+            AttributeError,
         ):
             raise CatalogUnavailable("Microsoft catalog could not be parsed safely") from None
         finally:
