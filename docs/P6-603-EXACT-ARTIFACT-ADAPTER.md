@@ -76,7 +76,7 @@ This document records a security foundation, not authorization to install softwa
 
 **No Critical finding in this manifest-preparation-only module. This is not an execution approval.** The module has no process invocation or installer dispatch. The following High execution blockers remain and must be closed before any call to WinGet:
 
-1. **Manifest TOCTOU:** validation currently occurs before a future WinGet process opens the manifest path. A same-user process could modify a manifest file between validation and WinGet parsing. Runtime integration must hold Windows file handles that deny write/delete sharing for all manifest files (and protect the directory) through WinGet's manifest-read phase, or use an equivalently strong atomic handoff. Rechecking immediately before process start alone is insufficient.
+1. **Manifest TOCTOU — helper implemented; execution integration still gated:** `lock_prepared_manifest` now opens the manifest directory and all three files with Windows sharing that allows read access only, then revalidates the exact approval-bound contents while the handles remain open. The future WinGet process must run entirely inside this context. Calling `build_install_arguments` and launching WinGet after the context exits is unsafe. Windows tests verify write and delete attempts fail while the lock context is active.
 2. **WinGet executable identity:** the current-user alias must be resolved and the actual executable verified with a reviewed Microsoft signer policy. File existence, PATH resolution, and an unpinned subject string are insufficient.
 3. **LocalManifestFiles prerequisite:** Microsoft documents this as an administrator-controlled setting. Runtime must not self-enable or elevate. If state cannot be read reliably without PowerShell or another prohibited execution path, fail closed and present the one-time setup requirement to the user.
 4. **Process lifecycle:** no process-tree containment, cancellation, bounded output-draining, or orphan-installer reconciliation exists. A timeout must produce an explicit unknown outcome until the job can prove no installer remains active.
@@ -93,3 +93,8 @@ This document records a security foundation, not authorization to install softwa
 - CodeQL run: https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43238492339
 
 These checks validate the current code and existing regression suite. They do not provide Windows WinGet local-manifest execution acceptance, and no installer was run.
+
+
+### Windows manifest-lock test
+
+The Windows-only acceptance test runs on `windows-latest` and proves the prepared manifest cannot be overwritten or deleted while `lock_prepared_manifest` holds its handles. It does not start WinGet or execute an installer. The first successful Windows run at commit `3b8fd1a45e30770614856f9e6aad97783d37590e` reported **14 passed**; the latest head is being rechecked.
