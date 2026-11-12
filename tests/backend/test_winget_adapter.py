@@ -204,3 +204,12 @@ def test_locked_manifest_rejects_write_and_delete_until_context_exit(tmp_path):
 
     cleanup_prepared_install(prepared, work_root=tmp_path)
     assert not directory.exists()
+
+
+def test_install_arguments_reject_prepared_manifest_from_another_approval(tmp_path):
+    binding, now = _binding()
+    prepared = prepare_approved_install(binding, work_root=tmp_path, now=now)
+    forged = prepared.model_copy(update={"approval_digest": "f" * 64})
+
+    with pytest.raises(WinGetAdapterError, match="exact approval"):
+        build_install_arguments(binding, forged, work_root=tmp_path)
