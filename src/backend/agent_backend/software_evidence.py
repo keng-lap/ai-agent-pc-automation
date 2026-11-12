@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import secrets
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 
 from agent_backend.software_approval import (
     InstallApprovalBinding,
@@ -82,14 +82,14 @@ class SoftwareEvidenceRegistry:
             raise EvidenceRejected("staged installer release origin does not match the candidate")
         try:
             signer_matches = self._signer_subject_verifier(candidate, staged.signature_subject)
-        except Exception:
+        except Exception:  # noqa: BLE001 - any trust-anchor failure must deny evidence minting.
             signer_matches = False
         if signer_matches is not True:
             raise EvidenceRejected("Authenticode signer does not match a backend-owned publisher trust anchor")
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
-            candidate_checked_at = datetime.fromisoformat(candidate.checked_at.replace("Z", "+00:00"))
+            candidate_checked_at = datetime.fromisoformat(candidate.checked_at)
         except (TypeError, ValueError):
             raise EvidenceRejected("discovery or staging timestamp is invalid") from None
         if (
