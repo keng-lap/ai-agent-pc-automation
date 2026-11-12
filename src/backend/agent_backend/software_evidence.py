@@ -2,7 +2,7 @@
 
 No HTTP endpoint accepts evidence fields. Only the trusted staging path may
 register a candidate, and registration fails closed unless the staged binary
-has a verified Authenticode signer subject matching the expected publisher.
+has a verified Authenticode certificate fingerprint matching the expected publisher.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class SoftwareEvidenceRegistry:
         *,
         clock: Callable[[], datetime] | None = None,
         capacity: int = MAX_EVIDENCE,
-        signer_subject_verifier: Callable[[InstallerCandidate, str], bool] | None = None,
+        signer_sha256_verifier: Callable[[InstallerCandidate, str], bool] | None = None,
     ) -> None:
         if type(capacity) is not int or not 1 <= capacity <= MAX_EVIDENCE:
             raise ValueError("evidence capacity must be between 1 and 128")
@@ -48,7 +48,7 @@ class SoftwareEvidenceRegistry:
         self._capacity = capacity
         # No publisher signer trust anchors are configured by default.
         # Until an independently reviewed anchor is supplied, registration denies.
-        self._signer_subject_verifier = signer_subject_verifier or (lambda _candidate, _subject: False)
+        self._signer_sha256_verifier = signer_sha256_verifier or (lambda _candidate, _fingerprint: False)
         self._entries: dict[str, VerifiedPackageEvidence] = {}
         self._lock = threading.RLock()
 
@@ -76,16 +76,19 @@ class SoftwareEvidenceRegistry:
             or staged.sha256 != candidate.installer_sha256
             or staged.authenticode_valid is not True
             or not staged.signature_subject
+            or not isinstance(staged.signature_sha256, str)
+            or len(staged.signature_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in staged.signature_sha256)
         ):
             raise EvidenceRejected("staged installer does not prove the exact candidate and signer")
         if staged.official_release_url != candidate.official_release_url:
             raise EvidenceRejected("staged installer release origin does not match the candidate")
         try:
-            signer_matches = self._signer_subject_verifier(candidate, staged.signature_subject)
+            signer_matches = self._signer_sha256_verifier(candidate, staged.signature_sha256)
         except Exception:  # noqa: BLE001 - any trust-anchor failure must deny evidence minting.
             signer_matches = False
         if signer_matches is not True:
-            raise EvidenceRejected("Authenticode signer does not match a backend-owned publisher trust anchor")
+            raise EvidenceRejected("Authenticode certificate fingerprint does not match a backend-owned publisher trust anchor")
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
@@ -124,6 +127,7 @@ class SoftwareEvidenceRegistry:
             architecture=candidate.architecture,
             scope=candidate.scope,
             signature_subject=staged.signature_subject,
+            signature_sha256=staged.signature_sha256,
             verified_at=verified_at,
             expires_at=min(verified_at + EVIDENCE_TTL, now + EVIDENCE_TTL),
         )
