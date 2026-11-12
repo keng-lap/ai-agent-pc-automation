@@ -28,7 +28,7 @@ A catalog search result is only a package-name/ID candidate. The UI displays the
 
 ## Required next stages
 
-1. Cross-check product identity, edition, publisher, and installer domain against vendor-controlled official information.
+1. Expand the backend-owned publisher trust-anchor registry only with independently verified vendor-controlled sources.
 2. Add a bounded staging downloader and file hash/Authenticode verification without executing the file.
 3. Add a backend-only evidence registry that accepts results only from the completed verifier.
 4. Bind the registry evidence to the existing exact-action approval challenge and approval digest.
