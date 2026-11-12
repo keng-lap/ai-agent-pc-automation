@@ -291,11 +291,17 @@ class MicrosoftWinGetCatalogIndex:
         self._source_sha256 = ""
         self._checked_at = ""
         self._source_signer_subject: str | None = None
+        self._source_signer_sha256: str | None = None
 
     @property
     def source_signer_subject(self) -> str | None:
         """Signer subject extracted from the verified source package, when available."""
         return self._source_signer_subject
+
+    @property
+    def source_signer_sha256(self) -> str | None:
+        """SHA-256 fingerprint of the verified source package signer certificate."""
+        return self._source_signer_sha256
 
     def search(self, query: str, *, limit: int = 10) -> CatalogSearchResponse:
         normalized = _validate_query(query)
@@ -399,10 +405,25 @@ class MicrosoftWinGetCatalogIndex:
 
             if not temp_path.exists() or temp_path.stat().st_size == 0:
                 raise CatalogUnavailable("Microsoft catalog download was empty")
-            if not self._signature_verifier.verify(temp_path):
-                raise CatalogUnavailable("Microsoft catalog MSIX signature did not pass Windows trust validation")
-            extract_subject = getattr(self._signature_verifier, "verify_and_get_signer_subject", None)
-            self._source_signer_subject = extract_subject(temp_path) if callable(extract_subject) else None
+            extract_identity = getattr(self._signature_verifier, "verify_and_get_signer_identity", None)
+            if callable(extract_identity):
+                trusted, signer_subject, signer_sha256 = extract_identity(temp_path)
+                if (
+                    trusted is not True
+                    or not isinstance(signer_subject, str)
+                    or not signer_subject.strip()
+                    or not isinstance(signer_sha256, str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", signer_sha256)
+                ):
+                    raise CatalogUnavailable("Microsoft catalog signer identity did not pass verification")
+                self._source_signer_subject = signer_subject
+                self._source_signer_sha256 = signer_sha256
+            else:
+                if not self._signature_verifier.verify(temp_path):
+                    raise CatalogUnavailable("Microsoft catalog MSIX signature did not pass Windows trust validation")
+                extract_subject = getattr(self._signature_verifier, "verify_and_get_signer_subject", None)
+                self._source_signer_subject = extract_subject(temp_path) if callable(extract_subject) else None
+                self._source_signer_sha256 = None
             package_bytes = temp_path.read_bytes()
             if (
                 len(package_bytes) != total
