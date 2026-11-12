@@ -7,10 +7,13 @@ This module deliberately does not execute WinGet or an installer yet.
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import shutil
 import tempfile
+from contextlib import contextmanager
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -278,3 +281,81 @@ def cleanup_prepared_install(prepared: PreparedWinGetInstall, *, work_root: Path
         return
     except OSError:
         raise WinGetAdapterError("prepared manifest cleanup failed") from None
+
+
+
+@contextmanager
+def lock_prepared_manifest(
+    binding: InstallApprovalBinding,
+    prepared: PreparedWinGetInstall,
+    *,
+    work_root: Path,
+) -> Iterator[tuple[str, ...]]:
+    """Lock the manifest directory/files against write/delete through WinGet's read.
+
+    Windows sharing semantics are used deliberately: existing handles allow
+    FILE_SHARE_READ only, so another process cannot replace or modify a manifest
+    while the caller runs WinGet inside this context. The exact manifest is
+    revalidated after all locks are held.
+    """
+    if os.name != "nt":
+        raise WinGetAdapterError("manifest locking requires Windows")
+    arguments = build_install_arguments(binding, prepared, work_root=work_root)
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    ]
+    create_file.restype = ctypes.c_void_p
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [ctypes.c_void_p]
+    close_handle.restype = ctypes.c_int
+
+    generic_read = 0x80000000
+    file_read_attributes = 0x00000080
+    share_read_only = 0x00000001
+    open_existing = 3
+    file_flag_backup_semantics = 0x02000000
+    invalid_handle = ctypes.c_void_p(-1).value
+    manifest_directory = Path(prepared.manifest_directory)
+    handles: list[ctypes.c_void_p] = []
+
+    def open_locked(path: Path, *, is_directory: bool = False) -> None:
+        access = file_read_attributes if is_directory else generic_read
+        flags = file_flag_backup_semantics if is_directory else 0x00000080
+        handle = create_file(
+            str(path),
+            access,
+            share_read_only,
+            None,
+            open_existing,
+            flags,
+            None,
+        )
+        if handle in (None, invalid_handle):
+            raise WinGetAdapterError("could not lock the approved manifest against modification")
+        handles.append(handle)
+
+    try:
+        # Lock the directory first, then each known manifest file.
+        open_locked(manifest_directory, is_directory=True)
+        expected_documents = build_local_manifest_documents(binding)
+        for file_name in sorted(expected_documents):
+            open_locked(manifest_directory / file_name)
+
+        # Close the validation-to-lock race: verify exact bytes again while
+        # write/delete sharing is denied for the directory and all manifest files.
+        arguments = build_install_arguments(binding, prepared, work_root=work_root)
+        yield arguments
+    except OSError:
+        raise WinGetAdapterError("approved manifest could not be locked safely") from None
+    finally:
+        for handle in reversed(handles):
+            close_handle(handle)
