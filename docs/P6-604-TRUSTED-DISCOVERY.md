@@ -18,13 +18,13 @@ Implementation in progress. This task is read-only discovery only. It does not i
 
 ## Current implementation boundary
 
-The backend first searches the signed Microsoft catalog by the user's product-name query. It returns candidate IDs and version hints directly from the catalog; AI is not used to recommend Package IDs. The user must choose a candidate before the backend reads its exact manifest.
+The chat UI recognizes explicit install commands (Thai `ติดตั้ง ...` / `ช่วยติดตั้ง ...`, and English `install ...` / `please install ...`) and routes the product-name remainder directly to the authenticated discovery API. This path does not ask Gemini or another AI model to recommend or construct a Package ID. The backend searches the signed Microsoft catalog and returns candidate IDs and version hints directly from the catalog. The user must choose the exact candidate before the backend reads its manifest.
 
-The manifest reader accepts an exact PackageIdentifier and optional exact version. If version is omitted, it returns the available version list and requires an explicit version choice; it never guesses that the lexicographically greatest version is the latest release.
+The chat UI asks the user to choose the exact Package ID and then an exact version. The catalog's latest-version field is displayed as a reference hint only and is never auto-selected. The manifest reader accepts an exact PackageIdentifier and optional exact version. If version is omitted, it returns the available version list and requires an explicit version choice; it never guesses that the lexicographically greatest version is the latest release. The current UI requests x64 user-scope manifest metadata; the backend rejects unsupported architecture/scope combinations.
 
 The catalog index is cached in memory for one hour. Its MSIX is held only in a bounded temporary file for signature validation and is deleted after loading; the SQLite index is loaded into memory, so no persistent catalog database is written to the user's PC.
 
-A catalog search result is only a package-name/ID candidate. A manifest result is always `CONDITIONAL`. It is not a `VerifiedPackageEvidence` and cannot be passed to the install adapter. The manifest reader records the publisher and installer URL/hash, but it does not yet independently establish the publisher's official distribution channel or inspect the downloaded binary's Authenticode signer. Those gaps are explicit limitations.
+A catalog search result is only a package-name/ID candidate. The UI displays the exact publisher, version, architecture, user scope, installer type/domain, hashes, source commit, and source manifest link returned by the backend. A manifest result is always `CONDITIONAL`. It is not a `VerifiedPackageEvidence` and cannot be passed to the install adapter. The manifest reader records the publisher and installer URL/hash, but it does not yet independently establish the publisher's official distribution channel or inspect the downloaded binary's Authenticode signer. Those gaps are explicit limitations.
 
 ## Required next stages
 
