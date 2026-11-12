@@ -30,13 +30,14 @@ def request_path(url):
 
 
 class FakeSource:
-    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False):
+    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False, official_version=VERSION):
         self.calls = []
+        self.official_version = official_version
         installer = {
             "Architecture": "x64",
             "Scope": "user" if not bad_scope else "machine",
-            "InstallerType": "msi",
-            "InstallerUrl": "https://dbeaver.io/files/dbeaver.msi",
+            "InstallerType": "exe",
+            "InstallerUrl": f"https://github.com/dbeaver/dbeaver/releases/download/{VERSION}/dbeaver-ce-{VERSION}-windows-x86_64.exe",
             "InstallerSha256": "b" * 64,
         }
         if bad_hash:
@@ -73,7 +74,18 @@ class FakeSource:
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
         path = request_path(url)
-        if path.endswith("/commits/master"):
+        if path == "/repos/dbeaver/dbeaver/releases/latest":
+            official_asset = f"dbeaver-ce-{self.official_version}-windows-x86_64.exe"
+            payload = {
+                "tag_name": self.official_version,
+                "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{self.official_version}",
+                "assets": [{
+                    "name": official_asset,
+                    "browser_download_url": f"https://github.com/dbeaver/dbeaver/releases/download/{self.official_version}/{official_asset}",
+                    "digest": "sha256:" + ("b" * 64 if self.official_version == VERSION else "c" * 64),
+                }],
+            }
+        elif path.endswith("/commits/master"):
             payload = {"sha": COMMIT}
         elif path.endswith("/DBeaver/DBeaver/Community"):
             payload = [{"name": VERSION, "type": "dir"}]
@@ -104,8 +116,11 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert result.status == "CONDITIONAL"
     assert result.candidate is not None
     assert result.candidate.publisher == "DBeaver Corp"
-    assert result.candidate.installer_domain == "dbeaver.io"
+    assert result.candidate.installer_domain == "github.com"
     assert result.candidate.installer_sha256 == "b" * 64
+    assert result.candidate.publisher_verification == "VERIFIED"
+    assert result.candidate.official_version == VERSION
+    assert "publisher_official_source_not_yet_cross_checked" not in result.candidate.limitations
     assert "installer_authenticode_signature_not_yet_verified" in result.candidate.limitations
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
     assert all("winget.exe" not in call[0] for call in source.calls)
@@ -113,6 +128,24 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
         "/contents/manifests/d/DBeaver/DBeaver/Community" in call[0]
         for call in source.calls
     )
+
+
+def test_discovery_blocks_manifest_when_official_release_is_newer():
+    source = FakeSource(official_version="26.2.4")
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "SOURCE_MISMATCH"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "MISMATCH"
+    assert result.candidate.version == VERSION
+    assert result.candidate.official_version == "26.2.4"
+    assert result.candidate.official_release_url == "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
+    assert result.candidate.official_asset_sha256 == "c" * 64
+    assert "publisher_official_release_mismatch" in result.candidate.limitations
 
 
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
