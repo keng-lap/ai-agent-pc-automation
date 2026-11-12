@@ -65,7 +65,11 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     version: str
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
+    installer_type: Literal["exe", "msi", "msix", "appx"]
     installer_url: str
+    official_release_url: str
+    manifest_source_url: str
+    repository_commit: str
     installer_sha256: str
     manifest_sha256: str
     signature_subject: str
@@ -178,7 +182,11 @@ def create_software_approval_challenge(
         version=evidence.version,
         architecture=evidence.architecture,
         scope=evidence.scope,
+        installer_type=evidence.installer_type,
         installer_url=evidence.installer_url,
+        official_release_url=evidence.official_release_url,
+        manifest_source_url=evidence.manifest_source_url,
+        repository_commit=evidence.repository_commit,
         installer_sha256=evidence.installer_sha256,
         manifest_sha256=evidence.manifest_sha256,
         signature_subject=evidence.signature_subject,
