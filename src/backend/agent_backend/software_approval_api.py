@@ -7,6 +7,7 @@ dispatch, package-manager call, background-job enqueue, or machine side effect.
 from __future__ import annotations
 
 import threading
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -16,6 +17,7 @@ from agent_backend.auth_audit import record_auth_audit_event
 from agent_backend.authenticator import SecretStoreError
 from agent_backend.plan_api import _plan_store
 from agent_backend.plans import PlanExpiredError, PlanNotFoundError
+from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.software_evidence import (
     EvidenceNotFound,
     EvidenceRejected,
@@ -24,8 +26,18 @@ from agent_backend.software_evidence import (
 
 router = APIRouter()
 _lock = threading.RLock()
-_bindings: dict[str, tuple[str, str, object]] = {}
+_bindings: dict[str, tuple[str, str, InstallApprovalBinding]] = {}
 MAX_BINDINGS = 128
+
+
+def _prune_bindings() -> None:
+    now = datetime.now(UTC)
+    expired = [
+        plan_id for plan_id, (_owner, _session, binding) in _bindings.items()
+        if now >= binding.evidence.expires_at
+    ]
+    for plan_id in expired:
+        _bindings.pop(plan_id, None)
 
 
 class SoftwareApprovalChallengeRequest(BaseModel):
@@ -129,6 +141,7 @@ def create_software_approval_challenge(
         raise HTTPException(status_code=409, detail="Verified package does not match the requested plan target.")
 
     with _lock:
+        _prune_bindings()
         existing = _bindings.get(plan_id)
         if existing is not None and (
             existing[0] != principal.owner_sub
