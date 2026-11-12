@@ -77,6 +77,7 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     installer_sha256: str
     manifest_sha256: str
     signature_subject: str
+    signature_sha256: str
     evidence_expires_at: str
     approval_digest: str
     notice: Literal["APPROVAL_ONLY_NOT_EXECUTED"] = "APPROVAL_ONLY_NOT_EXECUTED"
@@ -196,6 +197,7 @@ def create_software_approval_challenge(
         installer_sha256=evidence.installer_sha256,
         manifest_sha256=evidence.manifest_sha256,
         signature_subject=evidence.signature_subject,
+        signature_sha256=evidence.signature_sha256,
         evidence_expires_at=evidence.expires_at.isoformat(),
         approval_digest=binding.approval_digest,
     )
