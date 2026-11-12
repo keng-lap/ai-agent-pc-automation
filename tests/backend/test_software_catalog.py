@@ -91,7 +91,7 @@ class AcceptSignature:
 class AcceptSignatureWithIdentity:
     def verify_and_get_signer_identity(self, path):
         assert path.is_file()
-        return True, "CN=Microsoft Corporation", "d" * 64
+        return True, EXPECTED_PUBLISHER, "d" * 64
 
 
 class TamperDuringSignatureCheck(AcceptSignature):
@@ -197,3 +197,13 @@ def test_catalog_retains_certificate_fingerprint_from_verified_signer():
 
     assert index.source_signer_subject == "CN=Microsoft Corporation"
     assert index.source_signer_sha256 == "d" * 64
+
+
+def test_catalog_rejects_trusted_but_unexpected_signer_identity():
+    class WrongPublisherSignature:
+        def verify_and_get_signer_identity(self, path):
+            assert path.is_file()
+            return True, "CN=Other Trusted Publisher, O=Other Trusted Publisher", "e" * 64
+
+    with pytest.raises(CatalogUnavailable, match="expected Microsoft publisher"):
+        make_index(FakeSource(), WrongPublisherSignature()).search("DBeaver")
