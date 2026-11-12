@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 import requests
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from yaml.tokens import AliasToken, AnchorToken
 
 
