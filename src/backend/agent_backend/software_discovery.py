@@ -62,6 +62,10 @@ class InstallerCandidate(BaseModel):
     repository_commit: str
     manifest_source_url: str
     checked_at: str
+    publisher_verification: Literal["NOT_CHECKED", "VERIFIED", "MISMATCH", "UNAVAILABLE"] = "NOT_CHECKED"
+    official_version: str | None = None
+    official_release_url: str | None = None
+    official_asset_sha256: str | None = None
     status: Literal["CONDITIONAL"] = "CONDITIONAL"
     limitations: tuple[str, ...] = (
         "publisher_official_source_not_yet_cross_checked",
@@ -69,12 +73,138 @@ class InstallerCandidate(BaseModel):
     )
 
 
+class PublisherVerification(BaseModel):
+    """Result of comparing a manifest candidate with a vendor-controlled release."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    status: Literal["NOT_CHECKED", "VERIFIED", "MISMATCH", "UNAVAILABLE"]
+    official_version: str | None = None
+    official_release_url: str | None = None
+    official_asset_sha256: str | None = None
+
+
+class DBeaverGitHubReleaseVerifier:
+    """Cross-check DBeaver Community manifests against its official GitHub release."""
+
+    RELEASE_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
+    RELEASE_PAGE_PREFIX = "https://github.com/dbeaver/dbeaver/releases/tag/"
+    ASSET_PREFIX = "https://github.com/dbeaver/dbeaver/releases/download/"
+
+    def __init__(self, *, http_get=None) -> None:
+        self._http_get = http_get or requests.get
+
+    def verify(
+        self,
+        *,
+        package_id: str,
+        publisher: str,
+        version: str,
+        architecture: str,
+        installer_url: str,
+        installer_sha256: str,
+    ) -> PublisherVerification:
+        if package_id != "DBeaver.DBeaver.Community":
+            return PublisherVerification(status="NOT_CHECKED")
+        if publisher.strip().casefold() != "dbeaver corp":
+            return PublisherVerification(status="MISMATCH")
+
+        response = None
+        try:
+            response = self._http_get(
+                self.RELEASE_API_URL,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": USER_AGENT,
+                },
+                timeout=(3.05, 10),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code != 200:
+                return PublisherVerification(status="UNAVAILABLE")
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > MAX_RESPONSE_BYTES:
+                    return PublisherVerification(status="UNAVAILABLE")
+                chunks.append(chunk)
+            release = json.loads(b"".join(chunks))
+            if not isinstance(release, dict):
+                return PublisherVerification(status="UNAVAILABLE")
+            official_version = release.get("tag_name")
+            release_url = release.get("html_url")
+            if (
+                not isinstance(official_version, str)
+                or not VERSION_PATTERN.fullmatch(official_version)
+                or release_url != self.RELEASE_PAGE_PREFIX + official_version
+            ):
+                return PublisherVerification(status="UNAVAILABLE")
+
+            asset_name_by_architecture = {
+                "x64": f"dbeaver-ce-{official_version}-windows-x86_64.exe",
+                "arm64": f"dbeaver-ce-{official_version}-windows-aarch64.exe",
+            }
+            expected_asset_name = asset_name_by_architecture.get(architecture)
+            assets = release.get("assets")
+            if not isinstance(assets, list) or len(assets) > 100:
+                return PublisherVerification(status="UNAVAILABLE")
+            matching_assets = [
+                asset
+                for asset in assets
+                if isinstance(asset, dict)
+                and asset.get("name") == expected_asset_name
+                and isinstance(asset.get("browser_download_url"), str)
+                and asset.get("browser_download_url")
+                == self.ASSET_PREFIX + official_version + "/" + expected_asset_name
+            ]
+            if len(matching_assets) != 1:
+                return PublisherVerification(
+                    status="MISMATCH",
+                    official_version=official_version,
+                    official_release_url=release_url,
+                )
+            digest = matching_assets[0].get("digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+                return PublisherVerification(status="UNAVAILABLE")
+            official_sha256 = digest.split(":", 1)[1].lower()
+            asset_url = matching_assets[0]["browser_download_url"]
+            if (
+                version != official_version
+                or installer_url != asset_url
+                or installer_sha256.lower() != official_sha256
+            ):
+                return PublisherVerification(
+                    status="MISMATCH",
+                    official_version=official_version,
+                    official_release_url=release_url,
+                    official_asset_sha256=official_sha256,
+                )
+            return PublisherVerification(
+                status="VERIFIED",
+                official_version=official_version,
+                official_release_url=release_url,
+                official_asset_sha256=official_sha256,
+            )
+        except (requests.RequestException, ValueError, TypeError, KeyError):
+            return PublisherVerification(status="UNAVAILABLE")
+        finally:
+            if response is not None:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+
+
 class DiscoveryResponse(BaseModel):
     """A discovery result that cannot be mistaken for verified approval evidence."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    status: Literal["VERSION_REQUIRED", "CONDITIONAL"]
+    status: Literal["VERSION_REQUIRED", "CONDITIONAL", "SOURCE_MISMATCH", "SOURCE_CHECK_UNAVAILABLE"]
     package_id: str
     available_versions: tuple[str, ...]
     candidate: InstallerCandidate | None = None
@@ -84,9 +214,10 @@ class DiscoveryResponse(BaseModel):
 class WinGetManifestRepository:
     """Read exact package manifests from Microsoft's official GitHub repository."""
 
-    def __init__(self, *, http_get=None, clock=None) -> None:
+    def __init__(self, *, http_get=None, clock=None, publisher_verifier=None) -> None:
         self._http_get = http_get or requests.get
         self._clock = clock or _utc_now_iso
+        self._publisher_verifier = publisher_verifier or DBeaverGitHubReleaseVerifier(http_get=self._http_get)
 
     def discover(
         self,
@@ -305,6 +436,22 @@ class WinGetManifestRepository:
         source_url = (
             f"https://github.com/{WINGET_REPOSITORY}/tree/{commit_sha}/{version_path}"
         )
+        publisher_check = self._publisher_verifier.verify(
+            package_id=normalized_id,
+            publisher=publisher,
+            version=version,
+            architecture=architecture,
+            installer_url=installer_url,
+            installer_sha256=installer_hash.lower(),
+        )
+        limitations = ["installer_authenticode_signature_not_yet_verified"]
+        if publisher_check.status == "NOT_CHECKED":
+            limitations.append("publisher_official_source_not_yet_cross_checked")
+        elif publisher_check.status == "MISMATCH":
+            limitations.append("publisher_official_release_mismatch")
+        elif publisher_check.status == "UNAVAILABLE":
+            limitations.append("publisher_official_release_check_unavailable")
+
         candidate = InstallerCandidate(
             package_id=normalized_id,
             package_name=package_name,
@@ -320,9 +467,18 @@ class WinGetManifestRepository:
             repository_commit=commit_sha,
             manifest_source_url=source_url,
             checked_at=self._clock(),
+            publisher_verification=publisher_check.status,
+            official_version=publisher_check.official_version,
+            official_release_url=publisher_check.official_release_url,
+            official_asset_sha256=publisher_check.official_asset_sha256,
+            limitations=tuple(limitations),
         )
+        response_status = {
+            "MISMATCH": "SOURCE_MISMATCH",
+            "UNAVAILABLE": "SOURCE_CHECK_UNAVAILABLE",
+        }.get(publisher_check.status, "CONDITIONAL")
         return DiscoveryResponse(
-            status="CONDITIONAL",
+            status=response_status,
             package_id=normalized_id,
             available_versions=versions,
             candidate=candidate,
