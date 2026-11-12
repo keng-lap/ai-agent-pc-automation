@@ -149,6 +149,8 @@ def build_install_arguments(
     if not root.is_absolute() or root.is_symlink():
         raise WinGetAdapterError("work root must be an absolute non-symlink directory")
     try:
+        if not root.is_dir() or root.resolve(strict=True) != root:
+            raise WinGetAdapterError("work root is unavailable or unsafe")
         binding.ensure_fresh(now=datetime.now(UTC))
     except (TypeError, ValueError):
         raise WinGetAdapterError("approval evidence is expired or invalid") from None
@@ -207,9 +209,18 @@ def prepare_approved_install(
     if not root.is_absolute() or root.is_symlink():
         raise WinGetAdapterError("work root must be an absolute non-symlink directory")
     try:
-        root.mkdir(parents=True, exist_ok=True)
-        if not root.is_dir() or root.is_symlink():
-            raise WinGetAdapterError("work root is unavailable or unsafe")
+        parent = root.parent
+        if (
+            not parent.is_dir()
+            or parent.is_symlink()
+            or parent.resolve(strict=True) != parent
+        ):
+            raise WinGetAdapterError("work root parent must already exist and be a real directory")
+        if root.exists():
+            if not root.is_dir() or root.resolve(strict=True) != root:
+                raise WinGetAdapterError("work root is unavailable or unsafe")
+        else:
+            root.mkdir(mode=0o700)
         root_real = root.resolve(strict=True)
         if root_real != root:
             raise WinGetAdapterError("work root must not resolve through a link or reparse path")
@@ -254,6 +265,8 @@ def cleanup_prepared_install(prepared: PreparedWinGetInstall, *, work_root: Path
     root = Path(work_root)
     directory = Path(prepared.manifest_directory)
     try:
+        if not root.is_dir() or root.is_symlink() or root.resolve(strict=True) != root:
+            raise WinGetAdapterError("refusing to clean through an unsafe work root")
         root_real = root.resolve(strict=True)
         directory_real = directory.resolve(strict=True)
         if directory_real.parent != root_real or not directory_real.name.startswith("p6-603-"):
