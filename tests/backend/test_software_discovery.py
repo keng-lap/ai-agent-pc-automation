@@ -235,9 +235,21 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
         architecture="x64",
     )
 
+    manifest_calls = [
+        call for call in source.calls
+        if "/repos/microsoft/winget-pkgs/" in call[0]
+    ]
+    assert manifest_calls
     assert all(
         call[0].startswith("https://api.github.com/repos/microsoft/winget-pkgs/")
+        for call in manifest_calls
+    )
+    pinned_manifest_calls = [
+        call for call in manifest_calls
+        if "commits/master" not in call[0]
+    ]
+    assert all(call[1]["params"]["ref"] == COMMIT for call in pinned_manifest_calls)
+    assert any(
+        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
         for call in source.calls
     )
-    manifest_calls = [call for call in source.calls if "commits/master" not in call[0]]
-    assert all(call[1]["params"]["ref"] == COMMIT for call in manifest_calls)
