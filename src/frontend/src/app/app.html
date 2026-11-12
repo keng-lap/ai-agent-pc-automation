@@ -131,7 +131,7 @@
             }
             <div class="message-bubble">
               <span class="message-label">{{ labelFor(entry.kind) }}</span>
-              @if (entry.kind === 'error' || !entry.review?.dry_run_plan) {
+              @if ((entry.kind === 'error' || !entry.review?.dry_run_plan) && !entry.discovery) {
                 <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
               }
               @if (entry.response; as response) {
@@ -394,6 +394,83 @@
                       </div>
                     }
                   </details>
+                </section>
+              }
+              @if (entry.discovery; as discovery) {
+                <section class="agent-details software-discovery-card" [attr.aria-label]="language() === 'th' ? 'ผลการค้นหาโปรแกรมจาก Microsoft Catalog' : 'Microsoft Catalog software discovery results'">
+                  <div class="composer-footer">
+                    <div>
+                      <p class="eyebrow">TRUSTED SOFTWARE DISCOVERY</p>
+                      <h3>{{ language() === 'th' ? 'ค้นหาจาก Microsoft WinGet Catalog' : 'Microsoft WinGet Catalog search' }}</h3>
+                    </div>
+                    <span class="status-pill installer-status--pending">
+                      {{ discovery.status === 'conditional' ? 'CONDITIONAL' : discovery.status === 'error' ? (language() === 'th' ? 'ตรวจสอบไม่สำเร็จ' : 'Check failed') : (language() === 'th' ? 'กำลังตรวจสอบ' : 'Checking') }}
+                    </span>
+                  </div>
+                  <p class="detail-meta">{{ language() === 'th' ? 'คำค้น' : 'Search query' }}: {{ discovery.query }}</p>
+
+                  @if (discovery.status === 'searching') {
+                    <p class="detail-meta" role="status">{{ language() === 'th' ? 'กำลังค้นหาฐานข้อมูล Microsoft...' : 'Searching the Microsoft catalog...' }}</p>
+                  }
+                  @if (discovery.status === 'not_found') {
+                    <p class="detail-meta" role="status">{{ language() === 'th' ? 'ไม่พบโปรแกรมที่ตรงกับคำค้นใน Catalog' : 'No matching software was found in the catalog.' }}</p>
+                  }
+                  @if (discovery.status === 'matches' && discovery.catalog) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'เลือกรายการที่ต้องการ' : 'Choose the intended package' }}</div>
+                    <p class="detail-meta">{{ language() === 'th' ? 'เลือกให้ตรงกับ Edition ที่ต้องการ ระบบจะไม่เลือก Package ID ให้โดยอัตโนมัติ' : 'Choose the exact edition. The system will not select a Package ID automatically.' }}</p>
+                    <div class="software-candidate-list">
+                      @for (candidate of discovery.catalog.candidates; track candidate.package_id) {
+                        <button class="software-candidate" type="button" [disabled]="planning()" (click)="selectSoftwarePackage(entry.id, candidate.package_id)">
+                          <strong>{{ candidate.name }}</strong>
+                          <span>{{ candidate.package_id }}</span>
+                          <small>{{ language() === 'th' ? 'เวอร์ชันล่าสุดที่ Catalog ระบุ (เป็นเพียงข้อมูลอ้างอิง)' : 'Catalog latest-version hint (reference only)' }}: {{ candidate.latest_version }}</small>
+                        </button>
+                      }
+                    </div>
+                    <small class="detail-meta">{{ language() === 'th' ? 'Catalog SHA-256' : 'Catalog SHA-256' }}: {{ discovery.catalog.source_sha256 }}</small>
+                  }
+                  @if (discovery.status === 'checking_versions') {
+                    <p class="detail-meta" role="status">{{ language() === 'th' ? 'กำลังตรวจสอบรายการ Version ใน Manifest...' : 'Checking manifest versions...' }}</p>
+                  }
+                  @if (discovery.status === 'version_required' && discovery.result) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'เลือกเวอร์ชันที่ต้องการ' : 'Choose an exact version' }}</div>
+                    <p class="detail-meta">{{ discovery.packageId }} — {{ language() === 'th' ? 'ไม่มีการเลือกเวอร์ชันล่าสุดให้อัตโนมัติ' : 'No version is selected automatically.' }}</p>
+                    <div class="software-version-list">
+                      @for (version of discovery.result.available_versions; track version) {
+                        <button class="software-version" type="button" [disabled]="planning()" (click)="selectSoftwareVersion(entry.id, version)">{{ version }}</button>
+                      }
+                    </div>
+                  }
+                  @if (discovery.status === 'verifying_manifest') {
+                    <p class="detail-meta" role="status">{{ language() === 'th' ? 'กำลังตรวจสอบ Manifest ของเวอร์ชันที่เลือก...' : 'Verifying the selected version manifest...' }}</p>
+                  }
+                  @if (discovery.status === 'conditional' && discovery.result?.candidate; as candidate) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'รายละเอียดจาก Manifest' : 'Manifest details' }}</div>
+                    <div class="program-review">
+                      <strong>{{ candidate.package_name }}</strong>
+                      <span>Package ID: {{ candidate.package_id }}</span>
+                      <span>Publisher: {{ candidate.publisher }}</span>
+                      <span>Version: {{ candidate.version }}</span>
+                      <span>Architecture: {{ candidate.architecture }}</span>
+                      <span>Install scope: {{ candidate.scope }}</span>
+                      <span>Installer type: {{ candidate.installer_type }}</span>
+                      <span>Installer domain: {{ candidate.installer_domain }}</span>
+                      <span>Installer SHA-256: {{ candidate.installer_sha256 }}</span>
+                      <span>Manifest SHA-256: {{ candidate.manifest_sha256 }}</span>
+                      <span>Repository commit: {{ candidate.repository_commit }}</span>
+                      <a [href]="candidate.manifest_source_url" target="_blank" rel="noopener noreferrer">{{ language() === 'th' ? 'เปิด Manifest ต้นทาง' : 'Open source manifest' }}</a>
+                    </div>
+                    <div class="tool-preview installer-actions--blocked" role="status">
+                      <strong>{{ language() === 'th' ? 'ยังไม่ใช่หลักฐานอนุญาตติดตั้ง' : 'Not installation authorization evidence' }}</strong>
+                      <span>{{ language() === 'th' ? 'ผลนี้เป็น CONDITIONAL เท่านั้น ยังต้องตรวจสอบผู้ผลิตและลายเซ็นของไฟล์ติดตั้งจริงก่อนสร้าง Approval' : 'This result is CONDITIONAL only. Vendor identity and the downloaded installer's Authenticode signature must be verified before approval evidence can be created.' }}</span>
+                      @for (limitation of candidate.limitations; track limitation) {
+                        <small>{{ limitation }}</small>
+                      }
+                    </div>
+                  }
+                  @if (discovery.status === 'error' && discovery.error) {
+                    <p class="installer-error" role="alert">{{ discovery.error }}</p>
+                  }
                 </section>
               }
               @if (entry.planError) {
