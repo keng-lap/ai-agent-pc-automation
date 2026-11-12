@@ -84,6 +84,8 @@ def test_install_arguments_use_only_local_manifest_and_user_scope(tmp_path):
     binding, _ = _binding()
     manifest_dir = tmp_path / "manifest"
     manifest_dir.mkdir()
+    for file_name, content in build_local_manifest_documents(binding).items():
+        (manifest_dir / file_name).write_text(content, encoding="utf-8")
 
     args = build_install_arguments(binding, manifest_dir)
 
@@ -118,8 +120,8 @@ def test_install_arguments_use_only_local_manifest_and_user_scope(tmp_path):
     ],
 )
 def test_unsupported_or_mismatched_evidence_is_rejected(overrides):
-    binding, _ = _binding(**overrides)
-    with pytest.raises(WinGetAdapterError):
+    with pytest.raises((WinGetAdapterError, ValidationError)):
+        binding, _ = _binding(**overrides)
         build_local_manifest_documents(binding)
 
 
@@ -161,3 +163,27 @@ def test_prepare_rejects_symlink_work_root(tmp_path):
         pytest.skip("symlink creation is unavailable")
     with pytest.raises(WinGetAdapterError, match="non-symlink"):
         prepare_approved_install(binding, work_root=link, now=now)
+
+
+def test_install_arguments_reject_tampered_manifest(tmp_path):
+    binding, _ = _binding()
+    manifest_dir = tmp_path / "manifest"
+    manifest_dir.mkdir()
+    for file_name, content in build_local_manifest_documents(binding).items():
+        (manifest_dir / file_name).write_text(content, encoding="utf-8")
+    (manifest_dir / "Contoso.Sample.installer.yaml").write_text("InstallerUrl: https://attacker.example/x.msi", encoding="utf-8")
+
+    with pytest.raises(WinGetAdapterError, match="content"):
+        build_install_arguments(binding, manifest_dir)
+
+
+def test_install_arguments_reject_extra_manifest_files(tmp_path):
+    binding, _ = _binding()
+    manifest_dir = tmp_path / "manifest"
+    manifest_dir.mkdir()
+    for file_name, content in build_local_manifest_documents(binding).items():
+        (manifest_dir / file_name).write_text(content, encoding="utf-8")
+    (manifest_dir / "unexpected.yaml").write_text("ManifestType: installer", encoding="utf-8")
+
+    with pytest.raises(WinGetAdapterError, match="file set"):
+        build_install_arguments(binding, manifest_dir)
