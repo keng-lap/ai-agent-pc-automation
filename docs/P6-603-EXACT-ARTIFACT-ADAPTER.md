@@ -70,3 +70,26 @@ Reference: https://learn.microsoft.com/en-us/windows/package-manager/winget/down
 - Cleanup is limited to a generated directory directly under the fixed work root.
 
 This document records a security foundation, not authorization to install software or enable real execution.
+
+
+## A4 review — current head 7c669c6140228ca7e25515983981377ebf8e0237
+
+**No Critical finding in this manifest-preparation-only module. This is not an execution approval.** The module has no process invocation or installer dispatch. The following High execution blockers remain and must be closed before any call to WinGet:
+
+1. **Manifest TOCTOU:** validation currently occurs before a future WinGet process opens the manifest path. A same-user process could modify a manifest file between validation and WinGet parsing. Runtime integration must hold Windows file handles that deny write/delete sharing for all manifest files (and protect the directory) through WinGet's manifest-read phase, or use an equivalently strong atomic handoff. Rechecking immediately before process start alone is insufficient.
+2. **WinGet executable identity:** the current-user alias must be resolved and the actual executable verified with a reviewed Microsoft signer policy. File existence, PATH resolution, and an unpinned subject string are insufficient.
+3. **LocalManifestFiles prerequisite:** Microsoft documents this as an administrator-controlled setting. Runtime must not self-enable or elevate. If state cannot be read reliably without PowerShell or another prohibited execution path, fail closed and present the one-time setup requirement to the user.
+4. **Process lifecycle:** no process-tree containment, cancellation, bounded output-draining, or orphan-installer reconciliation exists. A timeout must produce an explicit unknown outcome until the job can prove no installer remains active.
+5. **Installer silent semantics:** this manifest intentionally omits package-provided switches. A package that cannot use WinGet's default silent behavior must be marked unsupported until its exact package-specific switch contract is independently reviewed and included in the approval digest.
+6. **Post-install verification:** no package identity/version/scope verification exists. Exit code zero alone must not be treated as proof that the intended user-scope package is installed.
+
+### CI evidence for this head
+
+- Backend: 461 passed, 2 skipped.
+- Ruff: passed.
+- Frontend unit tests, Playwright desktop/mobile E2E, and production build: passed.
+- CodeQL Python, JavaScript/TypeScript, and Actions analyses: passed.
+- CI run: https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43238500610
+- CodeQL run: https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43238492339
+
+These checks validate the current code and existing regression suite. They do not provide Windows WinGet local-manifest execution acceptance, and no installer was run.
