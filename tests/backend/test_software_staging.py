@@ -191,3 +191,22 @@ def test_stager_carries_subject_only_from_signature_verifier(tmp_path):
 
     assert staged.authenticode_valid is True
     assert staged.signature_subject == "CN=Trusted Test Publisher, O=Trusted Test Publisher"
+
+
+class AcceptSignatureWithIdentity:
+    def verify_with_identity(self, path):
+        assert Path(path).is_file()
+        return True, "CN=Trusted Test Publisher, O=Trusted Test Publisher", "d" * 64
+
+
+def test_stager_carries_verified_certificate_fingerprint(tmp_path):
+    body = b"verified-installer-bytes"
+    staged = InstallerStager(
+        http_get=lambda *args, **kwargs: FakeResponse(body),
+        signature_verifier=AcceptSignatureWithIdentity(),
+        clock=lambda: "2026-11-12T00:00:00Z",
+    ).stage(make_candidate(body), staging_root=tmp_path)
+
+    assert staged.authenticode_valid is True
+    assert staged.signature_subject == "CN=Trusted Test Publisher, O=Trusted Test Publisher"
+    assert staged.signature_sha256 == "d" * 64
