@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent_backend.software_catalog import CatalogUnavailable, MicrosoftWinGetCatalogIndex
 from agent_backend.software_discovery import (
     DiscoveryNotFound,
     DiscoveryUnavailable,
@@ -13,6 +14,24 @@ from agent_backend.software_discovery import (
 
 router = APIRouter()
 _repository = WinGetManifestRepository()
+_catalog = MicrosoftWinGetCatalogIndex()
+
+
+class SoftwareDiscoverySearchRequest(BaseModel):
+    """Natural-language product lookup; no AI-provided package data is trusted."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    query: str = Field(min_length=2, max_length=128)
+    limit: int = Field(default=10, ge=1, le=20)
+
+    @field_validator("query")
+    @classmethod
+    def normalize_query(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("query must not be blank")
+        return normalized
 
 
 class SoftwareDiscoveryRequest(BaseModel):
@@ -31,6 +50,21 @@ class SoftwareDiscoveryRequest(BaseModel):
         if not normalized:
             raise ValueError("package_id must not be blank")
         return normalized
+
+
+@router.post("/api/software/discovery/search")
+def search_software_catalog(payload: SoftwareDiscoverySearchRequest) -> dict:
+    """Search Microsoft's signed source2 catalog without invoking winget.exe."""
+    try:
+        result = _catalog.search(payload.query, limit=payload.limit)
+    except CatalogUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="Microsoft WinGet catalog is unavailable or failed trust validation.",
+        ) from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Catalog search parameters are invalid.") from None
+    return result.model_dump(mode="json")
 
 
 @router.post("/api/software/discovery")
