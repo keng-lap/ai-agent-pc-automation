@@ -39,7 +39,8 @@ to retrieve the primary signer certificate through the documented WinTrust
 provider helper functions, then reads its X.500 subject with `CertGetNameStringW`.
 `WindowsAuthenticodeVerifier` passes that subject into `StagedInstaller` only
 when trust validation and subject extraction both succeed. Missing or malformed
-subject data causes staging to fail closed.
+subject data causes staging to fail closed. The catalog loader also exposes the
+verified source package's extracted subject for Windows acceptance testing.
 
 The helper functions are documented by Microsoft but Microsoft notes that they
 may change or become unavailable. The implementation therefore treats every
