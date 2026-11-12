@@ -126,25 +126,42 @@ def build_local_manifest_documents(
 
 def build_install_arguments(
     binding: InstallApprovalBinding,
-    manifest_directory: Path,
+    prepared: PreparedWinGetInstall,
+    *,
+    work_root: Path,
 ) -> tuple[str, ...]:
-    """Build only the local-manifest install command; never resolve a live package ID."""
+    """Build argv only for the prepared directory bound to this exact approval."""
     if not isinstance(binding, InstallApprovalBinding):
         raise TypeError("an immutable install approval binding is required")
-    if not isinstance(manifest_directory, Path) or not manifest_directory.is_absolute():
-        raise WinGetAdapterError("manifest directory must be an absolute backend path")
+    if not isinstance(prepared, PreparedWinGetInstall):
+        raise TypeError("a prepared WinGet install is required")
+    root = Path(work_root)
+    manifest_directory = Path(prepared.manifest_directory)
+    expected_documents = build_local_manifest_documents(binding)
+    if (
+        prepared.approval_digest != binding.approval_digest
+        or prepared.package_id != binding.evidence.package_id
+        or prepared.version != binding.evidence.version
+        or prepared.installer_sha256 != binding.evidence.installer_sha256
+        or set(prepared.manifest_file_names) != set(expected_documents)
+    ):
+        raise WinGetAdapterError("prepared manifest does not match the exact approval binding")
+    if not root.is_absolute() or root.is_symlink():
+        raise WinGetAdapterError("work root must be an absolute non-symlink directory")
     try:
         binding.ensure_fresh(now=datetime.now(UTC))
     except (TypeError, ValueError):
         raise WinGetAdapterError("approval evidence is expired or invalid") from None
     try:
+        root_real = root.resolve(strict=True)
         if (
             not manifest_directory.is_dir()
             or manifest_directory.is_symlink()
             or manifest_directory.resolve(strict=True) != manifest_directory
+            or manifest_directory.parent != root_real
+            or not manifest_directory.name.startswith("p6-603-")
         ):
-            raise WinGetAdapterError("manifest directory is unavailable or unsafe")
-        expected_documents = build_local_manifest_documents(binding)
+            raise WinGetAdapterError("manifest directory is unavailable or outside the fixed work root")
         actual_names = {entry.name for entry in manifest_directory.iterdir()}
         if actual_names != set(expected_documents):
             raise WinGetAdapterError("manifest file set does not match the approved package")
