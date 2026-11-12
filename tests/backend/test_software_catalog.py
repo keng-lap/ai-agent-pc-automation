@@ -132,6 +132,14 @@ def test_catalog_search_uses_bound_sql_parameters():
     assert result.candidates == ()
 
 
+def test_loaded_catalog_connection_is_read_only():
+    index = make_index(FakeSource())
+    index.search("DBeaver")
+
+    with pytest.raises(sqlite3.OperationalError):
+        index._connection.execute("DELETE FROM packages")
+
+
 def test_catalog_signature_failure_blocks_search():
     with pytest.raises(CatalogUnavailable):
         make_index(FakeSource(), AcceptSignature(accepted=False)).search("DBeaver")
