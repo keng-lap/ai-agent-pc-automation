@@ -35,6 +35,32 @@ USER_AGENT = "ai-agent-pc-automation-catalog/1.0"
 QUERY_PATTERN = re.compile(r"^[^\x00-\x1f\x7f]{2,128}$")
 
 
+def _matches_expected_publisher_subject(subject: str) -> bool:
+    """Require every pinned X.500 publisher attribute; reject conflicting duplicates."""
+    if not isinstance(subject, str) or not subject.strip():
+        return False
+    expected = {}
+    for component in EXPECTED_PUBLISHER.split(","):
+        if "=" not in component:
+            return False
+        key, value = component.split("=", 1)
+        expected[key.strip().casefold()] = value.strip().casefold()
+
+    observed: dict[str, str] = {}
+    for component in subject.split(","):
+        if "=" not in component:
+            return False
+        key, value = component.split("=", 1)
+        key = key.strip().casefold()
+        value = value.strip().casefold()
+        if not key or not value:
+            return False
+        if key in observed and observed[key] != value:
+            return False
+        observed[key] = value
+    return all(observed.get(key) == value for key, value in expected.items())
+
+
 class CatalogUnavailable(RuntimeError):
     """The signed Microsoft catalog could not be loaded or trusted."""
 
@@ -412,7 +438,7 @@ class MicrosoftWinGetCatalogIndex:
                     trusted is not True
                     or not isinstance(signer_subject, str)
                     or not signer_subject.strip()
-                    or signer_subject.strip() != EXPECTED_PUBLISHER
+                    or not _matches_expected_publisher_subject(signer_subject)
                     or not isinstance(signer_sha256, str)
                     or not re.fullmatch(r"[0-9a-f]{64}", signer_sha256)
                 ):
