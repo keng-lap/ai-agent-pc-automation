@@ -5,10 +5,57 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import { TimeoutError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
-import { ChatApi, PlanReviewResponse, UiLanguage } from './chat/chat-api';
+import { ChatApi, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
+  catalogCalls: string[] = [];
+  discoveryCalls: Array<{ packageId: string; version: string | null; architecture: string }> = [];
+  catalogResponder: (query: string) => Observable<SoftwareCatalogSearchResponse> = () => of({
+    status: 'CATALOG_MATCHES',
+    source: 'microsoft-winget-source2',
+    source_version: '1.0.0.0',
+    source_sha256: 'a'.repeat(64),
+    checked_at: '2026-11-12T00:00:00Z',
+    candidates: [
+      { package_id: 'DBeaver.DBeaver.Community', name: 'DBeaver Community Edition', moniker: 'dbeaver', latest_version: '25.3.0' },
+      { package_id: 'DBeaverCorp.DBeaverEnterpriseEdition', name: 'DBeaver Enterprise Edition', moniker: null, latest_version: '25.3.0' },
+    ],
+  });
+  discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
+    version === null
+      ? {
+        status: 'VERSION_REQUIRED',
+        package_id: packageId,
+        available_versions: ['25.2.0', '25.3.0'],
+        candidate: null,
+        source: 'winget-community-repository',
+      }
+      : {
+        status: 'CONDITIONAL',
+        package_id: packageId,
+        available_versions: ['25.2.0', '25.3.0'],
+        candidate: {
+          package_id: packageId,
+          package_name: 'DBeaver Community Edition',
+          publisher: 'DBeaver Corp',
+          version,
+          architecture: 'x64',
+          scope: 'user',
+          installer_type: 'msi',
+          installer_url: 'https://dbeaver.io/files/dbeaver.msi',
+          installer_domain: 'dbeaver.io',
+          installer_sha256: 'b'.repeat(64),
+          manifest_sha256: 'c'.repeat(64),
+          repository_commit: 'd'.repeat(40),
+          manifest_source_url: 'https://github.com/microsoft/winget-pkgs/tree/main',
+          checked_at: '2026-11-12T00:00:00Z',
+          status: 'CONDITIONAL',
+          limitations: ['publisher_official_source_not_yet_cross_checked', 'installer_authenticode_signature_not_yet_verified'],
+        },
+        source: 'winget-community-repository',
+      },
+  );
   restoredConversationIds: string[] = [];
   clearedConversationIds: string[] = [];
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
@@ -68,6 +115,16 @@ class FakeChatApi {
 
   logout(): Observable<{ logged_out: boolean }> {
     return of({ logged_out: true });
+  }
+
+  searchSoftwareCatalog(query: string): Observable<SoftwareCatalogSearchResponse> {
+    this.catalogCalls.push(query);
+    return this.catalogResponder(query);
+  }
+
+  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64'): Observable<SoftwareDiscoveryResponse> {
+    this.discoveryCalls.push({ packageId, version, architecture });
+    return this.discoveryResponder(packageId, version);
   }
 
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
@@ -290,6 +347,54 @@ describe('App chat UI (T-202)', () => {
     expect(flow.textContent).toContain('เสร็จสมบูรณ์');
     expect(fixture.nativeElement.textContent).toContain('ผลการจำลอง');
     expect(fixture.nativeElement.textContent).toContain('Dry run only; no changes made.');
+  });
+
+  it('routes install requests through Microsoft discovery without asking AI to choose a Package ID', async () => {
+    await render();
+
+    send('ติดตั้ง DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.catalogCalls).toEqual(['DBeaver Community Edition']);
+    expect(api.calls).toHaveLength(0);
+    expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition');
+    expect(fixture.nativeElement.textContent).toContain('DBeaver.DBeaver.Community');
+    expect(fixture.nativeElement.textContent).toContain('DBeaverCorp.DBeaverEnterpriseEdition');
+
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.discoveryCalls).toEqual([
+      { packageId: 'DBeaver.DBeaver.Community', version: null, architecture: 'x64' },
+    ]);
+    expect(fixture.nativeElement.textContent).toContain('เลือกเวอร์ชันที่ต้องการ');
+    expect(fixture.nativeElement.textContent).toContain('25.3.0');
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.discoveryCalls[1]).toEqual({
+      packageId: 'DBeaver.DBeaver.Community',
+      version: '25.3.0',
+      architecture: 'x64',
+    });
+    expect(fixture.nativeElement.textContent).toContain('CONDITIONAL');
+    expect(fixture.nativeElement.textContent).toContain('DBeaver Corp');
+    expect(fixture.nativeElement.textContent).toContain('dbeaver.io');
+    expect(fixture.nativeElement.textContent).toContain('ยังไม่ใช่หลักฐานอนุญาตติดตั้ง');
+    expect(fixture.nativeElement.textContent).toContain('installer_authenticode_signature_not_yet_verified');
+    expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
 
   it('F-01: starts in Thai with the empty hint and disabled Send', async () => {
