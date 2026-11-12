@@ -89,14 +89,23 @@ class SoftwareEvidenceRegistry:
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
+            candidate_checked_at = datetime.fromisoformat(candidate.checked_at.replace("Z", "+00:00"))
         except (TypeError, ValueError):
-            raise EvidenceRejected("staging timestamp is invalid") from None
-        if verified_at.tzinfo is None or verified_at.utcoffset() is None:
-            raise EvidenceRejected("staging timestamp must be timezone-aware")
+            raise EvidenceRejected("discovery or staging timestamp is invalid") from None
+        if (
+            verified_at.tzinfo is None or verified_at.utcoffset() is None
+            or candidate_checked_at.tzinfo is None or candidate_checked_at.utcoffset() is None
+        ):
+            raise EvidenceRejected("discovery and staging timestamps must be timezone-aware")
 
         now = self._now()
-        if verified_at > now or now - verified_at > EVIDENCE_TTL:
-            raise EvidenceRejected("staged installer proof is not current")
+        if (
+            verified_at > now
+            or candidate_checked_at > now
+            or now - verified_at > EVIDENCE_TTL
+            or now - candidate_checked_at > EVIDENCE_TTL
+        ):
+            raise EvidenceRejected("discovery or staged installer proof is not current")
 
         evidence = VerifiedPackageEvidence(
             evidence_id=secrets.token_hex(16),
