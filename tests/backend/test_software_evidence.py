@@ -104,7 +104,7 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
     ],
 )
 def test_registry_rejects_mismatched_or_incomplete_proof(candidate_overrides, staged_overrides):
-    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    registry = make_registry(clock=lambda: NOW)
     with pytest.raises(EvidenceRejected):
         registry.register_staged_candidate(
             candidate=candidate().model_copy(update=candidate_overrides),
@@ -149,3 +149,12 @@ def test_default_registry_rejects_signer_without_configured_trust_anchor():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     with pytest.raises(EvidenceRejected, match="trust anchor"):
         registry.register_staged_candidate(candidate=candidate(), staged=staged())
+
+
+def test_registry_rejects_wrong_signer_even_when_signature_is_trusted_by_windows():
+    registry = make_registry(clock=lambda: NOW)
+    with pytest.raises(EvidenceRejected, match="trust anchor"):
+        registry.register_staged_candidate(
+            candidate=candidate(),
+            staged=staged(signature_subject="CN=Unrelated Publisher"),
+        )
