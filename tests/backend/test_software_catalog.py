@@ -88,6 +88,12 @@ class AcceptSignature:
         return self.accepted
 
 
+class AcceptSignatureWithIdentity:
+    def verify_and_get_signer_identity(self, path):
+        assert path.is_file()
+        return True, "CN=Microsoft Corporation", "d" * 64
+
+
 class TamperDuringSignatureCheck(AcceptSignature):
     def verify(self, path):
         self.paths.append(path)
@@ -183,3 +189,11 @@ def test_catalog_rejects_invalid_queries_before_network(query):
     with pytest.raises(ValueError):
         make_index(source).search(query)
     assert source.calls == []
+
+
+def test_catalog_retains_certificate_fingerprint_from_verified_signer():
+    index = make_index(FakeSource(), AcceptSignatureWithIdentity())
+    index.search("DBeaver")
+
+    assert index.source_signer_subject == "CN=Microsoft Corporation"
+    assert index.source_signer_sha256 == "d" * 64
