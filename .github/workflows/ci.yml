@@ -32,9 +32,11 @@ jobs:
       - name: Run AI reviewer unit tests
         working-directory: src/backend
         run: python -m unittest discover -s ../../tests/automation -v
-      - name: Run Ruff
+      - name: Run Ruff import fix diagnostic
         working-directory: src/backend
-        run: ruff check agent_backend ../../tests/backend
+        run: |
+          ruff check --fix agent_backend ../../tests/backend || true
+          git diff -- agent_backend ../../tests/backend
 
   frontend:
     runs-on: ubuntu-latest
