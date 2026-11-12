@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from agent_backend.winget_adapter import (
     build_install_arguments,
     build_local_manifest_documents,
     cleanup_prepared_install,
+    lock_prepared_manifest,
     prepare_approved_install,
 )
 
@@ -181,3 +183,24 @@ def test_install_arguments_reject_extra_manifest_files(tmp_path):
 
     with pytest.raises(WinGetAdapterError, match="file set"):
         build_install_arguments(binding, prepared, work_root=tmp_path)
+
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows file-sharing semantics are required")
+def test_locked_manifest_rejects_write_and_delete_until_context_exit(tmp_path):
+    binding, now = _binding()
+    prepared = prepare_approved_install(binding, work_root=tmp_path, now=now)
+    directory = Path(prepared.manifest_directory)
+    installer_manifest = directory / "Contoso.Sample.installer.yaml"
+    original = installer_manifest.read_text(encoding="utf-8")
+
+    with lock_prepared_manifest(binding, prepared, work_root=tmp_path) as args:
+        assert args[0] == "install"
+        assert installer_manifest.read_text(encoding="utf-8") == original
+        with pytest.raises(PermissionError):
+            installer_manifest.write_text("tampered", encoding="utf-8")
+        with pytest.raises(PermissionError):
+            installer_manifest.unlink()
+
+    cleanup_prepared_install(prepared, work_root=tmp_path)
+    assert not directory.exists()
