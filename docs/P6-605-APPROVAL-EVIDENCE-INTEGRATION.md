@@ -22,7 +22,10 @@ The registry accepts only backend model instances:
 
 The frontend and HTTP request schema accept only an opaque evidence ID. They
 cannot submit or override package ID, publisher, version, URL, hashes,
-architecture, scope, signer subject, timestamps, or approval digest.
+architecture, scope, signer subject, timestamps, or approval digest. The
+approval challenge response displays the package identity, publisher, exact
+version, installer URL and hashes, signer subject, and evidence expiry so the
+user can inspect the proposal before entering TOTP.
 
 Evidence is immutable, process-local, bounded to 128 records, and expires no
 later than 15 minutes after verification. A binding hashes the complete
