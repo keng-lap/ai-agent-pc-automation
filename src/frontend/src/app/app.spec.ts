@@ -50,8 +50,12 @@ class FakeChatApi {
           repository_commit: 'd'.repeat(40),
           manifest_source_url: 'https://github.com/microsoft/winget-pkgs/tree/main',
           checked_at: '2026-11-12T00:00:00Z',
+          publisher_verification: 'VERIFIED',
+          official_version: version,
+          official_release_url: 'https://github.com/dbeaver/dbeaver/releases/tag/' + version,
+          official_asset_sha256: 'b'.repeat(64),
           status: 'CONDITIONAL',
-          limitations: ['publisher_official_source_not_yet_cross_checked', 'installer_authenticode_signature_not_yet_verified'],
+          limitations: ['installer_authenticode_signature_not_yet_verified'],
         },
         source: 'winget-community-repository',
       },
@@ -394,6 +398,69 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('dbeaver.io');
     expect(fixture.nativeElement.textContent).toContain('ยังไม่ใช่หลักฐานอนุญาตติดตั้ง');
     expect(fixture.nativeElement.textContent).toContain('installer_authenticode_signature_not_yet_verified');
+    expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
+  });
+
+  it('blocks a WinGet manifest version that differs from the vendor official release', async () => {
+    api.catalogResponder = () => of({
+      status: 'CATALOG_MATCHES',
+      source: 'microsoft-winget-source2',
+      source_version: '1.0.0.0',
+      source_sha256: 'a'.repeat(64),
+      checked_at: '2026-11-12T00:00:00Z',
+      candidates: [
+        { package_id: 'DBeaver.DBeaver.Community', name: 'DBeaver Community Edition', moniker: 'dbeaver', latest_version: '7.3.5' },
+      ],
+    });
+    api.discoveryResponder = (packageId, version) => of({
+      status: 'SOURCE_MISMATCH',
+      package_id: packageId,
+      available_versions: ['7.3.5'],
+      source: 'winget-community-repository',
+      candidate: {
+        package_id: packageId,
+        package_name: 'DBeaver Community Edition',
+        publisher: 'DBeaver Corp',
+        version: version ?? '7.3.5',
+        architecture: 'x64',
+        scope: 'user',
+        installer_type: 'exe',
+        installer_url: 'https://github.com/dbeaver/dbeaver/releases/download/7.3.5/dbeaver-ce-7.3.5-windows-x86_64.exe',
+        installer_domain: 'github.com',
+        installer_sha256: 'b'.repeat(64),
+        manifest_sha256: 'c'.repeat(64),
+        repository_commit: 'd'.repeat(40),
+        manifest_source_url: 'https://github.com/microsoft/winget-pkgs/tree/main',
+        checked_at: '2026-11-12T00:00:00Z',
+        publisher_verification: 'MISMATCH',
+        official_version: '26.2.4',
+        official_release_url: 'https://github.com/dbeaver/dbeaver/releases/tag/26.2.4',
+        official_asset_sha256: 'e'.repeat(64),
+        status: 'CONDITIONAL',
+        limitations: ['publisher_official_release_mismatch', 'installer_authenticode_signature_not_yet_verified'],
+      },
+    });
+    await render();
+
+    send('ติดตั้ง DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const packageButton = fixture.nativeElement.querySelector('.software-candidate') as HTMLButtonElement;
+    packageButton.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const versionButton = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '7.3.5');
+    if (!versionButton) throw new Error('Stale manifest version was not rendered');
+    versionButton.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('SOURCE MISMATCH');
+    expect(fixture.nativeElement.textContent).toContain('7.3.5');
+    expect(fixture.nativeElement.textContent).toContain('26.2.4');
+    expect(fixture.nativeElement.textContent).toContain('บล็อก: Manifest ไม่ตรงกับ Release ทางการ');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
 
