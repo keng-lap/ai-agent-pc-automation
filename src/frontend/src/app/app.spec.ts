@@ -395,7 +395,7 @@ describe('App chat UI (T-202)', () => {
     });
     expect(fixture.nativeElement.textContent).toContain('CONDITIONAL');
     expect(fixture.nativeElement.textContent).toContain('DBeaver Corp');
-    expect(fixture.nativeElement.textContent).toContain('dbeaver.io');
+    expect(fixture.nativeElement.textContent).toContain('github.com');
     expect(fixture.nativeElement.textContent).toContain('ยังไม่ใช่หลักฐานอนุญาตติดตั้ง');
     expect(fixture.nativeElement.textContent).toContain('installer_authenticode_signature_not_yet_verified');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
