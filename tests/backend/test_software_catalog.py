@@ -95,7 +95,7 @@ def make_index(source, verifier=None):
     )
 
 
-def test_catalog_search_resolves_product_name_without_ai_or_winget_cli(tmp_path):
+def test_catalog_search_resolves_product_name_without_ai_or_winget_cli():
     source = FakeSource()
     verifier = AcceptSignature()
     result = make_index(source, verifier).search("DBeaver")
