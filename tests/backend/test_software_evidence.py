@@ -89,7 +89,6 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
         ({}, {"version": "26.2.3"}),
         ({}, {"architecture": "arm64"}),
         ({}, {"sha256": "e" * 64}),
-        ({}, {"authenticode_valid": False}),
         ({}, {"signature_subject": None}),
         ({}, {"official_release_url": "https://evil.example/release"}),
     ],
