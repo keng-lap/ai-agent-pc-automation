@@ -19,7 +19,6 @@ from pathlib import Path, PurePosixPath
 import requests
 from pydantic import BaseModel, ConfigDict
 
-
 WINGET_SOURCE2_URL = "https://cdn.winget.microsoft.com/cache/source2.msix"
 EXPECTED_PACKAGE_NAME = "Microsoft.Winget.Source"
 EXPECTED_PUBLISHER = (
