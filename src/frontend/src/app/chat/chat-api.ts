@@ -8,6 +8,49 @@ export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
 
+export interface SoftwareCatalogCandidate {
+  package_id: string;
+  name: string;
+  moniker: string | null;
+  latest_version: string;
+}
+
+export interface SoftwareCatalogSearchResponse {
+  status: 'CATALOG_MATCHES';
+  source: 'microsoft-winget-source2';
+  source_version: string;
+  source_sha256: string;
+  checked_at: string;
+  candidates: SoftwareCatalogCandidate[];
+}
+
+export interface SoftwareInstallerCandidate {
+  package_id: string;
+  package_name: string;
+  publisher: string;
+  version: string;
+  architecture: 'x86' | 'x64' | 'arm64';
+  scope: 'user';
+  installer_type: string;
+  installer_url: string;
+  installer_domain: string;
+  installer_sha256: string;
+  manifest_sha256: string;
+  repository_commit: string;
+  manifest_source_url: string;
+  checked_at: string;
+  status: 'CONDITIONAL';
+  limitations: string[];
+}
+
+export interface SoftwareDiscoveryResponse {
+  status: 'VERSION_REQUIRED' | 'CONDITIONAL';
+  package_id: string;
+  available_versions: string[];
+  candidate: SoftwareInstallerCandidate | null;
+  source: 'winget-community-repository';
+}
+
 export interface PlanReviewProgram {
   order: number;
   program: string;
@@ -57,6 +100,25 @@ export class ChatApi {
       conversation_id: conversationId,
       message,
       language,
+    });
+  }
+
+  searchSoftwareCatalog(query: string, limit = 10): Observable<SoftwareCatalogSearchResponse> {
+    return this.http.post<SoftwareCatalogSearchResponse>('/api/software/discovery/search', {
+      query,
+      limit,
+    });
+  }
+
+  discoverSoftware(
+    packageId: string,
+    version: string | null,
+    architecture: 'x86' | 'x64' | 'arm64' = 'x64',
+  ): Observable<SoftwareDiscoveryResponse> {
+    return this.http.post<SoftwareDiscoveryResponse>('/api/software/discovery', {
+      package_id: packageId,
+      version,
+      architecture,
     });
   }
 
