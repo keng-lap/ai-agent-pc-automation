@@ -93,6 +93,9 @@ class InstallApprovalBinding(BaseModel):
             raise ValueError("approval digest does not match the exact install proposal")
         return self
 
+    def ensure_fresh(self, *, now: datetime) -> None:
+        self.evidence.ensure_fresh(now=now)
+
 
 def digest_install_approval(*, plan_digest: str, evidence: VerifiedPackageEvidence) -> str:
     """Hash every material field so any proposal substitution changes approval."""
