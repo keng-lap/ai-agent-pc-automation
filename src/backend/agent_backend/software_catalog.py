@@ -366,7 +366,7 @@ class MicrosoftWinGetCatalogIndex:
 
 def _validate_query(query: str) -> str:
     if not isinstance(query, str):
-        raise ValueError("query must be a string")
+        raise TypeError("query must be a string")
     normalized = " ".join(query.split())
     if not QUERY_PATTERN.fullmatch(normalized):
         raise ValueError("query must contain 2 to 128 printable characters")
