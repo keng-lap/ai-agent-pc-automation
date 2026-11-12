@@ -412,10 +412,11 @@ class MicrosoftWinGetCatalogIndex:
                     trusted is not True
                     or not isinstance(signer_subject, str)
                     or not signer_subject.strip()
+                    or signer_subject.strip() != EXPECTED_PUBLISHER
                     or not isinstance(signer_sha256, str)
                     or not re.fullmatch(r"[0-9a-f]{64}", signer_sha256)
                 ):
-                    raise CatalogUnavailable("Microsoft catalog signer identity did not pass verification")
+                    raise CatalogUnavailable("Microsoft catalog signer identity did not match the expected Microsoft publisher")
                 self._source_signer_subject = signer_subject
                 self._source_signer_sha256 = signer_sha256
             else:
