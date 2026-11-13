@@ -16,7 +16,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from urllib.parse import urlencode, urlparse
 
 import requests
@@ -549,6 +549,47 @@ class ApplicationSessionStore:
                 return 0 <= age <= max_age_seconds
         return False
 
+    def consume_recent_auth(
+        self, principal: SessionPrincipal, *, max_age_seconds: int
+    ) -> bool:
+        """Atomically consume the one-time fresh-Google-auth grant on a live session."""
+        if (
+            not isinstance(principal, SessionPrincipal)
+            or type(max_age_seconds) is not int
+            or not 1 <= max_age_seconds <= 600
+        ):
+            return False
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return False
+        with self._lock:
+            for digest, record in self._sessions.items():
+                if (
+                    record.owner_sub != principal.owner_sub
+                    or record.session_id != principal.session_id
+                ):
+                    continue
+                if float(monotonic_now) >= record.monotonic_deadline:
+                    self._sessions.pop(digest, None)
+                    return False
+                authenticated_at = record.monotonic_authenticated_at
+                if authenticated_at is None:
+                    return False
+                age = float(monotonic_now) - authenticated_at
+                if not 0 <= age <= max_age_seconds:
+                    return False
+                self._sessions[digest] = replace(
+                    record,
+                    monotonic_authenticated_at=None,
+                )
+                return True
+        return False
+
     def rotate(self, token: str) -> SessionCredential | None:
         """Atomically replace a live session token after a sensitive enrollment."""
         if not isinstance(token, str) or not 32 <= len(token) <= 256:
@@ -587,7 +628,7 @@ class ApplicationSessionStore:
                 session_id=session_id,
                 expires_at=expires_at,
                 monotonic_deadline=float(monotonic_now) + self._ttl_seconds,
-                monotonic_authenticated_at=float(monotonic_now),
+                monotonic_authenticated_at=old_record.monotonic_authenticated_at,
             )
             return SessionCredential(
                 token=new_token,
