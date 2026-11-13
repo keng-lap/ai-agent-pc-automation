@@ -170,16 +170,26 @@ class WindowsSecretFile:
         access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
         if final:
             access |= _FILE_ADD_FILE | _WRITE_DAC | _WRITE_OWNER
-        handle = win32file.CreateFile(
-            str(path),
-            access,
-            _FILE_SHARE_READ | _FILE_SHARE_WRITE,
-            None,
-            _OPEN_EXISTING,
-            _FILE_FLAG_BACKUP_SEMANTICS
-            | _FILE_FLAG_OPEN_REPARSE_POINT,
-            None,
-        )
+        try:
+            handle = win32file.CreateFile(
+                str(path),
+                access,
+                _FILE_SHARE_READ | _FILE_SHARE_WRITE,
+                None,
+                _OPEN_EXISTING,
+                _FILE_FLAG_BACKUP_SEMANTICS
+                | _FILE_FLAG_OPEN_REPARSE_POINT,
+                None,
+            )
+        except cls._api()[4].error as exc:
+            error_code = getattr(exc, "winerror", None)
+            if error_code is None and getattr(exc, "args", None):
+                error_code = exc.args[0]
+            if error_code in (2, 3):
+                raise FileNotFoundError from None
+            raise WindowsSecretStorageError(
+                f"Secret directory could not be opened safely (Win32 error {error_code})."
+            ) from None
         cls._close(stack, handle)
         cls._verify_not_reparse(handle, directory=True)
         if final:
@@ -206,22 +216,40 @@ class WindowsSecretFile:
         parent = self._path.parent
         if not parent.is_absolute() or not parent.drive or parent.drive.startswith("\\\\"):
             raise WindowsSecretStorageError("Secret path must be an absolute local path.")
-        parent_existed = parent.exists()
-        try:
-            parent.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            raise WindowsSecretStorageError("Secret directory could not be prepared.") from None
         sid = self._current_user_sid()
         components = [*reversed(parent.parents), parent]
         final_handle = None
+        kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        create_directory = kernel32.CreateDirectoryW
+        create_directory.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p]
+        create_directory.restype = ctypes.c_int
         for index, component in enumerate(components):
-            final_handle = self._open_directory(
-                component,
-                final=index == len(components) - 1,
-                created=(index == len(components) - 1 and not parent_existed),
-                sid=sid,
-                stack=stack,
-            )
+            final = index == len(components) - 1
+            created = False
+            try:
+                final_handle = self._open_directory(
+                    component,
+                    final=final,
+                    created=False,
+                    sid=sid,
+                    stack=stack,
+                )
+            except FileNotFoundError:
+                if not create_directory(str(component), None):
+                    error = ctypes.get_last_error()
+                    if error != 183:  # ERROR_ALREADY_EXISTS: verify the winner below.
+                        raise WindowsSecretStorageError(
+                            f"Secret directory could not be created (Win32 error {error})."
+                        ) from None
+                else:
+                    created = True
+                final_handle = self._open_directory(
+                    component,
+                    final=final,
+                    created=created,
+                    sid=sid,
+                    stack=stack,
+                )
         return final_handle, sid
 
     def _open_file(self, stack: ExitStack, sid, *, create: bool):
