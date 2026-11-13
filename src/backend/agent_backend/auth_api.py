@@ -111,18 +111,17 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
     )
 
 
-def require_session(request: Request) -> SessionPrincipal | None:
-    """Require the enrolled Master User session when authentication is enabled."""
+def require_session(request: Request) -> SessionPrincipal:
+    """Fail closed unless an enrolled Master User session is available."""
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
-        return None
+        raise HTTPException(status_code=503, detail="Authentication is not configured.")
     token = request.cookies.get(SESSION_COOKIE_NAME)
     principal = services.sessions.resolve(token or "")
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     request.state.principal = principal
     return principal
-
 
 def _services(request: Request) -> AuthServices:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
