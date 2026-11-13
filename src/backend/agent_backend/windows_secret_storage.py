@@ -23,13 +23,13 @@ _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _FILE_SHARE_READ = 0x00000001
 _FILE_SHARE_WRITE = 0x00000002
-_FILE_SHARE_DELETE = 0x00000004
 _GENERIC_READ = 0x80000000
 _GENERIC_WRITE = 0x40000000
 _OPEN_EXISTING = 3
 _CREATE_NEW = 1
 _READ_CONTROL = 0x00020000
 _WRITE_DAC = 0x00040000
+
 
 class WindowsSecretStorageError(RuntimeError):
     """Windows secret storage could not be proven safe."""
@@ -87,7 +87,7 @@ class WindowsSecretFile:
             raise WindowsSecretStorageError("Secret path contains a reparse point.")
         if directory and not attributes & _FILE_ATTRIBUTE_DIRECTORY:
             raise WindowsSecretStorageError("Secret parent is not a directory.")
-        if not directory and attributes & win32con.FILE_ATTRIBUTE_DIRECTORY:
+        if not directory and attributes & _FILE_ATTRIBUTE_DIRECTORY:
             raise WindowsSecretStorageError("Secret path is not a regular file.")
 
     @classmethod
@@ -121,7 +121,6 @@ class WindowsSecretFile:
 
     @classmethod
     def _verify_owner_only_dacl(cls, handle, sid) -> None:
-        win32con = cls._api()[1]
         win32security = cls._api()[3]
         descriptor = win32security.GetSecurityInfo(
             handle,
@@ -138,7 +137,7 @@ class WindowsSecretFile:
         if (
             header[0] != win32security.ACCESS_ALLOWED_ACE_TYPE
             or header[1] != 0
-            or mask != win32con.FILE_ALL_ACCESS
+            or mask != _FILE_ALL_ACCESS
             or ace_sid != sid
         ):
             raise WindowsSecretStorageError("Secret path DACL is not owner-only.")
@@ -201,10 +200,10 @@ class WindowsSecretFile:
     def _open_file(self, stack: ExitStack, sid, *, create: bool):
         win32file = self._api()[2]
         pywintypes = self._api()[4]
-        disposition = _CREATE_NEW if create else win32con.OPEN_EXISTING
-        access = _GENERIC_READ | win32con.READ_CONTROL
+        disposition = _CREATE_NEW if create else _OPEN_EXISTING
+        access = _GENERIC_READ | _READ_CONTROL
         if create:
-            access |= _GENERIC_WRITE | win32con.WRITE_DAC
+            access |= _GENERIC_WRITE | _WRITE_DAC
         try:
             handle = win32file.CreateFile(
                 str(self._path),
