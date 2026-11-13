@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from agent_backend.auth_audit import AUTH_AUDIT_SINK
 from agent_backend import software_approval_api as api
 from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 from agent_backend.software_evidence import EvidenceNotFound
@@ -166,6 +167,7 @@ def test_confirm_rejects_expired_or_revoked_evidence(monkeypatch):
 
 
 def test_invalid_totp_never_returns_approval(monkeypatch):
+    AUTH_AUDIT_SINK.clear()
     binding = make_binding()
     step_up, _principal = setup_context(monkeypatch, accepted=False)
     monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
@@ -179,6 +181,10 @@ def test_invalid_totp_never_returns_approval(monkeypatch):
         )
     assert getattr(error.value, "status_code", None) == 403
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
+    events = AUTH_AUDIT_SINK.snapshot()
+    assert len(events) == 1
+    assert events[0].reason == "invalid_software_approval"
+    assert events[0].outcome == "denied"
 
 
 def test_successful_confirmation_consumes_plan_binding_and_rejects_replay(monkeypatch):
