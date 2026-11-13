@@ -47,7 +47,7 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 
 - If the encrypted secret cannot be read, the Google-authenticated session remains valid and the API reports authenticator storage unavailable.
 - The Dashboard and read-only Job Status remain accessible. The UI offers a Google-reauthenticated recovery attempt even when the secret payload is corrupt.
-- A current-user-owned final state directory with a bad DACL is hardened automatically. A secret file with a bad DACL is **not** repaired automatically; it is rejected and authenticator enrollment, recovery, and Step-up remain unavailable until the file ACL is repaired by a trusted local maintenance procedure. This repository does not currently provide an automated file-ACL repair procedure.
+- A current-user-owned final state directory or secret file with a bad DACL is hardened through its verified handle before use. A wrong-owner path remains rejected; the adapter never takes ownership of an existing path.
 - Wrong-owner and reparse-point paths remain rejected.
 - A confirmed replacement can replace a corrupt encrypted payload only when the existing secret file passes owner/DACL trust checks. It cannot repair an untrusted file ACL.
 - Enrollment, Step-up, and other high-risk operations fail closed while authenticator storage is unavailable.
