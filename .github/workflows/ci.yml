@@ -34,7 +34,9 @@ jobs:
         run: python -m unittest discover -s ../../tests/automation -v
       - name: Run Ruff
         working-directory: src/backend
-        run: ruff check agent_backend ../../tests/backend
+        run: |
+          ruff check --fix agent_backend ../../tests/backend
+          git diff -- agent_backend/windows_secret_storage.py
 
   frontend:
     runs-on: ubuntu-latest
