@@ -80,6 +80,7 @@ def build_client(tmp_path, *, identity=None):
         sessions=ApplicationSessionStore(
             ttl_seconds=1800,
             clock=lambda: now[0],
+            monotonic_clock=lambda: now[0],
         ),
         secret_store=secret_store,
         enrollment=AuthenticatorEnrollmentManager(
@@ -191,8 +192,8 @@ def test_api_routes_require_master_session_when_auth_is_enabled(tmp_path):
 
 
 def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
-    client, _services, now = build_client(tmp_path)
-    sign_in(client, _services)
+    client, services, now = build_client(tmp_path)
+    original_session = sign_in(client, services)
 
     start = client.post("/api/authenticator/enrollment", json={})
     assert start.status_code == 200
@@ -208,10 +209,25 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
     )
     assert confirmed.status_code == 200
     assert confirmed.json() == {"enrolled": True}
+    assert services.sessions.resolve(original_session.token) is None
+    assert client.cookies.get(SESSION_COOKIE_NAME) != original_session.token
     assert client.get("/api/authenticator/status").json()["authenticator_enrolled"] is True
 
     second = client.post("/api/authenticator/enrollment", json={})
     assert second.status_code == 409
+
+
+
+def test_totp_enrollment_requires_recent_google_reauthentication(tmp_path):
+    client, services, now = build_client(tmp_path)
+    sign_in(client, services)
+    now[0] += 301
+
+    response = client.post("/api/authenticator/enrollment", json={})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Fresh Google sign-in required."}
+    assert services.secret_store.is_configured() is False
 
 
 def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeypatch):
