@@ -4,7 +4,6 @@ import pytest
 
 from agent_backend.job_lifecycle import InMemoryJobStore, JobLifecycleError, JobState
 
-
 NOW = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
 DIGEST = "a" * 64
 
