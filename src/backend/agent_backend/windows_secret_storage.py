@@ -189,7 +189,7 @@ class WindowsSecretFile:
                 win32security.SE_FILE_OBJECT,
                 win32security.OWNER_SECURITY_INFORMATION,
             )
-            if descriptor.GetSecurityDescriptorOwner() != sid:
+            if descriptor.GetSecurityDescriptorOwner() != sid and not created:
                 raise WindowsSecretStorageError(
                     "Secret directory owner SID is not current user."
                 )
