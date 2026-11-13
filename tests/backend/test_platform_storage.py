@@ -10,7 +10,9 @@ from agent_backend.platform_storage import (
 
 
 def test_linux_platform_selects_linux_secure_storage():
-    assert isinstance(create_platform_secure_storage(platform="linux"), LinuxSecureStorage)
+    assert isinstance(
+        create_platform_secure_storage(platform="linux"), LinuxSecureStorage
+    )
 
 
 @pytest.mark.parametrize("platform", ["win32", "darwin", "freebsd"])
