@@ -237,11 +237,16 @@ class WindowsSecretFile:
                 None,
             )
         except pywintypes.error as exc:
-            if create and getattr(exc, "winerror", None) in (80, 183):
+            error_code = getattr(exc, "winerror", None)
+            if error_code is None and getattr(exc, "args", None):
+                error_code = exc.args[0]
+            if create and error_code in (80, 183):
                 raise FileExistsError from None
-            if not create and getattr(exc, "winerror", None) in (2, 3):
+            if not create and error_code in (2, 3):
                 raise FileNotFoundError from None
-            raise WindowsSecretStorageError("Secret file could not be opened safely.") from None
+            raise WindowsSecretStorageError(
+                f"Secret file could not be opened safely (Win32 error {error_code})."
+            ) from None
         self._close(stack, handle)
         self._verify_not_reparse(handle, directory=False)
         if create:
