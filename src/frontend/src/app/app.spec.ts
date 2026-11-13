@@ -67,7 +67,12 @@ class FakeChatApi {
   stepUpCalls: string[] = [];
   reauthCalls = 0;
   recoveryCalls = 0;
-  authSession = { enabled: false, authenticated: false, authenticator_enrolled: false };
+  authSession: {
+    enabled: boolean;
+    authenticated: boolean;
+    authenticator_enrolled: boolean;
+    authenticator_storage_available?: boolean;
+  } = { enabled: false, authenticated: false, authenticator_enrolled: false };
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
