@@ -34,7 +34,8 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 - Creates the application state directory and secret file with exclusive creation.
 - Sets and verifies the owner SID on newly created state paths.
 - Applies a protected DACL with exactly one allow ACE: current user SID, full file access, no inherited ACEs.
-- Verifies owner SID, exact DACL, and protected-DACL control bit on every open.
+- Verifies owner SID on every open. If the owner is already the current user, the adapter repairs an overly broad or inherited DACL in place; it never takes ownership of an existing directory or file.
+- Verifies the repaired DACL and protected-DACL control bit before reading or writing.
 - Opens every path component with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects reparse points, and keeps directory handles open without `FILE_SHARE_DELETE` while operating on the secret.
 - Opens the secret itself without delete sharing and without concurrent write sharing; reads and writes use the verified file handle.
 - Replacement writes a new protected file in the same secured directory and uses `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)`, then reopens and verifies the replacement.
@@ -42,9 +43,10 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 
 ## Failure behavior and lockout prevention
 
-- If the encrypted secret cannot be read or the Windows path/DACL check fails, the Google-authenticated session remains valid and the API reports authenticator storage unavailable.
-- The Dashboard and read-only Job Status remain accessible.
-- Enrollment, Step-up, and other high-risk operations fail closed while authenticator storage is unavailable.
+- If the encrypted secret cannot be read, the Google-authenticated session remains valid and the API reports authenticator storage unavailable.
+- The Dashboard and read-only Job Status remain accessible. The UI offers a Google-reauthenticated recovery attempt even when the secret payload is corrupt.
+- A current-user-owned directory/file with a bad DACL is hardened automatically; wrong-owner or reparse-point paths remain rejected.
+- Enrollment, Step-up, and other high-risk operations fail closed while authenticator storage is unavailable. A confirmed replacement can atomically replace a corrupt payload without decrypting the old TOTP secret.
 - No fallback to an unprotected file, another user's SID, or disabled authentication is permitted.
 
 ## Scope and remaining gates
