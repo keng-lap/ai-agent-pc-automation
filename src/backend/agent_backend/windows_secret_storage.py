@@ -183,17 +183,23 @@ class WindowsSecretFile:
         cls._close(stack, handle)
         cls._verify_not_reparse(handle, directory=True)
         if final:
-            if created:
-                cls._set_owner_only_dacl(
-                    handle,
-                    sid,
-                    allow_owner_change=True,
+            descriptor = win32security.GetSecurityInfo(
+                handle,
+                win32security.SE_FILE_OBJECT,
+                win32security.OWNER_SECURITY_INFORMATION,
+            )
+            if descriptor.GetSecurityDescriptorOwner() != sid and not created:
+                raise WindowsSecretStorageError(
+                    "Secret directory owner SID is not current user."
                 )
-            else:
-                # Never silently rewrite the ACL of an existing caller-owned
-                # directory. Only a newly created, dedicated secret directory
-                # may be hardened by this adapter.
-                cls._verify_owner_only_dacl(handle, sid)
+            # Repair an overly broad/inherited DACL only when the directory
+            # owner is already the current user; never take ownership of an
+            # existing directory.
+            cls._set_owner_only_dacl(
+                handle,
+                sid,
+                allow_owner_change=created,
+            )
         return handle
 
     def _parent_handles(self, stack: ExitStack):
@@ -255,7 +261,11 @@ class WindowsSecretFile:
                 allow_owner_change=True,
             )
         else:
-            self._verify_owner_only_dacl(handle, sid)
+            self._set_owner_only_dacl(
+                handle,
+                sid,
+                allow_owner_change=False,
+            )
         return handle
 
     def exists(self) -> bool:
