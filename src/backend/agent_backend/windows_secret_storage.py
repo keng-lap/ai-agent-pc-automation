@@ -5,11 +5,12 @@ rejects reparse points, verifies the current-user owner SID, and performs file I
 through verified handles. It deliberately fails closed if pywin32 is unavailable.
 """
 
+from contextlib import ExitStack
+from pathlib import Path
+
 import ctypes
 import os
 import secrets
-from contextlib import ExitStack
-from pathlib import Path
 
 
 _FILE_READ_ATTRIBUTES = 0x00000080
@@ -368,9 +369,15 @@ class WindowsSecretFile:
                     # verified and pinned parent handle instead of resolving
                     # source/destination path strings again.
                     name_bytes = temporary_name.encode("utf-16-le")
-                    class _FileRenameInfo(ctypes.Structure):
+                    class _RenameFlags(ctypes.Union):
                         _fields_ = [
                             ("ReplaceIfExists", ctypes.c_ubyte),
+                            ("Flags", ctypes.c_uint32),
+                        ]
+
+                    class _FileRenameInfo(ctypes.Structure):
+                        _fields_ = [
+                            ("RenameFlags", _RenameFlags),
                             ("RootDirectory", ctypes.c_void_p),
                             ("FileNameLength", ctypes.c_uint32),
                             ("FileName", ctypes.c_wchar * 1),
@@ -379,7 +386,7 @@ class WindowsSecretFile:
                     name_offset = _FileRenameInfo.FileName.offset
                     buffer = ctypes.create_string_buffer(name_offset + len(name_bytes))
                     info = _FileRenameInfo.from_buffer(buffer)
-                    info.ReplaceIfExists = 1
+                    info.RenameFlags.ReplaceIfExists = 1
                     info.RootDirectory = int(parent_handle)
                     info.FileNameLength = len(name_bytes)
                     ctypes.memmove(
