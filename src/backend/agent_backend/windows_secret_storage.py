@@ -296,10 +296,14 @@ class WindowsSecretFile:
                 allow_owner_change=True,
             )
         else:
-            # Existing secret files are immutable from a trust-policy
-            # perspective: verify their ACL, but never attempt to repair it.
-            # Repair would require WRITE_DAC and could mask tampering.
-            self._verify_owner_only_dacl(handle, sid)
+            # Verify ownership before changing any security descriptor. Never
+            # take ownership of an existing secret file; repair only its DACL
+            # through this verified handle, then validate the exact result.
+            self._set_owner_only_dacl(
+                handle,
+                sid,
+                allow_owner_change=False,
+            )
         return handle
 
     def exists(self) -> bool:
