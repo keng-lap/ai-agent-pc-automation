@@ -19,11 +19,11 @@ from .config import Settings
 from .oidc import (
     ApplicationSessionStore,
     GoogleOidcClient,
+    MAX_RECENT_AUTH_AGE_SECONDS,
     MasterUserAllowlist,
     OidcAuthenticationError,
     OidcTransactionStore,
     SessionPrincipal,
-    MAX_RECENT_AUTH_AGE_SECONDS,
 )
 from .step_up import StepUpChallengeStore
 from .totp import TotpReplayGuard
