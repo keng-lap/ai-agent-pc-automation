@@ -152,15 +152,15 @@ def test_terminal_transition_records_finish_time_and_reboot_flag(tmp_path):
         action_digest=DIGEST,
         idempotency_key="request-1",
     )
-    starting = store.transition(
+    store.transition(
         job["job_id"], owner_id=OWNER, expected_version=0,
         target=JobState.STARTING, message="Claimed", now=NOW + timedelta(seconds=1),
     )
-    running = store.transition(
+    store.transition(
         job["job_id"], owner_id=OWNER, expected_version=1,
         target=JobState.RUNNING, message="Started", now=NOW + timedelta(seconds=2),
     )
-    verifying = store.transition(
+    store.transition(
         job["job_id"], owner_id=OWNER, expected_version=2,
         target=JobState.VERIFYING, message="Verifying package identity",
         now=NOW + timedelta(seconds=3),
