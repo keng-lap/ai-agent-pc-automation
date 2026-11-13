@@ -11,7 +11,14 @@ This change introduces two isolated primitives:
 - `jobs_api.py`: read-only authenticated `GET /api/jobs` and `GET /api/jobs/{job_id}` endpoints. They never create, start, retry, cancel, or dispatch jobs.
 - `process_containment.py`: a Windows Job Object wrapper configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`. It supports assigning a process handle before the primary thread is resumed, terminating the contained process tree, and closing the Job Object.
 
-The original in-memory reference store remains test-only. The SQLite store persists operational records across process restarts. On POSIX it requires a private 0700 state directory and 0600 database file and rejects symlink paths. **On Windows it intentionally refuses to initialize until native DACL, owner SID, reparse-point and handle/path-race protections are implemented and independently reviewed.** The Frontend will therefore receive HTTP 503 for job status on Windows until this gate is closed.
+The original in-memory reference store remains test-only. The SQLite store persists operational records across process restarts. The store delegates filesystem protection to the `SecureStorageAdapter` contract in `platform_storage.py`; OS-specific controls are not embedded in the SQLite implementation.
+
+- **Linux:** the initial adapter requires a private 0700 state directory and 0600 database file and rejects symlink paths.
+- **Windows:** storage intentionally refuses to initialize until native DACL, owner SID, reparse-point and handle-based path-race protections are implemented and independently reviewed.
+- **macOS:** storage intentionally refuses to initialize until native ACL and handle-based path-race protections are implemented and independently reviewed.
+- Other operating systems are unsupported until an explicit adapter is implemented and reviewed.
+
+This is an adapter boundary, not a claim of cross-platform runtime support. The Frontend will receive HTTP 503 for job status on platforms without an enabled secure-storage adapter.
 
 ## Status API and persistence boundary
 
@@ -47,7 +54,7 @@ The state machine intentionally does not infer success from process exit. A futu
 
 ## Not yet implemented — required before runtime
 
-1. Native Windows ACL/owner/reparse-point and handle/path-race protections for the SQLite state directory/database; corruption recovery and retention policy still require implementation and A4 review.
+1. Native Windows DACL/owner/reparse-point and handle-based path-race protections, plus native macOS ACL/path-race protections, behind `SecureStorageAdapter`; each adapter requires platform-specific negative tests and independent A4 review. Linux path-based checks also require handle-relative hardening before hostile-local-user threat coverage can be claimed. Corruption recovery and retention policy still require implementation and A4 review.
 2. A production worker loop and scheduler with bounded queue/concurrency, lease renewal, worker shutdown semantics, and crash recovery.
 3. A reviewed suspended-process launcher that creates the process with a fixed executable/argv/environment and assigns it to the Job Object before resume. The current wrapper does not create processes.
 4. Bounded asynchronous stdout/stderr draining, output redaction, output-size caps, and timeout supervision.
