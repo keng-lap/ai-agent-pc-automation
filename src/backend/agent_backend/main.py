@@ -2,6 +2,7 @@
 
 import logging
 import re
+import threading
 import traceback
 
 from fastapi import Depends, FastAPI, Request
@@ -38,7 +39,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.auth_services = auth_services
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
-    application.state.job_store_lock = __import__('threading').Lock()
+    application.state.job_store_lock = threading.Lock()
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
