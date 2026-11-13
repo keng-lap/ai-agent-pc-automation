@@ -331,3 +331,25 @@ def test_protected_routers_fail_closed_when_authentication_is_disabled(
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Internal server error."}
+
+
+@pytest.mark.parametrize(
+    ("environ", "argv"),
+    [
+        ({"WEB_CONCURRENCY": "2"}, []),
+        ({}, ["--workers", "2"]),
+        ({"GUNICORN_CMD_ARGS": "--workers=3"}, []),
+        ({"UVICORN_WORKERS": "not-a-number"}, []),
+    ],
+)
+def test_multi_worker_configuration_is_rejected(environ, argv):
+    from agent_backend.main import enforce_single_worker
+
+    with pytest.raises(RuntimeError):
+        enforce_single_worker(environ=environ, argv=argv)
+
+
+def test_single_worker_configuration_is_accepted():
+    from agent_backend.main import enforce_single_worker
+
+    enforce_single_worker(environ={"WEB_CONCURRENCY": "1"}, argv=[])
