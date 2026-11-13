@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import os
 from ctypes import wintypes
+from typing import Self
 
 
 class ProcessContainmentError(RuntimeError):
@@ -141,7 +142,7 @@ class WindowsJobObject:
         if not self._kernel32.CloseHandle(handle):
             raise self._last_error("CloseHandle failed; contained processes may remain active")
 
-    def __enter__(self) -> WindowsJobObject:
+    def __enter__(self) -> Self:
         if not self.is_open:
             raise ProcessContainmentError("Job Object is closed")
         return self
