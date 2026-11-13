@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import ctypes
 import os
+import secrets
 from contextlib import ExitStack
 from pathlib import Path
-import secrets
 
 
 _FILE_READ_ATTRIBUTES = 0x00000080
@@ -167,6 +167,7 @@ class WindowsSecretFile:
         stack: ExitStack,
     ):
         win32file = cls._api()[2]
+        win32security = cls._api()[3]
         access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
         if final:
             access |= _WRITE_DAC | _WRITE_OWNER
