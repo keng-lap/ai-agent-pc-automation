@@ -284,7 +284,7 @@ class WindowsSecretFile:
             handle = self._open_file(stack, sid, create=False)
             win32file = self._api()[2]
             info = win32file.GetFileInformationByHandle(handle)
-            size = (info[4] << 32) | info[5]
+            size = (info[5] << 32) | info[6]
             if not 0 < size <= self._MAX_BYTES:
                 raise WindowsSecretStorageError("Secret file size is invalid.")
             error, payload = win32file.ReadFile(handle, self._MAX_BYTES + 1)
