@@ -168,6 +168,38 @@ class TotpReplayGuard:
             self._last_consumed[owner_key] = step
             return True
 
+    def consume_step_after(
+        self,
+        *,
+        owner_key: str,
+        step: int,
+        action: Callable[[], None],
+    ) -> bool:
+        """Run an operation and consume its exact TOTP step atomically.
+
+        The replay lock is held while the operation runs, so concurrent
+        Step-up verification cannot consume a code between secret replacement
+        and replay-state advancement. If the operation raises, replay state is
+        left unchanged.
+        """
+        if (
+            not isinstance(owner_key, str)
+            or not owner_key
+            or len(owner_key) > 256
+            or isinstance(step, bool)
+            or not isinstance(step, int)
+            or step < 0
+            or not callable(action)
+        ):
+            return False
+        with self._lock:
+            previous = self._last_consumed.get(owner_key)
+            if previous is not None and step <= previous:
+                return False
+            action()
+            self._last_consumed[owner_key] = step
+            return True
+
     def block_through_current_step(
         self,
         *,
