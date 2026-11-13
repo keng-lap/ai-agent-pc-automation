@@ -5,11 +5,11 @@ rejects reparse points, verifies the current-user owner SID, and performs file I
 through verified handles. It deliberately fails closed if pywin32 is unavailable.
 """
 
+import contextlib
 import ctypes
 import os
+import pathlib
 import secrets
-from contextlib import ExitStack
-from pathlib import Path
 
 
 _FILE_READ_ATTRIBUTES = 0x00000080
@@ -40,12 +40,12 @@ class WindowsSecretFile:
 
     _MAX_BYTES = 16 * 1024
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: pathlib.Path) -> None:
         if os.name != "nt":
             raise WindowsSecretStorageError("Windows secret storage is unavailable.")
-        if not isinstance(path, Path):
-            raise TypeError("secret path must be a pathlib.Path")
-        self._path = Path(os.path.abspath(path))
+        if not isinstance(path, pathlib.Path):
+            raise TypeError("secret path must be a pathlib.pathlib.Path")
+        self._path = pathlib.Path(os.path.abspath(path))
 
     @staticmethod
     def _api():
@@ -75,7 +75,7 @@ class WindowsSecretFile:
             win32api.CloseHandle(token)
 
     @staticmethod
-    def _close(stack: ExitStack, handle) -> None:
+    def _close(stack: contextlib.ExitStack, handle) -> None:
         win32file = WindowsSecretFile._api()[2]
         stack.callback(win32file.CloseHandle, handle)
 
@@ -158,12 +158,12 @@ class WindowsSecretFile:
     @classmethod
     def _open_directory(
         cls,
-        path: Path,
+        path: pathlib.Path,
         *,
         final: bool,
         created: bool,
         sid,
-        stack: ExitStack,
+        stack: contextlib.ExitStack,
     ):
         win32file = cls._api()[2]
         win32security = cls._api()[3]
@@ -212,7 +212,7 @@ class WindowsSecretFile:
             )
         return handle
 
-    def _parent_handles(self, stack: ExitStack):
+    def _parent_handles(self, stack: contextlib.ExitStack):
         parent = self._path.parent
         if not parent.is_absolute() or not parent.drive or parent.drive.startswith("\\\\"):
             raise WindowsSecretStorageError("Secret path must be an absolute local path.")
@@ -252,7 +252,7 @@ class WindowsSecretFile:
                 )
         return final_handle, sid
 
-    def _open_file(self, stack: ExitStack, sid, *, create: bool):
+    def _open_file(self, stack: contextlib.ExitStack, sid, *, create: bool):
         win32file = self._api()[2]
         pywintypes = self._api()[4]
         disposition = _CREATE_NEW if create else _OPEN_EXISTING
@@ -296,7 +296,7 @@ class WindowsSecretFile:
         return handle
 
     def exists(self) -> bool:
-        with ExitStack() as stack:
+        with contextlib.ExitStack() as stack:
             _parent, sid = self._parent_handles(stack)
             try:
                 self._open_file(stack, sid, create=False)
@@ -307,7 +307,7 @@ class WindowsSecretFile:
     def create_exclusive(self, payload: bytes) -> None:
         if not isinstance(payload, bytes) or not 0 < len(payload) <= self._MAX_BYTES:
             raise WindowsSecretStorageError("Secret payload size is invalid.")
-        with ExitStack() as stack:
+        with contextlib.ExitStack() as stack:
             _parent, sid = self._parent_handles(stack)
             handle = self._open_file(stack, sid, create=True)
             win32file = self._api()[2]
@@ -317,7 +317,7 @@ class WindowsSecretFile:
             win32file.FlushFileBuffers(handle)
 
     def read(self) -> bytes:
-        with ExitStack() as stack:
+        with contextlib.ExitStack() as stack:
             _parent, sid = self._parent_handles(stack)
             handle = self._open_file(stack, sid, create=False)
             win32file = self._api()[2]
@@ -336,11 +336,11 @@ class WindowsSecretFile:
 
         temporary_name = f".{self._path.name}.{secrets.token_hex(16)}.tmp"
         temporary = self._path.with_name(temporary_name)
-        with ExitStack() as parent_stack:
+        with contextlib.ExitStack() as parent_stack:
             _parent_handle, sid = self._parent_handles(parent_stack)
             # Verify the destination while its parent directory is pinned, then
             # close that file handle before asking Windows to replace it.
-            with ExitStack() as check:
+            with contextlib.ExitStack() as check:
                 _parent, check_sid = self._parent_handles(check)
                 self._open_file(check, check_sid, create=False)
 
@@ -349,7 +349,7 @@ class WindowsSecretFile:
             win32file = self._api()[2]
             pywintypes = self._api()[4]
             try:
-                with ExitStack() as rename_stack:
+                with contextlib.ExitStack() as rename_stack:
                     source = win32file.CreateFile(
                         str(temporary),
                         _GENERIC_READ | _GENERIC_WRITE | 0x00010000,  # DELETE
