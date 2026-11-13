@@ -588,6 +588,20 @@ class ApplicationSessionStore:
                 expires_at=expires_at,
             )
 
+    def revoke_owner_sessions(self, owner_sub: str) -> int:
+        """Revoke every active session for an owner after fresh identity proof."""
+        if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
+            return 0
+        with self._lock:
+            digests = [
+                digest
+                for digest, record in self._sessions.items()
+                if hmac.compare_digest(record.owner_sub, owner_sub)
+            ]
+            for digest in digests:
+                self._sessions.pop(digest, None)
+            return len(digests)
+
     def revoke(self, token: str) -> bool:
         if not isinstance(token, str) or not 32 <= len(token) <= 256:
             return False
