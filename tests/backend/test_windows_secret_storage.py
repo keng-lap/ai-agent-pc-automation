@@ -1,5 +1,5 @@
-import os
 from contextlib import ExitStack
+import os
 
 import pytest
 
@@ -26,7 +26,8 @@ def test_windows_secret_file_uses_owner_only_dacl_and_handle_io(tmp_path):
     assert store.read() == b"replacement-envelope"
 
     with ExitStack() as stack:
-        _parent, sid = store._parent_handles(stack)
+        parent_handle, sid = store._parent_handles(stack)
+        store._verify_owner_only_dacl(parent_handle, sid)
         handle = store._open_file(stack, sid, create=False)
         store._verify_owner_only_dacl(handle, sid)
 
