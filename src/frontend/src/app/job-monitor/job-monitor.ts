@@ -74,6 +74,9 @@ export class JobMonitorComponent implements OnInit {
               }
             }),
             catchError(() => {
+              this.jobs.set([]);
+              this.selectedId.set(null);
+              this.lastCheckedAt.set(null);
               this.apiStatus.set('unavailable');
               return EMPTY;
             }),
@@ -150,7 +153,12 @@ export class JobMonitorComponent implements OnInit {
         this.lastCheckedAt.set(response.checked_at);
         this.apiStatus.set('connected');
       },
-      error: () => this.apiStatus.set('unavailable'),
+      error: () => {
+        this.jobs.set([]);
+        this.selectedId.set(null);
+        this.lastCheckedAt.set(null);
+        this.apiStatus.set('unavailable');
+      },
     });
   }
 }
