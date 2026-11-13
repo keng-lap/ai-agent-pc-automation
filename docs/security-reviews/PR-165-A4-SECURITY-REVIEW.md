@@ -44,13 +44,7 @@ The secret path is now restricted by `validate_authenticator_secret_path()` to a
 
 Regression coverage rejects a configured secret path outside the dedicated directory. The security document and `.env.example` state the new path requirement.
 
-### F-03 — Medium — Recovery proof could be reused across replay owners
-
-**Status: Addressed.**
-
-The exact matched recovery step is consumed on the primary owner replay guard after successful secret replacement, not only on the recovery-enrollment-specific key. Current/future-step and persistence-failure regression tests cover this boundary.
-
-### F-04 — Low — Session rotation failure after secret persistence
+### F-03 — Low — Session rotation failure after secret persistence
 
 **Status: Addressed.**
 
@@ -58,7 +52,7 @@ If the secret has been persisted but session rotation returns `None`, the endpoi
 
 A regression test verifies persisted secret state and a success audit event when rotation fails.
 
-### F-05 — Low — Temporary and partial secret-file residue
+### F-04 — Low — Temporary and partial secret-file residue
 
 **Status: Mitigated; cleanup remains best-effort.**
 
