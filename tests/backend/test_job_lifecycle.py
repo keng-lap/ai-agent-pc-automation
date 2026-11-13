@@ -8,7 +8,10 @@ from agent_backend.job_lifecycle import (
     JobLifecycleError,
     JobState,
 )
-from agent_backend.process_containment import ProcessContainmentError, WindowsJobObject
+from agent_backend.process_containment import (
+    ProcessContainmentError,
+    WindowsJobObject,
+)
 
 
 NOW = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
