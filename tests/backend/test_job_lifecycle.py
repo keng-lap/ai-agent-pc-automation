@@ -3,8 +3,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-import agent_backend.job_lifecycle as job_lifecycle
-import agent_backend.process_containment as process_containment
+from agent_backend import job_lifecycle
+from agent_backend import process_containment
 
 
 NOW = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
