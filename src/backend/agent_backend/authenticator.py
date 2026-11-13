@@ -159,8 +159,10 @@ class EncryptedTotpSecretFileStore:
                     from .windows_secret_storage import WindowsSecretFile
 
                     return WindowsSecretFile(self._path).exists()
-                except Exception:  # noqa: BLE001 - sanitize platform failures
-                    raise SecretStoreError("Secret store path is not trusted.") from None
+                except Exception as exc:  # noqa: BLE001 - diagnostic for fail-closed platform errors
+                    raise SecretStoreError(
+                        f"Secret store path is not trusted ({type(exc).__name__}: {exc})."
+                    ) from None
             if self._path.is_symlink():
                 raise SecretStoreError("Secret store path is not trusted.")
             return self._path.exists()
