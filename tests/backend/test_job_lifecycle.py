@@ -59,7 +59,7 @@ def test_claim_is_atomic_and_creates_worker_lease():
     store, job = _create()
     claimed, lease = _claim(store, job)
 
-    assert claimed.state is job_lifecycle.JobState.STARTING
+    assert claimed.state is JobState.STARTING
     assert claimed.version == 1
     assert lease.worker_id == "worker-1"
     assert store.claim_next(worker_id="worker-2", now=NOW) is None
@@ -73,19 +73,19 @@ def test_worker_can_advance_only_with_current_lease_and_version():
         worker_id=lease.worker_id,
         lease_token=lease.token,
         expected_version=claimed.version,
-        target=job_lifecycle.JobState.RUNNING,
+        target=JobState.RUNNING,
         now=NOW + timedelta(seconds=1),
     )
 
-    assert running.state is job_lifecycle.JobState.RUNNING
+    assert running.state is JobState.RUNNING
     assert running.version == 2
-    with pytest.raises(job_lifecycle.JobLifecycleError, match="invalid"):
+    with pytest.raises(JobLifecycleError, match="invalid"):
         store.transition(
             job.job_id,
             worker_id=lease.worker_id,
             lease_token=lease.token,
             expected_version=claimed.version,
-            target=job_lifecycle.JobState.VERIFYING,
+            target=JobState.VERIFYING,
             now=NOW + timedelta(seconds=2),
         )
 
@@ -105,7 +105,7 @@ def test_worker_can_renew_a_live_lease_with_compare_and_swap_version():
 
     assert renewed.version == claimed.version + 1
     assert renewed.lease.expires_at == NOW + timedelta(seconds=70)
-    with pytest.raises(job_lifecycle.JobLifecycleError, match="invalid"):
+    with pytest.raises(JobLifecycleError, match="invalid"):
         store.renew_lease(
             job.job_id,
             worker_id=lease.worker_id,
@@ -117,13 +117,13 @@ def test_worker_can_renew_a_live_lease_with_compare_and_swap_version():
 def test_invalid_state_transition_is_rejected():
     store, job = _create()
     claimed, lease = _claim(store, job)
-    with pytest.raises(job_lifecycle.JobLifecycleError, match="not allowed"):
+    with pytest.raises(JobLifecycleError, match="not allowed"):
         store.transition(
             job.job_id,
             worker_id=lease.worker_id,
             lease_token=lease.token,
             expected_version=claimed.version,
-            target=job_lifecycle.JobState.SUCCEEDED,
+            target=JobState.SUCCEEDED,
             now=NOW + timedelta(seconds=1),
         )
 
@@ -132,7 +132,7 @@ def test_cancel_queued_job_without_worker_dispatch():
     store, job = _create()
     cancelled = store.request_cancel(job.job_id, owner_id="owner-1", now=NOW)
 
-    assert cancelled.state is job_lifecycle.JobState.CANCELLED
+    assert cancelled.state is JobState.CANCELLED
     assert store.claim_next(worker_id="worker-1", now=NOW) is None
 
 
@@ -144,23 +144,23 @@ def test_running_cancel_requires_worker_confirmation_before_cancelled():
         worker_id=lease.worker_id,
         lease_token=lease.token,
         expected_version=claimed.version,
-        target=job_lifecycle.JobState.RUNNING,
+        target=JobState.RUNNING,
         now=NOW + timedelta(seconds=1),
     )
     requested = store.request_cancel(job.job_id, owner_id="owner-1", now=NOW + timedelta(seconds=2))
 
-    assert requested.state is job_lifecycle.JobState.CANCEL_REQUESTED
+    assert requested.state is JobState.CANCEL_REQUESTED
     assert requested.lease == lease
     cancelled = store.transition(
         job.job_id,
         worker_id=lease.worker_id,
         lease_token=lease.token,
         expected_version=requested.version,
-        target=job_lifecycle.JobState.CANCELLED,
+        target=JobState.CANCELLED,
         now=NOW + timedelta(seconds=3),
         result_code="PROCESS_TREE_TERMINATED",
     )
-    assert cancelled.state is job_lifecycle.JobState.CANCELLED
+    assert cancelled.state is JobState.CANCELLED
     assert cancelled.lease is None
 
 
@@ -170,18 +170,18 @@ def test_expired_worker_lease_becomes_unknown_and_is_never_requeued():
     expired = store.expire_leases(now=NOW + timedelta(seconds=31))
 
     assert expired == (job.job_id,)
-    assert store.get_for_owner(job.job_id, "owner-1").state is job_lifecycle.JobState.UNKNOWN
+    assert store.get_for_owner(job.job_id, "owner-1").state is JobState.UNKNOWN
     assert store.claim_next(worker_id="worker-2", now=NOW + timedelta(seconds=32)) is None
 
 
 def test_owner_is_bound_to_job_status():
     store, job = _create()
-    with pytest.raises(job_lifecycle.JobLifecycleError, match="not found"):
+    with pytest.raises(JobLifecycleError, match="not found"):
         store.get_for_owner(job.job_id, "another-owner")
 
 
 def test_invalid_digest_and_lease_are_rejected():
-    store = job_lifecycle.InMemoryJobStore()
+    store = InMemoryJobStore()
     with pytest.raises(ValueError, match="SHA-256"):
         store.create(
             owner_id="owner-1",
