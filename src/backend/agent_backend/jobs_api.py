@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,7 +50,7 @@ class JobListResponse(BaseModel):
 
 
 def require_job_owner(
-    principal: SessionPrincipal | None = Depends(require_session),
+    principal: Annotated[SessionPrincipal | None, Depends(require_session)],
 ) -> SessionPrincipal:
     """Reject auth-disabled mode even when the shared dependency returns None."""
     if principal is None:
@@ -83,7 +83,7 @@ def _store(request: Request):
 def list_jobs(
     request: Request,
     limit: int = Query(default=25, ge=1, le=25),
-    principal: SessionPrincipal = Depends(require_job_owner),
+    principal: Annotated[SessionPrincipal, Depends(require_job_owner)],
 ) -> JobListResponse:
     try:
         jobs = _store(request).list_for_owner(principal.owner_sub, limit=limit)
