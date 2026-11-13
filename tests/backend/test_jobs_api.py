@@ -81,7 +81,7 @@ def test_job_status_api_fails_closed_when_authentication_is_disabled(tmp_path):
 
     assert response.status_code == 503
     assert response.json() == {
-        "detail": "Job status authentication is unavailable."
+        "detail": "Authentication is not configured."
     }
 
 
