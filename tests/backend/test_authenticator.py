@@ -56,7 +56,7 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
         owner_sub="owner-sub",
         code=code_at(RFC_SECRET, 90),
     )
-    raw_file = (tmp_path / "authenticator.json").read_text(encoding="ascii")
+    raw_file = store._path.read_text(encoding="ascii")
     assert "owner-sub" not in raw_file
     assert "otpauth://" not in raw_file
     assert store.load(owner_sub="owner-sub") is not None
