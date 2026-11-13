@@ -88,7 +88,7 @@ def test_windows_secret_file_rejects_extra_dacl_ace_for_verified_owner(tmp_path)
             win32security.ACL_REVISION, 0, 0x001F01FF, owner
         )
         acl.AddAccessAllowedAceEx(
-            win32security.ACL_REVISION, 0, win32con.FILE_READ_DATA, everyone
+            win32security.ACL_REVISION, 0, 0x00000001, everyone
         )
         win32security.SetSecurityInfo(
             handle,
