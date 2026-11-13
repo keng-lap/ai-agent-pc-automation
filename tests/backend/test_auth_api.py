@@ -354,6 +354,49 @@ def test_totp_recovery_replaces_lost_authenticator_after_google_reauth(tmp_path)
     )
 
 
+def test_corrupt_authenticator_storage_can_be_recovered_without_blocking_dashboard(tmp_path):
+    client, services, now = build_client(
+        tmp_path,
+        identity=GoogleIdentity(
+            sub=OWNER,
+            email="owner@example.test",
+            recently_authenticated=True,
+        ),
+    )
+    services.secret_store._path.parent.mkdir(parents=True, exist_ok=True)
+    services.secret_store._path.write_text(
+        "{corrupt-secret-envelope",
+        encoding="ascii",
+    )
+    sign_in(client, services)
+
+    session = client.get("/api/auth/session")
+    assert session.status_code == 200
+    assert session.json()["authenticated"] is True
+    assert session.json()["authenticator_storage_available"] is False
+
+    assert client.get("/api/auth/google/reauth/start").status_code == 200
+    callback = client.get(
+        "/auth/google/callback?state=repair-state&code=repair-code",
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+
+    services.enrollment._secret_factory = lambda: NEW_SECRET
+    start = client.post("/api/authenticator/recovery", json={})
+    assert start.status_code == 200
+    confirmed = client.post(
+        "/api/authenticator/recovery/confirm",
+        json={
+            "enrollment_id": start.json()["enrollment_id"],
+            "code": code_at(NEW_SECRET, now[0] + 30),
+        },
+    )
+    assert confirmed.status_code == 200
+    assert services.secret_store.load(owner_sub=OWNER) == NEW_SECRET
+    assert client.get("/api/auth/session").json()["authenticator_storage_available"] is True
+
+
 def test_fresh_google_auth_grant_is_consumed_once_for_enrollment(tmp_path):
     client, services, _now = build_client(tmp_path)
     sign_in(client, services, recently_authenticated=True)
