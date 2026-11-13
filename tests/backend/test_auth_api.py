@@ -642,3 +642,28 @@ def test_authenticator_change_reports_persisted_success_when_session_rotation_fa
         event.event_type == "auth.enrollment" and event.outcome == "success"
         for event in AUTH_AUDIT_SINK.snapshot()
     )
+
+
+
+def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_absent():
+    from pathlib import Path
+
+    from agent_backend.auth_api import build_auth_services
+
+    settings = replace(
+        load_settings(load_env_file=False),
+        google_oidc_client_id="test-client-id",
+        google_oidc_client_secret="test-client-secret",
+        google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+        master_google_sub=OWNER,
+        app_session_ttl_seconds=1800,
+        authenticator_secret_path=(
+            Path(__file__).resolve().parents[2]
+            / ".agent-state" / "authenticator" / "authenticator.json"
+        ),
+    )
+
+    services = build_auth_services(settings)
+
+    assert services is not None
+    assert services.enrollment._replay_guard._last_consumed.get(OWNER) is None
