@@ -3,7 +3,8 @@
 The owner secret is protected with Windows DPAPI (current Windows user scope)
 before it is written to the local file. Enrollment material is memory-only and
 expires; the QR data URI is returned once and must never be logged or persisted.
-No lost-device replacement or recovery path is provided by this module.
+Replacement requires a fresh Google OIDC authentication ceremony and verifies
+the replacement TOTP before atomically replacing the existing secret.
 """
 
 from __future__ import annotations
