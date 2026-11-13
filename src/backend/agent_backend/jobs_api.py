@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth_api import require_session
-from .job_lifecycle import JobLifecycleError, JobState
+from .job_lifecycle import JobLifecycleError
 from .job_store import JobStoreUnavailable, SQLiteJobStore
 from .oidc import SessionPrincipal
 
 router = APIRouter()
+JobStateValue = Literal["QUEUED", "STARTING", "RUNNING", "VERIFYING", "REBOOT_REQUIRED", "CANCEL_REQUESTED", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN"]
 
 
 class JobEventResponse(BaseModel):
@@ -21,7 +22,7 @@ class JobEventResponse(BaseModel):
 
     sequence: int = Field(ge=1)
     occurred_at: str = Field(min_length=20, max_length=40)
-    state: JobState
+    state: JobStateValue
     level: Literal["INFO", "WARN", "ERROR"]
     message: str = Field(min_length=1, max_length=240)
 
