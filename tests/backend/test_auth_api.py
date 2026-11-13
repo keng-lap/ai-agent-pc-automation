@@ -289,7 +289,7 @@ def test_secret_store_failure_does_not_lock_owner_out_of_dashboard(tmp_path, mon
         "enabled": True,
         "authenticated": True,
         "authenticator_enrolled": False,
-        "authenticator_storage_available": False,
+        "authenticator_storage_available": True,
     }
 
 
@@ -376,6 +376,7 @@ def test_totp_not_enrolled_does_not_block_google_dashboard_session(tmp_path):
         "enabled": True,
         "authenticated": True,
         "authenticator_enrolled": False,
+        "authenticator_storage_available": True,
     }
 
 
