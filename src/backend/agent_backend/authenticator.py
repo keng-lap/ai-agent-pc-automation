@@ -353,6 +353,7 @@ class _PendingEnrollment:
     secret: str
     expires_at: float
     monotonic_deadline: float
+    replace_existing: bool = False
     failed_attempts: int = 0
 
 
@@ -379,6 +380,27 @@ class AuthenticatorEnrollmentManager:
         self._lock = threading.RLock()
 
     def begin(self, *, owner_sub: str, account_name: str) -> EnrollmentStart:
+        return self._begin(
+            owner_sub=owner_sub,
+            account_name=account_name,
+            replace_existing=False,
+        )
+
+    def begin_recovery(self, *, owner_sub: str, account_name: str) -> EnrollmentStart:
+        """Begin a Google-reauthenticated replacement without requiring the old TOTP."""
+        return self._begin(
+            owner_sub=owner_sub,
+            account_name=account_name,
+            replace_existing=True,
+        )
+
+    def _begin(
+        self,
+        *,
+        owner_sub: str,
+        account_name: str,
+        replace_existing: bool,
+    ) -> EnrollmentStart:
         if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
             raise ValueError("authenticated owner is required")
         if not isinstance(account_name, str) or not 1 <= len(account_name.strip()) <= 254:
@@ -402,8 +424,11 @@ class AuthenticatorEnrollmentManager:
             raise RuntimeError("elapsed-time clock is invalid")
 
         with self._lock:
-            if self._secret_store.is_configured():
-                raise RuntimeError("an authenticator is already enrolled")
+            configured = self._secret_store.is_configured()
+            if configured != replace_existing:
+                if configured:
+                    raise RuntimeError("an authenticator is already enrolled")
+                raise RuntimeError("there is no authenticator to recover")
             # A refreshed/lost enrollment page cannot recover its one-time QR.
             # Starting again invalidates any older pending QR for this owner.
             superseded = [
@@ -427,6 +452,7 @@ class AuthenticatorEnrollmentManager:
                 secret=secret,
                 expires_at=expires_at,
                 monotonic_deadline=float(monotonic_now) + ENROLLMENT_TTL_SECONDS,
+                replace_existing=replace_existing,
             )
             return EnrollmentStart(
                 enrollment_id=enrollment_id,
@@ -469,8 +495,13 @@ class AuthenticatorEnrollmentManager:
                     self._pending.pop(enrollment_id, None)
                 return False
 
+            replay_owner = (
+                f"{owner_sub}:recovery:{enrollment_id}"
+                if pending.replace_existing
+                else owner_sub
+            )
             if not self._replay_guard.verify_and_consume(
-                owner_key=owner_sub,
+                owner_key=replay_owner,
                 secret=pending.secret,
                 code=code,
                 timestamp=float(now),
@@ -481,7 +512,14 @@ class AuthenticatorEnrollmentManager:
                 return False
 
             try:
-                self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
+                if pending.replace_existing:
+                    self._secret_store.replace(owner_sub=owner_sub, secret=pending.secret)
+                    self._replay_guard.block_through_current_step(
+                        owner_key=owner_sub,
+                        timestamp=float(now),
+                    )
+                else:
+                    self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
             except SecretStoreError:
                 self._pending.pop(enrollment_id, None)
                 return False
