@@ -85,13 +85,21 @@ def list_jobs(
     principal: Annotated[SessionPrincipal, Depends(require_job_owner)],
     limit: int = Query(default=25, ge=1, le=25),
 ) -> JobListResponse:
+    try:
+        jobs = _store(request).list_for_owner(principal.owner_sub, limit=limit)
+    except JobStoreUnavailable:
+        raise HTTPException(status_code=503, detail="Job status storage is unavailable.") from None
+    return JobListResponse(
+        jobs=jobs,
+        checked_at=datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+    )
 
 
 @router.get("/api/jobs/{job_id}", response_model=JobSummaryResponse)
 def get_job(
     job_id: str,
     request: Request,
-    principal: SessionPrincipal = Depends(require_job_owner),
+    principal: Annotated[SessionPrincipal, Depends(require_job_owner)],
 ) -> JobSummaryResponse:
     try:
         job = _store(request).get_for_owner(job_id, principal.owner_sub)
