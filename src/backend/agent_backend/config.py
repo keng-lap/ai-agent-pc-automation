@@ -33,7 +33,10 @@ def validate_authenticator_secret_path(path: Path) -> Path:
     if not isinstance(path, Path):
         raise ConfigError("AUTHENTICATOR_SECRET_PATH must be a filesystem path.")
     expected_dir = Path(os.path.abspath(REPO_ROOT / ".agent-state" / "authenticator"))
-    candidate = Path(os.path.abspath(path.expanduser()))
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    candidate = Path(os.path.abspath(candidate))
     if candidate.parent != expected_dir:
         raise ConfigError(
             "AUTHENTICATOR_SECRET_PATH must be a direct child of the "
@@ -162,15 +165,12 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
         authenticator_state_dir = Path(
             os.path.abspath(REPO_ROOT / ".agent-state" / "authenticator")
         )
-        secret_path = Path(
-            os.path.abspath(
-                Path(
-                    auth_values["AUTHENTICATOR_SECRET_PATH"]
-                    or (authenticator_state_dir / "authenticator.json")
-                ).expanduser()
-            )
+        secret_path = validate_authenticator_secret_path(
+            Path(
+                auth_values["AUTHENTICATOR_SECRET_PATH"]
+                or (authenticator_state_dir / "authenticator.json")
+            ).expanduser()
         )
-        secret_path = validate_authenticator_secret_path(secret_path)
         auth_settings = {
             "google_oidc_client_id": client_id,
             "google_oidc_client_secret": client_secret,
