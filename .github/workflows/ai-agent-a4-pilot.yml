@@ -118,7 +118,7 @@ jobs:
             exit 1
           fi
           printf '{}\n' > /tmp/aider-empty.yml
-          args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --read /tmp/a4-diff.md)
+          args=(--model gemini/gemini-3.8-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --read /tmp/a4-diff.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
           done < /tmp/a4-paths.txt
@@ -178,7 +178,7 @@ jobs:
             const report = fs.readFileSync(process.env.REVIEW_FILE, 'utf8');
             const body = [
               '<!-- ai-agent-a4-pilot -->',
-              '## Automated A4 Security Review — Aider + Gemini 2.5 Flash',
+              '## Automated A4 Security Review — Aider + Gemini 3.8 Flash',
               '**Reviewed commit:** `' + process.env.HEAD_SHA + '`',
               '',
               report
@@ -259,7 +259,7 @@ jobs:
             exit 1
           fi
           printf '{}\n' > /tmp/aider-empty.yml
-          args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --file README.md)
+          args=(--model gemini/gemini-3.8-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --file README.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
           done < /tmp/doc-paths.txt
