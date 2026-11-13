@@ -230,12 +230,27 @@ export class ChatApi {
     return this.http.get<GoogleLoginStart>('/api/auth/google/start');
   }
 
+  startGoogleReauthentication(): Observable<GoogleLoginStart> {
+    return this.http.get<GoogleLoginStart>('/api/auth/google/reauth/start');
+  }
+
   beginAuthenticatorEnrollment(): Observable<AuthenticatorEnrollment> {
     return this.http.post<AuthenticatorEnrollment>('/api/authenticator/enrollment', {});
   }
 
   confirmAuthenticatorEnrollment(enrollmentId: string, code: string): Observable<{ enrolled: boolean }> {
     return this.http.post<{ enrolled: boolean }>('/api/authenticator/enrollment/confirm', {
+      enrollment_id: enrollmentId,
+      code,
+    });
+  }
+
+  beginAuthenticatorRecovery(): Observable<AuthenticatorEnrollment> {
+    return this.http.post<AuthenticatorEnrollment>('/api/authenticator/recovery', {});
+  }
+
+  confirmAuthenticatorRecovery(enrollmentId: string, code: string): Observable<{ enrolled: boolean }> {
+    return this.http.post<{ enrolled: boolean }>('/api/authenticator/recovery/confirm', {
       enrollment_id: enrollmentId,
       code,
     });
