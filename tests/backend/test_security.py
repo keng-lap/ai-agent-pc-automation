@@ -241,6 +241,7 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/jobs/{job_id}",
         "/api/auth/session",
         "/api/auth/google/start",
+        "/api/auth/google/reauth/start",
         "/api/authenticator/status",
         "/auth/google/callback",
     }
