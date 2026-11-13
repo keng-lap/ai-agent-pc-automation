@@ -65,6 +65,8 @@ class FakeChatApi {
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
   approvalCalls: string[] = [];
   stepUpCalls: string[] = [];
+  reauthCalls = 0;
+  recoveryCalls = 0;
   authSession = { enabled: false, authenticated: false, authenticator_enrolled: false };
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
@@ -109,11 +111,25 @@ class FakeChatApi {
     return of({ authorization_url: 'https://accounts.google.com/test' });
   }
 
+  startGoogleReauthentication(): Observable<{ authorization_url: string }> {
+    this.reauthCalls += 1;
+    return of({ authorization_url: 'https://accounts.google.com/test-reauth' });
+  }
+
   beginAuthenticatorEnrollment(): Observable<{ enrollment_id: string; qr_data_uri: string; expires_at: number }> {
     return of({ enrollment_id: 'a'.repeat(32), qr_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', expires_at: 0 });
   }
 
   confirmAuthenticatorEnrollment(): Observable<{ enrolled: boolean }> {
+    return of({ enrolled: true });
+  }
+
+  beginAuthenticatorRecovery(): Observable<{ enrollment_id: string; qr_data_uri: string; expires_at: number }> {
+    this.recoveryCalls += 1;
+    return of({ enrollment_id: 'b'.repeat(32), qr_data_uri: 'data:image/png;base64,PHN2Zy8+', expires_at: 0 });
+  }
+
+  confirmAuthenticatorRecovery(): Observable<{ enrolled: boolean }> {
     return of({ enrolled: true });
   }
 
