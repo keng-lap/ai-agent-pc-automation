@@ -4,7 +4,7 @@
 
 This contract connects the Frontend Job Monitor to backend-owned operational job records. It replaces the previous hard-coded demonstration runs. The Frontend must never synthesize a job, progress percentage, success result, process identifier, or installer log.
 
-This is a read-only status surface. It does not start, retry, approve, cancel, or otherwise mutate a job.
+This is a read-only status surface. It does not start, retry, approve, cancel, or otherwise mutate a job. The SQLite store and endpoints are implemented in the current backend PR; no job producer or worker is connected yet, so the API correctly returns an empty list until a separately reviewed producer creates records.
 
 ## Endpoint
 
@@ -14,6 +14,7 @@ This is a read-only status surface. It does not start, retry, approve, cancel, o
 - Returns only jobs owned by the authenticated principal.
 - A missing job belonging to another owner must not be distinguishable from an unknown job.
 - `limit` is an integer from 1 through 25; the server applies a safe default and maximum.
+- `GET /api/jobs/{job_id}` returns one summary for the authenticated owner; unknown and foreign-owner IDs both return 404.
 - The endpoint must not cause worker dispatch, resume a process, retry a job, or consume an approval.
 - The response is bounded. The server returns at most 25 jobs and at most 20 recent events per job.
 
@@ -58,6 +59,14 @@ This is a read-only status surface. It does not start, retry, approve, cancel, o
 - `reboot_required`: boolean.
 - `recent_events`: bounded newest-first or oldest-first (the server must document one order consistently); each message is redacted and bounded to 240 characters.
 - Event `level` is one of `INFO`, `WARN`, `ERROR`.
+
+## Persistence implementation boundary
+
+- Operational records and bounded event summaries are stored in a local SQLite database with WAL mode, foreign keys, full synchronous commits, transaction boundaries, owner-scoped unique idempotency, and version-checked state updates.
+- The store persists only opaque owner reference, fixed tool ID, action digest, idempotency key, lifecycle state/timestamps, bounded progress/result metadata, and bounded event summaries. It does not persist prompts, Gemini content, secrets, command lines, executable paths, or raw installer output.
+- POSIX test/development storage requires a private state directory (0700) and database file (0600), rejects symlink paths, and fails closed on broad permissions.
+- **Windows runtime storage is deliberately unavailable at this stage.** The store returns unavailable until native Windows DACL, owner SID, handle/reparse-point and path-race protections are implemented and independently reviewed. Do not bypass this guard or move the database to a less-protected location.
+- No worker lease claim, approval consumption, job dispatch, or job producer is wired to the current API. Those remain separate reviewed work.
 
 ## Error behavior
 
