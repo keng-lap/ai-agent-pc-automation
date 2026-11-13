@@ -8,10 +8,10 @@ through verified handles. It deliberately fails closed if pywin32 is unavailable
 from __future__ import annotations
 
 import ctypes
-from contextlib import ExitStack
 import os
-from pathlib import Path
 import secrets
+from contextlib import ExitStack
+from pathlib import Path
 
 
 _FILE_READ_ATTRIBUTES = 0x00000080
