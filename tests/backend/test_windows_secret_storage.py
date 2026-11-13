@@ -61,7 +61,7 @@ def test_windows_secret_file_denies_rename_while_handle_is_open(tmp_path):
                 str(store._path.with_name("renamed.json")),
             )
 
-def test_windows_secret_file_rejects_extra_dacl_ace_for_verified_owner(tmp_path):
+def test_windows_secret_file_repairs_extra_dacl_ace_for_verified_owner(tmp_path):
     import win32con
     import win32file
     import win32security
