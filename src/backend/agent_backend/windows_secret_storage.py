@@ -29,6 +29,7 @@ _OPEN_EXISTING = 3
 _CREATE_NEW = 1
 _READ_CONTROL = 0x00020000
 _WRITE_DAC = 0x00040000
+_WRITE_OWNER = 0x00080000
 
 
 class WindowsSecretStorageError(RuntimeError):
@@ -91,7 +92,7 @@ class WindowsSecretFile:
             raise WindowsSecretStorageError("Secret path is not a regular file.")
 
     @classmethod
-    def _set_owner_only_dacl(cls, handle, sid) -> None:
+    def _set_owner_only_dacl(cls, handle, sid, *, allow_owner_change: bool) -> None:
         win32security = cls._api()[3]
         descriptor = win32security.GetSecurityInfo(
             handle,
@@ -99,7 +100,17 @@ class WindowsSecretFile:
             win32security.OWNER_SECURITY_INFORMATION,
         )
         if descriptor.GetSecurityDescriptorOwner() != sid:
-            raise WindowsSecretStorageError("Secret path owner SID is not current user.")
+            if not allow_owner_change:
+                raise WindowsSecretStorageError("Secret path owner SID is not current user.")
+            win32security.SetSecurityInfo(
+                handle,
+                win32security.SE_FILE_OBJECT,
+                win32security.OWNER_SECURITY_INFORMATION,
+                sid,
+                None,
+                None,
+                None,
+            )
         acl = win32security.ACL()
         acl.AddAccessAllowedAceEx(
             win32security.ACL_REVISION,
@@ -146,12 +157,20 @@ class WindowsSecretFile:
             raise WindowsSecretStorageError("Secret path DACL inheritance is not disabled.")
 
     @classmethod
-    def _open_directory(cls, path: Path, *, final: bool, sid, stack: ExitStack):
+    def _open_directory(
+        cls,
+        path: Path,
+        *,
+        final: bool,
+        created: bool,
+        sid,
+        stack: ExitStack,
+    ):
         win32file = cls._api()[2]
         win32security = cls._api()[3]
         access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
         if final:
-            access |= _WRITE_DAC
+            access |= _WRITE_DAC | _WRITE_OWNER
         handle = win32file.CreateFile(
             str(path),
             access,
@@ -174,13 +193,18 @@ class WindowsSecretFile:
                 raise WindowsSecretStorageError(
                     "Secret directory owner SID is not current user."
                 )
-            cls._set_owner_only_dacl(handle, sid)
+            cls._set_owner_only_dacl(
+                handle,
+                sid,
+                allow_owner_change=created,
+            )
         return handle
 
     def _parent_handles(self, stack: ExitStack):
         parent = self._path.parent
         if not parent.is_absolute() or not parent.drive or parent.drive.startswith("\\\\"):
             raise WindowsSecretStorageError("Secret path must be an absolute local path.")
+        parent_existed = parent.exists()
         try:
             parent.mkdir(parents=True, exist_ok=True)
         except OSError:
@@ -192,6 +216,7 @@ class WindowsSecretFile:
             final_handle = self._open_directory(
                 component,
                 final=index == len(components) - 1,
+                created=(index == len(components) - 1 and not parent_existed),
                 sid=sid,
                 stack=stack,
             )
@@ -203,7 +228,7 @@ class WindowsSecretFile:
         disposition = _CREATE_NEW if create else _OPEN_EXISTING
         access = _GENERIC_READ | _READ_CONTROL
         if create:
-            access |= _GENERIC_WRITE | _WRITE_DAC
+            access |= _GENERIC_WRITE | _WRITE_DAC | _WRITE_OWNER
         try:
             handle = win32file.CreateFile(
                 str(self._path),
@@ -223,7 +248,11 @@ class WindowsSecretFile:
         self._close(stack, handle)
         self._verify_not_reparse(handle, directory=False)
         if create:
-            self._set_owner_only_dacl(handle, sid)
+            self._set_owner_only_dacl(
+                handle,
+                sid,
+                allow_owner_change=True,
+            )
         else:
             self._verify_owner_only_dacl(handle, sid)
         return handle
