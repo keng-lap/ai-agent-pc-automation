@@ -49,7 +49,8 @@ class FakeOidc:
         )
         self.completed = []
 
-    def begin_login(self):
+    def begin_login(self, *, require_recent_auth=False):
+        self.require_recent_auth = require_recent_auth
         return LoginStart(authorization_url="https://accounts.google.com/test-login")
 
     def complete_login(self, *, state, code):
@@ -104,8 +105,12 @@ def build_client(tmp_path, *, identity=None):
     return client, services, now
 
 
-def sign_in(client, services):
-    identity = GoogleIdentity(sub=OWNER, email="owner@example.test")
+def sign_in(client, services, *, recently_authenticated=False):
+    identity = GoogleIdentity(
+        sub=OWNER,
+        email="owner@example.test",
+        recently_authenticated=recently_authenticated,
+    )
     credential = services.sessions.create(
         identity=identity,
         allowlist=services.allowlist,
@@ -193,7 +198,7 @@ def test_api_routes_require_master_session_when_auth_is_enabled(tmp_path):
 
 def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
     client, services, now = build_client(tmp_path)
-    original_session = sign_in(client, services)
+    original_session = sign_in(client, services, recently_authenticated=True)
 
     start = client.post("/api/authenticator/enrollment", json={})
     assert start.status_code == 200
@@ -220,7 +225,7 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
 
 def test_totp_enrollment_requires_recent_google_reauthentication(tmp_path):
     client, services, now = build_client(tmp_path)
-    sign_in(client, services)
+    sign_in(client, services, recently_authenticated=True)
     now[0] += 301
 
     response = client.post("/api/authenticator/enrollment", json={})
@@ -235,7 +240,7 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     from agent_backend.tools import ToolResult
 
     client, services, now = build_client(tmp_path)
-    sign_in(client, services)
+    sign_in(client, services, recently_authenticated=True)
     enrollment = client.post("/api/authenticator/enrollment", json={}).json()
     assert client.post(
         "/api/authenticator/enrollment/confirm",
