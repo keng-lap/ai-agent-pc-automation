@@ -233,6 +233,33 @@ class InMemoryJobStore:
             self._jobs[job_id] = updated
             return updated
 
+    def renew_lease(
+        self,
+        job_id: str,
+        *,
+        worker_id: str,
+        lease_token: str,
+        expected_version: int,
+        now: datetime,
+        lease_seconds: int = 30,
+    ) -> JobRecord:
+        self._validate_time(now)
+        if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
+            raise ValueError("lease_seconds must be between 1 and 300")
+        with self._lock:
+            current = self._jobs.get(job_id)
+            if current is None:
+                raise JobLifecycleError("job not found")
+            self._check_lease(current, worker_id, lease_token, expected_version, now)
+            renewed = replace(
+                current,
+                lease=replace(current.lease, expires_at=now + timedelta(seconds=lease_seconds)),
+                updated_at=now,
+                version=current.version + 1,
+            )
+            self._jobs[job_id] = renewed
+            return renewed
+
     def request_cancel(self, job_id: str, *, owner_id: str, now: datetime) -> JobRecord:
         self._validate_time(now)
         with self._lock:
