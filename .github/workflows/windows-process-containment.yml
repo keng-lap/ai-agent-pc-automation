@@ -17,6 +17,10 @@ on:
     branches:
       - main
     paths:
+      - "src/backend/agent_backend/authenticator.py"
+      - "src/backend/agent_backend/windows_secret_storage.py"
+      - "tests/backend/test_authenticator.py"
+      - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/agent_backend/process_containment.py"
       - "src/backend/agent_backend/job_lifecycle.py"
       - "tests/backend/test_job_lifecycle.py"
