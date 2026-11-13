@@ -330,7 +330,7 @@ def test_protected_routers_fail_closed_when_authentication_is_disabled(
     response = client.post(path, json=payload)
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Internal server error."}
+    assert response.json() == {"detail": "Authentication is not configured."}
 
 
 @pytest.mark.parametrize(
