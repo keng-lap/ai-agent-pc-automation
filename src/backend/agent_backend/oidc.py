@@ -335,6 +335,9 @@ class GoogleOidcClient:
         valid_auth_time = (
             isinstance(auth_time, (int, float))
             and not isinstance(auth_time, bool)
+            and not isinstance(now, bool)
+            and isinstance(now, (int, float))
+            and math.isfinite(now)
             and math.isfinite(auth_time)
             and auth_time <= now + CLOCK_FUTURE_TOLERANCE_SECONDS
             and now - auth_time <= MAX_RECENT_AUTH_AGE_SECONDS
@@ -353,7 +356,7 @@ class GoogleOidcClient:
             or email_verified is not True
             or not valid_time
             or not valid_auth_time
-        ): 
+        ):
             raise OidcAuthenticationError("Google identity claims failed validation.")
         return GoogleIdentity(sub=subject, email=email)
 
