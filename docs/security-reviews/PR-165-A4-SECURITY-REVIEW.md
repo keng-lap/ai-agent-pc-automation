@@ -68,7 +68,7 @@ The five earlier actionable comments were checked against the current source:
 4. The QR branch exposes a cancel action; a new recovery attempt still begins with fresh Google reauthentication.
 5. Successful enrollment/recovery refreshes backend session status before clearing the QR and rendering the resulting storage state.
 
-The two architecture threads and the startup thread were replied to and resolved. The two frontend threads remain subject to fresh CodeRabbit verification. A fresh review was requested for the exact source HEAD; its result is not yet recorded in this report.
+All five previous CodeRabbit threads were replied to and resolved after the corresponding code/documentation changes. A fresh review was requested for the current PR diff; its result is not yet recorded in this report.
 
 ## CI evidence observed for the reviewed source HEAD
 
