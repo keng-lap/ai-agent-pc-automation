@@ -1,8 +1,10 @@
 """FastAPI application for local Gemini chat without PC automation."""
 
 import logging
+import os
 import re
-import threading
+import shlex
+import sys
 import traceback
 
 from fastapi import Depends, FastAPI, Request
@@ -14,7 +16,6 @@ from .auth_api import build_auth_services, require_session
 from .auth_api import router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
-from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
@@ -22,7 +23,46 @@ from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
 
 
-def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
+def enforce_single_worker(*, environ=None, argv=None) -> None:
+    """Reject known multi-worker launch configurations for process-local auth state."""
+    env = os.environ if environ is None else environ
+    args = list(sys.argv[1:] if argv is None else argv)
+    worker_values = []
+    for name in ("WEB_CONCURRENCY", "UVICORN_WORKERS", "GUNICORN_WORKERS"):
+        raw = env.get(name)
+        if raw is not None and str(raw).strip():
+            worker_values.append((name, str(raw).strip()))
+    gunicorn_args = env.get("GUNICORN_CMD_ARGS")
+    if gunicorn_args:
+        args.extend(shlex.split(str(gunicorn_args)))
+
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in ("--workers", "-w"):
+            if index + 1 >= len(args):
+                raise RuntimeError("Worker count argument is incomplete.")
+            worker_values.append((token, args[index + 1]))
+            index += 1
+        elif token.startswith(("--workers=", "-w=")):
+            worker_values.append((token.split("=", 1)[0], token.split("=", 1)[1]))
+        index += 1
+
+    for source, raw in worker_values:
+        try:
+            count = int(raw)
+        except (TypeError, ValueError):
+            raise RuntimeError(f"Invalid worker count in {source}.") from None
+        if count < 1:
+            raise RuntimeError(f"Invalid worker count in {source}.")
+        if count != 1:
+            raise RuntimeError(
+                "Multi-worker mode is unsupported while security state is process-local."
+            )
+
+
+def create_app(settings=None, auth_services=None) -> FastAPI:
+    enforce_single_worker()
     validate_policy_configuration()
     settings = settings or load_settings()
     if auth_services is None:
@@ -37,16 +77,12 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     )
     application.state.settings = settings
     application.state.auth_services = auth_services
-    application.state.job_store = job_store
-    application.state.job_store_path = settings.job_store_path
-    application.state.job_store_lock = threading.Lock()
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
     application.include_router(software_approval_router, dependencies=[Depends(require_session)])
-    application.include_router(jobs_router)
     return application
 
 
