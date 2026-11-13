@@ -153,6 +153,13 @@ class EncryptedTotpSecretFileStore:
 
     def is_configured(self) -> bool:
         with self._lock:
+            if os.name == "nt":
+                try:
+                    from .windows_secret_storage import WindowsSecretFile
+
+                    return WindowsSecretFile(self._path).exists()
+                except Exception:  # noqa: BLE001 - sanitize platform failures
+                    raise SecretStoreError("Secret store path is not trusted.") from None
             if self._path.is_symlink():
                 raise SecretStoreError("Secret store path is not trusted.")
             return self._path.exists()
@@ -182,6 +189,16 @@ class EncryptedTotpSecretFileStore:
             raise SecretStoreError("Authenticator secret could not be stored.") from None
 
         with self._lock:
+            if os.name == "nt":
+                try:
+                    from .windows_secret_storage import WindowsSecretFile
+
+                    WindowsSecretFile(self._path).create_exclusive(envelope)
+                except FileExistsError:
+                    raise SecretStoreError("An authenticator is already enrolled.") from None
+                except Exception:  # noqa: BLE001 - sanitize platform failures
+                    raise SecretStoreError("Encrypted authenticator storage failed.") from None
+                return
             if self._path.is_symlink():
                 raise SecretStoreError("Secret store path is not trusted.")
             self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,16 +222,93 @@ class EncryptedTotpSecretFileStore:
                     pass
                 raise SecretStoreError("Encrypted authenticator storage failed.") from None
 
+    def replace(self, *, owner_sub: str, secret: str) -> None:
+        """Atomically replace the enrolled authenticator after verified recovery."""
+        if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
+            raise SecretStoreError("Invalid owner identity.")
+        try:
+            code_at(secret, 0)
+            plaintext = json.dumps(
+                {"owner_sub": owner_sub, "secret": secret},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            ciphertext = self._protector.protect(plaintext)
+            if not isinstance(ciphertext, bytes) or not ciphertext:
+                raise SecretStoreError("Secret protection returned invalid data.")
+            envelope = json.dumps(
+                {
+                    "version": 1,
+                    "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+        except (TotpConfigurationError, TypeError, ValueError):
+            raise SecretStoreError("Authenticator secret could not be stored.") from None
+
+        with self._lock:
+            if os.name == "nt":
+                try:
+                    from .windows_secret_storage import WindowsSecretFile
+
+                    WindowsSecretFile(self._path).replace(envelope)
+                except Exception:  # noqa: BLE001 - sanitize platform failures
+                    raise SecretStoreError("Authenticator recovery storage failed.") from None
+                return
+            if self._path.is_symlink() or not self._path.is_file():
+                raise SecretStoreError("Existing authenticator storage is not trusted.")
+            temporary = self._path.with_name(
+                f".{self._path.name}.{secrets.token_hex(16)}.tmp"
+            )
+            descriptor = None
+            try:
+                descriptor = os.open(
+                    temporary,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    0o600,
+                )
+                with os.fdopen(descriptor, "wb") as stream:
+                    descriptor = None
+                    stream.write(envelope)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, self._path)
+                if self._path.is_symlink() or not self._path.is_file():
+                    raise OSError("replacement path is not a regular file")
+            except OSError:
+                if descriptor is not None:
+                    os.close(descriptor)
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise SecretStoreError("Authenticator recovery storage failed.") from None
+
     def load(self, *, owner_sub: str) -> str | None:
         if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
             return None
         with self._lock:
-            if self._path.is_symlink():
-                raise SecretStoreError("Secret store path is not trusted.")
-            if not self._path.exists():
-                return None
+            if os.name == "nt":
+                try:
+                    from .windows_secret_storage import WindowsSecretFile
+
+                    envelope_bytes = WindowsSecretFile(self._path).read()
+                except FileNotFoundError:
+                    return None
+                except Exception:  # noqa: BLE001 - sanitize platform failures
+                    raise SecretStoreError("Encrypted authenticator storage is unavailable.") from None
+            else:
+                if self._path.is_symlink():
+                    raise SecretStoreError("Secret store path is not trusted.")
+                if not self._path.exists():
+                    return None
+                try:
+                    envelope_bytes = self._path.read_bytes()
+                except OSError:
+                    raise SecretStoreError("Encrypted authenticator storage is unavailable.") from None
             try:
-                envelope = json.loads(self._path.read_text(encoding="ascii"))
+                envelope = json.loads(envelope_bytes.decode("ascii"))
                 if (
                     not isinstance(envelope, dict)
                     or set(envelope) != {"version", "ciphertext"}
