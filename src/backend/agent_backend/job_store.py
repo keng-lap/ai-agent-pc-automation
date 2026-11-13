@@ -207,7 +207,7 @@ class SQLiteJobStore:
         timestamp = _utc_text(now or self._clock())
         job_id = str(uuid.uuid4())
         try:
-            with self._lock, self._connect() as connection:
+            with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 existing = connection.execute(
                     "SELECT * FROM job_records WHERE owner_id=? AND idempotency_key=?",
@@ -263,7 +263,7 @@ class SQLiteJobStore:
         if type(limit) is not int or not 1 <= limit <= MAX_JOBS_PER_QUERY:
             raise ValueError("limit must be between 1 and 25")
         try:
-            with self._connect() as connection:
+            with closing(self._connect()) as connection:
                 rows = connection.execute(
                     """
                     SELECT * FROM job_records
@@ -292,7 +292,7 @@ class SQLiteJobStore:
             raise ValueError("invalid event level")
         timestamp = _utc_text(now or self._clock())
         try:
-            with self._lock, self._connect() as connection:
+            with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
@@ -350,7 +350,7 @@ class SQLiteJobStore:
             raise ValueError("reboot_required must be boolean")
         timestamp = _utc_text(now or self._clock())
         try:
-            with self._lock, self._connect() as connection:
+            with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
