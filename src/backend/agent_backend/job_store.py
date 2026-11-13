@@ -12,6 +12,7 @@ import secrets
 import sqlite3
 import stat
 import threading
+from contextlib import closing
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -138,7 +139,7 @@ class SQLiteJobStore:
 
     def _initialize(self) -> None:
         try:
-            with self._lock, self._connect() as connection:
+            with self._lock, closing(self._connect()) as connection:
                 connection.execute("PRAGMA journal_mode = WAL")
                 connection.executescript(
                     """
@@ -244,7 +245,7 @@ class SQLiteJobStore:
     def get_for_owner(self, job_id: str, owner_id: str) -> dict[str, Any]:
         self._validate_identity(owner_id, "owner_id")
         try:
-            with self._connect() as connection:
+            with closing(self._connect()) as connection:
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
                     (job_id, owner_id),
