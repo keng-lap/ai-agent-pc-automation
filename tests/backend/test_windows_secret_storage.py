@@ -51,7 +51,6 @@ def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
     import win32file
 
     directory = tmp_path / "private"
-    directory.mkdir()
     store = WindowsSecretFile(directory / "authenticator.json")
     store.create_exclusive(b"encrypted")
 
@@ -115,11 +114,11 @@ def test_windows_secret_file_rejects_untrusted_extra_dacl_ace(tmp_path):
 
 
 def test_windows_secret_file_rejects_file_reparse_point(tmp_path):
-    target = tmp_path / "target.bin"
-    target.write_bytes(b"not-an-authenticator")
-    link = tmp_path / "authenticator.json"
+    target = WindowsSecretFile(tmp_path / "private" / "target.bin")
+    target.create_exclusive(b"not-an-authenticator")
+    link = tmp_path / "private" / "authenticator.json"
     try:
-        os.symlink(target, link)
+        os.symlink(target._path, link)
     except OSError:
         pytest.skip("The Windows runner does not permit creating file symlinks")
 
