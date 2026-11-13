@@ -237,6 +237,8 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/settings/gemini",
         "/api/chat/{conversation_id}",
         "/api/plans/{plan_id}",
+        "/api/jobs",
+        "/api/jobs/{job_id}",
         "/api/auth/session",
         "/api/auth/google/start",
         "/api/authenticator/status",
