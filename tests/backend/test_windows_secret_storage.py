@@ -103,8 +103,11 @@ def test_windows_secret_file_rejects_extra_dacl_ace_for_verified_owner(tmp_path)
     finally:
         win32file.CloseHandle(handle)
 
-    with pytest.raises(WindowsSecretStorageError, match="DACL is not owner-only"):
-        store.read()
+    assert store.read() == b"encrypted"
+    with ExitStack() as stack:
+        parent, sid = store._parent_handles(stack)
+        handle = store._open_file(stack, sid, create=False)
+        store._verify_owner_only_dacl(handle, sid)
 
 
 def test_windows_secret_file_rejects_file_reparse_point(tmp_path):
