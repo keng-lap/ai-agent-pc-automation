@@ -145,7 +145,7 @@ def test_cancel_queued_job_without_worker_dispatch():
 def test_running_cancel_requires_worker_confirmation_before_cancelled():
     store, job = _create()
     claimed, lease = _claim(store, job)
-    running = store.transition(
+    store.transition(
         job.job_id,
         worker_id=lease.worker_id,
         lease_token=lease.token,
@@ -172,7 +172,7 @@ def test_running_cancel_requires_worker_confirmation_before_cancelled():
 
 def test_expired_worker_lease_becomes_unknown_and_is_never_requeued():
     store, job = _create()
-    claimed, _lease = _claim(store, job)
+    _claimed, _lease = _claim(store, job)
     expired = store.expire_leases(now=NOW + timedelta(seconds=31))
 
     assert expired == (job.job_id,)
