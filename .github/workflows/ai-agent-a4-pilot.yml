@@ -10,7 +10,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ai-agent-a4-pilot-${{ github.event.workflow_run.id }}
+  group: ai-agent-a4-pilot-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -143,8 +143,27 @@ jobs:
           หากไม่มี finding ให้ระบุว่าไม่พบจาก scope ที่ตรวจ ไม่ใช่ security approval
           จำกัดรายงานไม่เกิน 12,000 ตัวอักษร
           PROMPT
+          set +e
           aider "${args[@]}" --message-file /tmp/a4-prompt.md > /tmp/a4-review.md 2> /tmp/a4-aider.log
-          test -s /tmp/a4-review.md || { cat /tmp/a4-aider.log; exit 1; }
+          aider_status=$?
+          set -e
+          if [[ "$aider_status" -ne 0 ]]; then
+            echo "::error title=Aider invocation failed::Aider exited with status $aider_status. Sanitized diagnostic follows."
+            python - <<'PY'
+          import os, re
+          from pathlib import Path
+          log = Path("/tmp/a4-aider.log")
+          text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else "(Aider stderr log missing)"
+          key = os.environ.get("GEMINI_API_KEY", "")
+          if key:
+              text = text.replace(key, "[REDACTED_GEMINI_API_KEY]")
+          text = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_GOOGLE_API_KEY]", text)
+          text = re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^\s,]+", r"\1[REDACTED]", text)
+          print("\\n".join(text.splitlines()[-100:])[-16000:])
+          PY
+            exit "$aider_status"
+          fi
+          test -s /tmp/a4-review.md || { echo "Aider exited successfully but produced an empty review."; exit 1; }
           printf '\n\n---\nAutomated pilot only. Not an independent A4 sign-off. Tests were not run.\n' >> /tmp/a4-review.md
 
       - name: Publish Thai A4 report as PR comment
@@ -254,7 +273,26 @@ jobs:
           ถ้าหลักฐานไม่พอให้คงข้อความเดิม ไม่เดา ไม่ลบข้อจำกัดหรือ residual security gaps
           ทำเฉพาะการเปลี่ยนแปลงเอกสารที่จำเป็นและกระชับ
           PROMPT
+          set +e
           aider "${args[@]}" --message-file /tmp/docs-prompt.md > /tmp/docs-aider.log 2>&1
+          aider_status=$?
+          set -e
+          if [[ "$aider_status" -ne 0 ]]; then
+            echo "::error title=Aider invocation failed::Aider exited with status $aider_status. Sanitized diagnostic follows."
+            python - <<'PY'
+          import os, re
+          from pathlib import Path
+          log = Path("/tmp/docs-aider.log")
+          text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else "(Aider log missing)"
+          key = os.environ.get("GEMINI_API_KEY", "")
+          if key:
+              text = text.replace(key, "[REDACTED_GEMINI_API_KEY]")
+          text = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_GOOGLE_API_KEY]", text)
+          text = re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^\s,]+", r"\1[REDACTED]", text)
+          print("\\n".join(text.splitlines()[-100:])[-16000:])
+          PY
+            exit "$aider_status"
+          fi
           changed="$(git diff --name-only)"
           test "$changed" = "README.md" || { echo "Unexpected modified paths: $changed"; exit 1; }
           git diff --check
