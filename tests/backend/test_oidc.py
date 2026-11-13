@@ -73,6 +73,14 @@ def test_begin_login_uses_code_flow_pkce_nonce_and_minimal_scopes():
     assert "code_challenge=" in result
     assert "state=" in result
     assert "nonce=" in result
+    assert "prompt=select_account" in result
+    assert "max_age=0" not in result
+
+
+def test_begin_login_can_request_fresh_authentication_only_when_needed():
+    client, _http = build_client()
+    result = client.begin_login(require_recent_auth=True).authorization_url
+
     assert "prompt=login" in result
     assert "max_age=0" in result
 
