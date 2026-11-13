@@ -107,7 +107,7 @@ def test_invalid_totp_exhausts_five_enrollment_attempts(tmp_path):
 
 def test_expired_enrollment_cannot_be_confirmed(tmp_path):
     now = [90.0]
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
+    store = EncryptedTotpSecretFileStore(tmp_path / "private" / "authenticator.json", FakeProtector())
     manager = AuthenticatorEnrollmentManager(
         secret_store=store,
         clock=lambda: now[0],
@@ -213,7 +213,7 @@ def test_enrollment_expiry_uses_monotonic_time_after_wall_clock_rollback(tmp_pat
     wall_time = [100000.0]
     monotonic_time = [200.0]
     store = EncryptedTotpSecretFileStore(
-        tmp_path / "authenticator.json",
+        tmp_path / "private" / "authenticator.json",
         FakeProtector(),
     )
     manager = AuthenticatorEnrollmentManager(
