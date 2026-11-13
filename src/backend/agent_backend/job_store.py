@@ -73,7 +73,7 @@ def _safe_text(value: str | None, *, maximum: int) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError("text field must be a string")
+        raise TypeError("text field must be a string")
     normalized = " ".join(value.split())
     if not normalized or len(normalized) > maximum:
         raise ValueError("text field is empty or exceeds its limit")
