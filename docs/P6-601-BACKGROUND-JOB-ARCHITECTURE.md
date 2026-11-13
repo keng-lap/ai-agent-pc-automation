@@ -170,8 +170,9 @@ atomically with the associated audit event and version check.
 
 | From | To | Actor | Required preconditions |
 |---|---|---|---|
-| absent | QUEUED | API | Authenticated owner; schema-valid immutable definition version; current evidence; exact approval consumed in the same transaction; unique idempotency key |
-| QUEUED | STARTING | Worker | Atomic compare-and-set claim; valid unexpired lease; approval/evidence revalidated; no other active installation |
+| absent | QUEUED | API | Authenticated owner; schema-valid immutable definition version; current evidence; exact approval reserved (not consumed) in the same transaction; unique idempotency key; queue audit committed |
+| QUEUED | STARTING | Worker | Atomic compare-and-set claim; valid unexpired lease; exact approval and evidence revalidated; approval consumed atomically with STARTING and its audit event; no other active installation |
+| QUEUED | FAILED | Worker/reconciler | Definitive approval expiry/revocation or evidence mismatch before process creation; terminal rejection audit committed |
 | STARTING | RUNNING | Worker | Fixed executable identity verified; process created inside containment boundary; process identity persisted before side-effect start is acknowledged |
 | STARTING | FAILED | Worker/reconciler | Definitive proof no child/installer process started; terminal audit committed |
 | STARTING | UNKNOWN | Reconciler | Process creation outcome or ownership cannot be established |
@@ -213,19 +214,24 @@ The minimum durable schema is versioned and local-only:
   next_state, actor, occurred_at, reason_code, state_version.
 
 Use a transactional local database with integrity constraints and a single
-writer/transaction boundary. The approval-consumption transaction must:
-(1) compare exact owner/session/action/evidence digests and expiry;
-(2) atomically mark the approval consumed;
+writer/transaction boundary. The queue transaction must:
+(1) compare the exact owner/session/action/evidence digests and initial expiry;
+(2) reserve (but do not consume) the one-use approval for this immutable run;
 (3) insert exactly one QUEUED run with its idempotency key; and
-(4) append the mandatory security audit event. If any step fails, roll back all
-four. A duplicate idempotency key returns the existing run and never creates a
-second run.
+(4) append the queue audit event. If any step fails, roll back all four. A
+duplicate idempotency key returns the existing run and never creates a second
+run. A reservation that expires before execution is not consumed and must be
+released or rejected through an audited terminal transition.
 
 Worker claim is a separate atomic transaction: compare QUEUED + expected
 state_version, ensure no unexpired lease and concurrency slot is available,
-then write STARTING and a unique lease generation. A stale lease is not proof
-that a process stopped. Recovery must inspect the persisted process creation
-time and containment object; ambiguity moves the run to UNKNOWN.
+then revalidate exact owner/session/action/evidence digests and expiry. If
+revalidation fails, atomically transition QUEUED to terminal FAILED and append
+the rejection audit event; do not create a lease or process. If it succeeds,
+atomically consume the reserved approval, write STARTING, create the unique
+lease generation, and append the execution-boundary audit event. A stale lease
+is not proof that a process stopped. Recovery must inspect the persisted process
+creation time and containment object; ambiguity moves the run to UNKNOWN.
 
 Before process creation, persist an execution-intent record and reserve the
 one-use approval. Immediately after process creation, persist PID plus process
