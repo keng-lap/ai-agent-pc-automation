@@ -363,11 +363,12 @@ class WindowsSecretFile:
                     self._verify_not_reparse(source, directory=False)
                     self._verify_owner_only_dacl(source, sid)
 
-                    # FILE_RENAME_INFO uses RootDirectory plus a relative
-                    # filename. This keeps the rename anchored to the already
-                    # verified and pinned parent handle instead of resolving
-                    # source/destination path strings again.
-                    name_bytes = self._path.name.encode("utf-16-le")
+                    # SetFileInformationByHandle on supported Windows runners
+                    # rejects a non-null RootDirectory (ERROR_INVALID_PARAMETER).
+                    # Use the absolute destination while every verified parent
+                    # directory remains open without FILE_SHARE_DELETE; this
+                    # prevents path-component replacement during the rename.
+                    name_bytes = str(self._path).encode("utf-16-le")
                     class _RenameFlags(ctypes.Union):
                         _fields_ = [
                             ("ReplaceIfExists", ctypes.c_ubyte),
@@ -386,7 +387,7 @@ class WindowsSecretFile:
                     buffer = ctypes.create_string_buffer(name_offset + len(name_bytes))
                     info = _FileRenameInfo.from_buffer(buffer)
                     info.RenameFlags.ReplaceIfExists = 1
-                    info.RootDirectory = int(parent_handle)
+                    info.RootDirectory = None
                     info.FileNameLength = len(name_bytes)
                     ctypes.memmove(
                         ctypes.addressof(buffer) + name_offset,
