@@ -178,6 +178,25 @@ def start_google_login(
     return GoogleLoginStartResponse(authorization_url=result.authorization_url)
 
 
+@router.get("/api/auth/google/reauth/start", response_model=GoogleLoginStartResponse)
+def start_google_reauthentication(
+    request: Request,
+    response: Response,
+) -> GoogleLoginStartResponse:
+    """Start a fresh Google authentication ceremony for sensitive account changes."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    services = _services(request)
+    principal = require_session(request)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        result = services.oidc.begin_login(require_recent_auth=True)
+    except OidcAuthenticationError:
+        raise HTTPException(status_code=429, detail="Re-authentication temporarily unavailable.") from None
+    return GoogleLoginStartResponse(authorization_url=result.authorization_url)
+
+
 @router.get("/auth/google/callback")
 def complete_google_login(
     request: Request,
