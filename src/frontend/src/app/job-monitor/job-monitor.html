@@ -45,7 +45,6 @@
           <span>
             <strong>{{ jobTitle(job.tool_id) }}</strong>
             <small>{{ job.job_id }} · {{ formatTime(job.created_at) }}</small>
-            <em><i></i></em>
           </span>
           <b [class]="'status ' + stateClass(job.state)">{{ stateLabel(job.state) }}</b>
         </button>
