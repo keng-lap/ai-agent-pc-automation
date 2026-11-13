@@ -95,6 +95,44 @@ export interface PlanReviewResponse {
   clarification?: string | null;
 }
 
+export type JobState =
+  | 'QUEUED'
+  | 'STARTING'
+  | 'RUNNING'
+  | 'VERIFYING'
+  | 'REBOOT_REQUIRED'
+  | 'CANCEL_REQUESTED'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'UNKNOWN';
+
+export interface JobEvent {
+  sequence: number;
+  occurred_at: string;
+  state: JobState;
+  level: 'INFO' | 'WARN' | 'ERROR';
+  message: string;
+}
+
+export interface JobSummary {
+  job_id: string;
+  tool_id: string;
+  state: JobState;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  progress_message: string | null;
+  result_code: string | null;
+  reboot_required: boolean;
+  recent_events: JobEvent[];
+}
+
+export interface JobListResponse {
+  jobs: JobSummary[];
+  checked_at: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatApi {
   private readonly http = inject(HttpClient);
@@ -160,6 +198,10 @@ export class ChatApi {
     );
   }
 
+  getJobs(limit = 25): Observable<JobListResponse> {
+    return this.http.get<JobListResponse>('/api/jobs', { params: { limit } });
+  }
+
   getConversation(conversationId: string): Observable<ConversationHistory> {
     return this.http.get<ConversationHistory>(`/api/chat/${encodeURIComponent(conversationId)}`);
   }
@@ -203,7 +245,6 @@ export class ChatApi {
     return this.http.post<{ logged_out: boolean }>('/api/auth/logout', {});
   }
 }
-
 
 export interface AuthSession {
   enabled: boolean;
