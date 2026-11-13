@@ -45,7 +45,11 @@ def test_windows_secret_file_rejects_reparse_point_ancestor(tmp_path):
         store.exists()
 
 
-def test_windows_secret_file_pins_parent_directory_against_rename(tmp_path):
+def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
+    import pywintypes
+    import win32con
+    import win32file
+
     directory = tmp_path / "private"
     directory.mkdir()
     store = WindowsSecretFile(directory / "authenticator.json")
@@ -53,5 +57,15 @@ def test_windows_secret_file_pins_parent_directory_against_rename(tmp_path):
 
     with ExitStack() as stack:
         store._parent_handles(stack)
-        with pytest.raises(OSError):
-            os.rename(directory, directory.with_name("renamed"))
+        with pytest.raises(pywintypes.error):
+            win32file.CreateFile(
+                str(directory),
+                win32con.DELETE,
+                win32con.FILE_SHARE_READ
+                | win32con.FILE_SHARE_WRITE
+                | win32con.FILE_SHARE_DELETE,
+                None,
+                win32con.OPEN_EXISTING,
+                win32con.FILE_FLAG_BACKUP_SEMANTICS,
+                None,
+            )
