@@ -80,6 +80,9 @@
               ? (language() === 'th' ? 'ยืนยัน Authenticator ใหม่' : 'Confirm replacement authenticator')
               : (language() === 'th' ? 'ยืนยันการลงทะเบียน' : 'Confirm enrollment') }}
           </button>
+          <button class="new-chat-button" type="button" [disabled]="authBusy()" (click)="cancelAuthenticatorSetup()">
+            {{ language() === 'th' ? 'ยกเลิก QR และเริ่มใหม่' : 'Cancel QR and restart' }}
+          </button>
         } @else if (!authenticatorStorageAvailable()) {
           <p role="alert">{{ language() === 'th'
             ? 'พื้นที่จัดเก็บ Authenticator มีปัญหา แต่คุณยังใช้ Dashboard และดูสถานะงานได้ คำสั่งเสี่ยงสูงจะถูกระงับจนกว่าจะแก้ไขพื้นที่จัดเก็บ'
