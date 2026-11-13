@@ -34,9 +34,5 @@ jobs:
           python-version: "3.12"
       - name: Install backend test dependencies
         run: python -m pip install -e "src/backend[dev]"
-      - name: Diagnose Ruff import formatting
-        run: |
-          ruff check --select I --fix tests/backend/test_job_lifecycle.py
-          git diff -- tests/backend/test_job_lifecycle.py
       - name: Test job lifecycle and Windows containment API
         run: python -m pytest tests/backend/test_job_lifecycle.py -q
