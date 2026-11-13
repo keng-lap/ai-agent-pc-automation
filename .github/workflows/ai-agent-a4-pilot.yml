@@ -1,9 +1,8 @@
 name: AI Agent A4 Pilot (Aider + Gemini)
 
 on:
-  workflow_run:
-    workflows: ["AI PR Diff Trigger"]
-    types: [completed]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   actions: read
@@ -17,9 +16,8 @@ concurrency:
 jobs:
   context:
     if: >-
-      ${{ github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.event == 'pull_request' &&
-          github.event.workflow_run.actor.login != 'github-actions[bot]' }}
+      ${{ github.actor == github.repository_owner &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.pr.outputs.pr_number }}
@@ -32,13 +30,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const run = context.payload.workflow_run;
-            const prs = run.pull_requests || [];
-            if (prs.length !== 1) {
-              core.setFailed('Expected exactly one associated PR; refusing ambiguous review.');
+            const number = context.payload.pull_request?.number;
+            if (!Number.isInteger(number)) {
+              core.setFailed('Missing PR number; refusing ambiguous review.');
               return;
             }
-            const number = prs[0].number;
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner, repo: context.repo.repo, pull_number: number
             });
@@ -46,12 +42,16 @@ jobs:
               core.setFailed('Fork PRs are excluded from this secret-bearing pilot.');
               return;
             }
+            if (pr.user?.login !== context.repo.owner) {
+              core.setFailed('Pilot is restricted to repository-owner-authored PRs.');
+              return;
+            }
             if (pr.state !== 'open' || pr.draft) {
               core.setFailed('PR is not open and ready for review.');
               return;
             }
-            if (pr.head.sha !== run.head_sha) {
-              core.setFailed('PR head changed after the trigger run; wait for the next PR update.');
+            if (pr.head.sha !== context.payload.pull_request.head.sha) {
+              core.setFailed('PR head changed during context resolution; wait for the next PR update.');
               return;
             }
             core.setOutput('pr_number', String(number));
