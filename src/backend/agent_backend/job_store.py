@@ -84,9 +84,9 @@ def _safe_text(value: str | None, *, maximum: int) -> str | None:
 class SQLiteJobStore:
     """SQLite-backed, transactionally updated job history for one local owner.
 
-    Windows use is intentionally blocked until native DACL/owner/reparse-point
-    verification is implemented and independently reviewed. POSIX storage
-    requires a private state directory and a non-symlink database path.
+    Filesystem protection is delegated to a platform adapter. Linux is the
+    only enabled platform; Windows and macOS remain fail-closed until their
+    native security adapters are implemented and independently reviewed.
     """
 
     def __init__(self, path: Path | str, *, clock=None, secure_storage=None) -> None:
