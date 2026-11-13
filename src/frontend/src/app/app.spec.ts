@@ -130,6 +130,11 @@ class FakeChatApi {
   }
 
   confirmAuthenticatorRecovery(): Observable<{ enrolled: boolean }> {
+    this.authSession = {
+      ...this.authSession,
+      authenticator_enrolled: true,
+      authenticator_storage_available: true,
+    };
     return of({ enrolled: true });
   }
 
@@ -925,7 +930,12 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('security check');
   });
   it('resumes authenticator recovery after successful Google reauthentication', async () => {
-    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.authSession = {
+      enabled: true,
+      authenticated: true,
+      authenticator_enrolled: true,
+      authenticator_storage_available: false,
+    };
     sessionStorage.setItem('ai-agent-pc-automation.authenticator-intent', 'recovery');
     window.history.replaceState({}, '', '/?login=success');
 
@@ -952,6 +962,37 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Authenticator พร้อมใช้งาน');
+    expect(api.authSession.authenticator_storage_available).toBe(true);
+  });
+
+  it('allows cancelling a recovery QR; starting again still begins with Google reauthentication', async () => {
+    api.authSession = {
+      enabled: true,
+      authenticated: true,
+      authenticator_enrolled: true,
+      authenticator_storage_available: true,
+    };
+    sessionStorage.setItem('ai-agent-pc-automation.authenticator-intent', 'recovery');
+    window.history.replaceState({}, '', '/?login=success');
+
+    await render();
+    expect(api.recoveryCalls).toBe(1);
+    const cancel = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยกเลิก QR และเริ่มใหม่'));
+    if (!cancel) throw new Error('Recovery QR cancel action was not rendered');
+    cancel.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('img[alt="Authenticator enrollment QR code"]')).toBeNull();
+    const recovery = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('เปลี่ยนเครื่องหรือกู้คืน Authenticator'));
+    expect(recovery).toBeDefined();
+    (fixture.componentInstance as unknown as { beginAuthenticatorRecovery: () => void })
+      .beginAuthenticatorRecovery();
+    expect(api.reauthCalls).toBe(1);
+    expect(api.recoveryCalls).toBe(1);
   });
 
 
