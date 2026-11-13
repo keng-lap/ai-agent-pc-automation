@@ -154,7 +154,11 @@ def test_invalid_identity_claims_are_rejected(change):
     client, _http = build_client(claims=claims)
 
     with pytest.raises(OidcAuthenticationError):
-        client._validate_identity_token("signed-id-token", expected_nonce="expected-nonce")
+        client._validate_identity_token(
+            "signed-id-token",
+            expected_nonce="expected-nonce",
+            require_recent_auth="auth_time" in change,
+        )
 
 
 def test_invalid_state_and_missing_code_fail_closed():
