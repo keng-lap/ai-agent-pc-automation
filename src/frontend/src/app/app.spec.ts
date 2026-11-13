@@ -994,6 +994,7 @@ describe('App chat UI (T-202)', () => {
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     ).find((button) => button.textContent?.includes('เปลี่ยนเครื่องหรือกู้คืน Authenticator'));
     expect(recovery).toBeDefined();
+    vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
     (fixture.componentInstance as unknown as { beginAuthenticatorRecovery: () => void })
       .beginAuthenticatorRecovery();
     expect(api.reauthCalls).toBe(1);
