@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_backend.auth_audit import AUTH_AUDIT_SINK
 from agent_backend import software_approval_api as api
+from agent_backend.auth_audit import AUTH_AUDIT_SINK
 from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 from agent_backend.software_evidence import EvidenceNotFound
 
