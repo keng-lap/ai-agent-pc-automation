@@ -30,6 +30,8 @@
 
 ## Windows secret-file protection
 
+The default secret file is `.agent-state/authenticator/authenticator.json` under the repository root. Leave `AUTHENTICATOR_SECRET_PATH` blank to use that default; any override must be a direct child of the same dedicated `.agent-state/authenticator` directory. The application rejects paths elsewhere rather than changing the DACL of a potentially shared folder. Existing local `.env` overrides that point to the old `.agent-state/authenticator.json` location must be updated before starting this version; do not copy plaintext secrets or weaken ACL checks.
+
 The Windows adapter uses pywin32 and fails closed if the required security APIs are unavailable.
 
 - Resolves the current process token's user SID.
