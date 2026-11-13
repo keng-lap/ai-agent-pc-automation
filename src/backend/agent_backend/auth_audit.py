@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 AuthAuditEventType = Literal[
     "auth.sign_in",
     "auth.enrollment",
+    "auth.recovery",
     "auth.step_up",
 ]
 AuthAuditOutcome = Literal["success", "denied"]
