@@ -59,6 +59,13 @@ This is a read-only status surface. It does not start, retry, approve, cancel, o
 - `recent_events`: bounded newest-first or oldest-first (the server must document one order consistently); each message is redacted and bounded to 240 characters.
 - Event `level` is one of `INFO`, `WARN`, `ERROR`.
 
+## Persistence and platform security boundary
+
+- The backend stores operational records and bounded event summaries in local SQLite using WAL, foreign keys, full synchronous commits, transaction boundaries, owner-scoped idempotency, and version-checked state changes.
+- POSIX development/test storage requires a private state directory (0700) and database file (0600), and rejects symlink paths.
+- Windows storage intentionally returns unavailable until native DACL, owner SID, reparse-point and handle/path-race protections are implemented and independently reviewed. Do not bypass this guard.
+- The API does not yet have a producer connected to the approved plan flow; no worker, approval consumption, WinGet, or installer dispatch is implemented.
+
 ## Error behavior
 
 - `401`: no valid authenticated session.
