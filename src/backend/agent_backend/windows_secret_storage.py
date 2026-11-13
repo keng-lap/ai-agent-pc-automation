@@ -5,8 +5,6 @@ rejects reparse points, verifies the current-user owner SID, and performs file I
 through verified handles. It deliberately fails closed if pywin32 is unavailable.
 """
 
-from __future__ import annotations
-
 import ctypes
 import os
 import secrets
@@ -306,28 +304,88 @@ class WindowsSecretFile:
     def replace(self, payload: bytes) -> None:
         if not isinstance(payload, bytes) or not 0 < len(payload) <= self._MAX_BYTES:
             raise WindowsSecretStorageError("Secret payload size is invalid.")
-        temporary = self._path.with_name(
-            f".{self._path.name}.{secrets.token_hex(16)}.tmp"
-        )
-        with ExitStack() as stack:
-            self._parent_handles(stack)
-            # Verify the destination while its parent directory is pinned.
+
+        temporary_name = f".{self._path.name}.{secrets.token_hex(16)}.tmp"
+        temporary = self._path.with_name(temporary_name)
+        with ExitStack() as parent_stack:
+            parent_handle, sid = self._parent_handles(parent_stack)
+            # Verify the destination while its parent directory is pinned, then
+            # close that file handle before asking Windows to replace it.
             with ExitStack() as check:
-                _parent, sid = self._parent_handles(check)
-                self._open_file(check, sid, create=False)
+                _parent, check_sid = self._parent_handles(check)
+                self._open_file(check, check_sid, create=False)
+
             WindowsSecretFile(temporary).create_exclusive(payload)
-            kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
-            move_file = kernel32.MoveFileExW
-            move_file.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
-            move_file.restype = ctypes.c_int
-            flags = 0x1 | 0x8  # REPLACE_EXISTING | WRITE_THROUGH
-            if not move_file(str(temporary), str(self._path), flags):
-                error = ctypes.get_last_error()
-                delete_file = kernel32.DeleteFileW
-                delete_file.argtypes = [ctypes.c_wchar_p]
-                delete_file.restype = ctypes.c_int
-                delete_file(str(temporary))
+
+            win32file = self._api()[2]
+            pywintypes = self._api()[4]
+            try:
+                with ExitStack() as rename_stack:
+                    source = win32file.CreateFile(
+                        str(temporary),
+                        _GENERIC_READ | _GENERIC_WRITE | 0x00010000,  # DELETE
+                        _FILE_SHARE_READ,
+                        None,
+                        _OPEN_EXISTING,
+                        _FILE_FLAG_OPEN_REPARSE_POINT,
+                        None,
+                    )
+                    self._close(rename_stack, source)
+                    self._verify_not_reparse(source, directory=False)
+                    self._verify_owner_only_dacl(source, sid)
+
+                    # FILE_RENAME_INFO uses RootDirectory plus a relative
+                    # filename. This keeps the rename anchored to the already
+                    # verified and pinned parent handle instead of resolving
+                    # source/destination path strings again.
+                    name_bytes = temporary_name.encode("utf-16-le")
+                    class _FileRenameInfo(ctypes.Structure):
+                        _fields_ = [
+                            ("ReplaceIfExists", ctypes.c_ubyte),
+                            ("RootDirectory", ctypes.c_void_p),
+                            ("FileNameLength", ctypes.c_uint32),
+                            ("FileName", ctypes.c_wchar * 1),
+                        ]
+
+                    name_offset = _FileRenameInfo.FileName.offset
+                    buffer = ctypes.create_string_buffer(name_offset + len(name_bytes))
+                    info = _FileRenameInfo.from_buffer(buffer)
+                    info.ReplaceIfExists = 1
+                    info.RootDirectory = int(parent_handle)
+                    info.FileNameLength = len(name_bytes)
+                    ctypes.memmove(
+                        ctypes.addressof(buffer) + name_offset,
+                        name_bytes,
+                        len(name_bytes),
+                    )
+
+                    kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+                    set_file_info = kernel32.SetFileInformationByHandle
+                    set_file_info.argtypes = [
+                        ctypes.c_void_p,
+                        ctypes.c_int,
+                        ctypes.c_void_p,
+                        ctypes.c_uint32,
+                    ]
+                    set_file_info.restype = ctypes.c_int
+                    if not set_file_info(
+                        int(source),
+                        3,  # FileRenameInfo
+                        ctypes.byref(buffer),
+                        ctypes.sizeof(buffer),
+                    ):
+                        error = ctypes.get_last_error()
+                        raise WindowsSecretStorageError(
+                            f"Handle-relative secret replacement failed (Win32 error {error})."
+                        )
+            except (OSError, pywintypes.error):
+                # Do not fall back to a path-based rename or deletion. A
+                # leftover random temporary file is safer than an unpinned
+                # path operation; the next successful maintenance pass can
+                # report it for manual cleanup.
                 raise WindowsSecretStorageError(
-                    f"Secret replacement failed (Win32 error {error})."
-                )
-            self._open_file(stack, self._current_user_sid(), create=False)
+                    "Secret replacement could not be completed safely."
+                ) from None
+
+            # Reopen and verify the replacement through the pinned directory.
+            self._open_file(parent_stack, sid, create=False)
