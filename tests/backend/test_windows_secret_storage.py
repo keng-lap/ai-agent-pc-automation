@@ -1,5 +1,5 @@
-from contextlib import ExitStack
 import os
+from contextlib import ExitStack
 
 import pytest
 
