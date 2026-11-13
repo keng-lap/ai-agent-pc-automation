@@ -14,6 +14,23 @@ from contextlib import ExitStack
 from pathlib import Path
 
 
+_FILE_READ_ATTRIBUTES = 0x00000080
+_FILE_ALL_ACCESS = 0x001F01FF
+_FILE_ATTRIBUTE_DIRECTORY = 0x00000010
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_ATTRIBUTE_NORMAL = 0x00000080
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_FILE_SHARE_DELETE = 0x00000004
+_GENERIC_READ = 0x80000000
+_GENERIC_WRITE = 0x40000000
+_OPEN_EXISTING = 3
+_CREATE_NEW = 1
+_READ_CONTROL = 0x00020000
+_WRITE_DAC = 0x00040000
+
 class WindowsSecretStorageError(RuntimeError):
     """Windows secret storage could not be proven safe."""
 
@@ -48,7 +65,7 @@ class WindowsSecretFile:
     def _current_user_sid(cls):
         win32api, win32con, _win32file, win32security, _pywintypes = cls._api()
         token = win32security.OpenProcessToken(
-            win32api.GetCurrentProcess(), win32con.TOKEN_QUERY
+            win32api.GetCurrentProcess(), 0x0008
         )
         try:
             return win32security.GetTokenInformation(
@@ -66,9 +83,9 @@ class WindowsSecretFile:
     def _verify_not_reparse(cls, handle, *, directory: bool) -> None:
         _win32api, win32con, win32file, _win32security, _pywintypes = cls._api()
         attributes = win32file.GetFileInformationByHandle(handle)[0]
-        if attributes & win32con.FILE_ATTRIBUTE_REPARSE_POINT:
+        if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
             raise WindowsSecretStorageError("Secret path contains a reparse point.")
-        if directory and not attributes & win32con.FILE_ATTRIBUTE_DIRECTORY:
+        if directory and not attributes & _FILE_ATTRIBUTE_DIRECTORY:
             raise WindowsSecretStorageError("Secret parent is not a directory.")
         if not directory and attributes & win32con.FILE_ATTRIBUTE_DIRECTORY:
             raise WindowsSecretStorageError("Secret path is not a regular file.")
@@ -88,7 +105,7 @@ class WindowsSecretFile:
         acl.AddAccessAllowedAceEx(
             win32security.ACL_REVISION,
             0,
-            win32con.FILE_ALL_ACCESS,
+            _FILE_ALL_ACCESS,
             sid,
         )
         win32security.SetSecurityInfo(
@@ -135,17 +152,17 @@ class WindowsSecretFile:
         win32con = cls._api()[1]
         win32file = cls._api()[2]
         win32security = cls._api()[3]
-        access = win32con.FILE_READ_ATTRIBUTES | win32con.READ_CONTROL
+        access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
         if final:
-            access |= win32con.WRITE_DAC
+            access |= _WRITE_DAC
         handle = win32file.CreateFile(
             str(path),
             access,
-            win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE,
             None,
-            win32con.OPEN_EXISTING,
-            win32con.FILE_FLAG_BACKUP_SEMANTICS
-            | win32con.FILE_FLAG_OPEN_REPARSE_POINT,
+            _OPEN_EXISTING,
+            _FILE_FLAG_BACKUP_SEMANTICS
+            | _FILE_FLAG_OPEN_REPARSE_POINT,
             None,
         )
         cls._close(stack, handle)
@@ -187,18 +204,18 @@ class WindowsSecretFile:
         win32con = self._api()[1]
         win32file = self._api()[2]
         pywintypes = self._api()[4]
-        disposition = win32con.CREATE_NEW if create else win32con.OPEN_EXISTING
-        access = win32con.GENERIC_READ | win32con.READ_CONTROL
+        disposition = _CREATE_NEW if create else win32con.OPEN_EXISTING
+        access = _GENERIC_READ | win32con.READ_CONTROL
         if create:
-            access |= win32con.GENERIC_WRITE | win32con.WRITE_DAC
+            access |= _GENERIC_WRITE | win32con.WRITE_DAC
         try:
             handle = win32file.CreateFile(
                 str(self._path),
                 access,
-                win32con.FILE_SHARE_READ,
+                _FILE_SHARE_READ,
                 None,
                 disposition,
-                win32con.FILE_ATTRIBUTE_NORMAL | win32con.FILE_FLAG_OPEN_REPARSE_POINT,
+                _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
                 None,
             )
         except pywintypes.error as exc:
