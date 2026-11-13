@@ -185,6 +185,42 @@ def test_login_start_returns_only_google_authorization_url(tmp_path):
     }
 
 
+def test_reauthentication_start_requires_existing_session_and_requests_fresh_google_auth(tmp_path):
+    client, services, _now = build_client(tmp_path)
+
+    denied = client.get("/api/auth/google/reauth/start")
+    assert denied.status_code == 401
+
+    sign_in(client, services)
+    response = client.get("/api/auth/google/reauth/start")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json()["authorization_url"] == "https://accounts.google.com/test-login"
+    assert services.oidc.require_recent_auth is True
+
+
+def test_fresh_google_callback_rotates_previous_owner_sessions(tmp_path):
+    client, services, _now = build_client(
+        tmp_path,
+        identity=GoogleIdentity(
+            sub=OWNER,
+            email="owner@example.test",
+            recently_authenticated=True,
+        ),
+    )
+    previous = sign_in(client, services)
+
+    response = client.get(
+        "/auth/google/callback?state=fresh-state&code=fresh-code",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert services.sessions.resolve(previous.token) is None
+    assert client.get("/api/auth/session").json()["authenticated"] is True
+
+
 def test_api_routes_require_master_session_when_auth_is_enabled(tmp_path):
     client, _services, _now = build_client(tmp_path)
 
