@@ -23,7 +23,7 @@
 - The new QR is pending and memory-only. The existing secret remains active until the new TOTP is confirmed.
 - The replacement is bound to the same verified Google owner and has the same short expiry and failed-attempt limit as enrollment.
 - On successful confirmation, the new encrypted secret replaces the old file using a single Windows file-rename operation; the destination is reopened and verified.
-- The implementation flushes the temporary file contents before rename. It does **not** currently request write-through rename semantics or flush the parent directory metadata. Therefore, atomic namespace replacement is intended, but crash/power-loss durability of the directory entry is not guaranteed.
+- The temporary file is opened with `FILE_FLAG_WRITE_THROUGH` and its contents are flushed with `FlushFileBuffers` before handle-based rename. The rename remains handle-based to preserve the verified-object boundary. The Win32 handle-based rename used here has no documented write-through rename flag, and this implementation does not flush parent-directory metadata. Therefore, atomic namespace replacement is intended, but crash/power-loss durability of the directory entry is not guaranteed; this is a documented residual limitation, not a durability guarantee.
 - If replacement fails before the rename completes, the old secret remains. A failed or abandoned QR does not disable ordinary Google sign-in.
 - This recovery route depends on the primary Google account. It is not an offline Google-account recovery mechanism.
 
@@ -36,7 +36,7 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 - Sets and verifies the owner SID on newly created state paths.
 - Applies a protected DACL with exactly one allow ACE: current user SID, full file access, no inherited ACEs.
 - Verifies owner SID on every open. If the owner is already the current user, the adapter repairs an overly broad or inherited DACL on the final state directory. It never takes ownership of an existing directory or file.
-- For an existing secret file, the adapter verifies the owner SID and exact protected owner-only DACL but deliberately does **not** repair a bad DACL. A file with a wrong owner, extra ACE, or unprotected DACL is rejected.
+- For an existing secret file, the adapter first verifies the owner SID on the already-opened handle. If the owner is the current user, it repairs the DACL to the exact protected owner-only form and verifies the result. It never takes ownership of an existing file. A wrong-owner file is rejected.
 - Verifies the repaired directory DACL and protected-DACL control bit before reading or writing.
 - Opens every path component with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects reparse points, and keeps directory handles open without `FILE_SHARE_DELETE` while operating on the secret.
 - Opens the secret itself without delete sharing and without concurrent write sharing; reads and writes use the verified file handle.
