@@ -8,7 +8,6 @@ from agent_backend.windows_secret_storage import (
     WindowsSecretStorageError,
 )
 
-
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows security API integration")
 
 
