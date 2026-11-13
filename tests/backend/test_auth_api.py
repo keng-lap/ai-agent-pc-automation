@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import (
@@ -79,6 +80,7 @@ def build_client(tmp_path, *, identity=None):
         sessions=ApplicationSessionStore(
             ttl_seconds=1800,
             clock=lambda: now[0],
+            monotonic_clock=lambda: now[0],
         ),
         secret_store=secret_store,
         enrollment=AuthenticatorEnrollmentManager(
@@ -190,8 +192,8 @@ def test_api_routes_require_master_session_when_auth_is_enabled(tmp_path):
 
 
 def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
-    client, _services, now = build_client(tmp_path)
-    sign_in(client, _services)
+    client, services, now = build_client(tmp_path)
+    original_session = sign_in(client, services)
 
     start = client.post("/api/authenticator/enrollment", json={})
     assert start.status_code == 200
@@ -207,10 +209,25 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
     )
     assert confirmed.status_code == 200
     assert confirmed.json() == {"enrolled": True}
+    assert services.sessions.resolve(original_session.token) is None
+    assert client.cookies.get(SESSION_COOKIE_NAME, domain="127.0.0.1", path="/") != original_session.token
     assert client.get("/api/authenticator/status").json()["authenticator_enrolled"] is True
 
     second = client.post("/api/authenticator/enrollment", json={})
     assert second.status_code == 409
+
+
+
+def test_totp_enrollment_requires_recent_google_reauthentication(tmp_path):
+    client, services, now = build_client(tmp_path)
+    sign_in(client, services)
+    now[0] += 301
+
+    response = client.post("/api/authenticator/enrollment", json={})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Fresh Google sign-in required."}
+    assert services.secret_store.is_configured() is False
 
 
 def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeypatch):
@@ -305,3 +322,49 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     )
     assert unauthenticated.status_code == 401
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/plans", {"request": "Install Google Chrome", "language": "en"}),
+        ("/api/software/discovery/search", {"query": "Google Chrome"}),
+    ],
+)
+def test_protected_routers_fail_closed_when_authentication_is_disabled(
+    tmp_path, path, payload
+):
+    from agent_backend.main import create_app
+
+    client = TestClient(
+        create_app(load_settings(load_env_file=False)),
+        base_url="http://127.0.0.1:8000",
+        headers=HEADERS,
+    )
+
+    response = client.post(path, json=payload)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication is not configured."}
+
+
+@pytest.mark.parametrize(
+    ("environ", "argv"),
+    [
+        ({"WEB_CONCURRENCY": "2"}, []),
+        ({}, ["--workers", "2"]),
+        ({"GUNICORN_CMD_ARGS": "--workers=3"}, []),
+        ({"UVICORN_WORKERS": "not-a-number"}, []),
+    ],
+)
+def test_multi_worker_configuration_is_rejected(environ, argv):
+    from agent_backend.main import enforce_single_worker
+
+    with pytest.raises(RuntimeError):
+        enforce_single_worker(environ=environ, argv=argv)
+
+
+def test_single_worker_configuration_is_accepted():
+    from agent_backend.main import enforce_single_worker
+
+    enforce_single_worker(environ={"WEB_CONCURRENCY": "1"}, argv=[])
