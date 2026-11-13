@@ -2,14 +2,25 @@
 
 ## Status
 
-**Foundation only. Not connected to API dispatch, approval consumption, WinGet, or installer execution.**
+**Durable status foundation only. Not connected to approval consumption, worker dispatch, WinGet, or installer execution.**
 
 This change introduces two isolated primitives:
 
-- `job_lifecycle.py`: a thread-safe reference state machine with idempotent job creation, owner-bound reads, worker leases, compare-and-swap version checks, cancellation requests, and fail-closed lease expiry.
+- `job_lifecycle.py`: an in-memory reference state machine with owner-bound reads, worker lease semantics, compare-and-swap version checks, cancellation requests, and fail-closed lease expiry.
+- `job_store.py`: a local SQLite operational store with transactional idempotent creation, owner-scoped reads, bounded response/event summaries, optimistic version checks, and validated lifecycle transitions.
+- `jobs_api.py`: read-only authenticated `GET /api/jobs` and `GET /api/jobs/{job_id}` endpoints. They never create, start, retry, cancel, or dispatch jobs.
 - `process_containment.py`: a Windows Job Object wrapper configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`. It supports assigning a process handle before the primary thread is resumed, terminating the contained process tree, and closing the Job Object.
 
-The worker store is intentionally in-memory and test-only. It is not durable, does not survive process restart, and must not be used by the application runtime.
+The original in-memory reference store remains test-only. The SQLite store persists operational records across process restarts. On POSIX it requires a private 0700 state directory and 0600 database file and rejects symlink paths. **On Windows it intentionally refuses to initialize until native DACL, owner SID, reparse-point and handle/path-race protections are implemented and independently reviewed.** The Frontend will therefore receive HTTP 503 for job status on Windows until this gate is closed.
+
+## Status API and persistence boundary
+
+- The API requires an authenticated Master User session; auth-disabled mode returns 503. Owner scoping is enforced in SQL, and foreign-owner Job IDs are indistinguishable from missing IDs (404).
+- SQLite uses WAL, foreign keys, full synchronous commits, `BEGIN IMMEDIATE` write transactions, and a unique `(owner_id, idempotency_key)` constraint.
+- Persisted fields are limited to owner reference, fixed tool ID, action digest, idempotency key, state/version/timestamps, normalized progress/result metadata, reboot flag, and bounded event summaries. No prompts, Gemini content, secrets, raw process output, command lines, executable paths, or scripts are stored.
+- The status API returns at most 25 jobs and 20 recent events per job. Polling is read-only and cannot alter a job or dispatch work.
+- No producer currently creates jobs from the approval workflow. The endpoint returns an empty list until a separately reviewed producer is connected.
+- Windows storage is fail-closed pending native ACL/reparse-point implementation; do not bypass the guard.
 
 ## Security boundaries
 
@@ -36,12 +47,12 @@ The state machine intentionally does not infer success from process exit. A futu
 
 ## Not yet implemented — required before runtime
 
-1. Durable, atomic local persistence with reviewed Windows ACL/owner/reparse-point protections, corruption handling, retention, and recovery.
+1. Native Windows ACL/owner/reparse-point and handle/path-race protections for the SQLite state directory/database; corruption recovery and retention policy still require implementation and A4 review.
 2. A production worker loop and scheduler with bounded queue/concurrency, lease renewal, worker shutdown semantics, and crash recovery.
 3. A reviewed suspended-process launcher that creates the process with a fixed executable/argv/environment and assigns it to the Job Object before resume. The current wrapper does not create processes.
 4. Bounded asynchronous stdout/stderr draining, output redaction, output-size caps, and timeout supervision.
 5. Cancellation/timeout race handling, process-tree termination proof, orphan reconciliation, and UNKNOWN outcomes after ambiguous shutdown.
-6. One-use approval consumption and atomic binding of approval, immutable action digest, and durable Job record.
+6. A reviewed producer that atomically consumes a one-use approval and binds its immutable action digest to the durable Job record.
 7. Capability-specific independent post-install verification and reboot-required handling.
 8. Windows acceptance tests that launch a harmless synthetic parent/child process suspended, assign it to the Job Object, resume it, and prove closing/terminating the job stops the complete process tree.
 9. Independent A4 review of the exact implementation and negative-test evidence.
