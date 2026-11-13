@@ -48,6 +48,7 @@ class OidcTransaction:
     created_at: float
     expires_at: float
     monotonic_deadline: float
+    requires_recent_auth: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class GoogleIdentity:
 
     sub: str
     email: str
+    recently_authenticated: bool = False
 
 
 class OidcTransactionStore:
@@ -82,7 +84,9 @@ class OidcTransactionStore:
         self._transactions: dict[str, OidcTransaction] = {}
         self._lock = threading.RLock()
 
-    def create(self) -> OidcTransaction:
+    def create(self, *, requires_recent_auth: bool = False) -> OidcTransaction:
+        if type(requires_recent_auth) is not bool:
+            raise OidcAuthenticationError("OIDC transaction purpose is invalid.")
         now = self._clock()
         if (
             isinstance(now, bool)
@@ -111,6 +115,7 @@ class OidcTransactionStore:
                 created_at=float(now),
                 expires_at=float(now) + self._ttl_seconds,
                 monotonic_deadline=float(monotonic_now) + self._ttl_seconds,
+                requires_recent_auth=requires_recent_auth,
             )
             self._transactions[transaction.state] = transaction
             return transaction
@@ -209,8 +214,10 @@ class GoogleOidcClient:
         self._token_verifier = token_verifier or self._verify_google_signature
         self._clock = clock or time.time
 
-    def begin_login(self) -> LoginStart:
-        transaction = self._transactions.create()
+    def begin_login(self, *, require_recent_auth: bool = False) -> LoginStart:
+        if type(require_recent_auth) is not bool:
+            raise OidcAuthenticationError("OIDC authentication purpose is invalid.")
+        transaction = self._transactions.create(requires_recent_auth=require_recent_auth)
         challenge = base64.urlsafe_b64encode(
             hashlib.sha256(transaction.code_verifier.encode("ascii")).digest()
         ).rstrip(b"=").decode("ascii")
@@ -223,8 +230,10 @@ class GoogleOidcClient:
             "nonce": transaction.nonce,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
-            "prompt": "login",
-            "max_age": 0,
+            "prompt": "login" if require_recent_auth else "select_account",
+        }
+        if require_recent_auth:
+            params["max_age"] = 0
         }
         return LoginStart(
             authorization_url=f"{GOOGLE_AUTHORIZATION_ENDPOINT}?{urlencode(params)}"
@@ -271,6 +280,7 @@ class GoogleOidcClient:
         return self._validate_identity_token(
             payload["id_token"],
             expected_nonce=transaction.nonce,
+            require_recent_auth=transaction.requires_recent_auth,
         )
 
     def _verify_google_signature(self, token: str) -> Mapping[str, object]:
@@ -288,6 +298,7 @@ class GoogleOidcClient:
         token: str,
         *,
         expected_nonce: str,
+        require_recent_auth: bool = False,
     ) -> GoogleIdentity:
         try:
             claims = self._token_verifier(token)
@@ -355,10 +366,14 @@ class GoogleOidcClient:
             or not 3 <= len(email) <= 254
             or email_verified is not True
             or not valid_time
-            or not valid_auth_time
+            or (require_recent_auth and not valid_auth_time)
         ):
             raise OidcAuthenticationError("Google identity claims failed validation.")
-        return GoogleIdentity(sub=subject, email=email)
+        return GoogleIdentity(
+            sub=subject,
+            email=email,
+            recently_authenticated=require_recent_auth and valid_auth_time,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,7 +399,7 @@ class _SessionRecord:
     session_id: str
     expires_at: float
     monotonic_deadline: float
-    monotonic_authenticated_at: float
+    monotonic_authenticated_at: float | None
 
 
 class ApplicationSessionStore:
@@ -448,7 +463,9 @@ class ApplicationSessionStore:
                 session_id=session_id,
                 expires_at=expires_at,
                 monotonic_deadline=monotonic_deadline,
-                monotonic_authenticated_at=float(monotonic_now),
+                monotonic_authenticated_at=(
+                    float(monotonic_now) if identity.recently_authenticated else None
+                ),
             )
         return SessionCredential(
             token=token,
@@ -518,6 +535,8 @@ class ApplicationSessionStore:
                     continue
                 if float(monotonic_now) >= record.monotonic_deadline:
                     self._sessions.pop(digest, None)
+                    return False
+                if record.monotonic_authenticated_at is None:
                     return False
                 age = float(monotonic_now) - record.monotonic_authenticated_at
                 return 0 <= age <= max_age_seconds
