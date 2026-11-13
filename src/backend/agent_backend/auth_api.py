@@ -48,6 +48,7 @@ class AuthSessionResponse(BaseModel):
     enabled: bool
     authenticated: bool
     authenticator_enrolled: bool = False
+    authenticator_storage_available: bool = True
 
 
 class GoogleLoginStartResponse(BaseModel):
@@ -147,19 +148,28 @@ def _frontend_redirect(request: Request, status: str) -> RedirectResponse:
 def get_auth_session(request: Request) -> AuthSessionResponse:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
-        return AuthSessionResponse(enabled=False, authenticated=False)
+        return AuthSessionResponse(
+            enabled=False,
+            authenticated=False,
+            authenticator_storage_available=False,
+        )
     token = request.cookies.get(SESSION_COOKIE_NAME)
     principal = services.sessions.resolve(token or "")
     if principal is None:
         return AuthSessionResponse(enabled=True, authenticated=False)
     try:
         enrolled = services.secret_store.load(owner_sub=principal.owner_sub) is not None
+        storage_available = True
     except SecretStoreError:
-        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+        # Keep the Google-authenticated owner session usable. Risky operations
+        # independently fail closed when the authenticator secret cannot load.
+        enrolled = False
+        storage_available = False
     return AuthSessionResponse(
         enabled=True,
         authenticated=True,
         authenticator_enrolled=enrolled,
+        authenticator_storage_available=storage_available,
     )
 
 
@@ -276,12 +286,17 @@ def authenticator_status(request: Request) -> AuthSessionResponse:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         enrolled = services.secret_store.load(owner_sub=principal.owner_sub) is not None
+        storage_available = True
     except SecretStoreError:
-        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+        # Keep the Google-authenticated owner session usable. Risky operations
+        # independently fail closed when the authenticator secret cannot load.
+        enrolled = False
+        storage_available = False
     return AuthSessionResponse(
         enabled=True,
         authenticated=True,
         authenticator_enrolled=enrolled,
+        authenticator_storage_available=storage_available,
     )
 
 
