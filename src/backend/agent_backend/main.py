@@ -14,13 +14,14 @@ from .auth_api import router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
 from .plan_api import router as plan_router
+from .jobs_api import router as jobs_router
 from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
 
 
-def create_app(settings=None, auth_services=None) -> FastAPI:
+def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     validate_policy_configuration()
     settings = settings or load_settings()
     if auth_services is None:
@@ -35,12 +36,16 @@ def create_app(settings=None, auth_services=None) -> FastAPI:
     )
     application.state.settings = settings
     application.state.auth_services = auth_services
+    application.state.job_store = job_store
+    application.state.job_store_path = settings.job_store_path
+    application.state.job_store_lock = __import__('threading').Lock()
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
     application.include_router(software_approval_router, dependencies=[Depends(require_session)])
+    application.include_router(jobs_router)
     return application
 
 
