@@ -117,7 +117,7 @@ jobs:
             echo "::error title=Gemini API key::GEMINI_API_KEY is missing or empty."
             exit 1
           fi
-          : > /tmp/aider-empty.yml
+          printf '{}\n' > /tmp/aider-empty.yml
           args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --read /tmp/a4-diff.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
@@ -258,7 +258,7 @@ jobs:
             echo "::error title=Gemini API key::GEMINI_API_KEY is missing or empty."
             exit 1
           fi
-          : > /tmp/aider-empty.yml
+          printf '{}\n' > /tmp/aider-empty.yml
           args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --file README.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
