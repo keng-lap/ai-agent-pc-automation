@@ -456,6 +456,14 @@ class ApplicationSessionStore:
         monotonic_deadline = float(monotonic_now) + self._ttl_seconds
         with self._lock:
             self._remove_expired(float(monotonic_now))
+            if identity.recently_authenticated:
+                stale = [
+                    digest
+                    for digest, record in self._sessions.items()
+                    if hmac.compare_digest(record.owner_sub, identity.sub)
+                ]
+                for digest in stale:
+                    self._sessions.pop(digest, None)
             if len(self._sessions) >= self._capacity:
                 raise OidcAuthenticationError("Session capacity reached.")
             self._sessions[token_digest] = _SessionRecord(
