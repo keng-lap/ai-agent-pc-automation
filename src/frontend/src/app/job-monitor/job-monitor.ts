@@ -1,20 +1,156 @@
-import { Component, Input, computed, signal } from '@angular/core';
-import { UiLanguage } from '../chat/chat-api';
-type Status='running'|'waiting'|'succeeded'|'failed'|'cancelled';
-interface Run{id:string;name:string;workflow:string;status:Status;started:string;duration:string;progress:number;current:string;summary:string;nodes:{name:string;status:string;detail:string;duration:string}[];logs:{time:string;level:'INFO'|'WARN'|'ERROR';message:string}[]}
-const RUNS:Run[]=[
-{id:'RUN-2026-0118',name:'ติดตั้งชุด Developer Tools',workflow:'Workstation setup · v3',status:'running',started:'วันนี้ 14:32:08',duration:'00:01:42',progress:62,current:'ติดตั้ง Visual Studio Code',summary:'ติดตั้ง Git สำเร็จแล้ว · กำลังทำขั้นตอนถัดไป (ข้อมูลจำลอง)',nodes:[{name:'รับคำขอ',status:'สำเร็จ',detail:'สร้าง Job Run',duration:'00:00:01'},{name:'ตรวจสอบ Software Hub',status:'สำเร็จ',detail:'ตรวจสอบ Package / Publisher (จำลอง)',duration:'00:00:08'},{name:'รอการอนุมัติ',status:'สำเร็จ',detail:'ผ่านจุดอนุมัติจำลอง',duration:'00:00:12'},{name:'ติดตั้ง Git',status:'สำเร็จ',detail:'ผลจำลอง · exit code 0',duration:'00:00:44'},{name:'ติดตั้ง Visual Studio Code',status:'กำลังทำงาน',detail:'กำลังประมวลผลจำลอง',duration:'00:00:37'},{name:'ติดตั้ง Python',status:'รอคิว',detail:'ยังไม่เริ่ม',duration:'—'}],logs:[{time:'14:32:08',level:'INFO',message:'Job Run created · workflow v3'},{time:'14:32:09',level:'INFO',message:'Software metadata validation completed (mock)'},{time:'14:32:21',level:'INFO',message:'Approval checkpoint passed (mock)'},{time:'14:33:05',level:'INFO',message:'Git install simulated · exit code 0'},{time:'14:33:27',level:'INFO',message:'VS Code step started (mock)'}]},
-{id:'RUN-2026-0117',name:'ตรวจสอบไฟล์รายงานประจำวัน',workflow:'Daily report check · v1',status:'waiting',started:'วันนี้ 14:28:44',duration:'00:00:19',progress:35,current:'รอการอนุมัติ',summary:'รอผู้ใช้ตรวจสอบรายละเอียด (ข้อมูลจำลอง)',nodes:[{name:'รับคำขอ',status:'สำเร็จ',detail:'รับคำขอ',duration:'00:00:01'},{name:'วิเคราะห์ด้วย AI',status:'สำเร็จ',detail:'จัดประเภทงาน',duration:'00:00:06'},{name:'รอการอนุมัติ',status:'รออนุมัติ',detail:'รอการยืนยันจากผู้ใช้',duration:'00:00:12'}],logs:[{time:'14:28:44',level:'INFO',message:'Job Run created (mock)'},{time:'14:28:51',level:'INFO',message:'AI plan prepared (mock)'},{time:'14:29:03',level:'WARN',message:'Awaiting explicit user approval'}]},
-{id:'RUN-2026-0116',name:'ตรวจสอบ Software Hub',workflow:'Software discovery · v2',status:'succeeded',started:'วันนี้ 13:55:10',duration:'00:00:26',progress:100,current:'เสร็จสิ้น',summary:'ตรวจสอบข้อมูลแพ็กเกจครบถ้วน (ข้อมูลจำลอง)',nodes:[{name:'รับคำขอ',status:'สำเร็จ',detail:'รับคำขอ',duration:'00:00:01'},{name:'ค้นหาแพ็กเกจ',status:'สำเร็จ',detail:'ค้นหาแหล่งข้อมูล',duration:'00:00:10'},{name:'ตรวจสอบ Publisher',status:'สำเร็จ',detail:'ตรวจสอบ metadata จำลอง',duration:'00:00:15'}],logs:[{time:'13:55:10',level:'INFO',message:'Discovery started (mock)'},{time:'13:55:36',level:'INFO',message:'Discovery completed (mock)'}]},
-{id:'RUN-2026-0115',name:'รันสคริปต์สำรองข้อมูล',workflow:'Backup report · v1',status:'failed',started:'เมื่อวาน 18:20:00',duration:'00:00:09',progress:66,current:'Run Custom Script',summary:'ตัวอย่างข้อผิดพลาด: exit code 1 (ไม่มีการรันจริง)',nodes:[{name:'รับคำขอ',status:'สำเร็จ',detail:'รับคำขอ',duration:'00:00:01'},{name:'ตรวจสอบพารามิเตอร์',status:'สำเร็จ',detail:'ตรวจสอบ schema',duration:'00:00:02'},{name:'Run Custom Script',status:'ล้มเหลว',detail:'ตัวอย่าง exit code 1 · no script executed',duration:'00:00:06'}],logs:[{time:'18:20:00',level:'INFO',message:'Script job prepared (mock)'},{time:'18:20:09',level:'ERROR',message:'Simulated failure · exit code 1 · no script executed'}]},
-{id:'RUN-2026-0114',name:'ติดตั้ง Chrome',workflow:'Single install · v1',status:'succeeded',started:'เมื่อวาน 10:04:12',duration:'00:01:13',progress:100,current:'เสร็จสิ้น',summary:'ผลลัพธ์ตัวอย่าง: สำเร็จ (ข้อมูลจำลอง)',nodes:[{name:'รับคำขอ',status:'สำเร็จ',detail:'รับคำขอ',duration:'00:00:01'},{name:'ตรวจสอบแหล่งที่มา',status:'สำเร็จ',detail:'metadata จำลอง',duration:'00:00:12'},{name:'ติดตั้งโปรแกรม',status:'สำเร็จ',detail:'ผลลัพธ์จำลอง',duration:'00:01:00'}],logs:[{time:'10:04:12',level:'INFO',message:'Install plan prepared (mock)'},{time:'10:05:25',level:'INFO',message:'Simulated success · no machine changes'}]}];
-@Component({selector:'app-job-monitor',standalone:true,templateUrl:'./job-monitor.html'})
-export class JobMonitorComponent{
- @Input() language:UiLanguage='th'; protected readonly tab=signal<'active'|'history'>('active'); protected readonly query=signal(''); protected readonly selectedId=signal('RUN-2026-0118');
- protected readonly activeRuns=computed(()=>RUNS.filter(r=>r.status==='running'||r.status==='waiting'));
- protected readonly visibleRuns=computed(()=>{const rows=this.tab()==='active'?this.activeRuns():RUNS.filter(r=>r.status!=='running'&&r.status!=='waiting');const q=this.query().trim().toLowerCase();return rows.filter(r=>!q||[r.id,r.name,r.workflow].some(v=>v.toLowerCase().includes(q)))});
- protected readonly selected=computed(()=>RUNS.find(r=>r.id===this.selectedId())??this.visibleRuns()[0]??null);
- protected isThai(){return this.language==='th'}
- protected label(s:Status){const th:Record<Status,string>={running:'กำลังทำงาน',waiting:'รออนุมัติ',succeeded:'สำเร็จ',failed:'ล้มเหลว',cancelled:'ยกเลิก'};const en:Record<Status,string>={running:'Running',waiting:'Awaiting approval',succeeded:'Succeeded',failed:'Failed',cancelled:'Cancelled'};return(this.isThai()?th:en)[s]}
- protected setTab(t:'active'|'history'){this.tab.set(t);const rows=t==='active'?this.activeRuns():RUNS.filter(r=>r.status!=='running'&&r.status!=='waiting');this.selectedId.set(rows[0]?.id??'')}
+import { Component, DestroyRef, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { EMPTY, catchError, switchMap, tap, timer } from 'rxjs';
+import { ChatApi, JobState, JobSummary, UiLanguage } from '../chat/chat-api';
+
+const ACTIVE_STATES = new Set<JobState>([
+  'QUEUED',
+  'STARTING',
+  'RUNNING',
+  'VERIFYING',
+  'REBOOT_REQUIRED',
+  'CANCEL_REQUESTED',
+]);
+
+@Component({
+  selector: 'app-job-monitor',
+  standalone: true,
+  templateUrl: './job-monitor.html',
+})
+export class JobMonitorComponent implements OnInit {
+  @Input() language: UiLanguage = 'th';
+
+  private readonly api = inject(ChatApi);
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly tab = signal<'active' | 'history'>('active');
+  protected readonly query = signal('');
+  protected readonly selectedId = signal<string | null>(null);
+  protected readonly jobs = signal<JobSummary[]>([]);
+  protected readonly apiStatus = signal<'loading' | 'connected' | 'unavailable'>('loading');
+  protected readonly lastCheckedAt = signal<string | null>(null);
+
+  protected readonly activeJobs = computed(() =>
+    this.jobs().filter((job) => ACTIVE_STATES.has(job.state)),
+  );
+  protected readonly historyJobs = computed(() =>
+    this.jobs().filter((job) => !ACTIVE_STATES.has(job.state)),
+  );
+  protected readonly visibleJobs = computed(() => {
+    const rows = this.tab() === 'active' ? this.activeJobs() : this.historyJobs();
+    const query = this.query().trim().toLowerCase();
+    return rows.filter((job) =>
+      !query || [job.job_id, job.tool_id].some((value) => value.toLowerCase().includes(query)),
+    );
+  });
+  protected readonly selected = computed(() => {
+    const rows = this.visibleJobs();
+    return rows.find((job) => job.job_id === this.selectedId()) ?? rows[0] ?? null;
+  });
+  protected readonly runningCount = computed(() =>
+    this.jobs().filter((job) => job.state === 'RUNNING' || job.state === 'STARTING').length,
+  );
+  protected readonly queuedCount = computed(() =>
+    this.jobs().filter((job) => job.state === 'QUEUED').length,
+  );
+  protected readonly verifyingCount = computed(() =>
+    this.jobs().filter((job) => job.state === 'VERIFYING' || job.state === 'REBOOT_REQUIRED').length,
+  );
+  protected readonly failedCount = computed(() =>
+    this.jobs().filter((job) => job.state === 'FAILED' || job.state === 'UNKNOWN').length,
+  );
+
+  ngOnInit(): void {
+    timer(0, 5000)
+      .pipe(
+        switchMap(() =>
+          this.api.getJobs(25).pipe(
+            tap((response) => {
+              this.jobs.set(response.jobs);
+              this.lastCheckedAt.set(response.checked_at);
+              this.apiStatus.set('connected');
+              if (!this.selectedId() && response.jobs.length > 0) {
+                this.selectedId.set(response.jobs[0].job_id);
+              }
+            }),
+            catchError(() => {
+              this.apiStatus.set('unavailable');
+              return EMPTY;
+            }),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe();
+  }
+
+  protected isThai(): boolean {
+    return this.language === 'th';
+  }
+
+  protected stateLabel(state: JobState): string {
+    const th: Record<JobState, string> = {
+      QUEUED: 'รอคิว',
+      STARTING: 'กำลังเริ่มงาน',
+      RUNNING: 'กำลังทำงาน',
+      VERIFYING: 'กำลังตรวจสอบผล',
+      REBOOT_REQUIRED: 'รอรีสตาร์ต',
+      CANCEL_REQUESTED: 'กำลังยกเลิก',
+      SUCCEEDED: 'สำเร็จ',
+      FAILED: 'ล้มเหลว',
+      CANCELLED: 'ยกเลิกแล้ว',
+      UNKNOWN: 'ไม่ทราบผล',
+    };
+    const en: Record<JobState, string> = {
+      QUEUED: 'Queued',
+      STARTING: 'Starting',
+      RUNNING: 'Running',
+      VERIFYING: 'Verifying',
+      REBOOT_REQUIRED: 'Reboot required',
+      CANCEL_REQUESTED: 'Cancelling',
+      SUCCEEDED: 'Succeeded',
+      FAILED: 'Failed',
+      CANCELLED: 'Cancelled',
+      UNKNOWN: 'Unknown',
+    };
+    return (this.isThai() ? th : en)[state];
+  }
+
+  protected stateClass(state: JobState): string {
+    return state.toLowerCase();
+  }
+
+  protected jobTitle(toolId: string): string {
+    const known: Record<string, string> = {
+      'software.install': this.isThai() ? 'ติดตั้งซอฟต์แวร์' : 'Install software',
+      'software.remove': this.isThai() ? 'ถอนการติดตั้งซอฟต์แวร์' : 'Remove software',
+    };
+    return known[toolId] ?? toolId;
+  }
+
+  protected formatTime(value: string | null): string {
+    if (!value) return this.isThai() ? '—' : '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString(this.isThai() ? 'th-TH' : 'en-US');
+  }
+
+  protected setTab(tab: 'active' | 'history'): void {
+    this.tab.set(tab);
+    this.selectedId.set(null);
+  }
+
+  protected selectJob(jobId: string): void {
+    this.selectedId.set(jobId);
+  }
+
+  protected refresh(): void {
+    this.api.getJobs(25).subscribe({
+      next: (response) => {
+        this.jobs.set(response.jobs);
+        this.lastCheckedAt.set(response.checked_at);
+        this.apiStatus.set('connected');
+      },
+      error: () => this.apiStatus.set('unavailable'),
+    });
+  }
 }
