@@ -286,6 +286,36 @@ def test_session_store_expires_and_revokes_tokens():
     assert store.resolve(second.token) is None
 
 
+def test_only_fresh_google_auth_session_satisfies_recent_auth_gate():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = [1100.0]
+    store = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: now[0],
+        monotonic_clock=lambda: now[0],
+    )
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    ordinary = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
+    fresh = GoogleIdentity(
+        sub="stable-google-sub",
+        email="owner@example.test",
+        recently_authenticated=True,
+    )
+
+    ordinary_credential = store.create(identity=ordinary, allowlist=allowlist)
+    ordinary_principal = store.resolve(ordinary_credential.token)
+    assert not store.is_recently_authenticated(ordinary_principal, max_age_seconds=300)
+
+    fresh_credential = store.create(identity=fresh, allowlist=allowlist)
+    assert store.resolve(ordinary_credential.token) is None
+    fresh_principal = store.resolve(fresh_credential.token)
+    assert store.is_recently_authenticated(fresh_principal, max_age_seconds=300)
+
+    now[0] += 301
+    assert not store.is_recently_authenticated(fresh_principal, max_age_seconds=300)
+
+
 def test_session_store_capacity_is_bounded():
     from agent_backend.oidc import ApplicationSessionStore
 
