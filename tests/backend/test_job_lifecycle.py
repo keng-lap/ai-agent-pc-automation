@@ -3,15 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agent_backend.job_lifecycle import (
-    InMemoryJobStore,
-    JobLifecycleError,
-    JobState,
-)
-from agent_backend.process_containment import (
-    ProcessContainmentError,
-    WindowsJobObject,
-)
+from agent_backend import job_lifecycle, process_containment
 
 
 NOW = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
