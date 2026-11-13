@@ -134,6 +134,7 @@ def test_auth_session_is_disabled_without_google_configuration(tmp_path):
         "enabled": False,
         "authenticated": False,
         "authenticator_enrolled": False,
+        "authenticator_storage_available": False,
     }
 
 
@@ -271,6 +272,27 @@ def test_totp_enrollment_requires_recent_google_reauthentication(tmp_path):
     assert services.secret_store.is_configured() is False
 
 
+def test_secret_store_failure_does_not_lock_owner_out_of_dashboard(tmp_path, monkeypatch):
+    from agent_backend.authenticator import SecretStoreError
+
+    client, services, _now = build_client(tmp_path)
+    sign_in(client, services)
+
+    def unavailable(*, owner_sub):
+        raise SecretStoreError("simulated storage failure")
+
+    monkeypatch.setattr(services.secret_store, "load", unavailable)
+    response = client.get("/api/auth/session")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": True,
+        "authenticated": True,
+        "authenticator_enrolled": False,
+        "authenticator_storage_available": False,
+    }
+
+
 def test_totp_recovery_replaces_lost_authenticator_after_google_reauth(tmp_path):
     client, services, now = build_client(
         tmp_path,
@@ -320,6 +342,7 @@ def test_totp_recovery_replaces_lost_authenticator_after_google_reauth(tmp_path)
         "enabled": True,
         "authenticated": True,
         "authenticator_enrolled": True,
+        "authenticator_storage_available": True,
     }
     rotated_token = client.cookies.get(SESSION_COOKIE_NAME, domain="127.0.0.1", path="/")
     rotated_principal = services.sessions.resolve(rotated_token)
