@@ -30,6 +30,7 @@ OIDC_SCOPES = "openid email profile"
 OIDC_TRANSACTION_TTL_SECONDS = 300
 MAX_PENDING_OIDC_TRANSACTIONS = 64
 MAX_ID_TOKEN_AGE_SECONDS = 600
+MAX_RECENT_AUTH_AGE_SECONDS = 300
 CLOCK_FUTURE_TOLERANCE_SECONDS = 60
 
 
@@ -222,7 +223,8 @@ class GoogleOidcClient:
             "nonce": transaction.nonce,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
-            "prompt": "select_account",
+            "prompt": "login",
+            "max_age": 0,
         }
         return LoginStart(
             authorization_url=f"{GOOGLE_AUTHORIZATION_ENDPOINT}?{urlencode(params)}"
@@ -305,6 +307,7 @@ class GoogleOidcClient:
         authorized_party = claims.get("azp")
         expires_at = claims.get("exp")
         issued_at = claims.get("iat")
+        auth_time = claims.get("auth_time")
         now = self._clock()
 
         valid_audience = (
@@ -329,6 +332,16 @@ class GoogleOidcClient:
             and issued_at <= now + CLOCK_FUTURE_TOLERANCE_SECONDS
             and now - issued_at <= MAX_ID_TOKEN_AGE_SECONDS
         )
+        valid_auth_time = (
+            isinstance(auth_time, (int, float))
+            and not isinstance(auth_time, bool)
+            and not isinstance(now, bool)
+            and isinstance(now, (int, float))
+            and math.isfinite(now)
+            and math.isfinite(auth_time)
+            and auth_time <= now + CLOCK_FUTURE_TOLERANCE_SECONDS
+            and now - auth_time <= MAX_RECENT_AUTH_AGE_SECONDS
+        )
         if (
             not isinstance(issuer, str)
             or issuer not in GOOGLE_ISSUERS
@@ -342,6 +355,7 @@ class GoogleOidcClient:
             or not 3 <= len(email) <= 254
             or email_verified is not True
             or not valid_time
+            or not valid_auth_time
         ):
             raise OidcAuthenticationError("Google identity claims failed validation.")
         return GoogleIdentity(sub=subject, email=email)
@@ -370,6 +384,7 @@ class _SessionRecord:
     session_id: str
     expires_at: float
     monotonic_deadline: float
+    monotonic_authenticated_at: float
 
 
 class ApplicationSessionStore:
@@ -433,6 +448,7 @@ class ApplicationSessionStore:
                 session_id=session_id,
                 expires_at=expires_at,
                 monotonic_deadline=monotonic_deadline,
+                monotonic_authenticated_at=float(monotonic_now),
             )
         return SessionCredential(
             token=token,
@@ -473,6 +489,84 @@ class ApplicationSessionStore:
             return SessionPrincipal(
                 owner_sub=record.owner_sub,
                 session_id=record.session_id,
+            )
+
+    def is_recently_authenticated(
+        self, principal: SessionPrincipal, *, max_age_seconds: int
+    ) -> bool:
+        """Return whether this live session was created by a recent OIDC login."""
+        if (
+            not isinstance(principal, SessionPrincipal)
+            or type(max_age_seconds) is not int
+            or not 1 <= max_age_seconds <= 600
+        ):
+            return False
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return False
+        with self._lock:
+            for digest, record in self._sessions.items():
+                if (
+                    record.owner_sub != principal.owner_sub
+                    or record.session_id != principal.session_id
+                ):
+                    continue
+                if float(monotonic_now) >= record.monotonic_deadline:
+                    self._sessions.pop(digest, None)
+                    return False
+                age = float(monotonic_now) - record.monotonic_authenticated_at
+                return 0 <= age <= max_age_seconds
+        return False
+
+    def rotate(self, token: str) -> SessionCredential | None:
+        """Atomically replace a live session token after a sensitive enrollment."""
+        if not isinstance(token, str) or not 32 <= len(token) <= 256:
+            return None
+        try:
+            old_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        except UnicodeEncodeError:
+            return None
+        now = self._clock()
+        monotonic_now = self._monotonic_clock()
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not math.isfinite(now)
+            or now < 0
+            or isinstance(monotonic_now, bool)
+            or not isinstance(monotonic_now, (int, float))
+            or not math.isfinite(monotonic_now)
+            or monotonic_now < 0
+        ):
+            return None
+        with self._lock:
+            old_record = self._sessions.get(old_digest)
+            if old_record is None:
+                return None
+            if float(monotonic_now) >= old_record.monotonic_deadline:
+                self._sessions.pop(old_digest, None)
+                return None
+            new_token = secrets.token_urlsafe(32)
+            new_digest = hashlib.sha256(new_token.encode("ascii")).hexdigest()
+            session_id = secrets.token_urlsafe(24)
+            expires_at = float(now) + self._ttl_seconds
+            self._sessions.pop(old_digest, None)
+            self._sessions[new_digest] = _SessionRecord(
+                owner_sub=old_record.owner_sub,
+                session_id=session_id,
+                expires_at=expires_at,
+                monotonic_deadline=float(monotonic_now) + self._ttl_seconds,
+                monotonic_authenticated_at=float(monotonic_now),
+            )
+            return SessionCredential(
+                token=new_token,
+                session_id=session_id,
+                expires_at=expires_at,
             )
 
     def revoke(self, token: str) -> bool:
