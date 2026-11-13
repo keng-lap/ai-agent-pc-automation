@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 _FILE_READ_ATTRIBUTES = 0x00000080
+_FILE_ADD_FILE = 0x00000002
 _FILE_ALL_ACCESS = 0x001F01FF
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
@@ -168,7 +169,7 @@ class WindowsSecretFile:
         win32security = cls._api()[3]
         access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
         if final:
-            access |= _WRITE_DAC | _WRITE_OWNER
+            access |= _FILE_ADD_FILE | _WRITE_DAC | _WRITE_OWNER
         handle = win32file.CreateFile(
             str(path),
             access,
