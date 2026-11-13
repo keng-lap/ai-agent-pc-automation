@@ -173,14 +173,14 @@ test('job monitor renders backend job state and event history without demo data'
   await page.getByRole('button', { name: /ติดตามงาน/ }).click();
 
   await expect(page.getByRole('heading', { name: 'ติดตามการทำงาน' })).toBeVisible();
-  await expect(page.getByText('00000000-0000-4000-8000-000000000001')).toBeVisible();
-  await expect(page.getByText('กำลังตรวจสอบ Package')).toBeVisible();
+  await expect(page.getByText('00000000-0000-4000-8000-000000000001').first()).toBeVisible();
+  await expect(page.getByText('กำลังตรวจสอบ Package').first()).toBeVisible();
   await expect(page.getByText('ตรวจสอบหลักฐาน Installer')).toBeVisible();
   await expect(page.getByText('PROTOTYPE · MOCK DATA')).toHaveCount(0);
   await expect(page.getByText('RUN-2026-0118')).toHaveCount(0);
 
   await page.getByRole('button', { name: /ประวัติการทำงาน/ }).click();
-  await expect(page.getByText('00000000-0000-4000-8000-000000000002')).toBeVisible();
+  await expect(page.getByText('00000000-0000-4000-8000-000000000002').first()).toBeVisible();
   await expect(page.getByText('SOURCE_MISMATCH')).toBeVisible();
   await expect(page.getByText('Source evidence mismatch')).toBeVisible();
   await expect(page.getByText('ไม่มีการเชื่อมต่อ Job Engine')).toHaveCount(0);
