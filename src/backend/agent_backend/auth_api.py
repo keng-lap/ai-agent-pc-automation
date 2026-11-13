@@ -17,6 +17,7 @@ from .authenticator import (
 )
 from .config import Settings
 from .oidc import (
+    MAX_RECENT_AUTH_AGE_SECONDS,
     ApplicationSessionStore,
     GoogleOidcClient,
     MasterUserAllowlist,
@@ -111,18 +112,17 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
     )
 
 
-def require_session(request: Request) -> SessionPrincipal | None:
-    """Require the enrolled Master User session when authentication is enabled."""
+def require_session(request: Request) -> SessionPrincipal:
+    """Fail closed unless an enrolled Master User session is available."""
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
-        return None
+        raise HTTPException(status_code=503, detail="Authentication is not configured.")
     token = request.cookies.get(SESSION_COOKIE_NAME)
     principal = services.sessions.resolve(token or "")
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     request.state.principal = principal
     return principal
-
 
 def _services(request: Request) -> AuthServices:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
@@ -277,6 +277,15 @@ def begin_authenticator_enrollment(
     principal = require_session(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
+    if not services.sessions.is_recently_authenticated(
+        principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
+    ):
+        record_auth_audit_event(
+            event_type="auth.enrollment",
+            outcome="denied",
+            reason="reauthentication_required",
+        )
+        raise HTTPException(status_code=403, detail="Fresh Google sign-in required.")
     try:
         start = services.enrollment.begin(
             owner_sub=principal.owner_sub,
@@ -295,6 +304,7 @@ def begin_authenticator_enrollment(
 def confirm_authenticator_enrollment(
     payload: EnrollmentConfirmRequest,
     request: Request,
+    response: Response,
 ) -> dict[str, bool]:
     services = _services(request)
     principal = require_session(request)
@@ -312,5 +322,19 @@ def confirm_authenticator_enrollment(
             reason="invalid_totp",
         )
         raise HTTPException(status_code=400, detail="Authenticator confirmation failed.")
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    rotated = services.sessions.rotate(token or "")
+    if rotated is None:
+        raise HTTPException(status_code=401, detail="Authentication session expired.")
+    settings: Settings = request.app.state.settings
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=rotated.token,
+        max_age=settings.app_session_ttl_seconds,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        path="/",
+    )
     record_auth_audit_event(event_type="auth.enrollment", outcome="success")
     return {"enrolled": True}
