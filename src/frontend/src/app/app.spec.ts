@@ -939,8 +939,12 @@ describe('App chat UI (T-202)', () => {
     input.value = '123456';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    const confirm = Array.from(fixture.nativeElement.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('ยืนยัน Authenticator ใหม่')) as HTMLButtonElement;
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    ) as HTMLButtonElement[];
+    const confirm = buttons.find((button: HTMLButtonElement) =>
+      button.textContent?.includes('ยืนยัน Authenticator ใหม่'),
+    );
     expect(confirm).toBeTruthy();
     confirm.click();
     await fixture.whenStable();
