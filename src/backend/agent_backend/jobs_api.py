@@ -32,7 +32,7 @@ class JobSummaryResponse(BaseModel):
 
     job_id: str = Field(min_length=36, max_length=36)
     tool_id: str = Field(min_length=1, max_length=128)
-    state: JobState
+    state: JobStateValue
     created_at: str = Field(min_length=20, max_length=40)
     started_at: str | None = Field(default=None, max_length=40)
     finished_at: str | None = Field(default=None, max_length=40)
