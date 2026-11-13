@@ -22,8 +22,9 @@
 - The owner can start replacement using fresh Google OIDC authentication; the old TOTP is not required.
 - The new QR is pending and memory-only. The existing secret remains active until the new TOTP is confirmed.
 - The replacement is bound to the same verified Google owner and has the same short expiry and failed-attempt limit as enrollment.
-- On successful confirmation, the new encrypted secret replaces the old file using a single Windows file-rename operation; the destination is reopened and verified.
-- The temporary file is opened with `FILE_FLAG_WRITE_THROUGH` and its contents are flushed with `FlushFileBuffers` before handle-based rename. The rename remains handle-based to preserve the verified-object boundary. The Win32 handle-based rename used here has no documented write-through rename flag, and this implementation does not flush parent-directory metadata. Therefore, atomic namespace replacement is intended, but crash/power-loss durability of the directory entry is not guaranteed; this is a documented residual limitation, not a durability guarantee.
+- On successful confirmation, the new encrypted secret replaces the old file with `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`; the destination is reopened and its exact payload is verified.
+- The source and destination are verified through handles before replacement. Every ancestor directory and the dedicated authenticator state directory remain pinned without `FILE_SHARE_DELETE` while the full-path rename runs. The leaf replacement uses the Win32 path-based rename API because the prior handle-based `FileRenameInfo` implementation reported success on the hosted Windows runner while leaving the old destination payload in place. The dedicated directory has an owner-only DACL; same-user processes remain outside the threat boundary.
+- The temporary file contents are flushed with `FlushFileBuffers` before rename. `MOVEFILE_WRITE_THROUGH` requests that the move operation complete after the move is flushed to disk.
 - If replacement fails before the rename completes, the old secret remains. A failed or abandoned QR does not disable ordinary Google sign-in.
 - This recovery route depends on the primary Google account. It is not an offline Google-account recovery mechanism.
 
@@ -32,7 +33,7 @@
 The Windows adapter uses pywin32 and fails closed if the required security APIs are unavailable.
 
 - Resolves the current process token's user SID.
-- Creates the application state directory and secret file with exclusive creation.
+- Creates the dedicated application-owned directory `.agent-state/authenticator` and secret file with exclusive creation. Configuration rejects secret paths outside this dedicated directory; the adapter never applies a DACL to an arbitrary configured/shared parent directory.
 - Sets and verifies the owner SID on newly created state paths.
 - Applies a protected DACL with exactly one allow ACE: current user SID, full file access, no inherited ACEs.
 - Verifies owner SID on every open. If the owner is already the current user, the adapter repairs an overly broad or inherited DACL on the final state directory. It never takes ownership of an existing directory or file.
@@ -40,7 +41,7 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 - Verifies the repaired directory DACL and protected-DACL control bit before reading or writing.
 - Opens every path component with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects reparse points, and keeps directory handles open without `FILE_SHARE_DELETE` while operating on the secret.
 - Opens the secret itself without delete sharing and without concurrent write sharing; reads and writes use the verified file handle.
-- Replacement creates a new protected file in the same secured directory and uses `SetFileInformationByHandle(FileRenameInfo)` with replacement enabled, then reopens and verifies the destination. The current implementation does not provide an explicit write-through rename guarantee.
+- Replacement creates a new protected file in the dedicated directory, verifies source and destination through handles, then uses `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH` while all verified parent-directory handles remain open without `FILE_SHARE_DELETE`. It reopens the destination and verifies the exact payload. The leaf rename is path-based; the owner-only directory and same-user-malware exclusion define that boundary.
 - DPAPI remains current-user scoped; the file ACL is an additional access-control boundary, not a replacement for DPAPI.
 
 ## Failure behavior and recovery limitations
@@ -51,7 +52,7 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 - Wrong-owner and reparse-point paths remain rejected.
 - A confirmed replacement can replace a corrupt encrypted payload only when the existing secret file passes owner/DACL trust checks. It cannot repair an untrusted file ACL.
 - Enrollment, Step-up, and other high-risk operations fail closed while authenticator storage is unavailable.
-- Failed replacement can leave a randomly named temporary file in the protected directory. The current implementation has no automated cleanup/maintenance pass; cleanup is a manual maintenance task and must not use an unverified path.
+- If replacement fails, the adapter attempts to delete its randomly named temporary file while the verified parent directory remains pinned. If cleanup itself fails, the leftover file is inert DPAPI ciphertext in the owner-only directory and must be removed only through a verified maintenance procedure.
 - No fallback to an unprotected file, another user's SID, or disabled authentication is permitted.
 
 ## Scope and remaining gates
