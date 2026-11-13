@@ -68,7 +68,11 @@
             {{ language() === 'th' ? 'ออกจากระบบ' : 'Sign out' }}
           </button>
         </div>
-        @if (qrDataUri()) {
+        @if (!authenticatorStorageAvailable()) {
+          <p role="alert">{{ language() === 'th'
+            ? 'พื้นที่จัดเก็บ Authenticator มีปัญหา แต่คุณยังใช้ Dashboard และดูสถานะงานได้ คำสั่งเสี่ยงสูงจะถูกระงับจนกว่าจะแก้ไขพื้นที่จัดเก็บ'
+            : 'Authenticator storage is unavailable. You can still use the Dashboard and view jobs; high-risk actions remain blocked until storage is repaired.' }}</p>
+        } @else if (qrDataUri()) {
           <p>{{ enrollmentMode() === 'recovery'
             ? (language() === 'th' ? 'สแกน QR ใหม่ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก Authenticator เดิมยังใช้งานได้จนกว่าจะยืนยันสำเร็จ' : 'Scan the new QR and enter its six-digit code. Your existing authenticator remains active until confirmation succeeds.')
             : (language() === 'th' ? 'สแกน QR ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก' : 'Scan this QR with your authenticator app, then enter its six-digit code.') }}</p>
