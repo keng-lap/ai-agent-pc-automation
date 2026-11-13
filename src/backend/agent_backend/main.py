@@ -12,7 +12,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .auth_api import build_auth_services, require_session, router as auth_router
+from .auth_api import build_auth_services, require_session
+from .auth_api import router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
 from .plan_api import router as plan_router
