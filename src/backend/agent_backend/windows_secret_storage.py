@@ -337,7 +337,7 @@ class WindowsSecretFile:
         temporary_name = f".{self._path.name}.{secrets.token_hex(16)}.tmp"
         temporary = self._path.with_name(temporary_name)
         with ExitStack() as parent_stack:
-            parent_handle, sid = self._parent_handles(parent_stack)
+            _parent_handle, sid = self._parent_handles(parent_stack)
             # Verify the destination while its parent directory is pinned, then
             # close that file handle before asking Windows to replace it.
             with ExitStack() as check:
