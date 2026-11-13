@@ -924,6 +924,31 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ตอบกลับภาษาไทย');
     expect(fixture.nativeElement.textContent).toContain('security check');
   });
+  it('resumes authenticator recovery after successful Google reauthentication', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    sessionStorage.setItem('ai-agent-pc-automation.authenticator-intent', 'recovery');
+    window.history.replaceState({}, '', '/?login=success');
+
+    await render();
+
+    expect(api.recoveryCalls).toBe(1);
+    expect(fixture.nativeElement.querySelector('img[alt="Authenticator enrollment QR code"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Authenticator เดิมยังใช้งานได้จนกว่าจะยืนยันสำเร็จ');
+
+    const input = fixture.nativeElement.querySelector('#auth-code') as HTMLInputElement;
+    input.value = '123456';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(fixture.nativeElement.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('ยืนยัน Authenticator ใหม่')) as HTMLButtonElement;
+    expect(confirm).toBeTruthy();
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Authenticator พร้อมใช้งาน');
+  });
+
+
 });
 
 
@@ -1363,30 +1388,5 @@ describe('Structured Agent response (T-404)', () => {
     expect(labels.join(' ')).not.toMatch(/execute|install|uninstall|remove|approve|อนุมัติ|ติดตั้ง|ถอนการติดตั้ง|ดำเนินการจริง/i);
     fixture.destroy();
   });
-
-  it('resumes authenticator recovery after successful Google reauthentication', async () => {
-    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    sessionStorage.setItem('ai-agent-pc-automation.authenticator-intent', 'recovery');
-    window.history.replaceState({}, '', '/?login=success');
-
-    await render();
-
-    expect(api.recoveryCalls).toBe(1);
-    expect(fixture.nativeElement.querySelector('img[alt="Authenticator enrollment QR code"]')).not.toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('Authenticator เดิมยังใช้งานได้จนกว่าจะยืนยันสำเร็จ');
-
-    const input = fixture.nativeElement.querySelector('#auth-code') as HTMLInputElement;
-    input.value = '123456';
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    const confirm = Array.from(fixture.nativeElement.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('ยืนยัน Authenticator ใหม่')) as HTMLButtonElement;
-    expect(confirm).toBeTruthy();
-    confirm.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Authenticator พร้อมใช้งาน');
-  });
-
 
 });
