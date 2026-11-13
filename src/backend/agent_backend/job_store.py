@@ -7,16 +7,16 @@ The store is not a worker and exposes no process-dispatch capability.
 
 from __future__ import annotations
 
-import os
 import secrets
 import sqlite3
-import stat
 import threading
 import uuid
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
 
 from .job_lifecycle import JobLifecycleError, JobState
 
@@ -90,39 +90,18 @@ class SQLiteJobStore:
     requires a private state directory and a non-symlink database path.
     """
 
-    def __init__(self, path: Path | str, *, clock=None) -> None:
-        if os.name == "nt":
-            raise JobStoreUnavailable(
-                "Windows job-store ACL verification is not yet implemented."
-            )
+    def __init__(self, path: Path | str, *, clock=None, secure_storage=None) -> None:
         self.path = Path(path).expanduser()
         if not self.path.is_absolute():
             raise JobStoreUnavailable("Job-store path must be absolute.")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._lock = threading.RLock()
-        self._prepare_private_path()
-        self._initialize()
-
-    def _prepare_private_path(self) -> None:
+        self._secure_storage = secure_storage or create_platform_secure_storage()
         try:
-            for part in (self.path.parent, *self.path.parent.parents):
-                if part.exists() and stat.S_ISLNK(part.lstat().st_mode):
-                    raise JobStoreUnavailable("Job-store path contains a symbolic link.")
-            self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            parent_mode = stat.S_IMODE(self.path.parent.stat().st_mode)
-            if parent_mode & 0o077:
-                raise JobStoreUnavailable("Job-store directory permissions are too broad.")
-            if self.path.exists():
-                info = self.path.lstat()
-                if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-                    raise JobStoreUnavailable("Job-store database is not a regular file.")
-                if stat.S_IMODE(info.st_mode) & 0o077:
-                    raise JobStoreUnavailable("Job-store database permissions are too broad.")
-            self.path.parent.chmod(0o700)
-        except JobStoreUnavailable:
-            raise
-        except OSError:
-            raise JobStoreUnavailable("Job-store path could not be secured.") from None
+            self._secure_storage.prepare_database_path(self.path)
+        except PlatformStorageUnavailable as exc:
+            raise JobStoreUnavailable(str(exc)) from None
+        self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(
@@ -180,7 +159,7 @@ class SQLiteJobStore:
                     PRAGMA user_version = 1;
                     """
                 )
-            self.path.chmod(0o600)
+            self._secure_storage.finalize_database_file(self.path)
         except JobStoreUnavailable:
             raise
         except (OSError, sqlite3.Error):
