@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .auth_api import require_session
 from .job_lifecycle import JobLifecycleError, JobState
-from .job_store import JobStoreUnavailable
+from .job_store import JobStoreUnavailable, SQLiteJobStore
 from .oidc import SessionPrincipal
 
 router = APIRouter()
@@ -59,10 +59,24 @@ def require_job_owner(
 
 def _store(request: Request):
     store = getattr(request.app.state, "job_store", None)
-    if store is None:
+    if store is not None:
+        return store
+    path = getattr(request.app.state, "job_store_path", None)
+    lock = getattr(request.app.state, "job_store_lock", None)
+    if path is None or lock is None:
         raise HTTPException(status_code=503, detail="Job status storage is unavailable.")
+    with lock:
+        store = getattr(request.app.state, "job_store", None)
+        if store is None:
+            try:
+                store = SQLiteJobStore(path)
+            except JobStoreUnavailable:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Job status storage is unavailable.",
+                ) from None
+            request.app.state.job_store = store
     return store
-
 
 @router.get("/api/jobs", response_model=JobListResponse)
 def list_jobs(
