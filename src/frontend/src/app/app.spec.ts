@@ -945,7 +945,9 @@ describe('App chat UI (T-202)', () => {
     const confirm = buttons.find((button: HTMLButtonElement) =>
       button.textContent?.includes('ยืนยัน Authenticator ใหม่'),
     );
-    expect(confirm).toBeTruthy();
+    if (!confirm) {
+      throw new Error('Authenticator recovery confirmation button was not rendered.');
+    }
     confirm.click();
     await fixture.whenStable();
     fixture.detectChanges();
