@@ -1,8 +1,9 @@
 """Exact-action-bound TOTP challenges (W4, provider independent).
 
-This bounded in-memory implementation is a contract/core for the later auth
-integration. It is not wired to the existing P1 dry-run route. A production
-multi-worker deployment requires shared atomic challenge and replay storage.
+The current plan API creates and consumes these challenges through the
+application authentication services. Storage and replay protection are
+process-local; multi-worker deployment is unsupported until shared atomic
+challenge and replay storage is implemented and independently reviewed.
 """
 
 from __future__ import annotations
