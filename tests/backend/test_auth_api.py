@@ -1,5 +1,6 @@
 import os
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -570,3 +571,74 @@ def test_single_worker_configuration_is_accepted():
     from agent_backend.main import enforce_single_worker
 
     enforce_single_worker(environ={"WEB_CONCURRENCY": "1"}, argv=[])
+
+
+
+def test_build_auth_services_keeps_google_dashboard_available_when_secret_load_fails(
+    monkeypatch
+):
+    from agent_backend.auth_api import build_auth_services
+    from agent_backend.authenticator import SecretStoreError
+
+    settings = replace(
+        load_settings(load_env_file=False),
+        google_oidc_client_id="test-client-id",
+        google_oidc_client_secret="test-client-secret",
+        google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+        master_google_sub=OWNER,
+        app_session_ttl_seconds=1800,
+        authenticator_secret_path=(
+            Path(__file__).resolve().parents[2]
+            / ".agent-state" / "authenticator" / "authenticator.json"
+        ),
+    )
+
+    def unavailable(self, *, owner_sub):
+        raise SecretStoreError("simulated unreadable storage")
+
+    monkeypatch.setattr(EncryptedTotpSecretFileStore, "load", unavailable)
+    services = build_auth_services(settings)
+    assert services is not None
+
+    from agent_backend.main import create_app
+
+    client = TestClient(
+        create_app(settings, auth_services=services),
+        base_url="http://127.0.0.1:8000",
+        headers=HEADERS,
+    )
+    sign_in(client, services)
+    session = client.get("/api/auth/session")
+    assert session.status_code == 200
+    assert session.json()["authenticated"] is True
+    assert session.json()["authenticator_storage_available"] is False
+    assert client.get("/api/auth/google/start").status_code == 200
+
+
+def test_authenticator_change_reports_persisted_success_when_session_rotation_fails(
+    tmp_path, monkeypatch
+):
+    from agent_backend.auth_audit import AUTH_AUDIT_SINK
+
+    AUTH_AUDIT_SINK.clear()
+    client, services, now = build_client(tmp_path)
+    sign_in(client, services, recently_authenticated=True)
+    enrollment = client.post("/api/authenticator/enrollment", json={})
+    assert enrollment.status_code == 200
+    monkeypatch.setattr(services.sessions, "rotate", lambda token: None)
+
+    response = client.post(
+        "/api/authenticator/enrollment/confirm",
+        json={
+            "enrollment_id": enrollment.json()["enrollment_id"],
+            "code": code_at(RFC_SECRET, now[0]),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"enrolled": True}
+    assert services.secret_store.load(owner_sub=OWNER) == RFC_SECRET
+    assert any(
+        event.event_type == "auth.enrollment" and event.outcome == "success"
+        for event in AUTH_AUDIT_SINK.snapshot()
+    )
