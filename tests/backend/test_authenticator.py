@@ -32,7 +32,7 @@ NEW_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 
 def build_manager(tmp_path, now=90):
     store = EncryptedTotpSecretFileStore(
-        tmp_path / "authenticator.json",
+        tmp_path / "private" / "authenticator.json",
         FakeProtector(),
     )
     manager = AuthenticatorEnrollmentManager(
