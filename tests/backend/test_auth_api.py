@@ -210,7 +210,7 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
     assert confirmed.status_code == 200
     assert confirmed.json() == {"enrolled": True}
     assert services.sessions.resolve(original_session.token) is None
-    assert client.cookies.get(SESSION_COOKIE_NAME) != original_session.token
+    assert client.cookies.get(SESSION_COOKIE_NAME, domain="127.0.0.1", path="/") != original_session.token
     assert client.get("/api/authenticator/status").json()["authenticator_enrolled"] is True
 
     second = client.post("/api/authenticator/enrollment", json={})
