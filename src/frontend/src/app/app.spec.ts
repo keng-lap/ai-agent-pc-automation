@@ -294,6 +294,7 @@ describe('App chat UI (T-202)', () => {
     httpTestingController?.verify();
     httpTestingController = null;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
 
@@ -994,11 +995,15 @@ describe('App chat UI (T-202)', () => {
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     ).find((button) => button.textContent?.includes('เปลี่ยนเครื่องหรือกู้คืน Authenticator'));
     expect(recovery).toBeDefined();
-    vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
+    const fakeWindow = { location: { assign: vi.fn() } };
+    vi.stubGlobal('window', fakeWindow);
     (fixture.componentInstance as unknown as { beginAuthenticatorRecovery: () => void })
       .beginAuthenticatorRecovery();
     expect(api.reauthCalls).toBe(1);
     expect(api.recoveryCalls).toBe(1);
+    expect(fakeWindow.location.assign).toHaveBeenCalledWith(
+      'https://accounts.google.com/test-reauth',
+    );
   });
 
 
