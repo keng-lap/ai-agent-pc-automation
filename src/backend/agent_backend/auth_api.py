@@ -296,7 +296,7 @@ def begin_authenticator_enrollment(
     principal = require_session(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
-    if not services.sessions.is_recently_authenticated(
+    if not services.sessions.consume_recent_auth(
         principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
     ):
         record_auth_audit_event(
@@ -319,11 +319,12 @@ def begin_authenticator_enrollment(
     )
 
 
-@router.post("/api/authenticator/enrollment/confirm")
-def confirm_authenticator_enrollment(
+def _complete_authenticator_setup(
     payload: EnrollmentConfirmRequest,
     request: Request,
     response: Response,
+    *,
+    event_type: str,
 ) -> dict[str, bool]:
     services = _services(request)
     principal = require_session(request)
@@ -336,7 +337,7 @@ def confirm_authenticator_enrollment(
     )
     if not confirmed:
         record_auth_audit_event(
-            event_type="auth.enrollment",
+            event_type=event_type,
             outcome="denied",
             reason="invalid_totp",
         )
@@ -355,5 +356,68 @@ def confirm_authenticator_enrollment(
         samesite="lax",
         path="/",
     )
-    record_auth_audit_event(event_type="auth.enrollment", outcome="success")
+    record_auth_audit_event(event_type=event_type, outcome="success")
     return {"enrolled": True}
+
+
+@router.post("/api/authenticator/enrollment/confirm")
+def confirm_authenticator_enrollment(
+    payload: EnrollmentConfirmRequest,
+    request: Request,
+    response: Response,
+) -> dict[str, bool]:
+    return _complete_authenticator_setup(
+        payload,
+        request,
+        response,
+        event_type="auth.enrollment",
+    )
+
+
+@router.post("/api/authenticator/recovery", response_model=EnrollmentStartResponse)
+def begin_authenticator_recovery(
+    request: Request,
+    response: Response,
+) -> EnrollmentStartResponse:
+    """Start replacement using fresh Google identity proof, never the lost TOTP."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    services = _services(request)
+    principal = require_session(request)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not services.sessions.consume_recent_auth(
+        principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
+    ):
+        record_auth_audit_event(
+            event_type="auth.recovery",
+            outcome="denied",
+            reason="reauthentication_required",
+        )
+        raise HTTPException(status_code=403, detail="Fresh Google sign-in required.")
+    try:
+        start = services.enrollment.begin_recovery(
+            owner_sub=principal.owner_sub,
+            account_name="Master User",
+        )
+    except (RuntimeError, ValueError):
+        raise HTTPException(status_code=409, detail="Authenticator recovery is unavailable.") from None
+    return EnrollmentStartResponse(
+        enrollment_id=start.enrollment_id,
+        qr_data_uri=start.qr_data_uri,
+        expires_at=start.expires_at,
+    )
+
+
+@router.post("/api/authenticator/recovery/confirm")
+def confirm_authenticator_recovery(
+    payload: EnrollmentConfirmRequest,
+    request: Request,
+    response: Response,
+) -> dict[str, bool]:
+    return _complete_authenticator_setup(
+        payload,
+        request,
+        response,
+        event_type="auth.recovery",
+    )
