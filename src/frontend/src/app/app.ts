@@ -54,6 +54,7 @@ interface ChatEntry {
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
 const CONVERSATION_STORAGE_KEY = 'ai-agent-pc-automation.conversation-id';
+const AUTHENTICATOR_INTENT_STORAGE_KEY = 'ai-agent-pc-automation.authenticator-intent';
 const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -320,6 +321,7 @@ export class App implements AfterViewChecked {
   protected readonly enrollmentId = signal('');
   protected readonly qrDataUri = signal('');
   protected readonly authCode = signal('');
+  protected readonly enrollmentMode = signal<'enrollment' | 'recovery'>('enrollment');
 
   constructor() {
     this.document.documentElement.lang = this.language();
@@ -349,6 +351,7 @@ export class App implements AfterViewChecked {
           this.authenticated.set(session.authenticated);
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
           this.authReady.set(true);
+          this.resumeAuthenticatorIntent(session);
         },
         error: () => {
           this.authEnabled.set(true);
@@ -360,6 +363,31 @@ export class App implements AfterViewChecked {
           this.authReady.set(true);
         },
       });
+  }
+
+  private resumeAuthenticatorIntent(session: AuthSession): void {
+    let intent: string | null = null;
+    try {
+      intent = sessionStorage.getItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+    } catch {
+      this.authError.set(this.language() === 'th'
+        ? 'เบราว์เซอร์ไม่อนุญาตให้เก็บสถานะการยืนยันตัวตน กรุณาลองใหม่'
+        : 'Browser session storage is unavailable. Please try again.');
+      return;
+    }
+    if (intent !== 'enrollment' && intent !== 'recovery') return;
+    const search = this.document.defaultView?.location.search ?? '';
+    const loginStatus = new URLSearchParams(search).get('login');
+    if (loginStatus === 'failed' || loginStatus === 'unavailable') {
+      sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+      this.authError.set(this.language() === 'th'
+        ? 'ยืนยันบัญชี Google ไม่สำเร็จ การเข้าสู่ระบบเดิมยังใช้งานได้'
+        : 'Google reauthentication failed. Your existing session remains available.');
+      return;
+    }
+    if (loginStatus !== 'success' || !session.authenticated) return;
+    sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+    this.requestAuthenticatorFlow(intent);
   }
 
   protected loginWithGoogle(): void {
@@ -384,10 +412,55 @@ export class App implements AfterViewChecked {
   }
 
   protected beginAuthenticatorSetup(): void {
+    this.startAuthenticatorReauthentication('enrollment');
+  }
+
+  protected beginAuthenticatorRecovery(): void {
+    this.startAuthenticatorReauthentication('recovery');
+  }
+
+  private startAuthenticatorReauthentication(intent: 'enrollment' | 'recovery'): void {
     if (this.authBusy()) return;
     this.authBusy.set(true);
     this.authError.set('');
-    defer(() => this.chatApi.beginAuthenticatorEnrollment())
+    try {
+      sessionStorage.setItem(AUTHENTICATOR_INTENT_STORAGE_KEY, intent);
+    } catch {
+      this.authBusy.set(false);
+      this.authError.set(this.language() === 'th'
+        ? 'ไม่สามารถเริ่มขั้นตอนยืนยันตัวตนใหม่ได้'
+        : 'Could not start the secure reauthentication flow.');
+      return;
+    }
+    defer(() => this.chatApi.startGoogleReauthentication())
+      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .subscribe({
+        next: (result) => {
+          if (typeof result.authorization_url !== 'string'
+            || !result.authorization_url.startsWith('https://accounts.google.com/')) {
+            sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+            this.authError.set('Invalid Google reauthentication URL.');
+            return;
+          }
+          window.location.assign(result.authorization_url);
+        },
+        error: () => {
+          sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+          this.authError.set(this.language() === 'th'
+            ? 'เริ่มยืนยันบัญชี Google อีกครั้งไม่สำเร็จ การเข้าสู่ระบบเดิมยังใช้งานได้'
+            : 'Could not start Google reauthentication. Your existing session remains available.');
+        },
+      });
+  }
+
+  private requestAuthenticatorFlow(intent: 'enrollment' | 'recovery'): void {
+    this.enrollmentMode.set(intent);
+    this.authBusy.set(true);
+    this.authError.set('');
+    const request = intent === 'recovery'
+      ? this.chatApi.beginAuthenticatorRecovery()
+      : this.chatApi.beginAuthenticatorEnrollment();
+    defer(() => request)
       .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
       .subscribe({
         next: (result) => {
@@ -396,8 +469,12 @@ export class App implements AfterViewChecked {
           this.authCode.set('');
         },
         error: () => this.authError.set(this.language() === 'th'
-          ? 'สร้าง QR สำหรับ Authenticator ไม่สำเร็จ'
-          : 'Could not create the authenticator QR code.'),
+          ? (intent === 'recovery'
+            ? 'เริ่มกู้คืน Authenticator ไม่สำเร็จ Authenticator เดิมยังคงใช้งานได้'
+            : 'สร้าง QR สำหรับ Authenticator ไม่สำเร็จ')
+          : (intent === 'recovery'
+            ? 'Could not start authenticator recovery. The existing authenticator remains active.'
+            : 'Could not create the authenticator QR code.')),
       });
   }
 
@@ -411,7 +488,10 @@ export class App implements AfterViewChecked {
     if (!enrollmentId || !/^\d{6}$/.test(code) || this.authBusy()) return;
     this.authBusy.set(true);
     this.authError.set('');
-    defer(() => this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code))
+    const confirmRequest = this.enrollmentMode() === 'recovery'
+      ? this.chatApi.confirmAuthenticatorRecovery(enrollmentId, code)
+      : this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code);
+    defer(() => confirmRequest)
       .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
       .subscribe({
         next: (result) => {
@@ -422,6 +502,7 @@ export class App implements AfterViewChecked {
           this.enrollmentId.set('');
           this.qrDataUri.set('');
           this.authCode.set('');
+          this.enrollmentMode.set('enrollment');
           this.authenticatorEnrolled.set(true);
         },
         error: () => this.authError.set(this.language() === 'th'
@@ -441,6 +522,8 @@ export class App implements AfterViewChecked {
           this.authenticatorEnrolled.set(false);
           this.enrollmentId.set('');
           this.qrDataUri.set('');
+          this.enrollmentMode.set('enrollment');
+          try { sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY); } catch { /* best effort */ }
         },
         error: () => this.authError.set(this.language() === 'th'
           ? 'ออกจากระบบไม่สำเร็จ'
