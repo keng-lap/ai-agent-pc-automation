@@ -76,7 +76,7 @@ def test_windows_secret_file_rejects_untrusted_extra_dacl_ace(tmp_path):
         win32con.FILE_SHARE_READ,
         None,
         win32con.OPEN_EXISTING,
-        win32con.FILE_FLAG_OPEN_REPARSE_POINT,
+        0x00200000,
         None,
     )
     try:
