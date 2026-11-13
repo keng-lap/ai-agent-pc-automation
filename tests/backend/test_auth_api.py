@@ -22,7 +22,8 @@ from agent_backend.step_up import StepUpChallengeStore
 from agent_backend.totp import TotpReplayGuard, code_at
 
 OWNER = "stable-google-sub"
-RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"\nNEW_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+NEW_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 NOW = 1_800_000_000.0
 HEADERS = {
     "origin": "http://127.0.0.1:4200",
