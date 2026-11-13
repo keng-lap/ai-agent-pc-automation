@@ -57,14 +57,9 @@ def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
     with ExitStack() as stack:
         store._parent_handles(stack)
         with pytest.raises(pywintypes.error):
-            win32file.CreateFile(
+            win32file.MoveFile(
                 str(directory),
-                0x00010000,
-                0x00000001 | 0x00000002 | 0x00000004,
-                None,
-                3,
-                0x02000000,
-                None,
+                str(directory.with_name("renamed")),
             )
 
 def test_windows_secret_file_rejects_untrusted_extra_dacl_ace(tmp_path):
