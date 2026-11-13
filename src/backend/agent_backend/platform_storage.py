@@ -1,9 +1,9 @@
 """Platform-specific protection for the local SQLite job database.
 
 The Job Store depends on this narrow interface instead of embedding OS checks.
-Only Linux is enabled initially. Windows and macOS remain fail-closed until
-native ACL/owner/reparse-point (Windows) or ACL/path-race (macOS) controls are
-implemented and independently reviewed.
+Linux is currently the only enabled adapter. Windows remains fail-closed until
+native DACL, owner SID, reparse-point and handle-based path-race protections
+are implemented and independently reviewed. macOS remains unsupported.
 """
 
 from __future__ import annotations
@@ -40,17 +40,11 @@ class LinuxSecureStorage:
                         "Job-store path contains a symbolic link."
                     )
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            parent_info = path.parent.stat()
-            if parent_info.st_uid != os.geteuid():
-                raise PlatformStorageUnavailable(
-                    "Job-store directory is not owned by the current user."
-                )
-            parent_mode = stat.S_IMODE(parent_info.st_mode)
-            if parent_mode & 0o077:
-                raise PlatformStorageUnavailable(
-                    "Job-store directory permissions are too broad."
-                )
-            if path.exists():
+
+            # Inspect the database entry before validating directory modes so a
+            # symlink is rejected for what it is, even when its parent is also
+            # too permissive. lstat() never follows the database symlink.
+            if path.exists() or path.is_symlink():
                 info = path.lstat()
                 if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
                     raise PlatformStorageUnavailable(
@@ -64,6 +58,17 @@ class LinuxSecureStorage:
                     raise PlatformStorageUnavailable(
                         "Job-store database permissions are too broad."
                     )
+
+            parent_info = path.parent.stat()
+            if parent_info.st_uid != os.geteuid():
+                raise PlatformStorageUnavailable(
+                    "Job-store directory is not owned by the current user."
+                )
+            parent_mode = stat.S_IMODE(parent_info.st_mode)
+            if parent_mode & 0o077:
+                raise PlatformStorageUnavailable(
+                    "Job-store directory permissions are too broad."
+                )
             path.parent.chmod(0o700)
         except PlatformStorageUnavailable:
             raise
