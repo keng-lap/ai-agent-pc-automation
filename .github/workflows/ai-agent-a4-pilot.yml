@@ -162,11 +162,22 @@ jobs:
           failure_markers = (
               "ServiceUnavailableError", "RateLimitError", "AuthenticationError",
               "APIConnectionError", "Traceback (most recent call last)", "UNAVAILABLE",
-              '"code": 503', "HTTP 503", "Would you like to see what's new",
+              '"code": 503', "HTTP 503", "RESOURCE_EXHAUSTED", '"code": 429',
+              "quota exceeded", "GenerateRequestsPerDayPerModel-FreeTier",
+              "Would you like to see what's new",
           )
           found = [marker for marker in failure_markers if marker.lower() in combined.lower()]
           if os.environ["AIDER_STATUS"] != "0" or found:
-              print("Aider/Gemini failed; refusing to publish an unverified review.")
+              quota_markers = (
+                  "RESOURCE_EXHAUSTED", '"code": 429', "quota exceeded",
+                  "GenerateRequestsPerDayPerModel-FreeTier",
+              )
+              if any(marker.lower() in combined.lower() for marker in quota_markers):
+                  print("::error title=Gemini Free Tier quota exhausted::HTTP 429 quota exhaustion detected. No review will be published; wait for quota reset.")
+              elif "UNAVAILABLE" in combined or '"code": 503' in combined:
+                  print("::error title=Gemini service unavailable::HTTP 503 detected. No review will be published.")
+              else:
+                  print("::error title=Aider/Gemini failed::No verified review will be published.")
               if found:
                   print("Failure markers: " + ", ".join(found))
               print(redact(combined)[-16000:])
@@ -230,8 +241,8 @@ jobs:
             }
 
   documentation:
-    needs: context
-    if: ${{ needs.context.result == 'success' }}
+    needs: [context, a4-review]
+    if: ${{ needs.context.result == 'success' && needs.a4-review.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
