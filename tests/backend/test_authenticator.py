@@ -306,3 +306,72 @@ def test_dpapi_output_cleanup_handles_missing_description_allocation(monkeypatch
     WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target)
 
     assert freed == [data_pointer]
+
+
+def test_recovery_consumes_the_exact_future_step_on_the_primary_replay_guard(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    assert manager.confirm(
+        enrollment_id=initial.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+
+    manager._secret_factory = lambda: NEW_SECRET
+    recovery = manager.begin_recovery(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+    future_code = code_at(NEW_SECRET, 120)
+    assert manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub="owner-sub",
+        code=future_code,
+    )
+    assert store.load(owner_sub="owner-sub") == NEW_SECRET
+
+    # The recovery proof used step 4 while the wall clock was in step 3.
+    # That exact step must not authorize a Step-up after the clock advances.
+    assert not manager._replay_guard.verify_and_consume(
+        owner_key="owner-sub",
+        secret=NEW_SECRET,
+        code=future_code,
+        timestamp=120,
+    )
+
+
+def test_recovery_storage_failure_does_not_advance_primary_replay_guard(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    assert manager.confirm(
+        enrollment_id=initial.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+
+    manager._secret_factory = lambda: NEW_SECRET
+    recovery = manager.begin_recovery(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+    original_replace = store.replace
+
+    def fail_replace(*, owner_sub, secret):
+        raise SecretStoreError("simulated persistence failure")
+
+    store.replace = fail_replace
+    assert not manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(NEW_SECRET, 120),
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
+
+    # The failed persistence operation must not consume the primary guard.
+    assert manager._replay_guard.verify_and_consume(
+        owner_key="owner-sub",
+        secret=RFC_SECRET,
+        code=code_at(RFC_SECRET, 120),
+        timestamp=120,
+    )
+    store.replace = original_replace
