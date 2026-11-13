@@ -40,6 +40,7 @@ def valid_claims(nonce):
         "email_verified": True,
         "nonce": nonce,
         "iat": 1000,
+        "auth_time": 1000,
         "exp": 1600,
     }
 
@@ -72,7 +73,8 @@ def test_begin_login_uses_code_flow_pkce_nonce_and_minimal_scopes():
     assert "code_challenge=" in result
     assert "state=" in result
     assert "nonce=" in result
-    assert "prompt=select_account" in result
+    assert "prompt=login" in result
+    assert "max_age=0" in result
 
 
 def test_oidc_transaction_is_one_time_and_expires():
@@ -133,6 +135,8 @@ def test_complete_login_exchanges_code_with_pkce_and_discards_provider_tokens():
         {"sub": ""},
         {"exp": 999},
         {"iat": 0},
+        {"auth_time": 700},
+        {"auth_time": 1200},
         {"azp": "another-client"},
     ],
 )
