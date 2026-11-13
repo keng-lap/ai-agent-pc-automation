@@ -345,6 +345,7 @@ def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
         "google-auth>=2.62.1",
         "requests>=2.32",
         "PyYAML>=6.0.2",
+        "pywin32>=311; sys_platform == 'win32'",
     ]
 
 
