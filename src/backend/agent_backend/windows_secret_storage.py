@@ -19,6 +19,7 @@ _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
+_FILE_FLAG_WRITE_THROUGH = 0x80000000
 _FILE_SHARE_READ = 0x00000001
 _FILE_SHARE_WRITE = 0x00000002
 _GENERIC_READ = 0x80000000
@@ -258,6 +259,11 @@ class WindowsSecretFile:
         access = _GENERIC_READ | _READ_CONTROL
         if create:
             access |= _GENERIC_WRITE | _WRITE_DAC | _WRITE_OWNER
+        else:
+            # DACL repair is permitted only after the opened file's owner SID
+            # has been verified as the current user. The handle denies delete
+            # and concurrent writes while the descriptor is inspected/repaired.
+            access |= _WRITE_DAC
         try:
             handle = win32file.CreateFile(
                 str(self._path),
@@ -265,7 +271,9 @@ class WindowsSecretFile:
                 _FILE_SHARE_READ,
                 None,
                 disposition,
-                _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
+                _FILE_ATTRIBUTE_NORMAL
+                | _FILE_FLAG_OPEN_REPARSE_POINT
+                | (_FILE_FLAG_WRITE_THROUGH if create else 0),
                 None,
             )
         except pywintypes.error as exc:
