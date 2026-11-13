@@ -66,3 +66,62 @@ def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
                 0x02000000,
                 None,
             )
+
+def test_windows_secret_file_rejects_untrusted_extra_dacl_ace(tmp_path):
+    import win32con
+    import win32file
+    import win32security
+
+    store = WindowsSecretFile(tmp_path / "private" / "authenticator.json")
+    store.create_exclusive(b"encrypted")
+
+    handle = win32file.CreateFile(
+        str(store._path),
+        win32con.READ_CONTROL | win32con.WRITE_DAC,
+        win32con.FILE_SHARE_READ,
+        None,
+        win32con.OPEN_EXISTING,
+        win32con.FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    try:
+        owner = WindowsSecretFile._current_user_sid()
+        everyone = win32security.CreateWellKnownSid(
+            win32security.WinWorldSid, None
+        )
+        acl = win32security.ACL()
+        acl.AddAccessAllowedAceEx(
+            win32security.ACL_REVISION, 0, win32con.FILE_ALL_ACCESS, owner
+        )
+        acl.AddAccessAllowedAceEx(
+            win32security.ACL_REVISION, 0, win32con.FILE_READ_DATA, everyone
+        )
+        win32security.SetSecurityInfo(
+            handle,
+            win32security.SE_FILE_OBJECT,
+            win32security.DACL_SECURITY_INFORMATION
+            | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            acl,
+            None,
+        )
+    finally:
+        win32file.CloseHandle(handle)
+
+    with pytest.raises(WindowsSecretStorageError, match="DACL is not owner-only"):
+        store.read()
+
+
+def test_windows_secret_file_rejects_file_reparse_point(tmp_path):
+    target = tmp_path / "target.bin"
+    target.write_bytes(b"not-an-authenticator")
+    link = tmp_path / "authenticator.json"
+    try:
+        os.symlink(target, link)
+    except OSError:
+        pytest.skip("The Windows runner does not permit creating file symlinks")
+
+    store = WindowsSecretFile(link)
+    with pytest.raises(WindowsSecretStorageError, match="reparse point"):
+        store.read()
