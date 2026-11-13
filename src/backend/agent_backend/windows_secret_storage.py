@@ -12,6 +12,8 @@ import os
 import secrets
 from contextlib import ExitStack
 from pathlib import Path
+
+
 _FILE_READ_ATTRIBUTES = 0x00000080
 _FILE_ALL_ACCESS = 0x001F01FF
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
@@ -227,9 +229,9 @@ class WindowsSecretFile:
         win32file = self._api()[2]
         pywintypes = self._api()[4]
         disposition = _CREATE_NEW if create else _OPEN_EXISTING
-        access = _GENERIC_READ | _READ_CONTROL | _WRITE_DAC
+        access = _GENERIC_READ | _READ_CONTROL
         if create:
-            access |= _GENERIC_WRITE | _WRITE_OWNER
+            access |= _GENERIC_WRITE | _WRITE_DAC | _WRITE_OWNER
         try:
             handle = win32file.CreateFile(
                 str(self._path),
@@ -260,11 +262,10 @@ class WindowsSecretFile:
                 allow_owner_change=True,
             )
         else:
-            self._set_owner_only_dacl(
-                handle,
-                sid,
-                allow_owner_change=False,
-            )
+            # Existing secret files are immutable from a trust-policy
+            # perspective: verify their ACL, but never attempt to repair it.
+            # Repair would require WRITE_DAC and could mask tampering.
+            self._verify_owner_only_dacl(handle, sid)
         return handle
 
     def exists(self) -> bool:
