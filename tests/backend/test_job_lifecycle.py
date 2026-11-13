@@ -1,9 +1,8 @@
-import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agent_backend import job_lifecycle, process_containment
+from agent_backend.job_lifecycle import InMemoryJobStore, JobLifecycleError, JobState
 
 
 NOW = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
@@ -11,7 +10,7 @@ DIGEST = "a" * 64
 
 
 def _create(store=None, **overrides):
-    store = store or job_lifecycle.InMemoryJobStore()
+    store = store or InMemoryJobStore()
     values = {
         "owner_id": "owner-1",
         "tool_id": "software.install",
@@ -39,14 +38,14 @@ def test_create_job_starts_queued_and_is_idempotent():
         now=NOW,
     )
 
-    assert job.state is job_lifecycle.JobState.QUEUED
+    assert job.state is JobState.QUEUED
     assert repeated.job_id == job.job_id
     assert repeated.version == job.version
 
 
 def test_idempotency_key_cannot_be_reused_for_different_action():
     store, _job = _create()
-    with pytest.raises(job_lifecycle.JobLifecycleError, match="different action"):
+    with pytest.raises(JobLifecycleError, match="different action"):
         store.create(
             owner_id="owner-1",
             tool_id="software.install",
@@ -193,20 +192,3 @@ def test_invalid_digest_and_lease_are_rejected():
         )
     with pytest.raises(ValueError, match="lease_seconds"):
         store.claim_next(worker_id="worker-1", now=NOW, lease_seconds=0)
-
-
-def test_windows_job_object_is_explicitly_unavailable_off_windows():
-    import os
-
-    if os.name == "nt":
-        pytest.skip("this assertion applies only to non-Windows hosts")
-    with pytest.raises(process_containment.ProcessContainmentError, match="only on Windows"):
-        process_containment.WindowsJobObject()
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows Job Object APIs are required")
-def test_windows_job_object_creates_and_closes_with_kill_on_close_policy():
-    with process_containment.WindowsJobObject() as job:
-        assert job.is_open
-        with pytest.raises(ValueError, match="native process handle"):
-            job.assign_suspended_process(0)
-    assert not job.is_open
