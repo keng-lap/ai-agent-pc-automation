@@ -162,6 +162,8 @@ class SQLiteJobStore:
             self._secure_storage.finalize_database_file(self.path)
         except JobStoreUnavailable:
             raise
+        except PlatformStorageUnavailable as exc:
+            raise JobStoreUnavailable(str(exc)) from None
         except (OSError, sqlite3.Error):
             raise JobStoreUnavailable("Job-store database could not be initialized.") from None
 
