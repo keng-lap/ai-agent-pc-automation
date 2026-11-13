@@ -65,7 +65,7 @@ class WindowsSecretFile:
     def _current_user_sid(cls):
         win32api, win32con, _win32file, win32security, _pywintypes = cls._api()
         token = win32security.OpenProcessToken(
-            win32api.GetCurrentProcess(), 0x0008
+            win32api.GetCurrentProcess(), win32con.TOKEN_QUERY
         )
         try:
             return win32security.GetTokenInformation(
@@ -92,7 +92,6 @@ class WindowsSecretFile:
 
     @classmethod
     def _set_owner_only_dacl(cls, handle, sid) -> None:
-        win32con = cls._api()[1]
         win32security = cls._api()[3]
         descriptor = win32security.GetSecurityInfo(
             handle,
@@ -149,7 +148,6 @@ class WindowsSecretFile:
 
     @classmethod
     def _open_directory(cls, path: Path, *, final: bool, sid, stack: ExitStack):
-        win32con = cls._api()[1]
         win32file = cls._api()[2]
         win32security = cls._api()[3]
         access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
@@ -201,7 +199,6 @@ class WindowsSecretFile:
         return final_handle, sid
 
     def _open_file(self, stack: ExitStack, sid, *, create: bool):
-        win32con = self._api()[1]
         win32file = self._api()[2]
         pywintypes = self._api()[4]
         disposition = _CREATE_NEW if create else win32con.OPEN_EXISTING
