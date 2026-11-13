@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import (
     SESSION_COOKIE_NAME,
