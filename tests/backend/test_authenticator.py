@@ -26,7 +26,7 @@ class FakeProtector:
         return ciphertext[len(prefix) :]
 
 
-RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"\nNEW_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 
 
 def build_manager(tmp_path, now=90):
@@ -127,6 +127,50 @@ def test_secret_file_cannot_be_overwritten(tmp_path):
 
     with pytest.raises(SecretStoreError, match="already enrolled"):
         store.save(owner_sub="owner-sub", secret="GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+
+
+def test_recovery_replaces_secret_only_after_new_authenticator_is_confirmed(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    assert manager.confirm(
+        enrollment_id=initial.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+
+    manager._secret_factory = lambda: NEW_SECRET
+    recovery = manager.begin_recovery(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
+    assert not manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub="owner-sub",
+        code="000000",
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
+
+    replacement = manager.begin_recovery(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+    assert manager.confirm(
+        enrollment_id=replacement.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(NEW_SECRET, 120),
+    )
+    assert store.load(owner_sub="owner-sub") == NEW_SECRET
+
+
+def test_recovery_cannot_be_started_when_no_authenticator_is_enrolled(tmp_path):
+    manager, _store = build_manager(tmp_path)
+
+    with pytest.raises(RuntimeError, match="no authenticator"):
+        manager.begin_recovery(
+            owner_sub="owner-sub",
+            account_name="owner@example.test",
+        )
 
 
 def test_corrupt_secret_file_fails_closed(tmp_path):
