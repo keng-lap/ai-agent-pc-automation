@@ -296,6 +296,11 @@ def begin_authenticator_enrollment(
     principal = require_session(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        if services.secret_store.is_configured():
+            raise HTTPException(status_code=409, detail="Authenticator is already enrolled.")
+    except SecretStoreError:
+        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
     if not services.sessions.consume_recent_auth(
         principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
     ):
@@ -386,6 +391,11 @@ def begin_authenticator_recovery(
     principal = require_session(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        if not services.secret_store.is_configured():
+            raise HTTPException(status_code=409, detail="No authenticator is enrolled.")
+    except SecretStoreError:
+        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
     if not services.sessions.consume_recent_auth(
         principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
     ):
