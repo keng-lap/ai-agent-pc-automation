@@ -47,7 +47,6 @@ def test_windows_secret_file_rejects_reparse_point_ancestor(tmp_path):
 
 def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
     import pywintypes
-    import win32con
     import win32file
 
     directory = tmp_path / "private"
@@ -60,12 +59,10 @@ def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
         with pytest.raises(pywintypes.error):
             win32file.CreateFile(
                 str(directory),
-                win32con.DELETE,
-                win32con.FILE_SHARE_READ
-                | win32con.FILE_SHARE_WRITE
-                | win32con.FILE_SHARE_DELETE,
+                0x00010000,
+                0x00000001 | 0x00000002 | 0x00000004,
                 None,
-                win32con.OPEN_EXISTING,
-                win32con.FILE_FLAG_BACKUP_SEMANTICS,
+                3,
+                0x02000000,
                 None,
             )
