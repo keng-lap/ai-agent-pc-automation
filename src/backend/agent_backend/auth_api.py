@@ -17,9 +17,9 @@ from .authenticator import (
 )
 from .config import Settings
 from .oidc import (
+    MAX_RECENT_AUTH_AGE_SECONDS,
     ApplicationSessionStore,
     GoogleOidcClient,
-    MAX_RECENT_AUTH_AGE_SECONDS,
     MasterUserAllowlist,
     OidcAuthenticationError,
     OidcTransactionStore,
