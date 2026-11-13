@@ -176,6 +176,7 @@ def test_recovery_cannot_be_started_when_no_authenticator_is_enrolled(tmp_path):
 
 def test_corrupt_secret_file_fails_closed(tmp_path):
     store = EncryptedTotpSecretFileStore(tmp_path / "private" / "authenticator.json", FakeProtector())
+    (tmp_path / "private").mkdir()
     (tmp_path / "private" / "authenticator.json").write_text(
         json.dumps({"version": 1, "ciphertext": "not-base64!"}),
         encoding="ascii",
