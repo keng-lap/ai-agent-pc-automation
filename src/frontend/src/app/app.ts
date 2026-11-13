@@ -316,6 +316,7 @@ export class App implements AfterViewChecked {
   protected readonly authEnabled = signal(false);
   protected readonly authenticated = signal(false);
   protected readonly authenticatorEnrolled = signal(false);
+  protected readonly authenticatorStorageAvailable = signal(true);
   protected readonly authBusy = signal(false);
   protected readonly authError = signal('');
   protected readonly enrollmentId = signal('');
@@ -350,6 +351,7 @@ export class App implements AfterViewChecked {
           this.authEnabled.set(session.enabled);
           this.authenticated.set(session.authenticated);
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
+          this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
           this.resumeAuthenticatorIntent(session);
         },
@@ -357,6 +359,7 @@ export class App implements AfterViewChecked {
           this.authEnabled.set(true);
           this.authenticated.set(false);
           this.authenticatorEnrolled.set(false);
+          this.authenticatorStorageAvailable.set(false);
           this.authError.set(this.language() === 'th'
             ? 'เชื่อมต่อระบบยืนยันตัวตนไม่ได้ กรุณาตรวจสอบ Backend'
             : 'Could not reach the authentication service. Check the backend.');
