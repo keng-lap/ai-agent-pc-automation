@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import (
@@ -305,3 +307,27 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     )
     assert unauthenticated.status_code == 401
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/plans", {"request": "Install Google Chrome", "language": "en"}),
+        ("/api/software/discovery/search", {"query": "Google Chrome"}),
+    ],
+)
+def test_protected_routers_fail_closed_when_authentication_is_disabled(
+    tmp_path, path, payload
+):
+    from agent_backend.main import create_app
+
+    client = TestClient(
+        create_app(load_settings(load_env_file=False)),
+        base_url="http://127.0.0.1:8000",
+        headers=HEADERS,
+    )
+
+    response = client.post(path, json=payload)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Internal server error."}
