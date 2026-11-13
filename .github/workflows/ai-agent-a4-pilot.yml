@@ -118,7 +118,7 @@ jobs:
             exit 1
           fi
           printf '{}\n' > /tmp/aider-empty.yml
-          args=(--model gemini/gemini-3.8-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --read /tmp/a4-diff.md)
+          args=(--model gemini/gemini-3.8-flash --no-auto-commits --no-git --no-check-update --no-show-release-notes --no-pretty --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --read /tmp/a4-diff.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
           done < /tmp/a4-paths.txt
@@ -144,26 +144,55 @@ jobs:
           จำกัดรายงานไม่เกิน 12,000 ตัวอักษร
           PROMPT
           set +e
-          aider "${args[@]}" --message-file /tmp/a4-prompt.md > /tmp/a4-review.md 2> /tmp/a4-aider.log
+          aider "${args[@]}" --message-file /tmp/a4-prompt.md > /tmp/a4-aider.stdout 2> /tmp/a4-aider.log
           aider_status=$?
           set -e
-          if [[ "$aider_status" -ne 0 ]]; then
-            echo "::error title=Aider invocation failed::Aider exited with status $aider_status. Sanitized diagnostic follows."
-            python - <<'PY'
-          import os, re
+          AIDER_STATUS="$aider_status" python - <<'PY'
+          import os, re, sys
           from pathlib import Path
-          log = Path("/tmp/a4-aider.log")
-          text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else "(Aider stderr log missing)"
+          stdout = Path("/tmp/a4-aider.stdout").read_text(encoding="utf-8", errors="replace")
+          stderr = Path("/tmp/a4-aider.log").read_text(encoding="utf-8", errors="replace")
           key = os.environ.get("GEMINI_API_KEY", "")
-          if key:
-              text = text.replace(key, "[REDACTED_GEMINI_API_KEY]")
-          text = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_GOOGLE_API_KEY]", text)
-          text = re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^\s,]+", r"\1[REDACTED]", text)
-          print("\\n".join(text.splitlines()[-100:])[-16000:])
+          def redact(value):
+              if key:
+                  value = value.replace(key, "[REDACTED_GEMINI_API_KEY]")
+              value = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_GOOGLE_API_KEY]", value)
+              return re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^\s,]+", r"\1[REDACTED]", value)
+          combined = stdout + "\n" + stderr
+          failure_markers = (
+              "ServiceUnavailableError", "RateLimitError", "AuthenticationError",
+              "APIConnectionError", "Traceback (most recent call last)", "UNAVAILABLE",
+              '"code": 503', "HTTP 503", "Would you like to see what's new",
+          )
+          found = [marker for marker in failure_markers if marker.lower() in combined.lower()]
+          if os.environ["AIDER_STATUS"] != "0" or found:
+              print("Aider/Gemini failed; refusing to publish an unverified review.")
+              if found:
+                  print("Failure markers: " + ", ".join(found))
+              print(redact(combined)[-16000:])
+              sys.exit(1)
+          match = re.search(r"(?im)^\s*(?:[-*]\s*)?Verdict\s*:\s*(.+?)\s*$", stdout)
+          if not match:
+              print("No structured A4 Verdict found; refusing to publish.")
+              print(redact(combined)[-16000:])
+              sys.exit(1)
+          verdict = match.group(1).strip().upper()
+          if verdict not in {"FINDINGS", "NO FINDINGS IN REVIEWED SCOPE"}:
+              print(f"Review is not complete (verdict: {verdict}); refusing to publish.")
+              sys.exit(1)
+          report = stdout[match.start():].strip()
+          required = ("Scope:", "Findings:", "Verification:")
+          missing = [h for h in required if not re.search(r"(?im)^\s*(?:[-*]\s*)?" + re.escape(h), report)]
+          if missing:
+              print("A4 report missing required sections: " + ", ".join(missing))
+              print(redact(report)[-12000:])
+              sys.exit(1)
+          if len(report) > 12000:
+              print("A4 report exceeds 12,000 characters; refusing to publish.")
+              sys.exit(1)
+          Path("/tmp/a4-review.md").write_text(report, encoding="utf-8")
+          print("A4 report structure and verdict validated; CLI diagnostics excluded.")
           PY
-            exit "$aider_status"
-          fi
-          test -s /tmp/a4-review.md || { echo "Aider exited successfully but produced an empty review."; exit 1; }
           printf '\n\n---\nAutomated pilot only. Not an independent A4 sign-off. Tests were not run.\n' >> /tmp/a4-review.md
 
       - name: Publish Thai A4 report as PR comment
@@ -205,6 +234,8 @@ jobs:
     if: ${{ needs.context.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      has_changes: ${{ steps.doc.outputs.has_changes }}
     permissions:
       contents: read
     steps:
@@ -249,6 +280,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check "aider-chat==0.86.2"
 
       - name: Update README only
+        id: doc
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -259,7 +291,7 @@ jobs:
             exit 1
           fi
           printf '{}\n' > /tmp/aider-empty.yml
-          args=(--model gemini/gemini-3.8-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --file README.md)
+          args=(--model gemini/gemini-3.8-flash --no-auto-commits --no-git --no-check-update --no-show-release-notes --no-pretty --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --analytics-disable --file README.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
           done < /tmp/doc-paths.txt
@@ -274,7 +306,7 @@ jobs:
           ทำเฉพาะการเปลี่ยนแปลงเอกสารที่จำเป็นและกระชับ
           PROMPT
           set +e
-          aider "${args[@]}" --message-file /tmp/docs-prompt.md > /tmp/docs-aider.log 2>&1
+          aider "${args[@]}" --message-file /tmp/docs-prompt.md > /tmp/docs-aider.stdout 2> /tmp/docs-aider.stderr
           aider_status=$?
           set -e
           if [[ "$aider_status" -ne 0 ]]; then
@@ -282,24 +314,34 @@ jobs:
             python - <<'PY'
           import os, re
           from pathlib import Path
-          log = Path("/tmp/docs-aider.log")
-          text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else "(Aider log missing)"
+          text = ""
+          for name in ("/tmp/docs-aider.stderr", "/tmp/docs-aider.stdout"):
+              path = Path(name)
+              if path.exists():
+                  text += path.read_text(encoding="utf-8", errors="replace") + "\n"
           key = os.environ.get("GEMINI_API_KEY", "")
           if key:
               text = text.replace(key, "[REDACTED_GEMINI_API_KEY]")
           text = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_GOOGLE_API_KEY]", text)
           text = re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^\s,]+", r"\1[REDACTED]", text)
-          print("\\n".join(text.splitlines()[-100:])[-16000:])
+          print("\n".join(text.splitlines()[-100:])[-16000:])
           PY
             exit "$aider_status"
           fi
           changed="$(git diff --name-only)"
+          if [[ -z "$changed" ]]; then
+            echo "No README documentation changes are warranted for this PR."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           test "$changed" = "README.md" || { echo "Unexpected modified paths: $changed"; exit 1; }
           git diff --check
           git diff --binary -- README.md > /tmp/docs.patch
-          test -s /tmp/docs.patch || { echo "Aider produced no documentation changes."; exit 1; }
+          test -s /tmp/docs.patch || { echo "README changed but no valid patch was produced."; exit 1; }
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload validated documentation patch
+        if: steps.doc.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ai-agent-readme-patch
@@ -309,7 +351,7 @@ jobs:
 
   push-documentation:
     needs: [context, documentation]
-    if: ${{ needs.context.result == 'success' && needs.documentation.result == 'success' }}
+    if: ${{ needs.context.result == 'success' && needs.documentation.result == 'success' && needs.documentation.outputs.has_changes == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
