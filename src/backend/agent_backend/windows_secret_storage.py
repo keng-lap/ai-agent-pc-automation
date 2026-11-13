@@ -318,14 +318,27 @@ class WindowsSecretFile:
     def create_exclusive(self, payload: bytes) -> None:
         if not isinstance(payload, bytes) or not 0 < len(payload) <= self._MAX_BYTES:
             raise WindowsSecretStorageError("Secret payload size is invalid.")
-        with ExitStack() as stack:
-            _parent, sid = self._parent_handles(stack)
-            handle = self._open_file(stack, sid, create=True)
-            win32file = self._api()[2]
-            error, written = win32file.WriteFile(handle, payload)
-            if error or written != len(payload):
-                raise WindowsSecretStorageError("Secret file write was incomplete.")
-            win32file.FlushFileBuffers(handle)
+        with ExitStack() as parent_stack:
+            _parent, sid = self._parent_handles(parent_stack)
+            created = False
+            try:
+                with ExitStack() as file_stack:
+                    handle = self._open_file(file_stack, sid, create=True)
+                    created = True
+                    win32file = self._api()[2]
+                    error, written = win32file.WriteFile(handle, payload)
+                    if error or written != len(payload):
+                        raise WindowsSecretStorageError("Secret file write was incomplete.")
+                    win32file.FlushFileBuffers(handle)
+            except Exception:
+                # The file handle is closed before cleanup; the verified parent
+                # remains pinned so a partial first-write cannot poison enrollment.
+                if created:
+                    try:
+                        self._path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                raise
 
     def read(self) -> bytes:
         with ExitStack() as stack:
