@@ -16,6 +16,7 @@ on:
       - "src/backend/agent_backend/process_containment.py"
       - "src/backend/agent_backend/job_lifecycle.py"
       - "tests/backend/test_job_lifecycle.py"
+      - "tests/backend/test_process_containment.py"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
 
