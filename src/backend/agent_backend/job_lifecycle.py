@@ -211,7 +211,7 @@ class InMemoryJobStore:
         self._validate_time(now)
         self._validate_identity(worker_id, "worker_id")
         if not isinstance(target, JobState):
-            raise ValueError("target must be a JobState")
+            raise TypeError("target must be a JobState")
         with self._lock:
             current = self._jobs.get(job_id)
             if current is None:
