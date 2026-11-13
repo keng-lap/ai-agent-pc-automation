@@ -1,11 +1,124 @@
 <section class="job-monitor" aria-labelledby="jm-title">
-<header class="jm-head"><div><p>JOB OPERATIONS / P6-605</p><h2 id="jm-title">{{isThai()?'ติดตามการทำงาน':'Job Monitor'}}</h2><span>{{isThai()?'ดูงานที่กำลังทำและตรวจสอบผลย้อนหลัง':'Monitor active jobs and inspect previous runs'}}</span></div><b>PROTOTYPE · MOCK DATA</b></header>
-<div class="jm-stats"><article><small>กำลังทำงาน</small><strong>1</strong></article><article><small>รออนุมัติ</small><strong>1</strong></article><article><small>สำเร็จวันนี้</small><strong>1</strong></article><article><small>ล้มเหลว</small><strong>1</strong></article></div>
-<div class="jm-tabs"><button [class.active]="tab()==='active'" (click)="setTab('active')">{{isThai()?'งานที่กำลังทำ':'Active jobs'}} · {{activeRuns().length}}</button><button [class.active]="tab()==='history'" (click)="setTab('history')">{{isThai()?'ประวัติการทำงาน':'Run history'}}</button><label>⌕ <input type="search" [value]="query()" (input)="query.set(($any($event.target)).value)" [placeholder]="isThai()?'ค้นหาชื่อ Job หรือ Run ID':'Search jobs or Run ID'"></label></div>
-<div class="jm-layout"><section class="jm-list"><header><strong>{{tab()==='active'?'งานที่ต้องติดตาม':'รายการย้อนหลัง'}}</strong><small>{{visibleRuns().length}} รายการ</small></header>
-@for(r of visibleRuns();track r.id){<button class="jm-run" [class.selected]="selectedId()===r.id" (click)="selectedId.set(r.id)"><i [class]="'dot '+r.status"></i><span><strong>{{r.name}}</strong><small>{{r.id}} · {{r.started}}</small><em><i [style.width.%]="r.progress"></i></em></span><b [class]="'status '+r.status">{{label(r.status)}}</b></button>}@empty{<p class="jm-empty">ไม่พบรายการ</p>}</section>
-@if(selected();as r){<section class="jm-detail"><header><div><small>{{r.id}} · {{r.workflow}}</small><h3>{{r.name}}</h3><p>{{r.summary}}</p></div><b [class]="'status '+r.status">{{label(r.status)}}</b></header>
-<div class="jm-progress"><div><strong>ความคืบหน้า</strong><b>{{r.progress}}%</b></div><i><span [style.width.%]="r.progress"></span></i><small>เริ่ม {{r.started}} · ใช้เวลา {{r.duration}}</small></div>
-@if(r.status==='running'||r.status==='waiting'){<div class="jm-current">● <span><small>ขั้นตอนปัจจุบัน</small><strong>{{r.current}}</strong></span></div>}
-<div class="jm-columns"><section><h4>ลำดับ Node</h4><ol>@for(n of r.nodes;track $index){<li><i>{{n.status==='สำเร็จ'?'✓':(n.status==='ล้มเหลว'?'!':$index+1)}}</i><span><strong>{{n.name}}</strong><small>{{n.detail}}</small></span><time>{{n.duration}}</time></li>}</ol></section><section><h4>Execution Log</h4><div class="jm-logs">@for(l of r.logs;track $index){<p><time>{{l.time}}</time><b [class]="l.level">{{l.level}}</b><span>{{l.message}}</span></p>}</div><small>ตัวอย่าง Log ที่ปกปิดข้อมูลสำคัญ · ไม่มีข้อมูลลับ</small></section></div></section>}
-</div><footer>ⓘ ข้อมูลทั้งหมดเป็นข้อมูลจำลอง ไม่มีการเชื่อมต่อ Job Engine, Storage หรือ Log จริง</footer></section>
+  <header class="jm-head">
+    <div>
+      <p>JOB OPERATIONS / P6-602</p>
+      <h2 id="jm-title">{{ isThai() ? 'ติดตามการทำงาน' : 'Job Monitor' }}</h2>
+      <span>{{ isThai() ? 'สถานะงานและประวัติจาก Backend' : 'Live job status and history from the backend' }}</span>
+    </div>
+    <b [class.connected]="apiStatus() === 'connected'">
+      {{ apiStatus() === 'connected' ? (isThai() ? 'LIVE STATUS' : 'LIVE STATUS') : (isThai() ? 'API ยังไม่พร้อม' : 'API unavailable') }}
+    </b>
+  </header>
+
+  @if (apiStatus() === 'unavailable') {
+    <div class="jm-connection" role="status">
+      <strong>{{ isThai() ? 'ยังเชื่อมต่อ Job Status API ไม่ได้' : 'Job Status API is not available yet' }}</strong>
+      <p>{{ isThai() ? 'หน้าจอนี้จะไม่แสดงข้อมูลตัวอย่างหรือสร้างสถานะขึ้นเอง เมื่อ Backend เปิด API แล้ว ระบบจะดึงสถานะจริงให้อัตโนมัติ' : 'No sample or invented job data is shown. Live status will appear automatically when the backend API is available.' }}</p>
+    </div>
+  }
+
+  <div class="jm-stats">
+    <article><small>{{ isThai() ? 'กำลังทำงาน' : 'Running' }}</small><strong>{{ runningCount() }}</strong></article>
+    <article><small>{{ isThai() ? 'รอคิว' : 'Queued' }}</small><strong>{{ queuedCount() }}</strong></article>
+    <article><small>{{ isThai() ? 'กำลังตรวจสอบ' : 'Verifying' }}</small><strong>{{ verifyingCount() }}</strong></article>
+    <article><small>{{ isThai() ? 'ล้มเหลว / ไม่ทราบผล' : 'Failed / Unknown' }}</small><strong>{{ failedCount() }}</strong></article>
+  </div>
+
+  <div class="jm-tabs">
+    <button [class.active]="tab() === 'active'" (click)="setTab('active')">
+      {{ isThai() ? 'งานที่กำลังทำ' : 'Active jobs' }} · {{ activeJobs().length }}
+    </button>
+    <button [class.active]="tab() === 'history'" (click)="setTab('history')">
+      {{ isThai() ? 'ประวัติการทำงาน' : 'Run history' }} · {{ historyJobs().length }}
+    </button>
+    <label>⌕ <input type="search" [value]="query()" (input)="query.set(($any($event.target)).value)"
+      [placeholder]="isThai() ? 'ค้นหา Job ID หรือ Tool ID' : 'Search Job ID or Tool ID'"></label>
+    <button type="button" class="jm-refresh" (click)="refresh()">{{ isThai() ? 'รีเฟรช' : 'Refresh' }}</button>
+  </div>
+
+  <div class="jm-layout">
+    <section class="jm-list">
+      <header><strong>{{ tab() === 'active' ? (isThai() ? 'งานที่ต้องติดตาม' : 'Active jobs') : (isThai() ? 'รายการย้อนหลัง' : 'Job history') }}</strong><small>{{ visibleJobs().length }} {{ isThai() ? 'รายการ' : 'items' }}</small></header>
+      @for (job of visibleJobs(); track job.job_id) {
+        <button class="jm-run" [class.selected]="selected()?.job_id === job.job_id" (click)="selectJob(job.job_id)">
+          <i [class]="'dot ' + stateClass(job.state)"></i>
+          <span>
+            <strong>{{ jobTitle(job.tool_id) }}</strong>
+            <small>{{ job.job_id }} · {{ formatTime(job.created_at) }}</small>
+          </span>
+          <b [class]="'status ' + stateClass(job.state)">{{ stateLabel(job.state) }}</b>
+        </button>
+      } @empty {
+        <p class="jm-empty">{{ apiStatus() === 'connected' ? (isThai() ? 'ไม่มีรายการในหมวดนี้' : 'No jobs in this view') : (isThai() ? 'รอการเชื่อมต่อ Backend' : 'Waiting for backend connection') }}</p>
+      }
+    </section>
+
+    @if (selected(); as job) {
+      <section class="jm-detail">
+        <header>
+          <div>
+            <small>{{ job.job_id }} · {{ job.tool_id }}</small>
+            <h3>{{ jobTitle(job.tool_id) }}</h3>
+            <p>{{ job.progress_message || stateLabel(job.state) }}</p>
+          </div>
+          <b [class]="'status ' + stateClass(job.state)">{{ stateLabel(job.state) }}</b>
+        </header>
+
+        <div class="jm-progress">
+          <div><strong>{{ isThai() ? 'สถานะปัจจุบัน' : 'Current state' }}</strong><b>{{ stateLabel(job.state) }}</b></div>
+          <p>{{ job.progress_message || (isThai() ? 'ไม่มีข้อความความคืบหน้าเพิ่มเติม' : 'No additional progress message') }}</p>
+          <small>{{ isThai() ? 'สร้างเมื่อ' : 'Created' }} {{ formatTime(job.created_at) }}</small>
+          <small>{{ isThai() ? 'เริ่มเมื่อ' : 'Started' }} {{ formatTime(job.started_at) }}</small>
+          <small>{{ isThai() ? 'สิ้นสุดเมื่อ' : 'Finished' }} {{ formatTime(job.finished_at) }}</small>
+        </div>
+
+        @if (job.state === 'REBOOT_REQUIRED' || job.reboot_required) {
+          <div class="jm-current" role="status">
+            <span><strong>{{ isThai() ? 'ต้องรีสตาร์ตเครื่อง' : 'Restart required' }}</strong><small>{{ isThai() ? 'ระบบยังไม่ถือว่างานสำเร็จ จนกว่าจะตรวจสอบหลังรีสตาร์ต' : 'The job is not complete until post-restart verification passes.' }}</small></span>
+          </div>
+        }
+        @if (job.state === 'UNKNOWN') {
+          <div class="jm-connection" role="alert">
+            <strong>{{ isThai() ? 'ไม่สามารถยืนยันผลการทำงานได้' : 'The outcome cannot be confirmed' }}</strong>
+            <p>{{ isThai() ? 'ระบบจะไม่เริ่มงานซ้ำอัตโนมัติ ต้องตรวจสอบสถานะก่อนเสนอคำสั่งใหม่' : 'The system will not retry automatically. Reconcile the outcome before proposing a new action.' }}</p>
+          </div>
+        }
+        <div class="jm-columns">
+          <section>
+            <h4>{{ isThai() ? 'ข้อมูลการทำงาน' : 'Execution details' }}</h4>
+            <dl class="jm-metadata">
+              <div><dt>Tool ID</dt><dd>{{ job.tool_id }}</dd></div>
+              <div><dt>Result code</dt><dd>{{ job.result_code || '—' }}</dd></div>
+              <div><dt>Reboot required</dt><dd>{{ job.reboot_required ? (isThai() ? 'ใช่' : 'Yes') : (isThai() ? 'ไม่ใช่' : 'No') }}</dd></div>
+            </dl>
+            <p class="jm-safety-note">{{ isThai() ? 'การยกเลิกจะแสดงเมื่อ Backend รองรับการยืนยันว่า Process Tree หยุดจริงเท่านั้น' : 'Cancellation controls will appear only after the backend can prove the complete process tree has stopped.' }}</p>
+          </section>
+          <section>
+            <h4>{{ isThai() ? 'เหตุการณ์ล่าสุด' : 'Recent events' }}</h4>
+            <div class="jm-logs">
+              @for (event of job.recent_events; track event.sequence) {
+                <p>
+                  <time>{{ formatTime(event.occurred_at) }}</time>
+                  <b [class]="event.level">{{ event.level }}</b>
+                  <span>{{ event.message }}</span>
+                </p>
+              } @empty {
+                <p>{{ isThai() ? 'ไม่มีเหตุการณ์ที่บันทึกไว้' : 'No recorded events' }}</p>
+              }
+            </div>
+            <small>{{ isThai() ? 'แสดงเฉพาะข้อความที่ผ่านการปกปิดข้อมูลสำคัญและจำกัดขนาดแล้ว' : 'Only bounded and redacted event messages are displayed.' }}</small>
+          </section>
+        </div>
+      </section>
+    } @else if (apiStatus() === 'connected') {
+      <section class="jm-detail jm-no-selection">
+        {{ isThai() ? 'เลือกรายการงานเพื่อดูรายละเอียด' : 'Select a job to inspect its details' }}
+      </section>
+    }
+  </div>
+  <footer>
+    {{ isThai() ? 'อัปเดตอัตโนมัติทุก 5 วินาที' : 'Automatically refreshed every 5 seconds' }}
+    @if (lastCheckedAt()) { · {{ isThai() ? 'ตรวจสอบล่าสุด' : 'Last checked' }} {{ formatTime(lastCheckedAt()) }}
+    }
+  </footer>
+</section>

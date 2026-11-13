@@ -122,20 +122,68 @@ test('workflow builder exposes script and software installation node types as no
   await expect(page.getByText('PROTOTYPE · NO EXECUTION')).toBeVisible();
 });
 
-test('job monitor shows active jobs and previous run details without real execution', async ({ page }) => {
+test('job monitor renders backend job state and event history without demo data', async ({ page }) => {
+  await page.route('**/api/jobs**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      checked_at: '2026-11-13T10:40:00.000Z',
+      jobs: [
+        {
+          job_id: '00000000-0000-4000-8000-000000000001',
+          tool_id: 'software.install',
+          state: 'RUNNING',
+          created_at: '2026-11-13T10:39:00.000Z',
+          started_at: '2026-11-13T10:39:02.000Z',
+          finished_at: null,
+          progress_message: 'กำลังตรวจสอบ Package',
+          result_code: null,
+          reboot_required: false,
+          recent_events: [{
+            sequence: 1,
+            occurred_at: '2026-11-13T10:39:10.000Z',
+            state: 'RUNNING',
+            level: 'INFO',
+            message: 'ตรวจสอบหลักฐาน Installer',
+          }],
+        },
+        {
+          job_id: '00000000-0000-4000-8000-000000000002',
+          tool_id: 'software.install',
+          state: 'FAILED',
+          created_at: '2026-11-12T10:00:00.000Z',
+          started_at: '2026-11-12T10:00:02.000Z',
+          finished_at: '2026-11-12T10:00:20.000Z',
+          progress_message: 'ตรวจสอบแหล่งที่มาไม่ผ่าน',
+          result_code: 'SOURCE_MISMATCH',
+          reboot_required: false,
+          recent_events: [{
+            sequence: 2,
+            occurred_at: '2026-11-12T10:00:20.000Z',
+            state: 'FAILED',
+            level: 'ERROR',
+            message: 'Source evidence mismatch',
+          }],
+        },
+      ],
+    }),
+  }));
+
   await page.goto('/');
   await page.getByRole('button', { name: /ติดตามงาน/ }).click();
 
   await expect(page.getByRole('heading', { name: 'ติดตามการทำงาน' })).toBeVisible();
-  await expect(page.getByText('PROTOTYPE · MOCK DATA')).toBeVisible();
-  await expect(page.getByText('RUN-2026-0118 · Workstation setup · v3', { exact: true })).toBeVisible();
-  await expect(page.getByText('ติดตั้ง Visual Studio Code').first()).toBeVisible();
+  await expect(page.getByText('00000000-0000-4000-8000-000000000001').first()).toBeVisible();
+  await expect(page.getByText('กำลังตรวจสอบ Package').first()).toBeVisible();
+  await expect(page.getByText('ตรวจสอบหลักฐาน Installer')).toBeVisible();
+  await expect(page.getByText('PROTOTYPE · MOCK DATA')).toHaveCount(0);
+  await expect(page.getByText('RUN-2026-0118')).toHaveCount(0);
 
   await page.getByRole('button', { name: /ประวัติการทำงาน/ }).click();
-  await expect(page.getByText('RUN-2026-0115')).toBeVisible();
-  await page.getByRole('button', { name: /รันสคริปต์สำรองข้อมูล/ }).click();
-  await expect(page.getByText('Simulated failure · exit code 1 · no script executed')).toBeVisible();
-  await expect(page.getByText(/ไม่มีการเชื่อมต่อ Job Engine/)).toBeVisible();
+  await expect(page.getByText('00000000-0000-4000-8000-000000000002').first()).toBeVisible();
+  await expect(page.getByText('SOURCE_MISMATCH')).toBeVisible();
+  await expect(page.getByText('Source evidence mismatch')).toBeVisible();
+  await expect(page.getByText('ไม่มีการเชื่อมต่อ Job Engine')).toHaveCount(0);
 });
 
 

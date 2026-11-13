@@ -42,6 +42,7 @@ class Settings:
     master_google_sub: str | None = None
     app_session_ttl_seconds: int | None = None
     authenticator_secret_path: Path | None = None
+    job_store_path: Path | None = None
 
     @property
     def auth_enabled(self) -> bool:
@@ -164,5 +165,6 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
         frontend_port=frontend_port,
         log_level=os.environ.get("LOG_LEVEL", "info").strip().lower(),
         local_agent_token=token,
+        job_store_path=Path(os.environ.get("JOB_STORE_PATH", str(REPO_ROOT / ".agent-state" / "jobs.sqlite3"))).expanduser(),
         **auth_settings,
     )
