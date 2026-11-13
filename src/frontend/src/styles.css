@@ -165,3 +165,30 @@ html.workflow-fullscreen.workflow-nav-visible .side-rail {
 app-workflow-builder .canvas-viewport.is-panning{cursor:grabbing;user-select:none;-webkit-user-select:none;}
 app-workflow-builder .canvas-viewport:focus-visible{outline:2px solid #39765d;}
 app-workflow-builder .canvas-viewport.is-panning *{user-select:none;-webkit-user-select:none;}
+
+
+/* P6-602 live Job Monitor states */
+app-job-monitor .jm-head>b.connected{color:#2f7654;background:#edf7ef;border-color:#cde5d2}
+app-job-monitor .jm-connection{padding:12px 14px;border:1px solid #e7d8b5;border-radius:8px;background:#fbf8ef;color:#705a2d}
+app-job-monitor .jm-connection strong{font-size:11px}
+app-job-monitor .jm-connection p{font-size:10px;line-height:1.55;margin:5px 0 0}
+app-job-monitor .jm-refresh{margin-left:0;border:1px solid var(--line,#dfe8e3)!important}
+app-job-monitor .jm-run em i{width:100%;height:100%;background:#aab9b0}
+app-job-monitor .dot.queued{background:#c39a4e}
+app-job-monitor .dot.starting,app-job-monitor .dot.running,app-job-monitor .dot.verifying{background:#5b9a70}
+app-job-monitor .dot.reboot_required,app-job-monitor .dot.cancel_requested{background:#c39a4e}
+app-job-monitor .dot.failed,app-job-monitor .dot.unknown{background:#c16e63}
+app-job-monitor .dot.cancelled{background:#829188}
+app-job-monitor .status.queued,app-job-monitor .status.reboot_required,app-job-monitor .status.cancel_requested{color:#98713a}
+app-job-monitor .status.starting,app-job-monitor .status.running,app-job-monitor .status.verifying,app-job-monitor .status.succeeded{color:#39765d}
+app-job-monitor .status.failed,app-job-monitor .status.unknown{color:#a45d55}
+app-job-monitor .status.cancelled{color:#829188}
+app-job-monitor .jm-progress p{font-size:10px;line-height:1.5;margin:0;color:var(--ink,#1d302d)}
+app-job-monitor .jm-metadata{display:grid;gap:7px;margin:0}
+app-job-monitor .jm-metadata>div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line,#edf1ee);padding:6px 0}
+app-job-monitor .jm-metadata dt,app-job-monitor .jm-metadata dd{font-size:9px;margin:0}
+app-job-monitor .jm-metadata dt{color:#829188}
+app-job-monitor .jm-metadata dd{font-weight:700;text-align:right;overflow-wrap:anywhere}
+app-job-monitor .jm-safety-note{font-size:9px;line-height:1.5;color:#829188;margin-top:12px}
+app-job-monitor .jm-no-selection{display:grid;place-items:center;min-height:180px;color:#829188;font-size:11px}
+@media(prefers-color-scheme:dark){app-job-monitor .jm-connection{background:#382f1e;border-color:#5d4a28;color:#e8d7ad}app-job-monitor .jm-head>b.connected{background:#203a2b;border-color:#355d42;color:#bfe0c8}}
