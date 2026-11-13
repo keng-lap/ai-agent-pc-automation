@@ -68,7 +68,7 @@ def build_client(tmp_path, *, identity=None):
         google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
         master_google_sub=OWNER,
         app_session_ttl_seconds=1800,
-        authenticator_secret_path=tmp_path / "authenticator.json",
+        authenticator_secret_path=tmp_path / "private" / "authenticator.json",
     )
     replay_guard = TotpReplayGuard(clock=lambda: now[0])
     secret_store = EncryptedTotpSecretFileStore(
