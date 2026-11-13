@@ -7,11 +7,11 @@ through verified handles. It deliberately fails closed if pywin32 is unavailable
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import ctypes
 import os
-import secrets
-from contextlib import ExitStack
 from pathlib import Path
+import secrets
 
 
 _FILE_READ_ATTRIBUTES = 0x00000080
@@ -50,11 +50,11 @@ class WindowsSecretFile:
     @staticmethod
     def _api():
         try:
+            import pywintypes
             import win32api
             import win32con
             import win32file
             import win32security
-            import pywintypes
         except ImportError:
             raise WindowsSecretStorageError(
                 "Windows security APIs are unavailable."
