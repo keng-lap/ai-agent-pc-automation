@@ -41,12 +41,15 @@ class LinuxSecureStorage:
                     )
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-            # Inspect the database entry before validating directory modes so a
-            # symlink is rejected for what it is, even when its parent is also
-            # too permissive. lstat() never follows the database symlink.
+            # Inspect the database entry before validating directory modes.
+            # lstat() does not follow a database symlink.
             if path.exists() or path.is_symlink():
                 info = path.lstat()
-                if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                if stat.S_ISLNK(info.st_mode):
+                    raise PlatformStorageUnavailable(
+                        "Job-store database path contains a symbolic link."
+                    )
+                if not stat.S_ISREG(info.st_mode):
                     raise PlatformStorageUnavailable(
                         "Job-store database is not a regular file."
                     )
@@ -81,7 +84,11 @@ class LinuxSecureStorage:
         try:
             path.chmod(0o600)
             info = path.lstat()
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            if stat.S_ISLNK(info.st_mode):
+                raise PlatformStorageUnavailable(
+                    "Job-store database path changed to a symbolic link."
+                )
+            if not stat.S_ISREG(info.st_mode):
                 raise PlatformStorageUnavailable(
                     "Job-store database changed to an unsafe file type."
                 )
