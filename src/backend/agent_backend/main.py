@@ -14,8 +14,8 @@ from .auth_api import build_auth_services, require_session
 from .auth_api import router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
-from .plan_api import router as plan_router
 from .jobs_api import router as jobs_router
+from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
