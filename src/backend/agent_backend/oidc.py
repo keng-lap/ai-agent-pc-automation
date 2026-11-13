@@ -234,7 +234,6 @@ class GoogleOidcClient:
         }
         if require_recent_auth:
             params["max_age"] = 0
-        }
         return LoginStart(
             authorization_url=f"{GOOGLE_AUTHORIZATION_ENDPOINT}?{urlencode(params)}"
         )
