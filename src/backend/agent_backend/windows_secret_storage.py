@@ -359,80 +359,44 @@ class WindowsSecretFile:
 
             win32file = self._api()[2]
             pywintypes = self._api()[4]
+            kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+            move_file = kernel32.MoveFileExW
+            move_file.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+            move_file.restype = ctypes.c_int
+            move_flags = 0x00000001 | 0x00000008  # MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+
             try:
-                with ExitStack() as rename_stack:
-                    source = win32file.CreateFile(
-                        str(temporary),
-                        _GENERIC_READ | _GENERIC_WRITE | 0x00010000,  # DELETE
-                        _FILE_SHARE_READ,
-                        None,
-                        _OPEN_EXISTING,
-                        _FILE_FLAG_OPEN_REPARSE_POINT,
-                        None,
+                # Verify the temporary file through a handle, then close it
+                # before rename. The destination parent remains pinned without
+                # FILE_SHARE_DELETE throughout this full-path rename operation.
+                with ExitStack() as source_check:
+                    source_store = WindowsSecretFile(temporary)
+                    _source_parent, source_sid = source_store._parent_handles(source_check)
+                    source_handle = source_store._open_file(
+                        source_check, source_sid, create=False
                     )
-                    self._close(rename_stack, source)
-                    self._verify_not_reparse(source, directory=False)
-                    self._verify_owner_only_dacl(source, sid)
+                    source_store._verify_owner_only_dacl(source_handle, sid)
 
-                    # SetFileInformationByHandle on supported Windows runners
-                    # rejects a non-null RootDirectory (ERROR_INVALID_PARAMETER).
-                    # Use the absolute destination while every verified parent
-                    # directory remains open without FILE_SHARE_DELETE; this
-                    # prevents path-component replacement during the rename.
-                    name_bytes = str(self._path).encode("utf-16-le")
-                    class _RenameFlags(ctypes.Union):
-                        _fields_ = [
-                            ("ReplaceIfExists", ctypes.c_ubyte),
-                            ("Flags", ctypes.c_uint32),
-                        ]
-
-                    class _FileRenameInfo(ctypes.Structure):
-                        _fields_ = [
-                            ("RenameFlags", _RenameFlags),
-                            ("RootDirectory", ctypes.c_void_p),
-                            ("FileNameLength", ctypes.c_uint32),
-                            ("FileName", ctypes.c_wchar * 1),
-                        ]
-
-                    name_offset = _FileRenameInfo.FileName.offset
-                    buffer = ctypes.create_string_buffer(name_offset + len(name_bytes))
-                    info = _FileRenameInfo.from_buffer(buffer)
-                    info.RenameFlags.ReplaceIfExists = 1
-                    info.RootDirectory = None
-                    info.FileNameLength = len(name_bytes)
-                    ctypes.memmove(
-                        ctypes.addressof(buffer) + name_offset,
-                        name_bytes,
-                        len(name_bytes),
+                if not move_file(str(temporary), str(self._path), move_flags):
+                    error = ctypes.get_last_error()
+                    raise WindowsSecretStorageError(
+                        f"Secret replacement failed (Win32 error {error})."
                     )
 
-                    kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
-                    set_file_info = kernel32.SetFileInformationByHandle
-                    set_file_info.argtypes = [
-                        ctypes.c_void_p,
-                        ctypes.c_int,
-                        ctypes.c_void_p,
-                        ctypes.c_uint32,
-                    ]
-                    set_file_info.restype = ctypes.c_int
-                    if not set_file_info(
-                        int(source),
-                        3,  # FileRenameInfo
-                        ctypes.byref(buffer),
-                        ctypes.sizeof(buffer),
-                    ):
-                        error = ctypes.get_last_error()
-                        raise WindowsSecretStorageError(
-                            f"Handle-relative secret replacement failed (Win32 error {error})."
-                        )
-            except (OSError, pywintypes.error):
-                # Do not fall back to a path-based rename or deletion. A
-                # leftover random temporary file is safer than an unpinned
-                # path operation; the next successful maintenance pass can
-                # report it for manual cleanup.
+                # Reopen through the pinned parent and verify the exact payload.
+                destination = self._open_file(parent_stack, sid, create=False)
+                info = win32file.GetFileInformationByHandle(destination)
+                size = (info[5] << 32) | info[6]
+                if not 0 < size <= self._MAX_BYTES:
+                    raise WindowsSecretStorageError("Replaced secret file size is invalid.")
+                error, actual = win32file.ReadFile(destination, self._MAX_BYTES + 1)
+                if error or actual != payload or len(actual) != size:
+                    raise WindowsSecretStorageError("Replaced secret file verification failed.")
+            except (OSError, pywintypes.error, WindowsSecretStorageError):
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
                 raise WindowsSecretStorageError(
                     "Secret replacement could not be completed safely."
                 ) from None
-
-            # Reopen and verify the replacement through the pinned directory.
-            self._open_file(parent_stack, sid, create=False)
