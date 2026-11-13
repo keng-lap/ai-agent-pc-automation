@@ -195,7 +195,7 @@ class WindowsSecretFile:
             handle = win32file.CreateFile(
                 str(self._path),
                 access,
-                win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE,
+                win32con.FILE_SHARE_READ,
                 None,
                 disposition,
                 win32con.FILE_ATTRIBUTE_NORMAL | win32con.FILE_FLAG_OPEN_REPARSE_POINT,
