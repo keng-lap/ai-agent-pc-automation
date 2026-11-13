@@ -7,14 +7,14 @@ The store is not a worker and exposes no process-dispatch capability.
 
 from __future__ import annotations
 
-from contextlib import closing
-from datetime import UTC, datetime
 import os
 import secrets
 import sqlite3
 import stat
 import threading
 import uuid
+from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
