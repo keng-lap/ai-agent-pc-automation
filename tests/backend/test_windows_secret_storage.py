@@ -46,20 +46,20 @@ def test_windows_secret_file_rejects_reparse_point_ancestor(tmp_path):
         store.exists()
 
 
-def test_windows_secret_file_denies_delete_access_to_pinned_parent(tmp_path):
+def test_windows_secret_file_denies_rename_while_handle_is_open(tmp_path):
     import pywintypes
     import win32file
 
-    directory = tmp_path / "private"
-    store = WindowsSecretFile(directory / "authenticator.json")
+    store = WindowsSecretFile(tmp_path / "private" / "authenticator.json")
     store.create_exclusive(b"encrypted")
 
     with ExitStack() as stack:
-        store._parent_handles(stack)
+        _parent, sid = store._parent_handles(stack)
+        store._open_file(stack, sid, create=False)
         with pytest.raises(pywintypes.error):
             win32file.MoveFile(
-                str(directory),
-                str(directory.with_name("renamed")),
+                str(store._path),
+                str(store._path.with_name("renamed.json")),
             )
 
 def test_windows_secret_file_rejects_untrusted_extra_dacl_ace(tmp_path):
