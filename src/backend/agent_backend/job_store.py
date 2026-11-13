@@ -16,9 +16,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
-
 from .job_lifecycle import JobLifecycleError, JobState
+from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
 
 MAX_PROGRESS_LENGTH = 160
 MAX_EVENT_LENGTH = 240
