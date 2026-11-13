@@ -15,7 +15,7 @@ from .authenticator import (
     SecretStoreError,
     WindowsDpapiProtector,
 )
-from .config import Settings
+from .config import Settings, validate_authenticator_secret_path
 from .oidc import (
     MAX_RECENT_AUTH_AGE_SECONDS,
     ApplicationSessionStore,
@@ -86,13 +86,21 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
     ):
         raise RuntimeError("Google authentication settings are incomplete.")
 
+    secret_path = validate_authenticator_secret_path(settings.authenticator_secret_path)
     secret_store = EncryptedTotpSecretFileStore(
-        settings.authenticator_secret_path,
+        secret_path,
         WindowsDpapiProtector(),
     )
     replay_guard = TotpReplayGuard()
-    if secret_store.load(owner_sub=settings.master_google_sub) is not None:
-        replay_guard.block_through_current_step(owner_key=settings.master_google_sub)
+    # Seed replay protection independently of storage availability. The seed
+    # depends only on the current time-step, not on reading the stored secret.
+    try:
+        secret_store.load(owner_sub=settings.master_google_sub)
+    except SecretStoreError:
+        # Preserve Google sign-in and the read-only Dashboard in degraded mode.
+        # High-risk requests independently load the secret and fail closed.
+        pass
+    replay_guard.block_through_current_step(owner_key=settings.master_google_sub)
     return AuthServices(
         oidc=GoogleOidcClient(
             client_id=settings.google_oidc_client_id,
@@ -365,7 +373,10 @@ def _complete_authenticator_setup(
     token = request.cookies.get(SESSION_COOKIE_NAME)
     rotated = services.sessions.rotate(token or "")
     if rotated is None:
-        raise HTTPException(status_code=401, detail="Authentication session expired.")
+        # The secret is already persisted. Report the completed authenticator
+        # change; the owner may need to sign in again because no cookie was issued.
+        record_auth_audit_event(event_type=event_type, outcome="success")
+        return {"enrolled": True}
     settings: Settings = request.app.state.settings
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
