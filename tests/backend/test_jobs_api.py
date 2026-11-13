@@ -106,4 +106,4 @@ def test_job_status_api_does_not_dispatch_or_change_job_state(tmp_path):
 
     persisted = store.get_for_owner(job["job_id"], OWNER)
     assert persisted["state"] == JobState.QUEUED.value
-    assert persisted["version"] == 0
+    assert len(persisted["recent_events"]) == 1
