@@ -330,7 +330,7 @@ class WindowsSecretFile:
                     if error or written != len(payload):
                         raise WindowsSecretStorageError("Secret file write was incomplete.")
                     win32file.FlushFileBuffers(handle)
-            except Exception:  # noqa: BLE001 - cleanup after partial secret creation
+            except Exception
                 # The file handle is closed before cleanup; the verified parent
                 # remains pinned so a partial first-write cannot poison enrollment.
                 if created:
