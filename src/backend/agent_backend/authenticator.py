@@ -492,7 +492,12 @@ class AuthenticatorEnrollmentManager:
                 self._pending.pop(enrollment_id, None)
                 return False
 
-            if matching_step(pending.secret, code, timestamp=float(now)) is None:
+            matched_step = matching_step(
+                pending.secret,
+                code,
+                timestamp=float(now),
+            )
+            if matched_step is None:
                 pending.failed_attempts += 1
                 if pending.failed_attempts >= MAX_ENROLLMENT_ATTEMPTS:
                     self._pending.pop(enrollment_id, None)
@@ -516,11 +521,17 @@ class AuthenticatorEnrollmentManager:
 
             try:
                 if pending.replace_existing:
-                    self._secret_store.replace(owner_sub=owner_sub, secret=pending.secret)
-                    self._replay_guard.block_through_current_step(
+                    replay_committed = self._replay_guard.consume_step_after(
                         owner_key=owner_sub,
-                        timestamp=float(now),
+                        step=matched_step,
+                        action=lambda: self._secret_store.replace(
+                            owner_sub=owner_sub,
+                            secret=pending.secret,
+                        ),
                     )
+                    if not replay_committed:
+                        self._pending.pop(enrollment_id, None)
+                        return False
                 else:
                     self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
             except SecretStoreError:
