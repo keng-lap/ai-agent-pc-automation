@@ -1,3 +1,4 @@
+import os
 from dataclasses import replace
 
 import pytest
@@ -363,11 +364,18 @@ def test_corrupt_authenticator_storage_can_be_recovered_without_blocking_dashboa
             recently_authenticated=True,
         ),
     )
-    services.secret_store._path.parent.mkdir(parents=True, exist_ok=True)
-    services.secret_store._path.write_text(
-        "{corrupt-secret-envelope",
-        encoding="ascii",
-    )
+    if os.name == "nt":
+        from agent_backend.windows_secret_storage import WindowsSecretFile
+
+        WindowsSecretFile(services.secret_store._path).create_exclusive(
+            b"{corrupt-secret-envelope"
+        )
+    else:
+        services.secret_store._path.parent.mkdir(parents=True, exist_ok=True)
+        services.secret_store._path.write_text(
+            "{corrupt-secret-envelope",
+            encoding="ascii",
+        )
     sign_in(client, services)
 
     session = client.get("/api/auth/session")
