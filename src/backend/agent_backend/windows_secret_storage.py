@@ -81,7 +81,7 @@ class WindowsSecretFile:
 
     @classmethod
     def _verify_not_reparse(cls, handle, *, directory: bool) -> None:
-        _win32api, win32con, win32file, _win32security, _pywintypes = cls._api()
+        _win32api, _win32con, win32file, _win32security, _pywintypes = cls._api()
         attributes = win32file.GetFileInformationByHandle(handle)[0]
         if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
             raise WindowsSecretStorageError("Secret path contains a reparse point.")
