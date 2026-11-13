@@ -21,3 +21,12 @@ Before acting, read README.md, docs/PROJECT.md, docs/ROADMAP.md, the active phas
 - Do not claim external Gemini/Claude review unless actual review output is supplied or the reviewer integration was genuinely used.
 
 Detailed engineering requirements are in docs/SECURE-DEVELOPMENT-STANDARD.md. Provider-specific instructions must not weaken that standard.
+
+## AI-assisted automatic testing
+- Follow docs/AI-ASSISTED-AUTOMATIC-TESTING.md for every code change.
+- Before coding, map changed behavior to acceptance criteria and existing tests; write a test plan for positive, negative, boundary, and regression behavior as applicable.
+- Add or update deterministic tests in the same task branch. For security rejections, assert denied requests make zero calls to side-effect handlers.
+- Run focused tests, then the full relevant suite and configured checks. Inspect actual CI results after PR creation/update.
+- AI-generated tests must assert independently grounded expected behavior; never weaken, delete, skip, or rewrite assertions merely to obtain a green result.
+- Treat test-runner/CI output as authoritative. Report exact commands and PASS / FAIL / PENDING / NOT VERIFIED; never infer a pass.
+- AI PR review or autonomous test-repair services that transmit repository data externally are not authorized by this workflow and require separate Product Owner approval.
