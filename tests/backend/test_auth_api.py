@@ -22,7 +22,7 @@ from agent_backend.step_up import StepUpChallengeStore
 from agent_backend.totp import TotpReplayGuard, code_at
 
 OWNER = "stable-google-sub"
-RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"\nNEW_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 NOW = 1_800_000_000.0
 HEADERS = {
     "origin": "http://127.0.0.1:4200",
@@ -269,6 +269,91 @@ def test_totp_enrollment_requires_recent_google_reauthentication(tmp_path):
     assert response.status_code == 403
     assert response.json() == {"detail": "Fresh Google sign-in required."}
     assert services.secret_store.is_configured() is False
+
+
+def test_totp_recovery_replaces_lost_authenticator_after_google_reauth(tmp_path):
+    client, services, now = build_client(
+        tmp_path,
+        identity=GoogleIdentity(
+            sub=OWNER,
+            email="owner@example.test",
+            recently_authenticated=True,
+        ),
+    )
+    sign_in(client, services, recently_authenticated=True)
+    initial = client.post("/api/authenticator/enrollment", json={}).json()
+    assert client.post(
+        "/api/authenticator/enrollment/confirm",
+        json={
+            "enrollment_id": initial["enrollment_id"],
+            "code": code_at(RFC_SECRET, now[0]),
+        },
+    ).status_code == 200
+    assert services.secret_store.load(owner_sub=OWNER) == RFC_SECRET
+
+    # The existing TOTP is treated as lost; Google OIDC is the recovery proof.
+    assert client.get("/api/auth/google/reauth/start").status_code == 200
+    callback = client.get(
+        "/auth/google/callback?state=recovery-state&code=recovery-code",
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert client.get("/api/auth/session").json()["authenticated"] is True
+
+    services.enrollment._secret_factory = lambda: NEW_SECRET
+    start = client.post("/api/authenticator/recovery", json={})
+    assert start.status_code == 200
+    assert start.headers["cache-control"] == "no-store"
+    assert services.secret_store.load(owner_sub=OWNER) == RFC_SECRET
+
+    confirmed = client.post(
+        "/api/authenticator/recovery/confirm",
+        json={
+            "enrollment_id": start.json()["enrollment_id"],
+            "code": code_at(NEW_SECRET, now[0] + 30),
+        },
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json() == {"enrolled": True}
+    assert services.secret_store.load(owner_sub=OWNER) == NEW_SECRET
+    assert client.get("/api/auth/session").json() == {
+        "enabled": True,
+        "authenticated": True,
+        "authenticator_enrolled": True,
+    }
+    rotated_token = client.cookies.get(SESSION_COOKIE_NAME, domain="127.0.0.1", path="/")
+    rotated_principal = services.sessions.resolve(rotated_token)
+    assert rotated_principal is not None
+    assert not services.sessions.is_recently_authenticated(
+        rotated_principal,
+        max_age_seconds=300,
+    )
+
+
+def test_fresh_google_auth_grant_is_consumed_once_for_enrollment(tmp_path):
+    client, services, _now = build_client(tmp_path)
+    sign_in(client, services, recently_authenticated=True)
+
+    first = client.post("/api/authenticator/enrollment", json={})
+    second = client.post("/api/authenticator/enrollment", json={})
+
+    assert first.status_code == 200
+    assert second.status_code == 403
+    assert services.secret_store.is_configured() is False
+
+
+def test_totp_not_enrolled_does_not_block_google_dashboard_session(tmp_path):
+    client, services, _now = build_client(tmp_path)
+    sign_in(client, services)
+
+    response = client.get("/api/auth/session")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": True,
+        "authenticated": True,
+        "authenticator_enrolled": False,
+    }
 
 
 def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeypatch):
