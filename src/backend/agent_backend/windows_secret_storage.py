@@ -270,7 +270,10 @@ class WindowsSecretFile:
             flags = 0x1 | 0x8  # REPLACE_EXISTING | WRITE_THROUGH
             if not move_file(str(temporary), str(self._path), flags):
                 error = ctypes.get_last_error()
-                kernel32.DeleteFileW(str(temporary))
+                delete_file = kernel32.DeleteFileW
+                delete_file.argtypes = [ctypes.c_wchar_p]
+                delete_file.restype = ctypes.c_int
+                delete_file(str(temporary))
                 raise WindowsSecretStorageError(
                     f"Secret replacement failed (Win32 error {error})."
                 )
