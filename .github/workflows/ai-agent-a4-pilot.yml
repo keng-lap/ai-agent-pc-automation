@@ -107,7 +107,8 @@ jobs:
           HEAD_SHA: ${{ needs.context.outputs.head_sha }}
         run: |
           test -n "$GEMINI_API_KEY" || { echo "GEMINI_API_KEY missing" >&2; exit 1; }
-          args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --no-config --no-suggest-shell-commands --read /tmp/a4-diff.md)
+          : > /tmp/aider-empty.yml
+          args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --read /tmp/a4-diff.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
           done < /tmp/a4-paths.txt
@@ -218,7 +219,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           test -n "$GEMINI_API_KEY" || { echo "GEMINI_API_KEY missing" >&2; exit 1; }
-          args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --no-config --no-suggest-shell-commands --file README.md)
+          : > /tmp/aider-empty.yml
+          args=(--model gemini/gemini-2.5-flash --no-auto-commits --no-git --no-check-update --no-stream --config /tmp/aider-empty.yml --env-file /dev/null --no-suggest-shell-commands --no-auto-lint --no-auto-test --file README.md)
           while IFS= read -r path; do
             [ -n "$path" ] && args+=(--read "$path")
           done < /tmp/doc-paths.txt
