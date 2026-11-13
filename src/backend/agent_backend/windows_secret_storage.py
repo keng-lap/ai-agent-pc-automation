@@ -11,7 +11,6 @@ import secrets
 from contextlib import ExitStack
 from pathlib import Path
 
-
 _FILE_READ_ATTRIBUTES = 0x00000080
 _FILE_ADD_FILE = 0x00000002
 _FILE_ALL_ACCESS = 0x001F01FF
