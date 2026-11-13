@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
+import { catchError, defer, finalize, map, of, switchMap, take, timeout, TimeoutError } from 'rxjs';
 import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
@@ -495,23 +495,67 @@ export class App implements AfterViewChecked {
       ? this.chatApi.confirmAuthenticatorRecovery(enrollmentId, code)
       : this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code);
     defer(() => confirmRequest)
-      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        switchMap((result) => {
+          if (result.enrolled !== true) {
+            return of({ result, session: null, refreshFailed: false });
+          }
+          // Recovery may have repaired an unavailable store. Wait for the
+          // backend session status before clearing the QR and rendering status.
+          return defer(() => this.chatApi.getAuthSession()).pipe(
+            timeout({ first: 10_000 }),
+            take(1),
+            map((session) => ({ result, session, refreshFailed: false })),
+            catchError(() => of({ result, session: null, refreshFailed: true })),
+          );
+        }),
+        finalize(() => this.authBusy.set(false)),
+      )
       .subscribe({
-        next: (result) => {
+        next: ({ result, session, refreshFailed }) => {
           if (result.enrolled !== true) {
             this.authError.set('Authenticator confirmation failed.');
             return;
+          }
+          if (session) {
+            this.authEnabled.set(session.enabled);
+            this.authenticated.set(session.authenticated);
+            this.authenticatorEnrolled.set(session.authenticator_enrolled);
+            this.authenticatorStorageAvailable.set(
+              session.authenticator_storage_available !== false,
+            );
+          } else {
+            // The confirmation endpoint only returns enrolled=true after the
+            // new secret is persisted. Preserve that authoritative result if
+            // the follow-up status request itself is unavailable.
+            this.authenticatorEnrolled.set(true);
+            this.authenticatorStorageAvailable.set(true);
+            if (refreshFailed) {
+              this.authError.set(this.language() === 'th'
+                ? 'บันทึก Authenticator แล้ว แต่ตรวจสอบสถานะ Session ไม่สำเร็จ กรุณาโหลดหน้าใหม่'
+                : 'Authenticator was saved, but session status could not be refreshed. Reload the page.');
+            }
           }
           this.enrollmentId.set('');
           this.qrDataUri.set('');
           this.authCode.set('');
           this.enrollmentMode.set('enrollment');
-          this.authenticatorEnrolled.set(true);
         },
         error: () => this.authError.set(this.language() === 'th'
           ? 'รหัสไม่ถูกต้องหรือหมดอายุ ลองเริ่มลงทะเบียนใหม่'
           : 'Invalid or expired code. Start enrollment again.'),
       });
+  }
+
+  protected cancelAuthenticatorSetup(): void {
+    // Cancelling only discards the local QR view. A new recovery request still
+    // goes through fresh Google reauthentication before the backend issues QR.
+    this.enrollmentId.set('');
+    this.qrDataUri.set('');
+    this.authCode.set('');
+    this.enrollmentMode.set('enrollment');
   }
 
   protected logout(): void {
