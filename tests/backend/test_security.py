@@ -257,6 +257,8 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/auth/logout"]) == {"post"}
     assert set(paths["/api/authenticator/enrollment"]) == {"post"}
     assert set(paths["/api/authenticator/enrollment/confirm"]) == {"post"}
+    assert set(paths["/api/authenticator/recovery"]) == {"post"}
+    assert set(paths["/api/authenticator/recovery/confirm"]) == {"post"}
     assert not any(
         path.endswith(("/acknowledgement", "/cancel", "/execute"))
         for path in paths
