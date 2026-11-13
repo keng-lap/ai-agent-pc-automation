@@ -229,9 +229,9 @@ class WindowsSecretFile:
         win32file = self._api()[2]
         pywintypes = self._api()[4]
         disposition = _CREATE_NEW if create else _OPEN_EXISTING
-        access = _GENERIC_READ | _READ_CONTROL
+        access = _GENERIC_READ | _READ_CONTROL | _WRITE_DAC
         if create:
-            access |= _GENERIC_WRITE | _WRITE_DAC | _WRITE_OWNER
+            access |= _GENERIC_WRITE | _WRITE_OWNER
         try:
             handle = win32file.CreateFile(
                 str(self._path),
