@@ -95,6 +95,30 @@ def test_worker_can_advance_only_with_current_lease_and_version():
         )
 
 
+
+def test_worker_can_renew_a_live_lease_with_compare_and_swap_version():
+    store, job = _create()
+    claimed, lease = _claim(store, job)
+    renewed = store.renew_lease(
+        job.job_id,
+        worker_id=lease.worker_id,
+        lease_token=lease.token,
+        expected_version=claimed.version,
+        now=NOW + timedelta(seconds=10),
+        lease_seconds=60,
+    )
+
+    assert renewed.version == claimed.version + 1
+    assert renewed.lease.expires_at == NOW + timedelta(seconds=70)
+    with pytest.raises(JobLifecycleError, match="invalid"):
+        store.renew_lease(
+            job.job_id,
+            worker_id=lease.worker_id,
+            lease_token=lease.token,
+            expected_version=claimed.version,
+            now=NOW + timedelta(seconds=11),
+        )
+
 def test_invalid_state_transition_is_rejected():
     store, job = _create()
     claimed, lease = _claim(store, job)
