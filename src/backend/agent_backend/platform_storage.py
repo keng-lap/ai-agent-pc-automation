@@ -8,6 +8,7 @@ implemented and independently reviewed.
 
 from __future__ import annotations
 
+import os
 import stat
 import sys
 from pathlib import Path
@@ -39,7 +40,12 @@ class LinuxSecureStorage:
                         "Job-store path contains a symbolic link."
                     )
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            parent_mode = stat.S_IMODE(path.parent.stat().st_mode)
+            parent_info = path.parent.stat()
+            if parent_info.st_uid != os.geteuid():
+                raise PlatformStorageUnavailable(
+                    "Job-store directory is not owned by the current user."
+                )
+            parent_mode = stat.S_IMODE(parent_info.st_mode)
             if parent_mode & 0o077:
                 raise PlatformStorageUnavailable(
                     "Job-store directory permissions are too broad."
@@ -49,6 +55,10 @@ class LinuxSecureStorage:
                 if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
                     raise PlatformStorageUnavailable(
                         "Job-store database is not a regular file."
+                    )
+                if info.st_uid != os.geteuid():
+                    raise PlatformStorageUnavailable(
+                        "Job-store database is not owned by the current user."
                     )
                 if stat.S_IMODE(info.st_mode) & 0o077:
                     raise PlatformStorageUnavailable(
@@ -69,6 +79,10 @@ class LinuxSecureStorage:
             if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
                 raise PlatformStorageUnavailable(
                     "Job-store database changed to an unsafe file type."
+                )
+            if info.st_uid != os.geteuid():
+                raise PlatformStorageUnavailable(
+                    "Job-store database is not owned by the current user."
                 )
             if stat.S_IMODE(info.st_mode) & 0o077:
                 raise PlatformStorageUnavailable(
