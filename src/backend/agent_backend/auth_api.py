@@ -13,13 +13,11 @@ from .auth_audit import record_auth_audit_event
 from .authenticator import (
     AuthenticatorEnrollmentManager,
     EncryptedTotpSecretFileStore,
-    SecretStoreCommitUnknown,
     SecretStoreError,
     WindowsDpapiProtector,
 )
 from .config import Settings, validate_authenticator_secret_path
 from .oidc import (
-    MAX_RECENT_AUTH_AGE_SECONDS,
     ApplicationSessionStore,
     GoogleOidcClient,
     MasterUserAllowlist,
@@ -222,25 +220,6 @@ def start_google_login(
     return GoogleLoginStartResponse(authorization_url=result.authorization_url)
 
 
-@router.get("/api/auth/google/reauth/start", response_model=GoogleLoginStartResponse)
-def start_google_reauthentication(
-    request: Request,
-    response: Response,
-) -> GoogleLoginStartResponse:
-    """Start a fresh Google authentication ceremony for sensitive account changes."""
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
-    services = _services(request)
-    principal = require_session(request)
-    if principal is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    try:
-        result = services.oidc.begin_login(require_recent_auth=True)
-    except OidcAuthenticationError:
-        raise HTTPException(status_code=429, detail="Re-authentication temporarily unavailable.") from None
-    return GoogleLoginStartResponse(authorization_url=result.authorization_url)
-
-
 @router.get("/auth/google/callback")
 def complete_google_login(
     request: Request,
@@ -350,15 +329,6 @@ def begin_authenticator_enrollment(
             raise HTTPException(status_code=409, detail="Authenticator is already enrolled.")
     except SecretStoreError:
         raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
-    if not services.sessions.consume_recent_auth(
-        principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
-    ):
-        record_auth_audit_event(
-            event_type="auth.enrollment",
-            outcome="denied",
-            reason="reauthentication_required",
-        )
-        raise HTTPException(status_code=403, detail="Fresh Google sign-in required.")
     try:
         start = services.enrollment.begin(
             owner_sub=principal.owner_sub,
@@ -374,127 +344,25 @@ def begin_authenticator_enrollment(
     )
 
 
-def _complete_authenticator_setup(
-    payload: EnrollmentConfirmRequest,
-    request: Request,
-    response: Response,
-    *,
-    event_type: str,
-) -> dict[str, bool]:
-    services = _services(request)
-    principal = require_session(request)
-    if principal is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    try:
-        confirmed = services.enrollment.confirm(
-            enrollment_id=payload.enrollment_id,
-            owner_sub=principal.owner_sub,
-            code=payload.code,
-            session_id=principal.session_id,
-            expected_replace_existing=event_type == "auth.recovery",
-        )
-    except SecretStoreCommitUnknown:
-        record_auth_audit_event(
-            event_type=event_type,
-            outcome="denied",
-            reason="replacement_state_unverified",
-        )
-        raise HTTPException(
-            status_code=503,
-            detail="Authenticator replacement state could not be verified; Step-up is unavailable.",
-        ) from None
-    if not confirmed:
-        record_auth_audit_event(
-            event_type=event_type,
-            outcome="denied",
-            reason="invalid_totp",
-        )
-        raise HTTPException(status_code=400, detail="Authenticator confirmation failed.")
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    rotated = services.sessions.rotate(token or "")
-    if rotated is None:
-        # The secret is already persisted. Report the completed authenticator
-        # change; the owner may need to sign in again because no cookie was issued.
-        record_auth_audit_event(event_type=event_type, outcome="success")
-        return {"enrolled": True}
-    settings: Settings = request.app.state.settings
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=rotated.token,
-        max_age=settings.app_session_ttl_seconds,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        path="/",
-    )
-    record_auth_audit_event(event_type=event_type, outcome="success")
-    return {"enrolled": True}
-
-
 @router.post("/api/authenticator/enrollment/confirm")
 def confirm_authenticator_enrollment(
     payload: EnrollmentConfirmRequest,
     request: Request,
-    response: Response,
 ) -> dict[str, bool]:
-    return _complete_authenticator_setup(
-        payload,
-        request,
-        response,
-        event_type="auth.enrollment",
-    )
-
-
-@router.post("/api/authenticator/recovery", response_model=EnrollmentStartResponse)
-def begin_authenticator_recovery(
-    request: Request,
-    response: Response,
-) -> EnrollmentStartResponse:
-    """Start replacement using fresh Google identity proof, never the lost TOTP."""
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
     services = _services(request)
     principal = require_session(request)
-    if principal is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    try:
-        if not services.secret_store.is_configured():
-            raise HTTPException(status_code=409, detail="No authenticator is enrolled.")
-    except SecretStoreError:
-        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
-    if not services.sessions.consume_recent_auth(
-        principal, max_age_seconds=MAX_RECENT_AUTH_AGE_SECONDS
-    ):
+    confirmed = services.enrollment.confirm(
+        enrollment_id=payload.enrollment_id,
+        owner_sub=principal.owner_sub,
+        code=payload.code,
+        session_id=principal.session_id,
+    )
+    if not confirmed:
         record_auth_audit_event(
-            event_type="auth.recovery",
+            event_type="auth.enrollment",
             outcome="denied",
-            reason="reauthentication_required",
+            reason="invalid_totp",
         )
-        raise HTTPException(status_code=403, detail="Fresh Google sign-in required.")
-    try:
-        start = services.enrollment.begin_recovery(
-            owner_sub=principal.owner_sub,
-            session_id=principal.session_id,
-            account_name="Master User",
-        )
-    except (RuntimeError, ValueError):
-        raise HTTPException(status_code=409, detail="Authenticator recovery is unavailable.") from None
-    return EnrollmentStartResponse(
-        enrollment_id=start.enrollment_id,
-        qr_data_uri=start.qr_data_uri,
-        expires_at=start.expires_at,
-    )
-
-
-@router.post("/api/authenticator/recovery/confirm")
-def confirm_authenticator_recovery(
-    payload: EnrollmentConfirmRequest,
-    request: Request,
-    response: Response,
-) -> dict[str, bool]:
-    return _complete_authenticator_setup(
-        payload,
-        request,
-        response,
-        event_type="auth.recovery",
-    )
+        raise HTTPException(status_code=400, detail="Authenticator confirmation failed.")
+    record_auth_audit_event(event_type="auth.enrollment", outcome="success")
+    return {"enrolled": True}
