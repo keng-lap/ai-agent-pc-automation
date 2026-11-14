@@ -7,7 +7,6 @@ through verified handles. It deliberately fails closed if pywin32 is unavailable
 
 import ctypes
 import os
-import secrets
 from contextlib import ExitStack
 from pathlib import Path
 
@@ -33,10 +32,6 @@ _WRITE_OWNER = 0x00080000
 
 class WindowsSecretStorageError(RuntimeError):
     """Windows secret storage could not be proven safe."""
-
-
-class WindowsSecretReplacementCommittedError(WindowsSecretStorageError):
-    """The destination was replaced, but post-replacement verification failed."""
 
 
 class WindowsSecretFile:
@@ -415,69 +410,3 @@ class WindowsSecretFile:
             if error or len(payload) != size:
                 raise WindowsSecretStorageError("Secret file read was incomplete.")
             return payload
-
-    def replace(self, payload: bytes) -> None:
-        if not isinstance(payload, bytes) or not 0 < len(payload) <= self._MAX_BYTES:
-            raise WindowsSecretStorageError("Secret payload size is invalid.")
-
-        temporary_name = f".{self._path.name}.{secrets.token_hex(16)}.tmp"
-        temporary = self._path.with_name(temporary_name)
-        with ExitStack() as parent_stack:
-            _parent_handle, sid = self._parent_handles(parent_stack)
-            # Verify the destination while its parent directory is pinned, then
-            # close that file handle before asking Windows to replace it.
-            with ExitStack() as check:
-                _parent, check_sid = self._parent_handles(check)
-                self._open_file(check, check_sid, create=False)
-
-            WindowsSecretFile(temporary).create_exclusive(payload)
-
-            win32file = self._api()[2]
-            pywintypes = self._api()[4]
-            kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
-            move_file = kernel32.MoveFileExW
-            move_file.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
-            move_file.restype = ctypes.c_int
-            move_flags = 0x00000001 | 0x00000008  # MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
-
-            replacement_committed = False
-            try:
-                # Verify the temporary file through a handle, then close it
-                # before rename. The destination parent remains pinned without
-                # FILE_SHARE_DELETE throughout this full-path rename operation.
-                with ExitStack() as source_check:
-                    source_store = WindowsSecretFile(temporary)
-                    _source_parent, source_sid = source_store._parent_handles(source_check)
-                    source_handle = source_store._open_file(
-                        source_check, source_sid, create=False
-                    )
-                    source_store._verify_owner_only_dacl(source_handle, sid)
-
-                if not move_file(str(temporary), str(self._path), move_flags):
-                    error = ctypes.get_last_error()
-                    raise WindowsSecretStorageError(
-                        f"Secret replacement failed (Win32 error {error})."
-                    )
-                replacement_committed = True
-
-                # Reopen through the pinned parent and verify the exact payload.
-                destination = self._open_file(parent_stack, sid, create=False)
-                info = win32file.GetFileInformationByHandle(destination)
-                size = (info[5] << 32) | info[6]
-                if not 0 < size <= self._MAX_BYTES:
-                    raise WindowsSecretStorageError("Replaced secret file size is invalid.")
-                error, actual = win32file.ReadFile(destination, self._MAX_BYTES + 1)
-                if error or actual != payload or len(actual) != size:
-                    raise WindowsSecretStorageError("Replaced secret file verification failed.")
-            except (OSError, pywintypes.error, WindowsSecretStorageError):
-                try:
-                    temporary.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                if replacement_committed:
-                    raise WindowsSecretReplacementCommittedError(
-                        "Secret replacement committed but could not be verified."
-                    ) from None
-                raise WindowsSecretStorageError(
-                    "Secret replacement could not be completed safely."
-                ) from None
