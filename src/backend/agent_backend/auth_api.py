@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
@@ -28,6 +29,8 @@ from .oidc import (
 )
 from .step_up import StepUpChallengeStore
 from .totp import TotpReplayGuard
+
+logger = logging.getLogger(__name__)
 
 SESSION_COOKIE_NAME = "agent_session"
 router = APIRouter()
@@ -162,6 +165,9 @@ def _frontend_redirect(request: Request, status: str) -> RedirectResponse:
 def get_auth_session(request: Request) -> AuthSessionResponse:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
+        logger.warning(
+            "auth.session status=services_unavailable authenticator_enrolled=false storage_available=false"
+        )
         return AuthSessionResponse(
             enabled=False,
             authenticated=False,
@@ -170,15 +176,28 @@ def get_auth_session(request: Request) -> AuthSessionResponse:
     token = request.cookies.get(SESSION_COOKIE_NAME)
     principal = services.sessions.resolve(token or "")
     if principal is None:
+        logger.info(
+            "auth.session status=unauthenticated authenticator_enrolled=false storage_available=unknown"
+        )
         return AuthSessionResponse(enabled=True, authenticated=False)
     try:
         enrolled = services.secret_store.load(owner_sub=principal.owner_sub) is not None
         storage_available = True
-    except SecretStoreError:
+    except SecretStoreError as exc:
         # Keep the Google-authenticated owner session usable. Risky operations
         # independently fail closed when the authenticator secret cannot load.
         enrolled = False
         storage_available = False
+        logger.error(
+            "auth.session status=secret_store_error authenticator_enrolled=false "
+            "storage_available=false error_type=%s",
+            type(exc).__name__,
+        )
+    logger.info(
+        "auth.session status=ok authenticated=true authenticator_enrolled=%s "
+        "storage_available=true",
+        str(enrolled).lower(),
+    )
     return AuthSessionResponse(
         enabled=True,
         authenticated=True,
