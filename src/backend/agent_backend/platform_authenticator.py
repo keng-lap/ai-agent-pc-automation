@@ -15,10 +15,10 @@ import os
 import secrets
 import threading
 import time
-from urllib.parse import urlsplit
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from webauthn import (
     generate_authentication_options,
@@ -91,7 +91,7 @@ class PlatformCredentialStore:
                 ):
                     raise ValueError
                 return PlatformCredential(owner_sub, credential_id, public_key, sign_count)
-            except Exception:
+            except Exception:  # noqa: BLE001 - normalize decrypt/parse/validation failures.
                 raise PlatformAuthenticatorError("Platform credential storage is invalid.") from None
 
     def save_new(self, credential: PlatformCredential) -> None:
@@ -138,7 +138,7 @@ class PlatformCredentialStore:
                 return WindowsSecretFile(self._path).read()
             except FileNotFoundError:
                 return None
-            except Exception:
+            except Exception:  # noqa: BLE001 - DPAPI and secure-file errors must fail closed.
                 raise PlatformAuthenticatorError("Platform credential storage is unavailable.") from None
         if self._path.is_symlink():
             raise PlatformAuthenticatorError("Platform credential path is not trusted.")
@@ -155,7 +155,7 @@ class PlatformCredentialStore:
                 from .windows_secret_storage import WindowsSecretFile
                 WindowsSecretFile(self._path).create_exclusive(protected)
                 return
-            except Exception:
+            except Exception:  # noqa: BLE001 - normalize Windows secure-file failures.
                 raise PlatformAuthenticatorError("Platform credential storage failed.") from None
         self._path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -164,7 +164,7 @@ class PlatformCredentialStore:
                 stream.write(protected)
                 stream.flush()
                 os.fsync(stream.fileno())
-        except Exception:
+        except Exception:  # noqa: BLE001 - normalize filesystem failures and clean up.
             raise PlatformAuthenticatorError("Platform credential storage failed.") from None
 
     def _replace(self, protected: bytes) -> None:
@@ -173,7 +173,7 @@ class PlatformCredentialStore:
                 from .windows_secret_storage import WindowsSecretFile
                 WindowsSecretFile(self._path).replace(protected)
                 return
-            except Exception:
+            except Exception:  # noqa: BLE001 - normalize Windows secure-file failures.
                 raise PlatformAuthenticatorError("Platform credential counter update failed.") from None
         if self._path.is_symlink() or not self._path.is_file():
             raise PlatformAuthenticatorError("Platform credential path is not trusted.")
@@ -185,7 +185,7 @@ class PlatformCredentialStore:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, self._path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - normalize filesystem failures and clean up.
             try:
                 temporary.unlink(missing_ok=True)
             except OSError:
@@ -267,7 +267,7 @@ class PlatformAuthenticatorManager:
             ))
         except PlatformAuthenticatorError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - sanitize malformed WebAuthn/library errors.
             raise PlatformAuthenticatorError("Platform credential registration failed.") from None
 
     def begin_assertion(
@@ -315,7 +315,7 @@ class PlatformAuthenticatorManager:
             self._store.update_counter(credential, verified.new_sign_count)
         except PlatformAuthenticatorError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - sanitize malformed WebAuthn/library errors.
             raise PlatformAuthenticatorError("Platform authenticator verification failed.") from None
 
     def _new_challenge(
