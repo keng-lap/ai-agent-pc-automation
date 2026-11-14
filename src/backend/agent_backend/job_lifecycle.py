@@ -56,7 +56,9 @@ _ALLOWED_TRANSITIONS = {
         {JobState.SUCCEEDED, JobState.FAILED, JobState.REBOOT_REQUIRED, JobState.UNKNOWN}
     ),
     JobState.REBOOT_REQUIRED: frozenset({JobState.VERIFYING, JobState.UNKNOWN}),
-    JobState.CANCEL_REQUESTED: frozenset({JobState.CANCELLED, JobState.UNKNOWN}),
+    JobState.CANCEL_REQUESTED: frozenset(
+        {JobState.VERIFYING, JobState.CANCELLED, JobState.UNKNOWN}
+    ),
     JobState.SUCCEEDED: frozenset(),
     JobState.FAILED: frozenset(),
     JobState.CANCELLED: frozenset(),
