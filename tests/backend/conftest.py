@@ -2,7 +2,6 @@
 
 import os
 
-from fastapi import Request
 
 # The app loads the repository .env when imported. Tests use fixed local
 # settings so TestClient Host and Origin headers stay valid.
@@ -19,7 +18,7 @@ from agent_backend.auth_api import require_session
 from agent_backend.main import app
 from agent_backend.oidc import SessionPrincipal
 
-def _synthetic_session(request: Request) -> SessionPrincipal:
+def _synthetic_session(request) -> SessionPrincipal:
     principal = SessionPrincipal(
         owner_sub="synthetic-test-owner",
         session_id="synthetic-test-session",
