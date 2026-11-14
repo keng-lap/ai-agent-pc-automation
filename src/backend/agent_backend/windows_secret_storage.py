@@ -88,7 +88,42 @@ class WindowsSecretFile:
         _win32api, _win32con, win32file, _win32security, _pywintypes = cls._api()
         attributes = win32file.GetFileInformationByHandle(handle)[0]
         if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
-            raise WindowsSecretStorageError("Secret path contains a reparse point.")
+            # FILE_ATTRIBUTE_TAG_INFO (GetFileInformationByHandleEx class 9)
+            # distinguishes path-redirection tags from sync-engine placeholders.
+            class FileAttributeTagInfo(ctypes.Structure):
+                _fields_ = [
+                    ("FileAttributes", ctypes.c_uint32),
+                    ("ReparseTag", ctypes.c_uint32),
+                ]
+
+            tag_info = FileAttributeTagInfo()
+            kernel32 = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+            get_info = kernel32.GetFileInformationByHandleEx
+            get_info.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+            ]
+            get_info.restype = ctypes.c_int
+            if not get_info(
+                handle,
+                9,  # FileAttributeTagInfo
+                ctypes.byref(tag_info),
+                ctypes.sizeof(tag_info),
+            ):
+                error = ctypes.get_last_error()
+                raise WindowsSecretStorageError(
+                    f"Secret reparse tag could not be verified (Win32 error {error})."
+                )
+            # Symbolic links and mount points redirect path traversal. Other
+            # reparse tags (including cloud placeholders) are not treated as
+            # path redirects; the component itself is still opened with
+            # FILE_FLAG_OPEN_REPARSE_POINT and validated through its handle.
+            if tag_info.ReparseTag in {0xA000000C, 0xA0000003}:
+                raise WindowsSecretStorageError(
+                    "Secret path contains a path-redirection reparse point."
+                )
         if directory and not attributes & _FILE_ATTRIBUTE_DIRECTORY:
             raise WindowsSecretStorageError("Secret parent is not a directory.")
         if not directory and attributes & _FILE_ATTRIBUTE_DIRECTORY:
