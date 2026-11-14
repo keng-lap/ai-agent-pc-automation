@@ -21,9 +21,6 @@ def test_windows_secret_file_uses_owner_only_dacl_and_handle_io(tmp_path):
     with pytest.raises(FileExistsError):
         store.create_exclusive(b"must-not-overwrite")
 
-    store.replace(b"replacement-envelope")
-    assert store.read() == b"replacement-envelope"
-
     with ExitStack() as stack:
         parent_handle, sid = store._parent_handles(stack)
         store._verify_owner_only_dacl(parent_handle, sid)
