@@ -32,6 +32,21 @@ HEADERS = {
     "x-local-agent-token": "a" * 64,
 }
 
+AUTH_ENV_VARS = (
+    "GOOGLE_OIDC_CLIENT_ID",
+    "GOOGLE_OIDC_CLIENT_SECRET",
+    "GOOGLE_OIDC_REDIRECT_URI",
+    "MASTER_GOOGLE_SUB",
+    "APP_SESSION_TTL_SECONDS",
+    "AUTHENTICATOR_SECRET_PATH",
+)
+
+
+def clear_auth_environment(monkeypatch):
+    """Keep disabled-auth tests independent of developer .env settings."""
+    for name in AUTH_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
 
 class FakeProtector:
     def protect(self, plaintext: bytes) -> bytes:
@@ -122,7 +137,8 @@ def sign_in(client, services, *, recently_authenticated=False):
     return credential
 
 
-def test_auth_session_is_disabled_without_google_configuration(tmp_path):
+def test_auth_session_is_disabled_without_google_configuration(tmp_path, monkeypatch):
+    clear_auth_environment(monkeypatch)
     from agent_backend.main import create_app
 
     client = TestClient(
@@ -535,8 +551,9 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     ],
 )
 def test_protected_routers_fail_closed_when_authentication_is_disabled(
-    tmp_path, path, payload
+    tmp_path, path, payload, monkeypatch
 ):
+    clear_auth_environment(monkeypatch)
     from agent_backend.main import create_app
 
     client = TestClient(
