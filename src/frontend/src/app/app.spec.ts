@@ -967,7 +967,7 @@ describe('App chat UI (T-202)', () => {
     confirm.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Authenticator พร้อมใช้งาน');
+    expect(fixture.nativeElement.textContent).toContain('ลงทะเบียน Authenticator แล้ว · พร้อมใช้ยืนยันการอนุมัติ');
     expect(api.authSession.authenticator_storage_available).toBe(true);
   });
 
@@ -991,9 +991,15 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('img[alt="Authenticator enrollment QR code"]')).toBeNull();
+    const securitySummary = fixture.nativeElement.querySelector(
+      'details.security-settings summary',
+    ) as HTMLElement | null;
+    expect(securitySummary).not.toBeNull();
+    securitySummary?.click();
+    fixture.detectChanges();
     const recovery = Array.from(
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.includes('เปลี่ยนเครื่องหรือกู้คืน Authenticator'));
+    ).find((button) => button.textContent?.includes('เริ่มขั้นตอนกู้คืนหรือเปลี่ยนอุปกรณ์'));
     expect(recovery).toBeDefined();
     const fakeWindow = { location: { assign: vi.fn() } };
     vi.stubGlobal('window', fakeWindow);
