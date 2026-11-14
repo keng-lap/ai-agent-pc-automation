@@ -11,14 +11,16 @@ os.environ["FRONTEND_PORT"] = "4200"
 os.environ["LOCAL_AGENT_TOKEN"] = "a" * 64
 
 
-# Auth-specific tests construct their own configured app. Keep the shared
-# route-test app auth-disabled regardless of a developer's local .env.
-from agent_backend.auth_api import require_session
-from agent_backend.main import app
-from agent_backend.oidc import SessionPrincipal
+def pytest_configure():
+    """Initialize the shared test app after isolating its environment."""
+    from agent_backend.auth_api import require_session
+    from agent_backend.main import app
+    from agent_backend.oidc import SessionPrincipal
 
-app.state.auth_services = None
-app.dependency_overrides[require_session] = lambda: SessionPrincipal(
-    owner_sub="synthetic-test-owner",
-    session_id="synthetic-test-session",
-)
+    # Auth-specific tests construct their own configured app. Keep the shared
+    # route-test app auth-disabled regardless of a developer's local .env.
+    app.state.auth_services = None
+    app.dependency_overrides[require_session] = lambda: SessionPrincipal(
+        owner_sub="synthetic-test-owner",
+        session_id="synthetic-test-session",
+    )
