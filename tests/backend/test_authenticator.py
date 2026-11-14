@@ -62,6 +62,18 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
     assert store.load(owner_sub="different-owner") is None
 
 
+
+def test_enrollment_cannot_start_when_authenticator_is_already_enrolled(tmp_path):
+    manager, store = build_manager(tmp_path)
+    store.save(owner_sub="owner-sub", secret=RFC_SECRET)
+
+    with pytest.raises(RuntimeError, match="already enrolled"):
+        manager.begin(
+            owner_sub="owner-sub",
+            account_name="owner@example.test",
+        )
+
+
 def test_wrong_owner_cannot_confirm_enrollment(tmp_path):
     manager, _store = build_manager(tmp_path)
     enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
