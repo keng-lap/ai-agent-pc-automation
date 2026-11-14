@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import require_session
@@ -27,6 +29,18 @@ class _TestSecureStorage:
 
 def build_client(tmp_path, *, authenticated=True):
     settings = load_settings(load_env_file=False)
+    if not authenticated:
+        # Make auth-disabled behavior deterministic even when the developer's
+        # Windows environment contains real Google OIDC credentials.
+        settings = replace(
+            settings,
+            google_oidc_client_id=None,
+            google_oidc_client_secret=None,
+            google_oidc_redirect_uri=None,
+            master_google_sub=None,
+            app_session_ttl_seconds=None,
+            authenticator_secret_path=None,
+        )
     store = SQLiteJobStore(
         tmp_path / "private-state" / "jobs.sqlite3",
         secure_storage=_TestSecureStorage(),
