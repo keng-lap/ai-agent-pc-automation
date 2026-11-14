@@ -74,7 +74,7 @@ jobs:
             exit 1
           }
 
-      - name: Test Windows DPAPI authenticator storage
-        run: python -m pytest tests/backend/test_authenticator.py -q
+      - name: Test Windows DPAPI authenticator and Step-up replay protection
+        run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_step_up.py tests/backend/test_totp.py -q
       - name: Verify live Microsoft WinGet catalog signature and search
         run: python -m pytest tests/backend/test_software_catalog_windows.py -q
