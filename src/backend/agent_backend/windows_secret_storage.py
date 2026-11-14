@@ -317,12 +317,12 @@ class WindowsSecretFile:
                     sid,
                     allow_owner_change=False,
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 - cleanup must run for every post-create failure
             # CREATE_NEW proves this attempt created the file. Close its handle
             # before unlinking so failed ACL setup cannot strand an empty file.
             try:
                 win32file.CloseHandle(handle)
-            except Exception:
+            except (OSError, pywintypes.error):  # noqa: S110 - best-effort handle cleanup
                 pass
             if created_by_attempt:
                 try:

@@ -149,8 +149,10 @@ def test_create_file_is_removed_if_owner_dacl_setup_fails(tmp_path, monkeypatch)
             "_set_owner_only_dacl",
             classmethod(fail_dacl),
         )
-        with ExitStack() as file_stack:
-            with pytest.raises(WindowsSecretStorageError, match="simulated DACL failure"):
-                store._open_file(file_stack, sid, create=True)
+        with ExitStack() as file_stack, pytest.raises(
+            WindowsSecretStorageError,
+            match="simulated DACL failure",
+        ):
+            store._open_file(file_stack, sid, create=True)
 
     assert not store._path.exists()
