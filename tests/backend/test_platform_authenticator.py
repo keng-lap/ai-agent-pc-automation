@@ -14,13 +14,18 @@ from agent_backend.platform_authenticator import (
 
 
 class FakeProtector:
+    """Test protector that provides authenticated encryption like the DPAPI adapter."""
+
+    def __init__(self) -> None:
+        from cryptography.fernet import Fernet
+
+        self._fernet = Fernet(base64.urlsafe_b64encode(bytes(range(32))))
+
     def protect(self, plaintext: bytes) -> bytes:
-        return b"protected:" + plaintext
+        return self._fernet.encrypt(plaintext)
 
     def unprotect(self, ciphertext: bytes) -> bytes:
-        if not ciphertext.startswith(b"protected:"):
-            raise ValueError("bad ciphertext")
-        return ciphertext[len(b"protected:"):]
+        return self._fernet.decrypt(ciphertext)
 
 
 OWNER = "master-google-sub"
