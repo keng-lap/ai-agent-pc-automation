@@ -22,10 +22,21 @@
 - Require the existing Google OIDC Master User session.
 - Create a cryptographically random, short-lived, one-use server challenge bound to the owner, session, RP ID, origin, and registration purpose.
 - Use WebAuthn registration options with platform attachment and required user verification.
-- Verify attestation/registration response server-side, including challenge, origin, RP ID hash, flags, credential public key, credential ID, and user handle.
+- Verify attestation/registration response server-side, including challenge, origin, RP ID hash, flags, credential public key, and credential ID. The registration response does **not** contain an assertion `userHandle`; bind the owner and user handle from the server-side registration ceremony and persist that binding with the credential. For later assertions, validate `userHandle` when supplied, but do not require it when the authenticator legitimately omits it; credential ID lookup must still resolve to exactly one owner-bound credential.
 - Persist the credential public key and metadata in owner-protected local storage. Never persist private key material; it remains in the platform authenticator.
 - Only after registration succeeds may the TOTP enrollment ceremony begin. TOTP secret persistence remains protected by the existing Windows DPAPI storage path.
 - Reject duplicate, unexpected, expired, replayed, cross-session, cross-owner, or wrong-purpose ceremonies.
+
+
+### Legacy TOTP-only installation / first WebAuthn credential
+
+- A pre-existing installation may already have an enrolled TOTP secret but no WebAuthn credential. A normal Google-authenticated application session, including a recently reauthenticated Google session, is **not by itself** sufficient to authorize first-credential registration or TOTP recovery.
+- The legacy migration is a separate, explicitly entered **local trusted-setup** ceremony on the Windows machine. It must require a fresh allowlisted Google sign-in and a successful WebAuthn platform registration with `userVerification: "required"` (Windows Hello or another supported platform authenticator). The UI and audit event must identify this as first-credential bootstrap, not ordinary enrollment or recovery.
+- First-credential bootstrap must not delete, replace, disable, or bypass the existing TOTP secret. TOTP remains the required Step-up factor for high-risk approvals throughout migration.
+- The server must reject bootstrap if a WebAuthn credential is already registered, if the request is not on the canonical configured loopback origin, or if the trusted-setup ceremony is not explicitly active. A routine Google session must not silently enter this mode.
+- Only after the registration response is fully verified and the credential record is durably committed may the installation be considered WebAuthn-enabled for recovery. A failed or ambiguous persistence result must fail closed and leave the existing TOTP secret unchanged.
+- If local trusted setup cannot be completed, do not provide a Google-only recovery fallback. Existing Google sign-in, Dashboard, and TOTP-based high-risk approvals remain available when the existing TOTP secret is healthy; only self-service TOTP replacement remains unavailable.
+
 
 ### TOTP replacement / recovery
 
