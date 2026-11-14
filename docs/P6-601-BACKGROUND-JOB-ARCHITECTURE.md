@@ -178,6 +178,7 @@ atomically with the associated audit event and version check.
 | STARTING | UNKNOWN | Reconciler | Process creation outcome or ownership cannot be established |
 | RUNNING | VERIFYING | Worker | Contained process tree has exited; descendants reconciled; bounded output finalized |
 | RUNNING | CANCEL_REQUESTED | API | Owner authorized; cancellation request persisted; no claim that process has stopped |
+| CANCEL_REQUESTED | VERIFYING | Worker/reconciler | Completion is proven and the contained process tree has exited; reconcile descendants and finalize bounded output before post-condition checks |
 | CANCEL_REQUESTED | CANCELLED | Worker/reconciler | Job Object and descendant inspection prove all associated processes terminated before side effects completed |
 | CANCEL_REQUESTED | UNKNOWN | Reconciler | Termination or partial side effects cannot be proven |
 | VERIFYING | SUCCEEDED | Worker | Independent package identity, version, scope and required postconditions all pass |

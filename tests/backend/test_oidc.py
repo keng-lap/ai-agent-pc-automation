@@ -81,8 +81,12 @@ def test_begin_login_can_request_fresh_authentication_only_when_needed():
     client, _http = build_client()
     result = client.begin_login(require_recent_auth=True).authorization_url
 
-    assert "prompt=login" in result
-    assert "max_age=0" in result
+    assert "prompt=select_account" in result
+    assert "max_age=0" not in result
+    assert (
+        "claims=%7B%22id_token%22%3A%7B%22auth_time%22%3A%7B%22essential%22%3Atrue%7D%7D%7D"
+        in result
+    )
 
 
 def test_oidc_transaction_is_one_time_and_expires():

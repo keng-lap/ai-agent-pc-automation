@@ -230,10 +230,12 @@ class GoogleOidcClient:
             "nonce": transaction.nonce,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
-            "prompt": "login" if require_recent_auth else "select_account",
+            # Google supports account selection, not a forced reauthentication prompt.
+            # Freshness is established only by the validated auth_time claim below.
+            "prompt": "select_account",
         }
         if require_recent_auth:
-            params["max_age"] = 0
+            params["claims"] = '{"id_token":{"auth_time":{"essential":true}}}'
         return LoginStart(
             authorization_url=f"{GOOGLE_AUTHORIZATION_ENDPOINT}?{urlencode(params)}"
         )

@@ -4,8 +4,9 @@
 
 - Google OIDC remains the primary sign-in mechanism.
 - TOTP is a Step-up factor for high-risk approvals; it is not required for ordinary sign-in, Dashboard access, or read-only Job Status.
-- Ordinary Google sign-in does not force a password prompt. A dedicated reauthentication transaction uses `prompt=login` and `max_age=0` only for authenticator enrollment or replacement.
-- The backend validates the fresh-authentication claim from the OIDC ID token and binds it to the one-time OIDC transaction.
+- Google does not support a forced reauthentication request through `prompt=login` or `max_age=0`. The dedicated enrollment/recovery transaction requests the essential `auth_time` ID-token claim; the backend accepts it only when the actual Google authentication time is within the five-minute freshness window and binds it to the one-time OIDC transaction. `prompt=select_account` is used only to select the account and is not treated as freshness evidence.
+- If Google returns a stale `auth_time`, the owner must complete a fresh Google sign-in outside this app (for example, after signing out of the Google account in the browser) and retry. The app rejects stale or missing evidence; account selection or consent alone never satisfies the requirement.
+- Google project setup must enable the `auth_time` claim for the OAuth client. Google documents this claim as requiring enablement in settings and an app-verification prerequisite; complete those provider-side prerequisites before relying on enrollment/recovery.
 - The resulting session has a five-minute, one-use fresh-authentication grant. Enrollment/recovery consumes that grant atomically. Session rotation does not renew it.
 
 ## Enrollment
@@ -30,7 +31,7 @@
 
 ## Windows secret-file protection
 
-The default secret file is `.agent-state/authenticator/authenticator.json` under the repository root. Leave `AUTHENTICATOR_SECRET_PATH` blank to use that default; any override must be a direct child of the same dedicated `.agent-state/authenticator` directory. The application rejects paths elsewhere rather than changing the DACL of a potentially shared folder. Existing local `.env` overrides that point to the old `.agent-state/authenticator.json` location must be updated before starting this version; do not copy plaintext secrets or weaken ACL checks.
+The default secret file is `.agent-state/authenticator/authenticator.json` under the repository root. Leave `AUTHENTICATOR_SECRET_PATH` blank to use that default; any override must be a direct child of the same dedicated `.agent-state/authenticator` directory. The application rejects paths elsewhere rather than changing the DACL of a potentially shared folder. Existing encrypted secrets at the previous default path `.agent-state/authenticator.json` are not migrated or copied. Owners upgrading from that default must re-enroll before Step-up can succeed. Existing local `.env` overrides that point to the old path must be updated before starting this version; do not copy plaintext secrets or weaken ACL checks.
 
 The Windows adapter uses pywin32 and fails closed if the required security APIs are unavailable.
 

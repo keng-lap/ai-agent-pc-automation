@@ -340,6 +340,46 @@ def test_recovery_consumes_the_exact_future_step_on_the_primary_replay_guard(tmp
     )
 
 
+def test_recovery_replay_collision_keeps_pending_qr_for_a_later_step(tmp_path, monkeypatch):
+    manager, store = build_manager(tmp_path, now=90)
+    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    assert manager.confirm(
+        enrollment_id=initial.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+
+    manager._secret_factory = lambda: NEW_SECRET
+    recovery = manager.begin_recovery(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+    now = [90.0]
+    manager._clock = lambda: now[0]
+    original_consume = manager._replay_guard.consume_step_after
+    monkeypatch.setattr(
+        manager._replay_guard,
+        "consume_step_after",
+        lambda **_kwargs: False,
+    )
+
+    assert not manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(NEW_SECRET, 90),
+    )
+    assert recovery.enrollment_id in manager._pending
+
+    monkeypatch.setattr(manager._replay_guard, "consume_step_after", original_consume)
+    now[0] = 120.0
+    assert manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(NEW_SECRET, 120),
+    )
+    assert store.load(owner_sub="owner-sub") == NEW_SECRET
+
+
 def test_recovery_storage_failure_does_not_advance_primary_replay_guard(tmp_path):
     manager, store = build_manager(tmp_path, now=90)
     initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")

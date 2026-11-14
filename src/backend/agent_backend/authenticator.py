@@ -530,7 +530,12 @@ class AuthenticatorEnrollmentManager:
                         ),
                     )
                     if not replay_committed:
-                        self._pending.pop(enrollment_id, None)
+                        # A collision with the primary replay guard does not
+                        # invalidate this QR. Keep it available for a later
+                        # valid step, subject to the existing expiry/attempt cap.
+                        pending.failed_attempts += 1
+                        if pending.failed_attempts >= MAX_ENROLLMENT_ATTEMPTS:
+                            self._pending.pop(enrollment_id, None)
                         return False
                 else:
                     self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)

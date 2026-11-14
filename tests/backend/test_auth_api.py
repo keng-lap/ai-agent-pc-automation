@@ -645,8 +645,14 @@ def test_authenticator_change_reports_persisted_success_when_session_rotation_fa
 
 
 
-def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_absent():
+def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_absent(monkeypatch):
     from agent_backend.auth_api import build_auth_services
+
+    monkeypatch.setattr(
+        EncryptedTotpSecretFileStore,
+        "load",
+        lambda self, *, owner_sub: None,
+    )
 
     settings = replace(
         load_settings(load_env_file=False),

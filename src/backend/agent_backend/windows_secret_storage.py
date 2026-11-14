@@ -169,7 +169,9 @@ class WindowsSecretFile:
         win32security = cls._api()[3]
         access = _FILE_READ_ATTRIBUTES | _READ_CONTROL
         if final:
-            access |= _FILE_ADD_FILE | _WRITE_DAC | _WRITE_OWNER
+            # The verified current-user owner can repair the DACL with
+            # WRITE_DAC; do not demand WRITE_OWNER before that repair.
+            access |= _FILE_ADD_FILE | _WRITE_DAC
         try:
             handle = win32file.CreateFile(
                 str(path),
