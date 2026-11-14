@@ -7,7 +7,6 @@ import pytest
 from agent_backend.authenticator import (
     AuthenticatorEnrollmentManager,
     EncryptedTotpSecretFileStore,
-    SecretStoreCommitUnknown,
     SecretStoreError,
     WindowsDpapiProtector,
 )
