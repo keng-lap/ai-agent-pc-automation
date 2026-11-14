@@ -2,7 +2,7 @@
 
 ## Review identity and limits
 
-**Disposition: PASS WITH CONDITIONS — do not merge solely on this report.**
+**Disposition: PASS WITH CONDITIONS — this report is not merge approval.**
 
 This is ChatGPT's secondary, static A4-style security review. CodeRabbit remains the primary automated PR reviewer. This report is not a named human A4 sign-off, penetration test, or Product Owner approval.
 
@@ -10,108 +10,124 @@ This is ChatGPT's secondary, static A4-style security review. CodeRabbit remains
 |---|---|
 | Repository | `keng-lap/ai-agent-pc-automation` |
 | Pull request | [#165](https://github.com/keng-lap/ai-agent-pc-automation/pull/165) |
-| Reviewed source HEAD | `0413c62d10bb6309f6d764350177f6cf8df62bc3` |
+| Reviewed source HEAD | `5fb7cf1ab1900d3056e2e382a129a470bf88e722` |
 | Base SHA | `96e4d0dc5ad6d920438056e33909d615937934fd` |
 | Review date | 2026-11-14 |
-| Scope | OIDC, sessions, TOTP, Step-up, enrollment/recovery, Windows DPAPI secret storage, configuration path boundary, related frontend, tests and P6-601 documents |
-| Method | Read-only static source/diff review plus inspection of GitHub Actions results. No local tests or live Windows operations were performed. |
-
-This report supersedes the earlier PR-165 review that referenced an older source revision.
+| Scope | Google OIDC, sessions, TOTP, Step-up, enrollment/recovery, Windows DPAPI secret storage, software-approval confirmation, configuration path boundary, frontend, tests, lifecycle and P6-601 documentation |
+| Method | Static source/diff review and inspection of GitHub Actions results for the exact source HEAD. No local tests or live Windows operations were performed. |
 
 ## Executive assessment
 
-The reviewed implementation preserves Google OIDC as primary authentication and uses TOTP only as a Step-up factor. The reviewed paths do not introduce arbitrary shell/PowerShell/CMD/script execution, dynamic handler selection, installer invocation, or host mutation.
+Google OIDC remains the primary sign-in mechanism; TOTP is used only for Step-up. The reviewed confirmation paths use a current-secret loader inside the replay-guard critical section. Recovery commits the replacement and replay step under the same guard, preventing a Step-up request from verifying against a stale secret snapshot after replacement completes.
 
-The previously identified replay, shared-directory DACL, and post-persistence session-rotation issues have been addressed in the current source. The five earlier CodeRabbit findings also have corresponding code/documentation changes. No Critical or High vulnerability was verified in the reviewed scope.
+The reviewed paths do not introduce arbitrary shell/PowerShell/CMD/script execution, dynamic handler selection, installer invocation, worker dispatch, or host mutation. Software approval remains an approval-only flow; it does not execute an installer.
 
-The main remaining technical limitation is that Windows replacement now uses a full-path `MoveFileExW` rename while all verified parent directories remain pinned without `FILE_SHARE_DELETE`. The dedicated directory is owner-only, and same-user malware is explicitly outside the protection boundary. This is a documented trade-off from the prior handle-relative rename implementation, which returned success on a hosted Windows runner while leaving the old destination payload in place. The replacement path verifies the source and exact destination payload and requests write-through.
+No Critical or High vulnerability was verified in this static review. The remaining conditions are target-machine acceptance, a live Google identity-provider ceremony, a fresh CodeRabbit result for this exact HEAD, and any required named human A4 sign-off.
 
 ## Findings and remediation status
 
 ### F-01 — Medium — TOTP replay across Recovery and Step-up
 
-**Status: Addressed.**
+**Status: Addressed in the reviewed source; concurrency behavior covered by regression tests.**
 
-Recovery now passes the exact matched RFC 6238 step to `TotpReplayGuard.consume_step_after()` on the primary owner replay key. The replay lock is held while secret replacement runs, so concurrent Step-up cannot consume the same step between persistence and replay-state advancement. If persistence raises, the primary replay state is not advanced.
+`StepUpChallengeStore.verify_and_consume()` accepts a `secret_loader` callback and invokes it while the shared `TotpReplayGuard` lock is held. Both the plan-approval API and software-approval API now load the active secret through this callback rather than passing a secret snapshot read before the lock. Recovery performs secret replacement and advances the owner's replay step through `consume_step_after()` under that same lock.
 
-Regression coverage includes future-step recovery replay against the primary guard and persistence failure preserving the old secret and primary replay state.
+This serializes secret selection, TOTP verification, replay-step consumption, and recovery replacement. If Step-up obtains the lock first, its verification is committed before recovery can replace the secret. If recovery obtains it first, the subsequent Step-up loads the replacement secret. The regression suite verifies the loader executes under the replay lock and that a replaced secret cannot authorize a later step.
 
 ### F-02 — Medium — DACL mutation of an arbitrary/shared parent directory
 
 **Status: Addressed.**
 
-The secret path is now restricted by `validate_authenticator_secret_path()` to a direct child of the dedicated application-owned `.agent-state/authenticator` directory. Validation occurs in both environment configuration and `build_auth_services()`, so directly constructed Settings cannot bypass the boundary. The Windows adapter therefore does not apply its directory DACL to an arbitrary configured/shared parent. Existing reparse-point and owner verification remains in place.
+`validate_authenticator_secret_path()` restricts the secret file to a direct child of the dedicated application-owned `.agent-state/authenticator` directory. Validation occurs in environment configuration and `build_auth_services()`, so directly constructed Settings cannot bypass the boundary. The Windows adapter does not apply its directory DACL to an arbitrary configured/shared parent.
 
-Regression coverage rejects a configured secret path outside the dedicated directory. The security document and `.env.example` state the new path requirement.
+Existing reparse-point and owner-SID checks remain in place. Existing files are opened through verified handles; an existing wrong-owner file is rejected rather than taken over.
 
 ### F-03 — Low — Session rotation failure after secret persistence
 
 **Status: Addressed.**
 
-If the secret has been persisted but session rotation returns `None`, the endpoint now reports the authenticator change as successful and records the success event rather than returning a misleading 401. No replacement cookie is issued in this case; the owner may need to sign in again. The frontend refreshes session status after successful confirmation and reflects an expired session accurately when the status request succeeds.
+If the secret has been persisted but session rotation returns `None`, the endpoint records and reports the authenticator change as successful rather than returning a misleading authentication failure. No replacement cookie is issued; the owner may need to sign in again. A regression test verifies persisted secret state and the success audit event when rotation fails.
 
-A regression test verifies persisted secret state and a success audit event when rotation fails.
+### F-04 — Low — Temporary or partial secret-file residue after DACL setup failure
 
-### F-04 — Low — Temporary and partial secret-file residue
+**Status: Addressed; filesystem cleanup remains best-effort.**
 
-**Status: Mitigated; cleanup remains best-effort.**
+`_open_file()` records successful `CREATE_NEW` creation immediately after `CreateFile` returns and before the DACL operation can fail. On a later setup failure, it closes the new handle and removes only the file created by that attempt. A Windows regression test forces DACL setup to fail and asserts the new file is removed.
 
-Incomplete first writes are deleted after the file handle closes while the verified parent directory remains pinned. Failed replacement attempts remove their randomly named temporary file while the parent remains pinned. If the filesystem refuses cleanup, inert DPAPI ciphertext may remain in the owner-only directory; this residual is documented. No automated general-purpose cleanup pass is claimed.
+Failed replacement attempts also attempt to remove their randomly named temporary file while the verified parent directory remains pinned. If the filesystem refuses cleanup, inert DPAPI ciphertext may remain in the owner-only directory; no general-purpose cleanup pass is claimed.
 
-### CodeRabbit findings
+### F-05 — Low — Enrollment / Recovery confirmation route and audit classification
 
-The five earlier actionable comments were checked against the current source:
+**Status: Addressed.**
 
-1. Approval is reserved when queued and consumed atomically with the worker's `QUEUED → STARTING` transition and its audit event.
-2. Failed approval/evidence revalidation has an audited terminal `QUEUED → FAILED` transition before process creation.
-3. Secret-store load failure no longer prevents Google authentication or Dashboard startup. The replay guard is seeded conservatively when storage state is unknown; it is not seeded when no secret exists, preserving first enrollment. Step-up independently loads the secret and fails closed.
-4. The QR branch exposes a cancel action; a new recovery attempt still begins with fresh Google reauthentication.
-5. Successful enrollment/recovery refreshes backend session status before clearing the QR and rendering the resulting storage state.
+The API passes the confirmation route's expected mode into `AuthenticatorEnrollmentManager.confirm()`. A pending recovery cannot be confirmed through the enrollment route, and a pending enrollment cannot be confirmed through the recovery route. A mismatch is rejected before secret persistence or replay-step consumption. Regression coverage exercises both mismatch directions, verifies the pending setup remains available, and then confirms through the correct route.
 
-All five previous CodeRabbit threads were replied to and resolved after the corresponding code/documentation changes. A fresh review was requested for the current PR diff; its result is not yet recorded in this report.
+The audit event records the endpoint that was actually attempted; a mismatched route is recorded as a denied attempt, never as a successful operation of the other type.
 
-## CI evidence observed for the reviewed source HEAD
+### F-06 — Low — Background-job lifecycle contract consistency
 
-All listed GitHub Actions workflows completed successfully for `0413c62d10bb6309f6d764350177f6cf8df62bc3`.
+**Status: Addressed in documentation.**
+
+The transition matrix now states that `QUEUED → STARTING` creates a valid unexpired lease atomically with the claim, and that `QUEUED → CANCELLED` releases the reserved approval and commits the cancellation audit atomically. It also includes `CANCEL_REQUESTED → VERIFYING` when process-tree completion is proven, while retaining the existing terminal `CANCELLED` and uncertain `UNKNOWN` paths.
+
+### OIDC freshness boundary
+
+Google's supported authorization prompt values include `select_account`, `consent`, and `none`; the implementation does not rely on unsupported `prompt=login` or `max_age=0` behavior. For the dedicated enrollment/recovery OIDC transaction, the client requests the essential `auth_time` ID-token claim and rejects missing, stale, future, or malformed values. The resulting application session receives a five-minute, one-use fresh-authentication grant.
+
+`select_account` is used only for account selection and is not treated as proof of freshness. If Google's last authentication time is stale, the owner must complete a fresh Google sign-in outside the app and retry. The provider setup document records that the Google project must enable the claim and satisfy Google's app-verification prerequisite. See [Google OpenID Connect claims](https://developers.google.com/identity/openid-connect/openid-connect) and [Google's session metadata announcement (2026-06-16)](https://developers.googleblog.com/enhance-security-and-trust-new-session-metadata-in-sign-in-with-google/).
+
+**Live Google IdP reauthentication is NOT VERIFIED.** Deterministic tests verify transaction purpose propagation through `complete_login()`, claim validation, and one-time consumption of the session grant; they do not prove the live Google project is configured or verified correctly.
+
+### Additional regression and CI-trigger checks
+
+- The Windows workflow path filters include `auth_api.py` and `test_auth_api.py`, so authentication API changes trigger the relevant Windows integration tests.
+- The DACL repair test opens the file directly with `READ_CONTROL` and verifies the resulting owner-only DACL without invoking the repair routine a second time.
+- The OIDC regression test exercises recent-authentication purpose from transaction creation through `complete_login()` and confirms that the session grant can be consumed exactly once.
+- The software-approval confirmation path now obtains the current TOTP secret under the replay guard instead of loading it before verification.
+
+## CI evidence for the reviewed source HEAD
+
+All listed GitHub Actions workflows completed successfully for `5fb7cf1ab1900d3056e2e382a129a470bf88e722`.
 
 | Workflow / job | Result |
 |---|---|
-| Backend suite | 519 passed, 9 skipped |
+| Backend suite | 531 passed, 11 skipped |
+| AI reviewer unit tests | 13 passed |
 | Ruff | Passed — “All checks passed!” |
-| Frontend unit tests | Passed |
-| Playwright E2E (desktop and mobile viewports) | Passed |
+| Frontend unit tests | 42 passed |
+| Playwright E2E (desktop and mobile viewports) | 19 passed |
 | Frontend build | Passed |
-| Windows Authenticator DPAPI | 17 passed |
+| Windows Authenticator DPAPI | 21 passed |
 | Windows live WinGet catalog signature/search check | 1 passed |
-| Windows Auth / Session / secret storage integration | 47 passed |
-| Windows job lifecycle / containment | 12 passed, 1 skipped |
-| Windows WinGet adapter | Passed |
+| Windows authenticator storage / DPAPI integration | 55 passed |
+| Windows job lifecycle / containment | 13 passed, 1 skipped |
+| Windows WinGet adapter | 15 passed |
 
 Run references:
-- [CI — 43526450972](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43526450972)
-- [Windows Authenticator DPAPI — 43526450886](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43526450886)
-- [Windows Process Containment — 43526450990](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43526450990)
-- [Windows WinGet Adapter — 43526450967](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43526450967)
+- [CI — 43554562939](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43554562939)
+- [Windows Authenticator DPAPI — 43554562963](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43554562963)
+- [Windows Process Containment — 43554563067](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43554563067)
+- [Windows WinGet Adapter — 43554562925](https://github.com/keng-lap/ai-agent-pc-automation/actions/runs/43554562925)
 
-The full backend suite includes OIDC, authenticator enrollment/recovery, session, Step-up, and related Auth/Session tests. Windows-specific tests were exercised on GitHub-hosted Windows runners. No claim is made that the implementer ran these tests locally.
+These results are GitHub-hosted CI evidence. No claim is made that tests were run locally by the reviewer.
 
 ## Residual risks and evidence not available
 
-1. **Target Windows 11 Home acceptance is NOT VERIFIED.** Hosted Windows CI is not the user's target machine. Local acceptance must verify owner-only DACL, DPAPI round-trip, reparse-point rejection, enrollment, recovery, and Step-up.
+1. **Target Windows 11 Home acceptance is NOT VERIFIED.** Hosted Windows CI does not replace acceptance on the user's target machine. Local acceptance must verify owner-only DACL, DPAPI round-trip, reparse-point rejection, enrollment, recovery, and Step-up.
 2. **No live Google IdP ceremony** was run. OIDC tests use deterministic fakes and injected token verification.
 3. **No fuzzing, penetration testing, or attack simulation** was performed.
-4. **Process-local state remains single-worker only.** Sessions, OIDC transactions, Step-up challenges, and TOTP replay state are not durable/shared across multiple workers. The existing startup guard rejects unsupported multi-worker operation.
-5. **Authentication audit is bounded and process-local**, not a durable compliance ledger. Before any future side-effecting capability, the project must define and enforce a mandatory durable execution audit boundary that fails closed.
-6. **Windows Job Store DACL/handle gate remains separate and closed.** This PR does not authorize worker execution, WinGet, installers, or host mutation.
+4. **Process-local state remains single-worker only.** Sessions, OIDC transactions, Step-up challenges, and TOTP replay state are not durable/shared across multiple workers. Unsupported multi-worker operation remains guarded.
+5. **Authentication audit is bounded and process-local**, not a durable compliance ledger. Before any future side-effecting capability, the project must define and enforce a mandatory durable execution-audit boundary that fails closed.
+6. **Windows Job Store DACL/handle gate remains separate and closed.** This PR does not authorize worker execution, WinGet installation, installers, or host mutation.
 7. **Same-user malware / compromised Windows account remains outside the boundary.** A process running as the same user can access that user's DPAPI context and owner-only directory.
-8. The loopback HTTP callback currently uses a non-Secure session cookie because the configured callback is local HTTP. This is an existing deployment assumption and must be reassessed before any non-loopback or HTTPS deployment.
+8. The loopback HTTP callback currently uses a non-Secure session cookie because the configured callback is local HTTP. This existing deployment assumption must be reassessed before any non-loopback or HTTPS deployment.
 
 ## Final recommendation
 
-**PASS WITH CONDITIONS for the P6-601 Authenticator / Session test gate.** The exact reviewed HEAD has green backend, frontend, Windows DPAPI, Windows containment, and WinGet CI evidence. The Auth/Session regression suites passed in CI.
+**PASS WITH CONDITIONS for the P6-601 Authenticator / Session test gate.** Backend, Ruff, frontend, Windows DPAPI, Windows containment, and WinGet CI are green on the reviewed source HEAD.
 
-Do not treat this report as authorization to merge. Keep PR #165 open and unmerged until:
-- CodeRabbit completes its fresh review of the latest HEAD and any new actionable finding is addressed.
+A fresh full CodeRabbit review has been requested for this exact HEAD; its result must be checked before treating automated review as complete. Keep PR #165 open and unmerged until:
+- CodeRabbit completes its fresh review and any new actionable finding is addressed.
 - Required target Windows 11 Home acceptance is completed and recorded.
 - Any project-required named human A4 sign-off is obtained.
 - The Product Owner explicitly decides whether to merge.
