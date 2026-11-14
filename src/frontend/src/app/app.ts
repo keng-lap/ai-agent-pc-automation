@@ -695,6 +695,8 @@ export class App implements AfterViewChecked {
     return Boolean(
       this.authEnabled()
       && this.authenticated()
+      && this.authenticatorEnrolled()
+      && this.authenticatorStorageAvailable()
       && review.dry_run_plan
       && !review.approved
       && review.questions.length === 0
