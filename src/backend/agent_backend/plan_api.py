@@ -337,33 +337,28 @@ def approve_plan_review(
             )
             if tool_definition is None or tool_definition.risk_class != "high":
                 raise HTTPException(status_code=403, detail="Tool is not eligible for approval.")
-            def load_current_secret() -> str:
-                secret = services.secret_store.load(owner_sub=principal.owner_sub)
-                if secret is None:
-                    raise AuthenticatorNotEnrolled
-                return secret
-
             try:
-                accepted = services.step_up.verify_and_consume(
-                    challenge_id=_payload.challenge_id,
-                    owner_sub=principal.owner_sub,
-                    session_id=principal.session_id,
-                    plan_id=plan.plan_id,
-                    action_digest=plan.plan_digest,
-                    risk_class=tool_definition.risk_class,
-                    secret_loader=load_current_secret,
-                    code=_payload.totp_code,
-                )
-            except AuthenticatorNotEnrolled:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Authenticator enrollment required.",
-                ) from None
+                secret = services.secret_store.load(owner_sub=principal.owner_sub)
             except SecretStoreError:
                 raise HTTPException(
                     status_code=503,
                     detail="Authenticator storage unavailable.",
                 ) from None
+            if secret is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Authenticator enrollment required.",
+                )
+            accepted = services.step_up.verify_and_consume(
+                challenge_id=_payload.challenge_id,
+                owner_sub=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan.plan_id,
+                action_digest=plan.plan_digest,
+                risk_class=tool_definition.risk_class,
+                secret=secret,
+                code=_payload.totp_code,
+            )
             if not accepted:
                 record_auth_audit_event(
                     event_type="auth.step_up",
