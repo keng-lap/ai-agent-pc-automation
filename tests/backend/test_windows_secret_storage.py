@@ -31,6 +31,22 @@ def test_windows_secret_file_uses_owner_only_dacl_and_handle_io(tmp_path):
         store._verify_owner_only_dacl(handle, sid)
 
 
+
+def test_windows_secret_file_removes_new_file_when_dacl_setup_fails(tmp_path, monkeypatch):
+    store = WindowsSecretFile(tmp_path / "private" / "authenticator.json")
+
+    def fail_dacl(_handle, _sid, *, allow_owner_change):
+        raise WindowsSecretStorageError("simulated DACL setup failure")
+
+    # Override only the file instance; parent-directory verification still uses
+    # the real security implementation.
+    monkeypatch.setattr(store, "_set_owner_only_dacl", fail_dacl)
+
+    with pytest.raises(WindowsSecretStorageError, match="DACL setup failure"):
+        store.create_exclusive(b"encrypted")
+
+    assert not store._path.exists()
+
 def test_windows_secret_file_rejects_reparse_point_ancestor(tmp_path):
     real_directory = tmp_path / "real"
     real_directory.mkdir()
