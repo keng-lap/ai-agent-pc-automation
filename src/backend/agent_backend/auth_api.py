@@ -195,8 +195,9 @@ def get_auth_session(request: Request) -> AuthSessionResponse:
         )
     logger.info(
         "auth.session status=ok authenticated=true authenticator_enrolled=%s "
-        "storage_available=true",
+        "storage_available=%s",
         str(enrolled).lower(),
+        str(storage_available).lower(),
     )
     return AuthSessionResponse(
         enabled=True,
