@@ -30,4 +30,7 @@ def _synthetic_session(request: Request) -> SessionPrincipal:
     return principal
 
 
+# The shared route-test app must stay authentication-disabled regardless of a
+# developer's local .env. Auth-specific tests build their own configured app.
+app.state.auth_services = None
 app.dependency_overrides[require_session] = _synthetic_session
