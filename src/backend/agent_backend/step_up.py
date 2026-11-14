@@ -161,7 +161,7 @@ class StepUpChallengeStore:
         """Consume a challenge only when identity, session, action and TOTP match.
 
         Production callers should provide secret_loader so secret selection and
-        replay consumption share the same lock as recovery replacement.
+        replay consumption happen under the same lock.
         """
         if not self._valid_identity(owner_sub, session_id):
             return False
