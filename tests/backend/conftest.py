@@ -2,6 +2,8 @@
 
 import os
 
+from fastapi import Request
+
 # The app loads the repository .env when imported. Tests use fixed local
 # settings so TestClient Host and Origin headers stay valid.
 os.environ["BACKEND_HOST"] = "127.0.0.1"
@@ -17,7 +19,15 @@ from agent_backend.auth_api import require_session
 from agent_backend.main import app
 from agent_backend.oidc import SessionPrincipal
 
-app.dependency_overrides[require_session] = lambda: SessionPrincipal(
-    owner_sub="synthetic-test-owner",
-    session_id="synthetic-test-session",
-)
+def _synthetic_session(request: Request) -> SessionPrincipal:
+    principal = SessionPrincipal(
+        owner_sub="synthetic-test-owner",
+        session_id="synthetic-test-session",
+    )
+    # Some route handlers bind step-up state to request.state.principal in
+    # addition to consuming the dependency result.
+    request.state.principal = principal
+    return principal
+
+
+app.dependency_overrides[require_session] = _synthetic_session
