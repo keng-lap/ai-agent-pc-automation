@@ -342,6 +342,7 @@ def begin_authenticator_enrollment(
     try:
         start = services.enrollment.begin(
             owner_sub=principal.owner_sub,
+            session_id=principal.session_id,
             account_name="Master User",
         )
     except (RuntimeError, ValueError):
@@ -369,6 +370,7 @@ def _complete_authenticator_setup(
             enrollment_id=payload.enrollment_id,
             owner_sub=principal.owner_sub,
             code=payload.code,
+            session_id=principal.session_id,
             expected_replace_existing=event_type == "auth.recovery",
         )
     except SecretStoreCommitUnknown:
@@ -452,6 +454,7 @@ def begin_authenticator_recovery(
     try:
         start = services.enrollment.begin_recovery(
             owner_sub=principal.owner_sub,
+            session_id=principal.session_id,
             account_name="Master User",
         )
     except (RuntimeError, ValueError):
