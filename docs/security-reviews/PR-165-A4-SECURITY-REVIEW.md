@@ -128,6 +128,7 @@ These results are GitHub-hosted CI evidence. No claim is made that tests were ru
 
 A fresh full CodeRabbit review has been requested for this exact HEAD; its result must be checked before treating automated review as complete. Keep PR #165 open and unmerged until:
 - CodeRabbit completes its fresh review and any new actionable finding is addressed.
+- A live Google IdP enrollment/recovery ceremony confirms the production project's `auth_time` claim is returned and validated.
 - Required target Windows 11 Home acceptance is completed and recorded.
 - Any project-required named human A4 sign-off is obtained.
 - The Product Owner explicitly decides whether to merge.
