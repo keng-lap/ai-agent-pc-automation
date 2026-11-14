@@ -399,12 +399,34 @@ class AuthenticatorEnrollmentManager:
         self._pending: dict[str, _PendingEnrollment] = {}
         self._lock = threading.RLock()
 
-    def begin(self, *, owner_sub: str, account_name: str, session_id: str | None = None) -> EnrollmentStart:
-        return self._begin(owner_sub=owner_sub, session_id=session_id, account_name=account_name, replace_existing=False)
+    def begin(
+        self,
+        *,
+        owner_sub: str,
+        account_name: str,
+        session_id: str | None = None,
+    ) -> EnrollmentStart:
+        return self._begin(
+            owner_sub=owner_sub,
+            session_id=session_id,
+            account_name=account_name,
+            replace_existing=False,
+        )
 
-    def begin_recovery(self, *, owner_sub: str, account_name: str, session_id: str | None = None) -> EnrollmentStart:
+    def begin_recovery(
+        self,
+        *,
+        owner_sub: str,
+        account_name: str,
+        session_id: str | None = None,
+    ) -> EnrollmentStart:
         """Begin a Google-reauthenticated replacement without requiring the old TOTP."""
-        return self._begin(owner_sub=owner_sub, session_id=session_id, account_name=account_name, replace_existing=True)
+        return self._begin(
+            owner_sub=owner_sub,
+            session_id=session_id,
+            account_name=account_name,
+            replace_existing=True,
+        )
 
     def _begin(
         self,
@@ -416,9 +438,14 @@ class AuthenticatorEnrollmentManager:
     ) -> EnrollmentStart:
         if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
             raise ValueError("authenticated owner is required")
-        if session_id is not None and (not isinstance(session_id, str) or not 16 <= len(session_id) <= 256):
+        if session_id is not None and (
+            not isinstance(session_id, str) or not 16 <= len(session_id) <= 256
+        ):
             raise ValueError("authenticated session is invalid")
-        if not isinstance(account_name, str) or not 1 <= len(account_name.strip()) <= 254:
+        if (
+            not isinstance(account_name, str)
+            or not 1 <= len(account_name.strip()) <= 254
+        ):
             raise ValueError("account label is invalid")
         now = self._clock()
         if (
@@ -507,7 +534,11 @@ class AuthenticatorEnrollmentManager:
 
         with self._lock:
             pending = self._pending.get(enrollment_id)
-            if pending is None or pending.owner_sub != owner_sub or pending.session_id != session_id:
+            if (
+                pending is None
+                or pending.owner_sub != owner_sub
+                or pending.session_id != session_id
+            ):
                 return False
             if expected_replace_existing is not None and (
                 type(expected_replace_existing) is not bool
@@ -530,7 +561,8 @@ class AuthenticatorEnrollmentManager:
                 return False
 
             replay_owner = (
-                f"recovery:{hashlib.sha256(owner_sub.encode('utf-8')).hexdigest()}:{enrollment_id}"
+                "recovery:"
+                f"{hashlib.sha256(owner_sub.encode('utf-8')).hexdigest()}:{enrollment_id}"
                 if pending.replace_existing
                 else owner_sub
             )
@@ -550,7 +582,10 @@ class AuthenticatorEnrollmentManager:
                     replay_committed = self._replay_guard.consume_step_after(
                         owner_key=owner_sub,
                         step=matched_step,
-                        action=lambda: self._secret_store.replace(owner_sub=owner_sub, secret=pending.secret),
+                        action=lambda: self._secret_store.replace(
+                            owner_sub=owner_sub,
+                            secret=pending.secret,
+                        ),
                         consume_on_exception=(SecretStoreCommitUnknown,),
                     )
                     if not replay_committed:
