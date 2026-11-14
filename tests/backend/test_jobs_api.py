@@ -14,9 +14,23 @@ HEADERS = {
 OWNER = "google-owner-sub"
 
 
+class _TestSecureStorage:
+    """Test-only adapter; production platform gates remain unchanged."""
+
+    def prepare_database_path(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    def finalize_database_file(self, path):
+        if not path.is_file():
+            raise AssertionError("test database was not created")
+
+
 def build_client(tmp_path, *, authenticated=True):
     settings = load_settings(load_env_file=False)
-    store = SQLiteJobStore(tmp_path / "private-state" / "jobs.sqlite3")
+    store = SQLiteJobStore(
+        tmp_path / "private-state" / "jobs.sqlite3",
+        secure_storage=_TestSecureStorage(),
+    )
     app = create_app(settings, auth_services=None, job_store=store)
     if authenticated:
         app.dependency_overrides[require_session] = lambda: SessionPrincipal(
