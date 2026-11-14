@@ -14,11 +14,13 @@ os.environ["LOCAL_AGENT_TOKEN"] = "a" * 64
 # Route-level tests that exercise application behavior use an explicit synthetic
 # principal. Auth-specific tests construct their own app and therefore still
 # exercise the real fail-closed dependency and session validation.
+from fastapi import Request
+
 from agent_backend.auth_api import require_session
 from agent_backend.main import app
 from agent_backend.oidc import SessionPrincipal
 
-def _synthetic_session(request) -> SessionPrincipal:
+def _synthetic_session(request: Request) -> SessionPrincipal:
     principal = SessionPrincipal(
         owner_sub="synthetic-test-owner",
         session_id="synthetic-test-session",
