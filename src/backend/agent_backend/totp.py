@@ -213,14 +213,15 @@ class TotpReplayGuard:
         owner_key: str,
         step: int,
         action: Callable[[], None],
-        consume_on_exception: tuple[type[BaseException], ...] = (),
+        consume_on_exception: tuple[type[Exception], ...] = (),
     ) -> bool:
         """Run an operation and consume its exact TOTP step atomically.
 
         The replay lock is held while the operation runs, so concurrent
         Step-up verification cannot consume a code between secret replacement
-        and replay-state advancement. If the operation raises, replay state is
-        left unchanged.
+        and replay-state advancement. Exceptions listed in
+        ``consume_on_exception`` burn the step before the lock is released;
+        other failures leave replay state unchanged.
         """
         if (
             not isinstance(owner_key, str)
@@ -231,7 +232,10 @@ class TotpReplayGuard:
             or step < 0
             or not callable(action)
             or not isinstance(consume_on_exception, tuple)
-            or any(not isinstance(kind, type) or not issubclass(kind, BaseException) for kind in consume_on_exception)
+            or any(
+                not isinstance(kind, type) or not issubclass(kind, Exception)
+                for kind in consume_on_exception
+            )
         ):
             return False
         with self._lock:
@@ -240,7 +244,7 @@ class TotpReplayGuard:
                 return False
             try:
                 action()
-            except BaseException as exc:
+            except Exception as exc:
                 if isinstance(exc, consume_on_exception):
                     self._last_consumed[owner_key] = step
                 raise
