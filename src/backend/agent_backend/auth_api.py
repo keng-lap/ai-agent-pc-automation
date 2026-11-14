@@ -12,6 +12,7 @@ from .auth_audit import record_auth_audit_event
 from .authenticator import (
     AuthenticatorEnrollmentManager,
     EncryptedTotpSecretFileStore,
+    SecretStoreCommitUnknown,
     SecretStoreError,
     WindowsDpapiProtector,
 )
@@ -363,11 +364,22 @@ def _complete_authenticator_setup(
     principal = require_session(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
-    confirmed = services.enrollment.confirm(
-        enrollment_id=payload.enrollment_id,
-        owner_sub=principal.owner_sub,
-        code=payload.code,
-    )
+    try:
+        confirmed = services.enrollment.confirm(
+            enrollment_id=payload.enrollment_id,
+            owner_sub=principal.owner_sub,
+            code=payload.code,
+        )
+    except SecretStoreCommitUnknown:
+        record_auth_audit_event(
+            event_type=event_type,
+            outcome="denied",
+            reason="replacement_state_unverified",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Authenticator replacement state could not be verified; Step-up is unavailable.",
+        ) from None
     if not confirmed:
         record_auth_audit_event(
             event_type=event_type,

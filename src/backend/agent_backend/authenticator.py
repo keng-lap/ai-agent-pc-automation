@@ -43,6 +43,10 @@ class SecretStoreError(RuntimeError):
     """Raised when encrypted authenticator secret storage fails."""
 
 
+class SecretStoreCommitUnknown(SecretStoreError):
+    """Replacement committed, but its final state could not be verified."""
+
+
 class SecretProtector(Protocol):
     """Platform protection adapter for the encrypted secret file."""
 
@@ -253,9 +257,16 @@ class EncryptedTotpSecretFileStore:
         with self._lock:
             if os.name == "nt":
                 try:
-                    from .windows_secret_storage import WindowsSecretFile
+                    from .windows_secret_storage import (
+                        WindowsSecretFile,
+                        WindowsSecretReplacementCommittedError,
+                    )
 
                     WindowsSecretFile(self._path).replace(envelope)
+                except WindowsSecretReplacementCommittedError:
+                    raise SecretStoreCommitUnknown(
+                        "Authenticator replacement committed but verification failed."
+                    ) from None
                 except Exception:  # noqa: BLE001 - sanitize platform failures
                     raise SecretStoreError("Authenticator recovery storage failed.") from None
                 return
@@ -539,6 +550,21 @@ class AuthenticatorEnrollmentManager:
                         return False
                 else:
                     self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
+            except SecretStoreCommitUnknown:
+                # The file replacement may already be active. Burn the exact
+                # matched step conservatively before reconciling the durable
+                # secret, so a post-rename read failure cannot permit replay.
+                self._replay_guard.consume_step_after(
+                    owner_key=owner_sub,
+                    step=matched_step,
+                    action=lambda: None,
+                )
+                self._pending.pop(enrollment_id, None)
+                try:
+                    active_secret = self._secret_store.load(owner_sub=owner_sub)
+                except SecretStoreError:
+                    raise
+                return active_secret == pending.secret
             except SecretStoreError:
                 self._pending.pop(enrollment_id, None)
                 return False

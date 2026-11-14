@@ -35,6 +35,10 @@ class WindowsSecretStorageError(RuntimeError):
     """Windows secret storage could not be proven safe."""
 
 
+class WindowsSecretReplacementCommittedError(WindowsSecretStorageError):
+    """The destination was replaced, but post-replacement verification failed."""
+
+
 class WindowsSecretFile:
     """Secure one secret file beneath a current-user-only directory."""
 
@@ -380,6 +384,7 @@ class WindowsSecretFile:
             move_file.restype = ctypes.c_int
             move_flags = 0x00000001 | 0x00000008  # MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
 
+            replacement_committed = False
             try:
                 # Verify the temporary file through a handle, then close it
                 # before rename. The destination parent remains pinned without
@@ -397,6 +402,7 @@ class WindowsSecretFile:
                     raise WindowsSecretStorageError(
                         f"Secret replacement failed (Win32 error {error})."
                     )
+                replacement_committed = True
 
                 # Reopen through the pinned parent and verify the exact payload.
                 destination = self._open_file(parent_stack, sid, create=False)
@@ -412,6 +418,10 @@ class WindowsSecretFile:
                     temporary.unlink(missing_ok=True)
                 except OSError:
                     pass
+                if replacement_committed:
+                    raise WindowsSecretReplacementCommittedError(
+                        "Secret replacement committed but could not be verified."
+                    ) from None
                 raise WindowsSecretStorageError(
                     "Secret replacement could not be completed safely."
                 ) from None
