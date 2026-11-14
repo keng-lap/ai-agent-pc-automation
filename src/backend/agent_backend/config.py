@@ -28,6 +28,23 @@ class ConfigError(ValueError):
     """Raised when configuration is invalid or unsafe."""
 
 
+def validate_authenticator_secret_path(path: Path) -> Path:
+    """Require the secret file to live in the app-owned authenticator directory."""
+    if not isinstance(path, Path):
+        raise ConfigError("AUTHENTICATOR_SECRET_PATH must be a filesystem path.")
+    expected_dir = Path(os.path.abspath(REPO_ROOT / ".agent-state" / "authenticator"))
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    candidate = Path(os.path.abspath(candidate))
+    if candidate.parent != expected_dir:
+        raise ConfigError(
+            "AUTHENTICATOR_SECRET_PATH must be a direct child of the "
+            "dedicated .agent-state/authenticator directory."
+        )
+    return candidate
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
@@ -145,10 +162,15 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
             raise ConfigError(
                 "GOOGLE_OIDC_REDIRECT_URI must be the configured loopback callback URL."
             )
-        secret_path = Path(
-            auth_values["AUTHENTICATOR_SECRET_PATH"]
-            or (REPO_ROOT / ".agent-state" / "authenticator.json")
-        ).expanduser()
+        authenticator_state_dir = Path(
+            os.path.abspath(REPO_ROOT / ".agent-state" / "authenticator")
+        )
+        secret_path = validate_authenticator_secret_path(
+            Path(
+                auth_values["AUTHENTICATOR_SECRET_PATH"]
+                or (authenticator_state_dir / "authenticator.json")
+            ).expanduser()
+        )
         auth_settings = {
             "google_oidc_client_id": client_id,
             "google_oidc_client_secret": client_secret,

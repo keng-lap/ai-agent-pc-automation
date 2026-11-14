@@ -68,23 +68,46 @@
             {{ language() === 'th' ? 'ออกจากระบบ' : 'Sign out' }}
           </button>
         </div>
-        @if (!authenticatorEnrolled()) {
+        @if (qrDataUri()) {
+          <p>{{ enrollmentMode() === 'recovery'
+            ? (language() === 'th' ? 'สแกน QR ใหม่ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก Authenticator เดิมยังใช้งานได้จนกว่าจะยืนยันสำเร็จ' : 'Scan the new QR and enter its six-digit code. Your existing authenticator remains active until confirmation succeeds.')
+            : (language() === 'th' ? 'สแกน QR ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก' : 'Scan this QR with your authenticator app, then enter its six-digit code.') }}</p>
+          <img [src]="qrDataUri()" width="220" alt="Authenticator enrollment QR code" />
+          <label for="auth-code">{{ language() === 'th' ? 'รหัสยืนยัน 6 หลัก' : 'Six-digit verification code' }}</label>
+          <input id="auth-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="authCode()" (input)="onAuthCodeInput($event)" />
+          <button class="send-button" type="button" [disabled]="authBusy() || authCode().length !== 6" (click)="confirmAuthenticatorSetup()">
+            {{ enrollmentMode() === 'recovery'
+              ? (language() === 'th' ? 'ยืนยัน Authenticator ใหม่' : 'Confirm replacement authenticator')
+              : (language() === 'th' ? 'ยืนยันการลงทะเบียน' : 'Confirm enrollment') }}
+          </button>
+          <button class="new-chat-button" type="button" [disabled]="authBusy()" (click)="cancelAuthenticatorSetup()">
+            {{ language() === 'th' ? 'ยกเลิก QR และเริ่มใหม่' : 'Cancel QR and restart' }}
+          </button>
+        } @else if (!authenticatorStorageAvailable()) {
+          <p role="alert">{{ language() === 'th'
+            ? 'พื้นที่จัดเก็บ Authenticator มีปัญหา แต่คุณยังใช้ Dashboard และดูสถานะงานได้ คำสั่งเสี่ยงสูงจะถูกระงับจนกว่าจะแก้ไขพื้นที่จัดเก็บ'
+            : 'Authenticator storage is unavailable. You can still use the Dashboard and view jobs; high-risk actions remain blocked until storage is repaired.' }}</p>
+          <details class="security-settings">
+            <summary>{{ language() === 'th' ? 'การตั้งค่าความปลอดภัยและการกู้คืน' : 'Security and recovery settings' }}</summary>
+            <p>{{ language() === 'th' ? 'ใช้ตัวเลือกนี้เฉพาะเมื่อ Authenticator สูญหายหรือจำเป็นต้องเปลี่ยนอุปกรณ์' : 'Use this only if your authenticator is lost or you need to replace the device.' }}</p>
+            <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
+              {{ language() === 'th' ? 'ตรวจสอบการเข้าสู่ระบบ Google เพื่อกู้คืน Authenticator' : 'Reauthenticate with Google to recover authenticator' }}
+            </button>
+          </details>
+        } @else if (!authenticatorEnrolled()) {
           <p>{{ language() === 'th' ? 'ลงทะเบียนแอป Authenticator ก่อนอนุมัติคำสั่งที่มีความเสี่ยงสูง' : 'Enroll an authenticator app before approving high-risk actions.' }}</p>
-          @if (!qrDataUri()) {
-            <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorSetup()">
-              {{ language() === 'th' ? 'เริ่มลงทะเบียน Authenticator' : 'Set up authenticator' }}
-            </button>
-          } @else {
-            <p>{{ language() === 'th' ? 'สแกน QR ด้วยแอป Authenticator แล้วกรอกรหัส 6 หลัก' : 'Scan this QR with your authenticator app, then enter its six-digit code.' }}</p>
-            <img [src]="qrDataUri()" width="220" alt="Authenticator enrollment QR code" />
-            <label for="auth-code">{{ language() === 'th' ? 'รหัสยืนยัน 6 หลัก' : 'Six-digit verification code' }}</label>
-            <input id="auth-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="authCode()" (input)="onAuthCodeInput($event)" />
-            <button class="send-button" type="button" [disabled]="authBusy() || authCode().length !== 6" (click)="confirmAuthenticatorSetup()">
-              {{ language() === 'th' ? 'ยืนยันการลงทะเบียน' : 'Confirm enrollment' }}
-            </button>
-          }
+          <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorSetup()">
+            {{ language() === 'th' ? 'เริ่มลงทะเบียน Authenticator' : 'Set up authenticator' }}
+          </button>
         } @else {
-          <p role="status">{{ language() === 'th' ? 'Authenticator พร้อมใช้งาน' : 'Authenticator is enrolled and ready.' }}</p>
+          <p role="status">{{ language() === 'th' ? 'ลงทะเบียน Authenticator แล้ว · พร้อมใช้ยืนยันการอนุมัติ' : 'Authenticator enrolled · ready for approval verification.' }}</p>
+          <details class="security-settings">
+            <summary>{{ language() === 'th' ? 'การตั้งค่าความปลอดภัยเพิ่มเติม' : 'More security settings' }}</summary>
+            <p>{{ language() === 'th' ? 'กู้คืนหรือเปลี่ยน Authenticator เฉพาะเมื่อสูญเสียอุปกรณ์เดิมหรือไม่สามารถใช้รหัสเดิมได้เท่านั้น การยืนยันอุปกรณ์ใหม่จะแทนที่การลงทะเบียนเดิม' : 'Recover or replace your authenticator only if the original device is lost or unavailable. Confirming a replacement will replace the existing enrollment.' }}</p>
+            <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
+              {{ language() === 'th' ? 'เริ่มขั้นตอนกู้คืนหรือเปลี่ยนอุปกรณ์' : 'Start authenticator recovery or replacement' }}
+            </button>
+          </details>
         }
         @if (authError()) { <p class="conversation-notice" role="alert">{{ authError() }}</p> }
       </section>

@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 AuthAuditEventType = Literal[
     "auth.sign_in",
     "auth.enrollment",
+    "auth.recovery",
     "auth.step_up",
 ]
 AuthAuditOutcome = Literal["success", "denied"]
@@ -32,6 +33,9 @@ AuthAuditReason = Literal[
     "action_binding_mismatch",
     "rate_limited",
     "trusted_setup_required",
+    "invalid_software_approval",
+    "reauthentication_required",
+    "replacement_state_unverified",
 ]
 
 MAX_AUTH_AUDIT_EVENTS = 500

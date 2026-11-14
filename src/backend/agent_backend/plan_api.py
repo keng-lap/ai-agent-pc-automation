@@ -331,18 +331,24 @@ def approve_plan_review(
                 or _payload.totp_code is None
             ):
                 raise HTTPException(status_code=403, detail="Fresh authenticator approval required.")
-            try:
-                secret = services.secret_store.load(owner_sub=principal.owner_sub)
-            except SecretStoreError:
-                raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
-            if secret is None:
-                raise HTTPException(status_code=403, detail="Authenticator enrollment required.")
             tool_definition = next(
                 (item for item in TOOL_CATALOG if item.id == plan.tool_id),
                 None,
             )
             if tool_definition is None or tool_definition.risk_class != "high":
                 raise HTTPException(status_code=403, detail="Tool is not eligible for approval.")
+            try:
+                secret = services.secret_store.load(owner_sub=principal.owner_sub)
+            except SecretStoreError:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Authenticator storage unavailable.",
+                ) from None
+            if secret is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Authenticator enrollment required.",
+                )
             accepted = services.step_up.verify_and_consume(
                 challenge_id=_payload.challenge_id,
                 owner_sub=principal.owner_sub,

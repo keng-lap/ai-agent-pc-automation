@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
+import { catchError, defer, finalize, map, of, switchMap, take, timeout, TimeoutError } from 'rxjs';
 import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
@@ -54,6 +54,7 @@ interface ChatEntry {
 
 const LANGUAGE_STORAGE_KEY = 'ai-agent-pc-automation.language';
 const CONVERSATION_STORAGE_KEY = 'ai-agent-pc-automation.conversation-id';
+const AUTHENTICATOR_INTENT_STORAGE_KEY = 'ai-agent-pc-automation.authenticator-intent';
 const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -315,11 +316,13 @@ export class App implements AfterViewChecked {
   protected readonly authEnabled = signal(false);
   protected readonly authenticated = signal(false);
   protected readonly authenticatorEnrolled = signal(false);
+  protected readonly authenticatorStorageAvailable = signal(true);
   protected readonly authBusy = signal(false);
   protected readonly authError = signal('');
   protected readonly enrollmentId = signal('');
   protected readonly qrDataUri = signal('');
   protected readonly authCode = signal('');
+  protected readonly enrollmentMode = signal<'enrollment' | 'recovery'>('enrollment');
 
   constructor() {
     this.document.documentElement.lang = this.language();
@@ -348,18 +351,67 @@ export class App implements AfterViewChecked {
           this.authEnabled.set(session.enabled);
           this.authenticated.set(session.authenticated);
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
+          this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
+          this.logAuthenticatorUiState("auth-session-loaded");
+          this.resumeAuthenticatorIntent(session);
         },
         error: () => {
           this.authEnabled.set(true);
           this.authenticated.set(false);
           this.authenticatorEnrolled.set(false);
+          this.authenticatorStorageAvailable.set(false);
           this.authError.set(this.language() === 'th'
             ? 'เชื่อมต่อระบบยืนยันตัวตนไม่ได้ กรุณาตรวจสอบ Backend'
             : 'Could not reach the authentication service. Check the backend.');
           this.authReady.set(true);
+          this.logAuthenticatorUiState("auth-session-error");
         },
       });
+  }
+
+  private logAuthenticatorUiState(reason: string): void {
+    const state = {
+      reason,
+      authReady: this.authReady(),
+      authEnabled: this.authEnabled(),
+      authenticated: this.authenticated(),
+      authenticatorEnrolled: this.authenticatorEnrolled(),
+      authenticatorStorageAvailable: this.authenticatorStorageAvailable(),
+      visibleBranch: !this.authReady()
+        ? "loading"
+        : !this.authenticatorStorageAvailable()
+          ? "storage-unavailable"
+          : !this.authenticatorEnrolled()
+            ? "enrollment-prompt"
+            : "enrolled-status",
+    };
+    console.info("[authenticator-ui]", state);
+  }
+
+  private resumeAuthenticatorIntent(session: AuthSession): void {
+    let intent: string | null = null;
+    try {
+      intent = sessionStorage.getItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+    } catch {
+      this.authError.set(this.language() === 'th'
+        ? 'เบราว์เซอร์ไม่อนุญาตให้เก็บสถานะการยืนยันตัวตน กรุณาลองใหม่'
+        : 'Browser session storage is unavailable. Please try again.');
+      return;
+    }
+    if (intent !== 'enrollment' && intent !== 'recovery') return;
+    const search = this.document.defaultView?.location.search ?? '';
+    const loginStatus = new URLSearchParams(search).get('login');
+    if (loginStatus === 'failed' || loginStatus === 'unavailable') {
+      sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+      this.authError.set(this.language() === 'th'
+        ? 'Google ไม่ได้ส่งเวลายืนยันตัวตนที่ใหม่พอ กรุณาออกจากบัญชี Google ในเบราว์เซอร์นี้แล้วเข้าสู่ระบบใหม่ จากนั้นลองอีกครั้ง Session ของแอปเดิมยังใช้งานได้'
+        : 'Google did not provide a recent enough authentication time. Sign out of your Google account in this browser, sign in again, then retry. Your existing app session remains available.');
+      return;
+    }
+    if (loginStatus !== 'success' || !session.authenticated) return;
+    sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+    this.requestAuthenticatorFlow(intent);
   }
 
   protected loginWithGoogle(): void {
@@ -384,10 +436,55 @@ export class App implements AfterViewChecked {
   }
 
   protected beginAuthenticatorSetup(): void {
+    this.startAuthenticatorReauthentication('enrollment');
+  }
+
+  protected beginAuthenticatorRecovery(): void {
+    this.startAuthenticatorReauthentication('recovery');
+  }
+
+  private startAuthenticatorReauthentication(intent: 'enrollment' | 'recovery'): void {
     if (this.authBusy()) return;
     this.authBusy.set(true);
     this.authError.set('');
-    defer(() => this.chatApi.beginAuthenticatorEnrollment())
+    try {
+      sessionStorage.setItem(AUTHENTICATOR_INTENT_STORAGE_KEY, intent);
+    } catch {
+      this.authBusy.set(false);
+      this.authError.set(this.language() === 'th'
+        ? 'ไม่สามารถเริ่มขั้นตอนยืนยันตัวตนใหม่ได้'
+        : 'Could not start the secure reauthentication flow.');
+      return;
+    }
+    defer(() => this.chatApi.startGoogleReauthentication())
+      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+      .subscribe({
+        next: (result) => {
+          if (typeof result.authorization_url !== 'string'
+            || !result.authorization_url.startsWith('https://accounts.google.com/')) {
+            sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+            this.authError.set('Invalid Google reauthentication URL.');
+            return;
+          }
+          window.location.assign(result.authorization_url);
+        },
+        error: () => {
+          sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
+          this.authError.set(this.language() === 'th'
+            ? 'เริ่มยืนยันบัญชี Google อีกครั้งไม่สำเร็จ การเข้าสู่ระบบเดิมยังใช้งานได้'
+            : 'Could not start Google reauthentication. Your existing session remains available.');
+        },
+      });
+  }
+
+  private requestAuthenticatorFlow(intent: 'enrollment' | 'recovery'): void {
+    this.enrollmentMode.set(intent);
+    this.authBusy.set(true);
+    this.authError.set('');
+    const request = intent === 'recovery'
+      ? this.chatApi.beginAuthenticatorRecovery()
+      : this.chatApi.beginAuthenticatorEnrollment();
+    defer(() => request)
       .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
       .subscribe({
         next: (result) => {
@@ -396,8 +493,12 @@ export class App implements AfterViewChecked {
           this.authCode.set('');
         },
         error: () => this.authError.set(this.language() === 'th'
-          ? 'สร้าง QR สำหรับ Authenticator ไม่สำเร็จ'
-          : 'Could not create the authenticator QR code.'),
+          ? (intent === 'recovery'
+            ? 'เริ่มกู้คืน Authenticator ไม่สำเร็จ Authenticator เดิมยังคงใช้งานได้'
+            : 'สร้าง QR สำหรับ Authenticator ไม่สำเร็จ')
+          : (intent === 'recovery'
+            ? 'Could not start authenticator recovery. The existing authenticator remains active.'
+            : 'Could not create the authenticator QR code.')),
       });
   }
 
@@ -411,23 +512,71 @@ export class App implements AfterViewChecked {
     if (!enrollmentId || !/^\d{6}$/.test(code) || this.authBusy()) return;
     this.authBusy.set(true);
     this.authError.set('');
-    defer(() => this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code))
-      .pipe(timeout({ first: 10_000 }), take(1), finalize(() => this.authBusy.set(false)))
+    const confirmRequest = this.enrollmentMode() === 'recovery'
+      ? this.chatApi.confirmAuthenticatorRecovery(enrollmentId, code)
+      : this.chatApi.confirmAuthenticatorEnrollment(enrollmentId, code);
+    defer(() => confirmRequest)
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        switchMap((result) => {
+          if (result.enrolled !== true) {
+            return of({ result, session: null, refreshFailed: false });
+          }
+          // Recovery may have repaired an unavailable store. Wait for the
+          // backend session status before clearing the QR and rendering status.
+          return defer(() => this.chatApi.getAuthSession()).pipe(
+            timeout({ first: 10_000 }),
+            take(1),
+            map((session) => ({ result, session, refreshFailed: false })),
+            catchError(() => of({ result, session: null, refreshFailed: true })),
+          );
+        }),
+        finalize(() => this.authBusy.set(false)),
+      )
       .subscribe({
-        next: (result) => {
+        next: ({ result, session, refreshFailed }) => {
           if (result.enrolled !== true) {
             this.authError.set('Authenticator confirmation failed.');
             return;
           }
+          if (session) {
+            this.authEnabled.set(session.enabled);
+            this.authenticated.set(session.authenticated);
+            this.authenticatorEnrolled.set(session.authenticator_enrolled);
+            this.authenticatorStorageAvailable.set(
+              session.authenticator_storage_available !== false,
+            );
+          } else {
+            // The confirmation endpoint only returns enrolled=true after the
+            // new secret is persisted. Preserve that authoritative result if
+            // the follow-up status request itself is unavailable.
+            this.authenticatorEnrolled.set(true);
+            this.authenticatorStorageAvailable.set(true);
+            if (refreshFailed) {
+              this.authError.set(this.language() === 'th'
+                ? 'บันทึก Authenticator แล้ว แต่ตรวจสอบสถานะ Session ไม่สำเร็จ กรุณาโหลดหน้าใหม่'
+                : 'Authenticator was saved, but session status could not be refreshed. Reload the page.');
+            }
+          }
           this.enrollmentId.set('');
           this.qrDataUri.set('');
           this.authCode.set('');
-          this.authenticatorEnrolled.set(true);
+          this.enrollmentMode.set('enrollment');
         },
         error: () => this.authError.set(this.language() === 'th'
           ? 'รหัสไม่ถูกต้องหรือหมดอายุ ลองเริ่มลงทะเบียนใหม่'
           : 'Invalid or expired code. Start enrollment again.'),
       });
+  }
+
+  protected cancelAuthenticatorSetup(): void {
+    // Cancelling only discards the local QR view. A new recovery request still
+    // goes through fresh Google reauthentication before the backend issues QR.
+    this.enrollmentId.set('');
+    this.qrDataUri.set('');
+    this.authCode.set('');
+    this.enrollmentMode.set('enrollment');
   }
 
   protected logout(): void {
@@ -441,6 +590,8 @@ export class App implements AfterViewChecked {
           this.authenticatorEnrolled.set(false);
           this.enrollmentId.set('');
           this.qrDataUri.set('');
+          this.enrollmentMode.set('enrollment');
+          try { sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY); } catch { /* best effort */ }
         },
         error: () => this.authError.set(this.language() === 'th'
           ? 'ออกจากระบบไม่สำเร็จ'
@@ -663,7 +814,6 @@ export class App implements AfterViewChecked {
     return Boolean(
       this.authEnabled()
       && this.authenticated()
-      && this.authenticatorEnrolled()
       && review.dry_run_plan
       && !review.approved
       && review.questions.length === 0

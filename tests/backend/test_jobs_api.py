@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import require_session
@@ -14,9 +16,35 @@ HEADERS = {
 OWNER = "google-owner-sub"
 
 
+class _TestSecureStorage:
+    """Test-only adapter; production platform gates remain unchanged."""
+
+    def prepare_database_path(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    def finalize_database_file(self, path):
+        if not path.is_file():
+            raise AssertionError("test database was not created")
+
+
 def build_client(tmp_path, *, authenticated=True):
     settings = load_settings(load_env_file=False)
-    store = SQLiteJobStore(tmp_path / "private-state" / "jobs.sqlite3")
+    if not authenticated:
+        # Make auth-disabled behavior deterministic even when the developer's
+        # Windows environment contains real Google OIDC credentials.
+        settings = replace(
+            settings,
+            google_oidc_client_id=None,
+            google_oidc_client_secret=None,
+            google_oidc_redirect_uri=None,
+            master_google_sub=None,
+            app_session_ttl_seconds=None,
+            authenticator_secret_path=None,
+        )
+    store = SQLiteJobStore(
+        tmp_path / "private-state" / "jobs.sqlite3",
+        secure_storage=_TestSecureStorage(),
+    )
     app = create_app(settings, auth_services=None, job_store=store)
     if authenticated:
         app.dependency_overrides[require_session] = lambda: SessionPrincipal(
@@ -81,7 +109,7 @@ def test_job_status_api_fails_closed_when_authentication_is_disabled(tmp_path):
 
     assert response.status_code == 503
     assert response.json() == {
-        "detail": "Job status authentication is unavailable."
+        "detail": "Authentication is not configured."
     }
 
 

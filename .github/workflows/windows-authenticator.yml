@@ -4,8 +4,20 @@ on:
   pull_request:
     paths:
       - "src/backend/agent_backend/authenticator.py"
-      - "src/backend/agent_backend/software_catalog.py"
+      - "src/backend/agent_backend/auth_api.py"
+      - "src/backend/agent_backend/plan_api.py"
+      - "src/backend/agent_backend/software_approval_api.py"
+      - "src/backend/agent_backend/step_up.py"
+      - "src/backend/agent_backend/totp.py"
+      - "src/backend/agent_backend/windows_secret_storage.py"
       - "tests/backend/test_authenticator.py"
+      - "tests/backend/test_auth_api.py"
+      - "tests/backend/test_plan_api.py"
+      - "tests/backend/test_software_approval_api.py"
+      - "tests/backend/test_step_up.py"
+      - "tests/backend/test_totp.py"
+      - "tests/backend/test_windows_secret_storage.py"
+      - "src/backend/agent_backend/software_catalog.py"
       - "tests/backend/test_software_catalog_windows.py"
       - "src/backend/pyproject.toml"
       - "scripts/P516-01-setup-google-oauth.ps1"
@@ -15,7 +27,19 @@ on:
       - main
     paths:
       - "src/backend/agent_backend/authenticator.py"
+      - "src/backend/agent_backend/auth_api.py"
+      - "src/backend/agent_backend/plan_api.py"
+      - "src/backend/agent_backend/software_approval_api.py"
+      - "src/backend/agent_backend/step_up.py"
+      - "src/backend/agent_backend/totp.py"
+      - "src/backend/agent_backend/windows_secret_storage.py"
       - "tests/backend/test_authenticator.py"
+      - "tests/backend/test_auth_api.py"
+      - "tests/backend/test_plan_api.py"
+      - "tests/backend/test_software_approval_api.py"
+      - "tests/backend/test_step_up.py"
+      - "tests/backend/test_totp.py"
+      - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-authenticator.yml"
 
@@ -50,7 +74,7 @@ jobs:
             exit 1
           }
 
-      - name: Test Windows DPAPI authenticator storage
-        run: python -m pytest tests/backend/test_authenticator.py -q
+      - name: Test Windows DPAPI authenticator and Step-up replay protection
+        run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_step_up.py tests/backend/test_totp.py -q
       - name: Verify live Microsoft WinGet catalog signature and search
         run: python -m pytest tests/backend/test_software_catalog_windows.py -q

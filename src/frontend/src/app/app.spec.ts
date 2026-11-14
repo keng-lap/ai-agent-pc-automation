@@ -65,7 +65,14 @@ class FakeChatApi {
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
   approvalCalls: string[] = [];
   stepUpCalls: string[] = [];
-  authSession = { enabled: false, authenticated: false, authenticator_enrolled: false };
+  reauthCalls = 0;
+  recoveryCalls = 0;
+  authSession: {
+    enabled: boolean;
+    authenticated: boolean;
+    authenticator_enrolled: boolean;
+    authenticator_storage_available?: boolean;
+  } = { enabled: false, authenticated: false, authenticator_enrolled: false };
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -109,11 +116,30 @@ class FakeChatApi {
     return of({ authorization_url: 'https://accounts.google.com/test' });
   }
 
+  startGoogleReauthentication(): Observable<{ authorization_url: string }> {
+    this.reauthCalls += 1;
+    return of({ authorization_url: 'https://accounts.google.com/test-reauth' });
+  }
+
   beginAuthenticatorEnrollment(): Observable<{ enrollment_id: string; qr_data_uri: string; expires_at: number }> {
     return of({ enrollment_id: 'a'.repeat(32), qr_data_uri: 'data:image/svg+xml;base64,PHN2Zy8+', expires_at: 0 });
   }
 
   confirmAuthenticatorEnrollment(): Observable<{ enrolled: boolean }> {
+    return of({ enrolled: true });
+  }
+
+  beginAuthenticatorRecovery(): Observable<{ enrollment_id: string; qr_data_uri: string; expires_at: number }> {
+    this.recoveryCalls += 1;
+    return of({ enrollment_id: 'b'.repeat(32), qr_data_uri: 'data:image/png;base64,PHN2Zy8+', expires_at: 0 });
+  }
+
+  confirmAuthenticatorRecovery(): Observable<{ enrolled: boolean }> {
+    this.authSession = {
+      ...this.authSession,
+      authenticator_enrolled: true,
+      authenticator_storage_available: true,
+    };
     return of({ enrolled: true });
   }
 
@@ -268,6 +294,7 @@ describe('App chat UI (T-202)', () => {
     httpTestingController?.verify();
     httpTestingController = null;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
 
@@ -908,6 +935,84 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ตอบกลับภาษาไทย');
     expect(fixture.nativeElement.textContent).toContain('security check');
   });
+  it('resumes authenticator recovery after successful Google reauthentication', async () => {
+    api.authSession = {
+      enabled: true,
+      authenticated: true,
+      authenticator_enrolled: true,
+      authenticator_storage_available: false,
+    };
+    sessionStorage.setItem('ai-agent-pc-automation.authenticator-intent', 'recovery');
+    window.history.replaceState({}, '', '/?login=success');
+
+    await render();
+
+    expect(api.recoveryCalls).toBe(1);
+    expect(fixture.nativeElement.querySelector('img[alt="Authenticator enrollment QR code"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Authenticator เดิมยังใช้งานได้จนกว่าจะยืนยันสำเร็จ');
+
+    const input = fixture.nativeElement.querySelector('#auth-code') as HTMLInputElement;
+    input.value = '123456';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    ) as HTMLButtonElement[];
+    const confirm = buttons.find((button: HTMLButtonElement) =>
+      button.textContent?.includes('ยืนยัน Authenticator ใหม่'),
+    );
+    if (!confirm) {
+      throw new Error('Authenticator recovery confirmation button was not rendered.');
+    }
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('ลงทะเบียน Authenticator แล้ว · พร้อมใช้ยืนยันการอนุมัติ');
+    expect(api.authSession.authenticator_storage_available).toBe(true);
+  });
+
+  it('allows cancelling a recovery QR; starting again still begins with Google reauthentication', async () => {
+    api.authSession = {
+      enabled: true,
+      authenticated: true,
+      authenticator_enrolled: true,
+      authenticator_storage_available: true,
+    };
+    sessionStorage.setItem('ai-agent-pc-automation.authenticator-intent', 'recovery');
+    window.history.replaceState({}, '', '/?login=success');
+
+    await render();
+    expect(api.recoveryCalls).toBe(1);
+    const cancel = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยกเลิก QR และเริ่มใหม่'));
+    if (!cancel) throw new Error('Recovery QR cancel action was not rendered');
+    cancel.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('img[alt="Authenticator enrollment QR code"]')).toBeNull();
+    const securitySummary = fixture.nativeElement.querySelector(
+      'details.security-settings summary',
+    ) as HTMLElement | null;
+    expect(securitySummary).not.toBeNull();
+    securitySummary?.click();
+    fixture.detectChanges();
+    const recovery = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('เริ่มขั้นตอนกู้คืนหรือเปลี่ยนอุปกรณ์'));
+    expect(recovery).toBeDefined();
+    const fakeWindow = { location: { assign: vi.fn() } };
+    vi.stubGlobal('window', fakeWindow);
+    (fixture.componentInstance as unknown as { beginAuthenticatorRecovery: () => void })
+      .beginAuthenticatorRecovery();
+    expect(api.reauthCalls).toBe(1);
+    expect(api.recoveryCalls).toBe(1);
+    expect(fakeWindow.location.assign).toHaveBeenCalledWith(
+      'https://accounts.google.com/test-reauth',
+    );
+  });
+
+
 });
 
 

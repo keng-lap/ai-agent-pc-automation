@@ -172,3 +172,70 @@ def test_replay_guard_rejects_invalid_restart_timestamp():
             owner_key="master-user",
             timestamp=float("nan"),
         )
+
+
+def test_step_up_secret_loader_observes_secret_replaced_under_replay_lock():
+    old_secret = RFC_SECRET
+    new_secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+    active_secret = [old_secret]
+    guard = TotpReplayGuard()
+
+    # Recovery commits the replacement and its matched step under the same
+    # lock used by Step-up's secret loader and replay verification.
+    assert guard.consume_step_after(
+        owner_key="owner",
+        step=4,
+        action=lambda: active_secret.__setitem__(0, new_secret),
+    )
+
+    assert not guard.verify_and_consume_with_secret_loader(
+        owner_key="owner",
+        secret_loader=lambda: active_secret[0],
+        code=code_at(old_secret, 180),
+        timestamp=180,
+    )
+    assert guard.verify_and_consume_with_secret_loader(
+        owner_key="owner",
+        secret_loader=lambda: active_secret[0],
+        code=code_at(new_secret, 180),
+        timestamp=180,
+    )
+
+
+def test_uncertain_persistence_burns_step_before_releasing_replay_lock():
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    class CommitUnknown(RuntimeError):
+        pass
+
+    guard = TotpReplayGuard()
+    code = code_at(RFC_SECRET, 90)
+    action_started = threading.Event()
+    allow_action_to_fail = threading.Event()
+
+    def uncertain_action():
+        action_started.set()
+        assert allow_action_to_fail.wait(timeout=3)
+        raise CommitUnknown("replacement may already be committed")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        replacement = pool.submit(
+            guard.consume_step_after,
+            owner_key="owner",
+            step=3,
+            action=uncertain_action,
+            consume_on_exception=(CommitUnknown,),
+        )
+        assert action_started.wait(timeout=3)
+        concurrent_step_up = pool.submit(
+            guard.verify_and_consume,
+            owner_key="owner",
+            secret=RFC_SECRET,
+            code=code,
+            timestamp=90,
+        )
+        allow_action_to_fail.set()
+        with pytest.raises(CommitUnknown):
+            replacement.result(timeout=3)
+        assert concurrent_step_up.result(timeout=3) is False

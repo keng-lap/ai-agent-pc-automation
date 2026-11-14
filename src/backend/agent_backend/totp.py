@@ -168,6 +168,89 @@ class TotpReplayGuard:
             self._last_consumed[owner_key] = step
             return True
 
+    def verify_and_consume_with_secret_loader(
+        self,
+        *,
+        owner_key: str,
+        secret_loader: Callable[[], str | None],
+        code: str,
+        timestamp: float | None = None,
+    ) -> bool:
+        """Load the current secret and consume its code under one replay lock."""
+        if (
+            not isinstance(owner_key, str)
+            or not owner_key
+            or len(owner_key) > 256
+            or not callable(secret_loader)
+        ):
+            return False
+        if timestamp is None:
+            if self._clock is not None:
+                timestamp = self._clock()
+            else:
+                import time
+
+                timestamp = time.time()
+        with self._lock:
+            # Secret replacement uses this same lock. A caller therefore sees
+            # either the old secret before replacement or the new secret after
+            # replacement, never a stale pre-lock snapshot.
+            secret = secret_loader()
+            if not isinstance(secret, str) or not secret:
+                return False
+            step = matching_step(secret, code, timestamp=timestamp)
+            if step is None:
+                return False
+            previous = self._last_consumed.get(owner_key)
+            if previous is not None and step <= previous:
+                return False
+            self._last_consumed[owner_key] = step
+            return True
+
+    def consume_step_after(
+        self,
+        *,
+        owner_key: str,
+        step: int,
+        action: Callable[[], None],
+        consume_on_exception: tuple[type[Exception], ...] = (),
+    ) -> bool:
+        """Run an operation and consume its exact TOTP step atomically.
+
+        The replay lock is held while the operation runs, so concurrent
+        Step-up verification cannot consume a code between secret replacement
+        and replay-state advancement. Exceptions listed in
+        ``consume_on_exception`` burn the step before the lock is released;
+        other failures leave replay state unchanged.
+        """
+        if (
+            not isinstance(owner_key, str)
+            or not owner_key
+            or len(owner_key) > 256
+            or isinstance(step, bool)
+            or not isinstance(step, int)
+            or step < 0
+            or not callable(action)
+            or not isinstance(consume_on_exception, tuple)
+            or any(
+                not isinstance(kind, type) or not issubclass(kind, Exception)
+                for kind in consume_on_exception
+            )
+        ):
+            return False
+        with self._lock:
+            previous = self._last_consumed.get(owner_key)
+            if previous is not None and step <= previous:
+                return False
+            try:
+                action()
+            except Exception as exc:
+                if isinstance(exc, consume_on_exception):
+                    self._last_consumed[owner_key] = step
+                raise
+            self._last_consumed[owner_key] = step
+            return True
+
     def block_through_current_step(
         self,
         *,

@@ -99,3 +99,25 @@ def test_global_auth_audit_records_only_safe_fields():
         "outcome",
         "reason",
     }
+
+
+def test_software_approval_denial_reason_is_recorded():
+    AUTH_AUDIT_SINK.clear()
+
+    assert record_auth_audit_event(
+        event_type="auth.step_up",
+        outcome="denied",
+        reason="invalid_software_approval",
+    )
+    saved = AUTH_AUDIT_SINK.snapshot()
+    assert len(saved) == 1
+    assert saved[0].reason == "invalid_software_approval"
+
+
+def test_uncertain_replacement_audit_reason_is_allowed():
+    item = event(
+        event_type="auth.recovery",
+        outcome="denied",
+        reason="replacement_state_unverified",
+    )
+    assert item.reason == "replacement_state_unverified"

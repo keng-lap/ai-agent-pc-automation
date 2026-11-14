@@ -1,8 +1,9 @@
 """Exact-action-bound TOTP challenges (W4, provider independent).
 
-This bounded in-memory implementation is a contract/core for the later auth
-integration. It is not wired to the existing P1 dry-run route. A production
-multi-worker deployment requires shared atomic challenge and replay storage.
+The current plan API creates and consumes these challenges through the
+application authentication services. Storage and replay protection are
+process-local; multi-worker deployment is unsupported until shared atomic
+challenge and replay storage is implemented and independently reviewed.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import re
 import secrets
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -152,11 +154,18 @@ class StepUpChallengeStore:
         plan_id: str,
         action_digest: str,
         risk_class: str,
-        secret: str,
+        secret: str | None = None,
         code: str,
+        secret_loader: Callable[[], str | None] | None = None,
     ) -> bool:
-        """Consume a challenge only when identity, session, action and TOTP match."""
+        """Consume a challenge only when identity, session, action and TOTP match.
+
+        Production callers should provide secret_loader so secret selection and
+        replay consumption share the same lock as recovery replacement.
+        """
         if not self._valid_identity(owner_sub, session_id):
+            return False
+        if (secret is None) == (secret_loader is None):
             return False
         now = self._clock()
         if (
@@ -212,12 +221,20 @@ class StepUpChallengeStore:
                 self._replace(challenge, status="locked")
                 return False
 
-            accepted = self._replay_guard.verify_and_consume(
-                owner_key=owner_sub,
-                secret=secret,
-                code=code,
-                timestamp=float(now),
-            )
+            if secret_loader is not None:
+                accepted = self._replay_guard.verify_and_consume_with_secret_loader(
+                    owner_key=owner_sub,
+                    secret_loader=secret_loader,
+                    code=code,
+                    timestamp=float(now),
+                )
+            else:
+                accepted = self._replay_guard.verify_and_consume(
+                    owner_key=owner_sub,
+                    secret=secret or "",
+                    code=code,
+                    timestamp=float(now),
+                )
             if not accepted:
                 attempts = challenge.failed_attempts + 1
                 previous_window = self._owner_failures.get(owner_session)

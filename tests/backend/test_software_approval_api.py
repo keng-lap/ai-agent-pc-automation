@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from agent_backend import software_approval_api as api
+from agent_backend.auth_audit import AUTH_AUDIT_SINK
 from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 from agent_backend.software_evidence import EvidenceNotFound
 
@@ -51,6 +52,8 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
 
         def verify_and_consume(self, **kwargs):
             self.verified.append(kwargs)
+            if "secret_loader" in kwargs:
+                self.loaded_secret = kwargs["secret_loader"]()
             return accepted
 
     step_up = StepUp()
@@ -59,7 +62,11 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         step_up=step_up,
         secret_store=SimpleNamespace(load=lambda owner_sub: "test-secret"),
     )
-    monkeypatch.setattr(api, "_authenticated_context", lambda _request: (services, principal, "test-secret"))
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda _request, **_kwargs: (services, principal, "test-secret"),
+    )
     monkeypatch.setattr(
         api,
         "_get_install_plan",
@@ -131,6 +138,8 @@ def test_confirm_consumes_exact_digest_and_returns_approved_not_executed(monkeyp
     assert response.approval_digest == binding.approval_digest
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
     assert step_up.verified[0]["code"] == "123456"
+    assert callable(step_up.verified[0]["secret_loader"])
+    assert step_up.loaded_secret == "test-secret"
 
 
 def test_confirm_rejects_binding_from_another_session(monkeypatch):
@@ -166,6 +175,7 @@ def test_confirm_rejects_expired_or_revoked_evidence(monkeypatch):
 
 
 def test_invalid_totp_never_returns_approval(monkeypatch):
+    AUTH_AUDIT_SINK.clear()
     binding = make_binding()
     step_up, _principal = setup_context(monkeypatch, accepted=False)
     monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
@@ -179,6 +189,10 @@ def test_invalid_totp_never_returns_approval(monkeypatch):
         )
     assert getattr(error.value, "status_code", None) == 403
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
+    events = AUTH_AUDIT_SINK.snapshot()
+    assert len(events) == 1
+    assert events[0].reason == "invalid_software_approval"
+    assert events[0].outcome == "denied"
 
 
 def test_successful_confirmation_consumes_plan_binding_and_rejects_replay(monkeypatch):

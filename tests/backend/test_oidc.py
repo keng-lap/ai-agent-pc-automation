@@ -40,11 +40,14 @@ def valid_claims(nonce):
         "email_verified": True,
         "nonce": nonce,
         "iat": 1000,
+        "auth_time": 1000,
         "exp": 1600,
     }
 
 
-def build_client(*, now=1100, claims=None, response=None, transactions=None):
+def build_client(
+    *, now=1100, claims=None, response=None, transactions=None, monotonic_clock=None
+):
     claims = claims or valid_claims("expected-nonce")
     http = FakeHttp(response or FakeResponse({"id_token": "signed-id-token"}))
     def verifier(_token):
@@ -57,6 +60,7 @@ def build_client(*, now=1100, claims=None, response=None, transactions=None):
         http_session=http,
         token_verifier=verifier,
         clock=lambda: now,
+        monotonic_clock=monotonic_clock,
     )
     return client, http
 
@@ -73,6 +77,19 @@ def test_begin_login_uses_code_flow_pkce_nonce_and_minimal_scopes():
     assert "state=" in result
     assert "nonce=" in result
     assert "prompt=select_account" in result
+    assert "max_age=0" not in result
+
+
+def test_begin_login_can_request_fresh_authentication_only_when_needed():
+    client, _http = build_client()
+    result = client.begin_login(require_recent_auth=True).authorization_url
+
+    assert "prompt=select_account" in result
+    assert "max_age=0" not in result
+    assert (
+        "claims=%7B%22id_token%22%3A%7B%22auth_time%22%3A%7B%22essential%22%3Atrue%7D%7D%7D"
+        in result
+    )
 
 
 def test_oidc_transaction_is_one_time_and_expires():
@@ -133,6 +150,8 @@ def test_complete_login_exchanges_code_with_pkce_and_discards_provider_tokens():
         {"sub": ""},
         {"exp": 999},
         {"iat": 0},
+        {"auth_time": 700},
+        {"auth_time": 1200},
         {"azp": "another-client"},
     ],
 )
@@ -142,7 +161,11 @@ def test_invalid_identity_claims_are_rejected(change):
     client, _http = build_client(claims=claims)
 
     with pytest.raises(OidcAuthenticationError):
-        client._validate_identity_token("signed-id-token", expected_nonce="expected-nonce")
+        client._validate_identity_token(
+            "signed-id-token",
+            expected_nonce="expected-nonce",
+            require_recent_auth="auth_time" in change,
+        )
 
 
 def test_invalid_state_and_missing_code_fail_closed():
@@ -270,6 +293,73 @@ def test_session_store_expires_and_revokes_tokens():
     assert store.resolve(second.token) is None
 
 
+def test_complete_login_preserves_recent_authentication_purpose_and_one_time_grant():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    claims = valid_claims("placeholder")
+    client, _http = build_client(
+        claims=claims,
+        monotonic_clock=lambda: 1100.0,
+    )
+    start = client.begin_login(require_recent_auth=True)
+    query = start.authorization_url.partition("?")[2]
+    params = dict(
+        part.split("=", 1) for part in query.split("&") if "=" in part
+    )
+    claims["nonce"] = params["nonce"]
+
+    identity = client.complete_login(
+        state=params["state"],
+        code="authorization-code",
+    )
+    assert identity.sub == "stable-google-sub"
+    assert identity.recently_authenticated is True
+
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: 1100.0,
+        monotonic_clock=lambda: 1100.0,
+    )
+    credential = sessions.create(
+        identity=identity,
+        allowlist=MasterUserAllowlist("stable-google-sub"),
+    )
+    principal = sessions.resolve(credential.token)
+    assert principal is not None
+    assert sessions.consume_recent_auth(principal, max_age_seconds=300)
+    assert not sessions.consume_recent_auth(principal, max_age_seconds=300)
+
+
+def test_only_fresh_google_auth_session_satisfies_recent_auth_gate():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = [1100.0]
+    store = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: now[0],
+        monotonic_clock=lambda: now[0],
+    )
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    ordinary = GoogleIdentity(sub="stable-google-sub", email="owner@example.test")
+    fresh = GoogleIdentity(
+        sub="stable-google-sub",
+        email="owner@example.test",
+        recently_authenticated=True,
+    )
+
+    ordinary_credential = store.create(identity=ordinary, allowlist=allowlist)
+    ordinary_principal = store.resolve(ordinary_credential.token)
+    assert not store.is_recently_authenticated(ordinary_principal, max_age_seconds=300)
+
+    fresh_credential = store.create(identity=fresh, allowlist=allowlist)
+    assert store.resolve(ordinary_credential.token) is None
+    fresh_principal = store.resolve(fresh_credential.token)
+    assert store.is_recently_authenticated(fresh_principal, max_age_seconds=300)
+
+    now[0] += 301
+    assert not store.is_recently_authenticated(fresh_principal, max_age_seconds=300)
+
+
 def test_session_store_capacity_is_bounded():
     from agent_backend.oidc import ApplicationSessionStore
 
@@ -280,3 +370,104 @@ def test_session_store_capacity_is_bounded():
 
     with pytest.raises(OidcAuthenticationError, match="capacity"):
         store.create(identity=identity, allowlist=allowlist)
+
+
+def test_complete_login_preserves_recent_auth_purpose_into_one_time_session_grant():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = 1100.0
+    claims = valid_claims("unused")
+    transactions = OidcTransactionStore(clock=lambda: now)
+    transaction = transactions.create(requires_recent_auth=True)
+    claims["nonce"] = transaction.nonce
+    claims["auth_time"] = 1090
+    client, _http = build_client(
+        now=now,
+        claims=claims,
+        transactions=transactions,
+        monotonic_clock=lambda: now,
+    )
+
+    identity = client.complete_login(
+        state=transaction.state,
+        code="fresh-auth-authorization-code",
+    )
+
+    assert identity.sub == "stable-google-sub"
+    assert identity.recently_authenticated is True
+
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: now,
+        monotonic_clock=lambda: now,
+    )
+    credential = sessions.create(identity=identity, allowlist=allowlist)
+    principal = sessions.resolve(credential.token)
+    assert principal is not None
+    assert sessions.consume_recent_auth(principal, max_age_seconds=300) is True
+    assert sessions.consume_recent_auth(principal, max_age_seconds=300) is False
+
+
+def test_session_freshness_uses_age_from_google_auth_time_not_session_creation():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = 1100.0
+    monotonic_now = [5000.0]
+    claims = valid_claims("unused")
+    claims["auth_time"] = 1090
+    transactions = OidcTransactionStore(clock=lambda: now)
+    transaction = transactions.create(requires_recent_auth=True)
+    claims["nonce"] = transaction.nonce
+    client, _http = build_client(
+        now=now,
+        claims=claims,
+        transactions=transactions,
+        monotonic_clock=lambda: monotonic_now[0],
+    )
+    identity = client.complete_login(
+        state=transaction.state,
+        code="recent-auth-code",
+    )
+
+    assert identity.recently_authenticated is True
+    assert identity.recent_auth_monotonic_at == 5000.0
+
+    # Simulate 260 seconds between provider validation and session creation.
+    monotonic_now[0] += 260
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: now,
+        monotonic_clock=lambda: monotonic_now[0],
+    )
+    credential = sessions.create(
+        identity=identity,
+        allowlist=MasterUserAllowlist("stable-google-sub"),
+    )
+    principal = sessions.resolve(credential.token)
+    assert principal is not None
+    assert sessions.is_recently_authenticated(principal, max_age_seconds=300)
+
+    monotonic_now[0] += 41
+    assert not sessions.is_recently_authenticated(principal, max_age_seconds=300)
+
+
+def test_session_store_rejects_recent_auth_age_that_expired_before_creation():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    identity = GoogleIdentity(
+        sub="stable-google-sub",
+        email="owner@example.test",
+        recently_authenticated=True,
+        recent_auth_monotonic_at=799.0,
+    )
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: 1100,
+        monotonic_clock=lambda: 1100.0,
+    )
+    with pytest.raises(OidcAuthenticationError, match="no longer recent"):
+        sessions.create(
+            identity=identity,
+            allowlist=MasterUserAllowlist("stable-google-sub"),
+        )
