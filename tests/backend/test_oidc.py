@@ -290,6 +290,39 @@ def test_session_store_expires_and_revokes_tokens():
     assert store.resolve(second.token) is None
 
 
+def test_complete_login_preserves_recent_authentication_purpose_and_one_time_grant():
+    from urllib.parse import parse_qs, urlparse
+
+    from agent_backend.oidc import ApplicationSessionStore
+
+    claims = valid_claims("placeholder")
+    client, _http = build_client(claims=claims)
+    start = client.begin_login(require_recent_auth=True)
+    params = parse_qs(urlparse(start.authorization_url).query)
+    claims["nonce"] = params["nonce"][0]
+
+    identity = client.complete_login(
+        state=params["state"][0],
+        code="authorization-code",
+    )
+    assert identity.sub == "stable-google-sub"
+    assert identity.recently_authenticated is True
+
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: 1100.0,
+        monotonic_clock=lambda: 1100.0,
+    )
+    credential = sessions.create(
+        identity=identity,
+        allowlist=MasterUserAllowlist("stable-google-sub"),
+    )
+    principal = sessions.resolve(credential.token)
+    assert principal is not None
+    assert sessions.consume_recent_auth(principal, max_age_seconds=300)
+    assert not sessions.consume_recent_auth(principal, max_age_seconds=300)
+
+
 def test_only_fresh_google_auth_session_satisfies_recent_auth_gate():
     from agent_backend.oidc import ApplicationSessionStore
 

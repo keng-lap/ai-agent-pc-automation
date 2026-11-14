@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "src/backend/agent_backend/authenticator.py"
+      - "src/backend/agent_backend/auth_api.py"
       - "src/backend/agent_backend/windows_secret_storage.py"
       - "tests/backend/test_authenticator.py"
       - "tests/backend/test_auth_api.py"
@@ -19,6 +20,8 @@ on:
       - main
     paths:
       - "src/backend/agent_backend/authenticator.py"
+      - "src/backend/agent_backend/auth_api.py"
+      - "tests/backend/test_auth_api.py"
       - "src/backend/agent_backend/windows_secret_storage.py"
       - "tests/backend/test_authenticator.py"
       - "tests/backend/test_windows_secret_storage.py"

@@ -171,7 +171,8 @@ atomically with the associated audit event and version check.
 | From | To | Actor | Required preconditions |
 |---|---|---|---|
 | absent | QUEUED | API | Authenticated owner; schema-valid immutable definition version; current evidence; exact approval reserved (not consumed) in the same transaction; unique idempotency key; queue audit committed |
-| QUEUED | STARTING | Worker | Atomic compare-and-set claim; valid unexpired lease; exact approval and evidence revalidated; approval consumed atomically with STARTING and its audit event; no other active installation |
+| QUEUED | STARTING | Worker | Atomic compare-and-set claim; no unexpired lease exists; claim creates a valid unexpired lease in the same transaction; exact approval and evidence revalidated; approval consumed atomically with STARTING and its audit event; no other active installation |
+| QUEUED | CANCELLED | API | Owner-authorized cancellation before worker claim; cancellation and release of the reserved approval are committed atomically with the terminal audit event |
 | QUEUED | FAILED | Worker/reconciler | Definitive approval expiry/revocation or evidence mismatch before process creation; terminal rejection audit committed |
 | STARTING | RUNNING | Worker | Fixed executable identity verified; process created inside containment boundary; process identity persisted before side-effect start is acknowledged |
 | STARTING | FAILED | Worker/reconciler | Definitive proof no child/installer process started; terminal audit committed |

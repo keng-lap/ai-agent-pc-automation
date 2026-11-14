@@ -341,6 +341,43 @@ def test_recovery_consumes_the_exact_future_step_on_the_primary_replay_guard(tmp
     )
 
 
+def test_enrollment_route_cannot_confirm_recovery_pending_qr(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+    assert manager.confirm(
+        enrollment_id=initial.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+    )
+    recovery = manager.begin_recovery(
+        owner_sub="owner-sub",
+        account_name="owner@example.test",
+    )
+
+    assert not manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(NEW_SECRET, 120),
+        expected_replace_existing=False,
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
+    assert recovery.enrollment_id in manager._pending
+
+
+def test_recovery_route_cannot_confirm_enrollment_pending_qr(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+
+    assert not manager.confirm(
+        enrollment_id=enrollment.enrollment_id,
+        owner_sub="owner-sub",
+        code=code_at(RFC_SECRET, 90),
+        expected_replace_existing=True,
+    )
+    assert store.load(owner_sub="owner-sub") is None
+    assert enrollment.enrollment_id in manager._pending
+
+
 def test_recovery_replay_collision_keeps_pending_qr_for_a_later_step(tmp_path, monkeypatch):
     manager, store = build_manager(tmp_path, now=90)
     initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")

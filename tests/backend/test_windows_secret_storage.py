@@ -106,7 +106,19 @@ def test_windows_secret_file_repairs_extra_dacl_ace_for_verified_owner(tmp_path)
     assert store.read() == b"encrypted"
     with ExitStack() as stack:
         _parent, sid = store._parent_handles(stack)
-        handle = store._open_file(stack, sid, create=False)
+        handle = win32file.CreateFile(
+            str(store._path),
+            win32con.READ_CONTROL,
+            win32con.FILE_SHARE_READ,
+            None,
+            win32con.OPEN_EXISTING,
+            0x00200000,
+            None,
+        )
+        try:
+            WindowsSecretFile._verify_owner_only_dacl(handle, sid)
+        finally:
+            win32file.CloseHandle(handle)
 
 
 def test_windows_secret_file_rejects_file_reparse_point(tmp_path):
@@ -121,3 +133,24 @@ def test_windows_secret_file_rejects_file_reparse_point(tmp_path):
     store = WindowsSecretFile(link)
     with pytest.raises(WindowsSecretStorageError, match="reparse point"):
         store.read()
+
+
+
+def test_create_file_is_removed_if_owner_dacl_setup_fails(tmp_path, monkeypatch):
+    store = WindowsSecretFile(tmp_path / "private" / "authenticator.json")
+    with ExitStack() as parent_stack:
+        _parent, sid = store._parent_handles(parent_stack)
+
+        def fail_dacl(_cls, *_args, **_kwargs):
+            raise WindowsSecretStorageError("simulated DACL failure")
+
+        monkeypatch.setattr(
+            WindowsSecretFile,
+            "_set_owner_only_dacl",
+            classmethod(fail_dacl),
+        )
+        with ExitStack() as file_stack:
+            with pytest.raises(WindowsSecretStorageError, match="simulated DACL failure"):
+                store._open_file(file_stack, sid, create=True)
+
+    assert not store._path.exists()
