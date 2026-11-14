@@ -88,7 +88,7 @@
             ? 'พื้นที่จัดเก็บ Authenticator มีปัญหา แต่คุณยังใช้ Dashboard และดูสถานะงานได้ คำสั่งเสี่ยงสูงจะถูกระงับจนกว่าจะแก้ไขพื้นที่จัดเก็บ'
             : 'Authenticator storage is unavailable. You can still use the Dashboard and view jobs; high-risk actions remain blocked until storage is repaired.' }}</p>
           <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
-            {{ language() === 'th' ? 'ยืนยัน Google อีกครั้งเพื่อกู้คืน Authenticator' : 'Reauthenticate with Google to recover authenticator' }}
+            {{ language() === 'th' ? 'ตรวจสอบการเข้าสู่ระบบ Google ล่าสุดเพื่อกู้คืน Authenticator' : 'Check Google sign-in freshness to recover authenticator' }}
           </button>
         } @else if (!authenticatorEnrolled()) {
           <p>{{ language() === 'th' ? 'ลงทะเบียนแอป Authenticator ก่อนอนุมัติคำสั่งที่มีความเสี่ยงสูง' : 'Enroll an authenticator app before approving high-risk actions.' }}</p>
