@@ -107,7 +107,7 @@ class WindowsSecretFile:
             ]
             get_info.restype = ctypes.c_int
             if not get_info(
-                handle,
+                ctypes.c_void_p(int(handle)),
                 9,  # FileAttributeTagInfo
                 ctypes.byref(tag_info),
                 ctypes.sizeof(tag_info),
