@@ -198,11 +198,14 @@ class WebAuthnPlatformAuthenticator:
             challenge=ceremony.challenge,
             authenticator_selection=AuthenticatorSelectionCriteria(
                 authenticator_attachment=AuthenticatorAttachment.PLATFORM,
-                user_verification=UserVerificationRequirement.REQUIRED,
             ),
             timeout=CEREMONY_TTL_SECONDS * 1000,
         )
-        return ceremony.ceremony_id, json.loads(options_to_json(options))
+        public_options = json.loads(options_to_json(options))
+        # py_webauthn 2.x models this registration field as optional in its
+        # dataclass; set the WebAuthn protocol value explicitly in the JSON.
+        public_options["authenticatorSelection"]["userVerification"] = "required"
+        return ceremony.ceremony_id, public_options
 
     def finish_registration(
         self,
