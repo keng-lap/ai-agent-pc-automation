@@ -303,241 +303,92 @@ class _PendingEnrollment:
 class AuthenticatorEnrollmentManager:
     """One-owner, one-time QR enrollment state machine."""
 
-    def __init__(
-        self,
-        *,
-        secret_store: EncryptedTotpSecretFileStore,
-        replay_guard: TotpReplayGuard | None = None,
-        clock=None,
-        monotonic_clock=None,
-        secret_factory=generate_secret,
-    ) -> None:
+    def __init__(self, *, secret_store: EncryptedTotpSecretFileStore,
+                 replay_guard: TotpReplayGuard | None = None, clock=None,
+                 monotonic_clock=None, secret_factory=generate_secret) -> None:
         self._secret_store = secret_store
         self._replay_guard = replay_guard or TotpReplayGuard()
         self._clock = clock or time.time
-        self._monotonic_clock = monotonic_clock or (
-            time.monotonic if clock is None else clock
-        )
+        self._monotonic_clock = monotonic_clock or (time.monotonic if clock is None else clock)
         self._secret_factory = secret_factory
         self._pending: dict[str, _PendingEnrollment] = {}
         self._lock = threading.RLock()
 
-    def begin(
-        self,
-        *,
-        owner_sub: str,
-        account_name: str,
-        session_id: str | None = None,
-    ) -> EnrollmentStart:
-        return self._begin(
-            owner_sub=owner_sub,
-            session_id=session_id,
-            account_name=account_name,
-            replace_existing=False,
-        )
-
-    def begin_recovery(
-        self,
-        *,
-        owner_sub: str,
-        account_name: str,
-        session_id: str | None = None,
-    ) -> EnrollmentStart:
-        """Begin a Google-reauthenticated replacement without requiring the old TOTP."""
-        return self._begin(
-            owner_sub=owner_sub,
-            session_id=session_id,
-            account_name=account_name,
-            replace_existing=True,
-        )
-
-    def _begin(
-        self,
-        *,
-        owner_sub: str,
-        session_id: str | None,
-        account_name: str,
-        replace_existing: bool,
-    ) -> EnrollmentStart:
+    def begin(self, *, owner_sub: str, account_name: str,
+              session_id: str | None = None) -> EnrollmentStart:
         if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
             raise ValueError("authenticated owner is required")
         if session_id is not None and (
             not isinstance(session_id, str) or not 16 <= len(session_id) <= 256
         ):
             raise ValueError("authenticated session is invalid")
-        if (
-            not isinstance(account_name, str)
-            or not 1 <= len(account_name.strip()) <= 254
-        ):
+        if not isinstance(account_name, str) or not 1 <= len(account_name.strip()) <= 254:
             raise ValueError("account label is invalid")
         now = self._clock()
-        if (
-            isinstance(now, bool)
-            or not isinstance(now, (int, float))
-            or not math.isfinite(now)
-            or now < 0
-        ):
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now) or now < 0:
             raise RuntimeError("system clock is invalid")
-
         monotonic_now = self._monotonic_clock()
-        if (
-            isinstance(monotonic_now, bool)
-            or not isinstance(monotonic_now, (int, float))
-            or not math.isfinite(monotonic_now)
-            or monotonic_now < 0
-        ):
+        if isinstance(monotonic_now, bool) or not isinstance(monotonic_now, (int, float)) or not math.isfinite(monotonic_now) or monotonic_now < 0:
             raise RuntimeError("elapsed-time clock is invalid")
-
         with self._lock:
-            configured = self._secret_store.is_configured()
-            if configured != replace_existing:
-                if configured:
-                    raise RuntimeError("an authenticator is already enrolled")
-                raise RuntimeError("there is no authenticator to recover")
-            # A refreshed/lost enrollment page cannot recover its one-time QR.
-            # Starting again invalidates any older pending QR for this owner.
+            if self._secret_store.is_configured():
+                raise RuntimeError("an authenticator is already enrolled")
             superseded = [
-                enrollment_id
-                for enrollment_id, item in self._pending.items()
+                enrollment_id for enrollment_id, item in self._pending.items()
                 if item.owner_sub == owner_sub
             ]
             for enrollment_id in superseded:
                 self._pending.pop(enrollment_id, None)
             secret = self._secret_factory()
-            uri = provisioning_uri(
-                secret,
-                account_name=account_name,
-                issuer=ENROLLMENT_ISSUER,
-            )
+            uri = provisioning_uri(secret, account_name=account_name, issuer=ENROLLMENT_ISSUER)
             qr_data_uri = _qr_data_uri(uri)
             enrollment_id = secrets.token_hex(16)
             expires_at = float(now) + ENROLLMENT_TTL_SECONDS
             self._pending[enrollment_id] = _PendingEnrollment(
-                owner_sub=owner_sub,
-                session_id=session_id,
-                secret=secret,
+                owner_sub=owner_sub, session_id=session_id, secret=secret,
                 expires_at=expires_at,
                 monotonic_deadline=float(monotonic_now) + ENROLLMENT_TTL_SECONDS,
-                replace_existing=replace_existing,
             )
-            return EnrollmentStart(
-                enrollment_id=enrollment_id,
-                qr_data_uri=qr_data_uri,
-                expires_at=expires_at,
-            )
+            return EnrollmentStart(enrollment_id=enrollment_id, qr_data_uri=qr_data_uri, expires_at=expires_at)
 
-    def confirm(
-        self,
-        *,
-        enrollment_id: str,
-        owner_sub: str,
-        code: str,
-        session_id: str | None = None,
-        expected_replace_existing: bool | None = None,
-    ) -> bool:
+    def confirm(self, *, enrollment_id: str, owner_sub: str, code: str,
+                session_id: str | None = None) -> bool:
         now = self._clock()
         if (
-            isinstance(now, bool)
-            or not isinstance(now, (int, float))
-            or not math.isfinite(now)
-            or now < 0
-            or not isinstance(enrollment_id, str)
-            or not isinstance(owner_sub, str)
+            isinstance(now, bool) or not isinstance(now, (int, float))
+            or not math.isfinite(now) or now < 0
+            or not isinstance(enrollment_id, str) or not isinstance(owner_sub, str)
         ):
             return False
-
         monotonic_now = self._monotonic_clock()
-        if (
-            isinstance(monotonic_now, bool)
-            or not isinstance(monotonic_now, (int, float))
-            or not math.isfinite(monotonic_now)
-            or monotonic_now < 0
-        ):
+        if isinstance(monotonic_now, bool) or not isinstance(monotonic_now, (int, float)) or not math.isfinite(monotonic_now) or monotonic_now < 0:
             return False
-
         with self._lock:
             pending = self._pending.get(enrollment_id)
-            if (
-                pending is None
-                or pending.owner_sub != owner_sub
-                or pending.session_id != session_id
-            ):
-                return False
-            if expected_replace_existing is not None and (
-                type(expected_replace_existing) is not bool
-                or pending.replace_existing is not expected_replace_existing
-            ):
+            if pending is None or pending.owner_sub != owner_sub or pending.session_id != session_id:
                 return False
             if float(monotonic_now) >= pending.monotonic_deadline:
                 self._pending.pop(enrollment_id, None)
                 return False
-
-            matched_step = matching_step(
-                pending.secret,
-                code,
-                timestamp=float(now),
-            )
-            if matched_step is None:
+            if matching_step(pending.secret, code, timestamp=float(now)) is None:
                 pending.failed_attempts += 1
                 if pending.failed_attempts >= MAX_ENROLLMENT_ATTEMPTS:
                     self._pending.pop(enrollment_id, None)
                 return False
-
-            replay_owner = (
-                "recovery:"
-                f"{hashlib.sha256(owner_sub.encode('utf-8')).hexdigest()}:{enrollment_id}"
-                if pending.replace_existing
-                else owner_sub
-            )
             if not self._replay_guard.verify_and_consume(
-                owner_key=replay_owner,
-                secret=pending.secret,
-                code=code,
-                timestamp=float(now),
+                owner_key=owner_sub, secret=pending.secret, code=code, timestamp=float(now)
             ):
                 pending.failed_attempts += 1
                 if pending.failed_attempts >= MAX_ENROLLMENT_ATTEMPTS:
                     self._pending.pop(enrollment_id, None)
                 return False
-
             try:
-                if pending.replace_existing:
-                    replay_committed = self._replay_guard.consume_step_after(
-                        owner_key=owner_sub,
-                        step=matched_step,
-                        action=lambda: self._secret_store.replace(
-                            owner_sub=owner_sub,
-                            secret=pending.secret,
-                        ),
-                        consume_on_exception=(SecretStoreCommitUnknown,),
-                    )
-                    if not replay_committed:
-                        # A collision with the primary replay guard does not
-                        # invalidate this QR. Keep it available for a later
-                        # valid step, subject to the existing expiry/attempt cap.
-                        pending.failed_attempts += 1
-                        if pending.failed_attempts >= MAX_ENROLLMENT_ATTEMPTS:
-                            self._pending.pop(enrollment_id, None)
-                        return False
-                else:
-                    self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
-            except SecretStoreCommitUnknown:
-                # consume_step_after() burned the exact step under the replay
-                # lock before propagating the uncertain-commit exception.
-                self._pending.pop(enrollment_id, None)
-                try:
-                    active_secret = self._secret_store.load(owner_sub=owner_sub)
-                except SecretStoreError:
-                    raise SecretStoreCommitUnknown(
-                        "Authenticator replacement state remains unavailable."
-                    ) from None
-                return active_secret == pending.secret
+                self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
             except SecretStoreError:
                 self._pending.pop(enrollment_id, None)
                 return False
             self._pending.pop(enrollment_id, None)
             return True
-
 
 def _qr_data_uri(provisioning_uri_value: str) -> str:
     qr = qrcode.QRCode(
