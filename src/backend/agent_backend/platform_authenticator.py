@@ -15,6 +15,7 @@ import os
 import secrets
 import threading
 import time
+from urllib.parse import urlsplit
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -203,8 +204,19 @@ class PlatformAuthenticatorManager:
         expected_origin: str = "http://localhost:4200",
         clock=None,
     ) -> None:
-        if rp_id != "localhost" or expected_origin != "http://localhost:4200":
-            raise ValueError("Only the configured localhost WebAuthn origin is supported.")
+        parsed_origin = urlsplit(expected_origin)
+        if (
+            rp_id != "localhost"
+            or parsed_origin.scheme != "http"
+            or parsed_origin.hostname != "localhost"
+            or parsed_origin.port is None
+            or parsed_origin.path not in {"", "/"}
+            or parsed_origin.query
+            or parsed_origin.fragment
+            or parsed_origin.username is not None
+            or parsed_origin.password is not None
+        ):
+            raise ValueError("Only an explicit localhost HTTP WebAuthn origin is supported.")
         self._store = credential_store
         self._rp_id = rp_id
         self._origin = expected_origin
@@ -338,14 +350,20 @@ class PlatformAuthenticatorManager:
             raise PlatformAuthenticatorError("Platform ceremony is invalid or expired.")
         now = self._clock()
         with self._lock:
-            pending = self._pending.pop(ceremony_id, None)
+            pending = self._pending.get(ceremony_id)
             if (
                 pending is None or pending.owner_sub != owner_sub
                 or pending.session_id != session_id or pending.purpose != purpose
                 or isinstance(now, bool) or not isinstance(now, (int, float))
                 or not math.isfinite(now) or float(now) >= pending.expires_at
             ):
+                if pending is not None and (
+                    isinstance(now, (int, float)) and not isinstance(now, bool)
+                    and math.isfinite(now) and float(now) >= pending.expires_at
+                ):
+                    self._pending.pop(ceremony_id, None)
                 raise PlatformAuthenticatorError("Platform ceremony is invalid or expired.")
+            self._pending.pop(ceremony_id, None)
             return pending
 
     def _remove_expired(self, now: float) -> None:
