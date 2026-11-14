@@ -353,6 +353,7 @@ export class App implements AfterViewChecked {
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
           this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
+          this.logAuthenticatorUiState("auth-session-loaded");
           this.resumeAuthenticatorIntent(session);
         },
         error: () => {
@@ -364,8 +365,28 @@ export class App implements AfterViewChecked {
             ? 'เชื่อมต่อระบบยืนยันตัวตนไม่ได้ กรุณาตรวจสอบ Backend'
             : 'Could not reach the authentication service. Check the backend.');
           this.authReady.set(true);
+          this.logAuthenticatorUiState("auth-session-error");
         },
       });
+  }
+
+  private logAuthenticatorUiState(reason: string): void {
+    const state = {
+      reason,
+      authReady: this.authReady(),
+      authEnabled: this.authEnabled(),
+      authenticated: this.authenticated(),
+      authenticatorEnrolled: this.authenticatorEnrolled(),
+      authenticatorStorageAvailable: this.authenticatorStorageAvailable(),
+      visibleBranch: !this.authReady()
+        ? "loading"
+        : !this.authenticatorStorageAvailable()
+          ? "storage-unavailable"
+          : !this.authenticatorEnrolled()
+            ? "enrollment-prompt"
+            : "enrolled-status",
+    };
+    console.info("[authenticator-ui]", state);
   }
 
   private resumeAuthenticatorIntent(session: AuthSession): void {
