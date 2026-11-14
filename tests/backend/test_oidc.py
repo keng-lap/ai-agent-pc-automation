@@ -422,9 +422,10 @@ def test_session_freshness_uses_age_from_google_auth_time_not_session_creation()
     )
 
     assert identity.recently_authenticated is True
-    assert identity.recent_auth_age_seconds == 10.0
+    assert identity.recent_auth_time == 1090.0
 
     monotonic_now = [5000.0]
+    now = 1350.0
     sessions = ApplicationSessionStore(
         ttl_seconds=1800,
         clock=lambda: now,
@@ -438,7 +439,7 @@ def test_session_freshness_uses_age_from_google_auth_time_not_session_creation()
     assert principal is not None
     assert sessions.is_recently_authenticated(principal, max_age_seconds=300)
 
-    monotonic_now[0] += 291
+    monotonic_now[0] += 41
     assert not sessions.is_recently_authenticated(principal, max_age_seconds=300)
 
 
@@ -449,7 +450,7 @@ def test_session_store_rejects_recent_auth_age_that_expired_before_creation():
         sub="stable-google-sub",
         email="owner@example.test",
         recently_authenticated=True,
-        recent_auth_age_seconds=301.0,
+        recent_auth_time=799.0,
     )
     sessions = ApplicationSessionStore(ttl_seconds=1800, clock=lambda: 1100)
     with pytest.raises(OidcAuthenticationError, match="no longer recent"):
