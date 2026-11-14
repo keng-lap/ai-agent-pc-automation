@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import hashlib
 import json
 import math
 import os
@@ -368,6 +369,7 @@ class EnrollmentStart:
 @dataclass(slots=True)
 class _PendingEnrollment:
     owner_sub: str
+    session_id: str | None
     secret: str
     expires_at: float
     monotonic_deadline: float
@@ -397,30 +399,25 @@ class AuthenticatorEnrollmentManager:
         self._pending: dict[str, _PendingEnrollment] = {}
         self._lock = threading.RLock()
 
-    def begin(self, *, owner_sub: str, account_name: str) -> EnrollmentStart:
-        return self._begin(
-            owner_sub=owner_sub,
-            account_name=account_name,
-            replace_existing=False,
-        )
+    def begin(self, *, owner_sub: str, account_name: str, session_id: str | None = None) -> EnrollmentStart:
+        return self._begin(owner_sub=owner_sub, session_id=session_id, account_name=account_name, replace_existing=False)
 
-    def begin_recovery(self, *, owner_sub: str, account_name: str) -> EnrollmentStart:
+    def begin_recovery(self, *, owner_sub: str, account_name: str, session_id: str | None = None) -> EnrollmentStart:
         """Begin a Google-reauthenticated replacement without requiring the old TOTP."""
-        return self._begin(
-            owner_sub=owner_sub,
-            account_name=account_name,
-            replace_existing=True,
-        )
+        return self._begin(owner_sub=owner_sub, session_id=session_id, account_name=account_name, replace_existing=True)
 
     def _begin(
         self,
         *,
         owner_sub: str,
+        session_id: str | None,
         account_name: str,
         replace_existing: bool,
     ) -> EnrollmentStart:
         if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
             raise ValueError("authenticated owner is required")
+        if session_id is not None and (not isinstance(session_id, str) or not 16 <= len(session_id) <= 256):
+            raise ValueError("authenticated session is invalid")
         if not isinstance(account_name, str) or not 1 <= len(account_name.strip()) <= 254:
             raise ValueError("account label is invalid")
         now = self._clock()
@@ -467,6 +464,7 @@ class AuthenticatorEnrollmentManager:
             expires_at = float(now) + ENROLLMENT_TTL_SECONDS
             self._pending[enrollment_id] = _PendingEnrollment(
                 owner_sub=owner_sub,
+                session_id=session_id,
                 secret=secret,
                 expires_at=expires_at,
                 monotonic_deadline=float(monotonic_now) + ENROLLMENT_TTL_SECONDS,
@@ -484,6 +482,7 @@ class AuthenticatorEnrollmentManager:
         enrollment_id: str,
         owner_sub: str,
         code: str,
+        session_id: str | None = None,
         expected_replace_existing: bool | None = None,
     ) -> bool:
         now = self._clock()
@@ -508,7 +507,7 @@ class AuthenticatorEnrollmentManager:
 
         with self._lock:
             pending = self._pending.get(enrollment_id)
-            if pending is None or pending.owner_sub != owner_sub:
+            if pending is None or pending.owner_sub != owner_sub or pending.session_id != session_id:
                 return False
             if expected_replace_existing is not None and (
                 type(expected_replace_existing) is not bool
@@ -531,7 +530,7 @@ class AuthenticatorEnrollmentManager:
                 return False
 
             replay_owner = (
-                f"{owner_sub}:recovery:{enrollment_id}"
+                f"recovery:{hashlib.sha256(owner_sub.encode('utf-8')).hexdigest()}:{enrollment_id}"
                 if pending.replace_existing
                 else owner_sub
             )
@@ -551,10 +550,8 @@ class AuthenticatorEnrollmentManager:
                     replay_committed = self._replay_guard.consume_step_after(
                         owner_key=owner_sub,
                         step=matched_step,
-                        action=lambda: self._secret_store.replace(
-                            owner_sub=owner_sub,
-                            secret=pending.secret,
-                        ),
+                        action=lambda: self._secret_store.replace(owner_sub=owner_sub, secret=pending.secret),
+                        consume_on_exception=(SecretStoreCommitUnknown,),
                     )
                     if not replay_committed:
                         # A collision with the primary replay guard does not
@@ -567,14 +564,8 @@ class AuthenticatorEnrollmentManager:
                 else:
                     self._secret_store.save(owner_sub=owner_sub, secret=pending.secret)
             except SecretStoreCommitUnknown:
-                # The file replacement may already be active. Burn the exact
-                # matched step conservatively before reconciling the durable
-                # secret, so a post-rename read failure cannot permit replay.
-                self._replay_guard.consume_step_after(
-                    owner_key=owner_sub,
-                    step=matched_step,
-                    action=lambda: None,
-                )
+                # consume_step_after() burned the exact step under the replay
+                # lock before propagating the uncertain-commit exception.
                 self._pending.pop(enrollment_id, None)
                 try:
                     active_secret = self._secret_store.load(owner_sub=owner_sub)
