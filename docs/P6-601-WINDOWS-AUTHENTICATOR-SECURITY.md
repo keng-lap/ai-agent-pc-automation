@@ -6,7 +6,7 @@
 - TOTP is a Step-up factor for high-risk approvals; it is not required for ordinary sign-in, Dashboard access, or read-only Job Status.
 - Google does not support a forced reauthentication request through `prompt=login` or `max_age=0`. The dedicated enrollment/recovery transaction requests the essential `auth_time` ID-token claim; the backend accepts it only when the actual Google authentication time is within the five-minute freshness window and binds it to the one-time OIDC transaction. `prompt=select_account` is used only to select the account and is not treated as freshness evidence.
 - If Google returns a stale `auth_time`, the owner must complete a fresh Google sign-in outside this app (for example, after signing out of the Google account in the browser) and retry. The app rejects stale or missing evidence; account selection or consent alone never satisfies the requirement.
-- Google project setup must enable the `auth_time` claim for the OAuth client. Google documents this claim as requiring enablement in settings and an app-verification prerequisite; complete those provider-side prerequisites before relying on enrollment/recovery.
+- Before relying on enrollment/recovery, the Google Auth Platform project must be **In production**, its Verification status must be **Verified**, and Settings → Advanced Settings → **Session age claims** must be enabled for the OAuth client. Google documents all three as prerequisites for receiving `auth_time`.
 - The resulting session has a five-minute, one-use fresh-authentication grant. Enrollment/recovery consumes that grant atomically. Session rotation does not renew it.
 
 ## Enrollment
@@ -53,7 +53,8 @@ The Windows adapter uses pywin32 and fails closed if the required security APIs 
 - The Dashboard and read-only Job Status remain accessible. The UI offers a Google-reauthenticated recovery attempt even when the secret payload is corrupt.
 - A current-user-owned final state directory or secret file with a bad DACL is hardened through its verified handle before use. A wrong-owner path remains rejected; the adapter never takes ownership of an existing path.
 - Wrong-owner and reparse-point paths remain rejected.
-- A confirmed replacement can replace a corrupt encrypted payload only when the existing secret file passes owner/DACL trust checks. It cannot repair an untrusted file ACL.
+- A current-user-owned secret file with a bad DACL may be repaired through its already-verified handle. A wrong-owner file or a DACL that cannot be repaired is rejected; recovery never takes ownership of an existing file.
+- A confirmed replacement can replace a corrupt encrypted payload only when the existing secret file passes those owner/DACL trust checks. Recovery cannot replace a file whose owner or ACL trust cannot be established.
 - Enrollment, Step-up, and other high-risk operations fail closed while authenticator storage is unavailable.
 - If replacement fails, the adapter attempts to delete its randomly named temporary file while the verified parent directory remains pinned. If cleanup itself fails, the leftover file is inert DPAPI ciphertext in the owner-only directory and must be removed only through a verified maintenance procedure.
 - No fallback to an unprotected file, another user's SID, or disabled authentication is permitted.
