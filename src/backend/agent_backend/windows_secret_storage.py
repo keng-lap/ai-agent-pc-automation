@@ -1,7 +1,7 @@
 """Handle-based Windows secret-file storage with owner-only DACLs.
 
 This adapter opens and holds every directory component without FILE_SHARE_DELETE,
-rejects reparse points, verifies the current-user owner SID, and performs file I/O
+rejects path-redirection reparse points, verifies the current-user owner SID, and performs file I/O
 through verified handles. It deliberately fails closed if pywin32 is unavailable.
 """
 
