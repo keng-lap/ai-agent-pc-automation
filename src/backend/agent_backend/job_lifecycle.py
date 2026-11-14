@@ -38,7 +38,7 @@ TERMINAL_STATES = frozenset(
 _ACTIVE_STATES = frozenset(
     {JobState.STARTING, JobState.RUNNING, JobState.VERIFYING, JobState.CANCEL_REQUESTED}
 )
-_ALLOWED_TRANSITIONS = {
+ALLOWED_TRANSITIONS = {
     JobState.QUEUED: frozenset({JobState.STARTING, JobState.CANCELLED, JobState.FAILED}),
     JobState.STARTING: frozenset(
         {JobState.RUNNING, JobState.CANCEL_REQUESTED, JobState.FAILED, JobState.UNKNOWN}
@@ -219,7 +219,7 @@ class InMemoryJobStore:
             if current is None:
                 raise JobLifecycleError("job not found")
             self._check_lease(current, worker_id, lease_token, expected_version, now)
-            if target not in _ALLOWED_TRANSITIONS[current.state]:
+            if target not in ALLOWED_TRANSITIONS[current.state]:
                 raise JobLifecycleError(
                     f"transition {current.state.value} -> {target.value} is not allowed"
                 )
