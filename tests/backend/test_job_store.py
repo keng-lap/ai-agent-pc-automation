@@ -185,7 +185,7 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
         action_digest=DIGEST,
         idempotency_key="cancel-race",
     )
-    started = store.transition(
+    store.transition(
         job["job_id"],
         owner_id=OWNER,
         expected_version=0,
@@ -193,7 +193,7 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
         message="Worker claimed job",
         now=NOW + timedelta(seconds=1),
     )
-    running = store.transition(
+    store.transition(
         job["job_id"],
         owner_id=OWNER,
         expected_version=1,
@@ -201,7 +201,7 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
         message="Process started",
         now=NOW + timedelta(seconds=2),
     )
-    cancel_requested = store.transition(
+    store.transition(
         job["job_id"],
         owner_id=OWNER,
         expected_version=2,
