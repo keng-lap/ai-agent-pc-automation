@@ -400,3 +400,60 @@ def test_complete_login_preserves_recent_auth_purpose_into_one_time_session_gran
     assert principal is not None
     assert sessions.consume_recent_auth(principal, max_age_seconds=300) is True
     assert sessions.consume_recent_auth(principal, max_age_seconds=300) is False
+
+
+def test_session_freshness_uses_age_from_google_auth_time_not_session_creation():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = 1100.0
+    claims = valid_claims("unused")
+    claims["auth_time"] = 1090
+    transactions = OidcTransactionStore(clock=lambda: now)
+    transaction = transactions.create(requires_recent_auth=True)
+    claims["nonce"] = transaction.nonce
+    client, _http = build_client(
+        now=now,
+        claims=claims,
+        transactions=transactions,
+    )
+    identity = client.complete_login(
+        state=transaction.state,
+        code="recent-auth-code",
+    )
+
+    assert identity.recently_authenticated is True
+    assert identity.recent_auth_age_seconds == 10.0
+
+    monotonic_now = [5000.0]
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: now,
+        monotonic_clock=lambda: monotonic_now[0],
+    )
+    credential = sessions.create(
+        identity=identity,
+        allowlist=MasterUserAllowlist("stable-google-sub"),
+    )
+    principal = sessions.resolve(credential.token)
+    assert principal is not None
+    assert sessions.is_recently_authenticated(principal, max_age_seconds=300)
+
+    monotonic_now[0] += 291
+    assert not sessions.is_recently_authenticated(principal, max_age_seconds=300)
+
+
+def test_session_store_rejects_recent_auth_age_that_expired_before_creation():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    identity = GoogleIdentity(
+        sub="stable-google-sub",
+        email="owner@example.test",
+        recently_authenticated=True,
+        recent_auth_age_seconds=301.0,
+    )
+    sessions = ApplicationSessionStore(ttl_seconds=1800, clock=lambda: 1100)
+    with pytest.raises(OidcAuthenticationError, match="no longer recent"):
+        sessions.create(
+            identity=identity,
+            allowlist=MasterUserAllowlist("stable-google-sub"),
+        )
