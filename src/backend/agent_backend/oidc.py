@@ -375,7 +375,11 @@ class GoogleOidcClient:
             sub=subject,
             email=email,
             recently_authenticated=require_recent_auth and valid_auth_time,
-            recent_auth_age_seconds=(max(0.0, float(now) - float(auth_time)) if require_recent_auth and valid_auth_time else None),
+            recent_auth_age_seconds=(
+                max(0.0, float(now) - float(auth_time))
+                if require_recent_auth and valid_auth_time
+                else None
+            ),
         )
 
 
@@ -461,7 +465,12 @@ class ApplicationSessionStore:
         if identity.recently_authenticated:
             if recent_auth_age is None:
                 recent_auth_age = 0.0
-            if (isinstance(recent_auth_age, bool) or not isinstance(recent_auth_age, (int, float)) or not math.isfinite(recent_auth_age) or not 0 <= recent_auth_age <= MAX_RECENT_AUTH_AGE_SECONDS):
+            if (
+                isinstance(recent_auth_age, bool)
+                or not isinstance(recent_auth_age, (int, float))
+                or not math.isfinite(recent_auth_age)
+                or not 0 <= recent_auth_age <= MAX_RECENT_AUTH_AGE_SECONDS
+            ):
                 raise OidcAuthenticationError("Google authentication is no longer recent.")
         with self._lock:
             self._remove_expired(float(monotonic_now))
@@ -481,7 +490,11 @@ class ApplicationSessionStore:
                 expires_at=expires_at,
                 monotonic_deadline=monotonic_deadline,
                 monotonic_authenticated_at=(
-                    float(monotonic_now) - float(recent_auth_age) if identity.recently_authenticated else None
+                    (
+                        float(monotonic_now) - float(recent_auth_age)
+                        if identity.recently_authenticated
+                        else None
+                    )
                 ),
             )
         return SessionCredential(
