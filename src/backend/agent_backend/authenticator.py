@@ -563,7 +563,9 @@ class AuthenticatorEnrollmentManager:
                 try:
                     active_secret = self._secret_store.load(owner_sub=owner_sub)
                 except SecretStoreError:
-                    raise
+                    raise SecretStoreCommitUnknown(
+                        "Authenticator replacement state remains unavailable."
+                    ) from None
                 return active_secret == pending.secret
             except SecretStoreError:
                 self._pending.pop(enrollment_id, None)
