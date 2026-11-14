@@ -174,6 +174,7 @@ def test_cancel_requested_completion_enters_verifying_before_final_result():
         target=JobState.RUNNING,
         now=NOW + timedelta(seconds=1),
     )
+    assert running.state is JobState.RUNNING
     requested = store.request_cancel(
         job.job_id,
         owner_id="owner-1",
