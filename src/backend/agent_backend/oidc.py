@@ -506,11 +506,9 @@ class ApplicationSessionStore:
                 expires_at=expires_at,
                 monotonic_deadline=monotonic_deadline,
                 monotonic_authenticated_at=(
-                    (
-                        float(monotonic_now) - float(recent_auth_age)
-                        if identity.recently_authenticated
-                        else None
-                    )
+                    float(monotonic_now) - float(recent_auth_age)
+                    if identity.recently_authenticated
+                    else None
                 ),
             )
         return SessionCredential(
