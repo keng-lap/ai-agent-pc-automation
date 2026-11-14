@@ -28,6 +28,7 @@ _TERMINAL_STATES = frozenset(
     {JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED, JobState.UNKNOWN}
 )
 
+
 class JobStoreUnavailable(RuntimeError):
     """Durable job storage is unavailable or cannot be trusted."""
 
