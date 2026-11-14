@@ -273,6 +273,7 @@ class WindowsSecretFile:
             # has been verified as the current user. The handle denies delete
             # and concurrent writes while the descriptor is inspected/repaired.
             access |= _WRITE_DAC
+        created_by_attempt = False
         try:
             handle = win32file.CreateFile(
                 str(self._path),
@@ -285,6 +286,9 @@ class WindowsSecretFile:
                 | (_FILE_FLAG_WRITE_THROUGH if create else 0),
                 None,
             )
+            # CREATE_NEW proves this handle refers to a file created here.
+            # Record that fact before any security operation can fail.
+            created_by_attempt = create
         except pywintypes.error as exc:
             error_code = getattr(exc, "winerror", None)
             if error_code is None and getattr(exc, "args", None):
@@ -320,7 +324,7 @@ class WindowsSecretFile:
                 win32file.CloseHandle(handle)
             except Exception:
                 pass
-            if create:
+            if created_by_attempt:
                 try:
                     self._path.unlink(missing_ok=True)
                 except OSError:
