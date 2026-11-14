@@ -11,7 +11,7 @@
 
 ## Enrollment
 
-1. The owner starts Google reauthentication from the authenticated Dashboard.
+1. The owner starts a Google session-freshness check from the authenticated Dashboard. This does not force Google to reauthenticate an existing Google Account session.
 2. The frontend starts a dedicated fresh Google OIDC transaction through `GET /api/auth/google/reauth/start`.
 3. The OIDC callback validates fresh-authentication evidence and updates the authenticated session.
 4. The owner starts enrollment through `POST /api/authenticator/enrollment`; the backend consumes the one-use fresh-authentication grant and creates a short-lived, owner-bound QR enrollment.
@@ -20,7 +20,7 @@
 
 ## Lost or unusable TOTP
 
-- The owner can start replacement using fresh Google OIDC authentication; the old TOTP is not required.
+- The owner can start replacement using a Google OIDC session-freshness check; the old TOTP is not required. If `auth_time` is stale, the owner must sign out of the Google Account in that browser and sign in again before retrying.
 - The new QR is pending and memory-only. The existing secret remains active until the new TOTP is confirmed.
 - The replacement is bound to the same verified Google owner and has the same short expiry and failed-attempt limit as enrollment.
 - On successful confirmation, the new encrypted secret replaces the old file with `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`; the destination is reopened and its exact payload is verified.
