@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import secrets
 import threading
 import time
@@ -312,11 +313,16 @@ class WebAuthnPlatformAuthenticator:
         if credential.owner_sub != owner_sub or not isinstance(assertion, dict):
             raise WebAuthnCeremonyError("WebAuthn credential is unavailable.")
         try:
-            raw_id = assertion.get("rawId") or assertion.get("id")
-            if not isinstance(raw_id, str):
+            raw_id = assertion.get("rawId")
+            credential_id = assertion.get("id")
+            if not isinstance(raw_id, str) or not isinstance(credential_id, str):
                 raise ValueError("Missing credential identifier.")
             supplied_id = _base64url_decode(raw_id)
-            if not secrets.compare_digest(supplied_id, credential.credential_id):
+            supplied_text_id = _base64url_decode(credential_id)
+            if (
+                not secrets.compare_digest(supplied_id, supplied_text_id)
+                or not secrets.compare_digest(supplied_id, credential.credential_id)
+            ):
                 raise ValueError("Credential identifier mismatch.")
             response = assertion.get("response")
             if not isinstance(response, dict):
@@ -348,8 +354,10 @@ class WebAuthnPlatformAuthenticator:
 def _base64url_decode(value: str) -> bytes:
     if not isinstance(value, str) or not 1 <= len(value) <= 2048:
         raise ValueError("Invalid base64url value.")
+    if any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for character in value):
+        raise ValueError("Invalid base64url alphabet.")
     padding = "=" * (-len(value) % 4)
-    decoded = base64.urlsafe_b64decode(value + padding)
+    decoded = base64.b64decode(value + padding, altchars=b"-_", validate=True)
     if not decoded:
         raise ValueError("Empty base64url value.")
     return decoded
