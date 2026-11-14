@@ -384,8 +384,8 @@ export class App implements AfterViewChecked {
     if (loginStatus === 'failed' || loginStatus === 'unavailable') {
       sessionStorage.removeItem(AUTHENTICATOR_INTENT_STORAGE_KEY);
       this.authError.set(this.language() === 'th'
-        ? 'ยืนยันบัญชี Google ไม่สำเร็จ การเข้าสู่ระบบเดิมยังใช้งานได้'
-        : 'Google reauthentication failed. Your existing session remains available.');
+        ? 'Google ไม่ได้ส่งเวลายืนยันตัวตนที่ใหม่พอ กรุณาออกจากบัญชี Google ในเบราว์เซอร์นี้แล้วเข้าสู่ระบบใหม่ จากนั้นลองอีกครั้ง Session ของแอปเดิมยังใช้งานได้'
+        : 'Google did not provide a recent enough authentication time. Sign out of your Google account in this browser, sign in again, then retry. Your existing app session remains available.');
       return;
     }
     if (loginStatus !== 'success' || !session.authenticated) return;
