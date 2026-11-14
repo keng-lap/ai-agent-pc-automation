@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_backend.auth_audit import record_auth_audit_event
-from agent_backend.authenticator import SecretStoreError
+from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
 from agent_backend.plan_api import _plan_store
 from agent_backend.plans import PlanExpiredError, PlanNotFoundError
 from agent_backend.software_approval import InstallApprovalBinding
@@ -213,7 +213,7 @@ def confirm_software_approval(
     request: Request,
 ) -> SoftwareApprovalResult:
     """Consume the one-use TOTP challenge for the exact evidence-bound proposal."""
-    services, principal, secret = _authenticated_context(request)
+    services, principal, _secret = _authenticated_context(request)
     plan = _get_install_plan(plan_id)
     with _lock:
         _prune_bindings()
@@ -244,16 +244,33 @@ def confirm_software_approval(
     with _lock:
         if plan_id in _consumed_bindings:
             raise HTTPException(status_code=409, detail="This software approval has already been consumed.")
-        accepted = services.step_up.verify_and_consume(
-            challenge_id=payload.challenge_id,
-            owner_sub=principal.owner_sub,
-            session_id=principal.session_id,
-            plan_id=plan.plan_id,
-            action_digest=binding.approval_digest,
-            risk_class="high",
-            secret=secret,
-            code=payload.totp_code,
-        )
+        def load_current_secret() -> str:
+            secret = services.secret_store.load(owner_sub=principal.owner_sub)
+            if secret is None:
+                raise AuthenticatorNotEnrolled
+            return secret
+
+        try:
+            accepted = services.step_up.verify_and_consume(
+                challenge_id=payload.challenge_id,
+                owner_sub=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan.plan_id,
+                action_digest=binding.approval_digest,
+                risk_class="high",
+                secret_loader=load_current_secret,
+                code=payload.totp_code,
+            )
+        except AuthenticatorNotEnrolled:
+            raise HTTPException(
+                status_code=403,
+                detail="Authenticator enrollment required.",
+            ) from None
+        except SecretStoreError:
+            raise HTTPException(
+                status_code=503,
+                detail="Authenticator storage unavailable.",
+            ) from None
         if accepted:
             _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:

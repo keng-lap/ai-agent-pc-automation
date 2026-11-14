@@ -52,6 +52,8 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
 
         def verify_and_consume(self, **kwargs):
             self.verified.append(kwargs)
+            if "secret_loader" in kwargs:
+                self.loaded_secret = kwargs["secret_loader"]()
             return accepted
 
     step_up = StepUp()
@@ -132,6 +134,8 @@ def test_confirm_consumes_exact_digest_and_returns_approved_not_executed(monkeyp
     assert response.approval_digest == binding.approval_digest
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
     assert step_up.verified[0]["code"] == "123456"
+    assert callable(step_up.verified[0]["secret_loader"])
+    assert step_up.loaded_secret == "test-secret"
 
 
 def test_confirm_rejects_binding_from_another_session(monkeypatch):
