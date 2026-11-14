@@ -172,3 +172,31 @@ def test_replay_guard_rejects_invalid_restart_timestamp():
             owner_key="master-user",
             timestamp=float("nan"),
         )
+
+
+def test_step_up_secret_loader_observes_secret_replaced_under_replay_lock():
+    old_secret = RFC_SECRET
+    new_secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+    active_secret = [old_secret]
+    guard = TotpReplayGuard()
+
+    # Recovery commits the replacement and its matched step under the same
+    # lock used by Step-up's secret loader and replay verification.
+    assert guard.consume_step_after(
+        owner_key="owner",
+        step=4,
+        action=lambda: active_secret.__setitem__(0, new_secret),
+    )
+
+    assert not guard.verify_and_consume_with_secret_loader(
+        owner_key="owner",
+        secret_loader=lambda: active_secret[0],
+        code=code_at(old_secret, 180),
+        timestamp=180,
+    )
+    assert guard.verify_and_consume_with_secret_loader(
+        owner_key="owner",
+        secret_loader=lambda: active_secret[0],
+        code=code_at(new_secret, 180),
+        timestamp=180,
+    )
