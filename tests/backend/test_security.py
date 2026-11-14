@@ -396,7 +396,10 @@ async def _unexpected_app(scope, receive, send):
 
 
 
-def test_google_oidc_callback_accepts_google_origin_without_local_agent_token():
+def test_google_oidc_callback_accepts_google_origin_without_local_agent_token(monkeypatch):
+    # This test covers the callback's auth-disabled response. A developer's
+    # .env must not silently turn it into a live OIDC callback test.
+    monkeypatch.setattr(app.state, "auth_services", None)
     callback_client = TestClient(app, base_url=BASE_URL)
     response = callback_client.get(
         "/auth/google/callback?state=opaque-state-value-123456&code=opaque-code",
