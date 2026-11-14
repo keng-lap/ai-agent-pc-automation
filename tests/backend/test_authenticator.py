@@ -489,3 +489,56 @@ def test_recovery_storage_failure_does_not_advance_primary_replay_guard(tmp_path
         timestamp=120,
     )
     store.replace = original_replace
+
+
+def test_enrollment_confirmation_is_bound_to_the_initiating_session(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    enrollment = manager.begin(
+        owner_sub="owner-sub",
+        session_id="session-a-identifier-0001",
+        account_name="owner@example.test",
+    )
+
+    assert not manager.confirm(
+        enrollment_id=enrollment.enrollment_id,
+        owner_sub="owner-sub",
+        session_id="session-b-identifier-0002",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert store.load(owner_sub="owner-sub") is None
+    assert enrollment.enrollment_id in manager._pending
+
+    assert manager.confirm(
+        enrollment_id=enrollment.enrollment_id,
+        owner_sub="owner-sub",
+        session_id="session-a-identifier-0001",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
+
+
+def test_recovery_replay_key_supports_maximum_owner_subject_length(tmp_path):
+    owner_sub = "o" * 256
+    manager, store = build_manager(tmp_path, now=90)
+
+    initial = manager.begin(
+        owner_sub=owner_sub,
+        account_name="owner@example.test",
+    )
+    assert manager.confirm(
+        enrollment_id=initial.enrollment_id,
+        owner_sub=owner_sub,
+        code=code_at(RFC_SECRET, 90),
+    )
+
+    manager._secret_factory = lambda: NEW_SECRET
+    recovery = manager.begin_recovery(
+        owner_sub=owner_sub,
+        account_name="owner@example.test",
+    )
+    assert manager.confirm(
+        enrollment_id=recovery.enrollment_id,
+        owner_sub=owner_sub,
+        code=code_at(NEW_SECRET, 120),
+    )
+    assert store.load(owner_sub=owner_sub) == NEW_SECRET
