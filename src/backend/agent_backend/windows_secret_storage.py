@@ -296,23 +296,37 @@ class WindowsSecretFile:
             raise WindowsSecretStorageError(
                 f"Secret file could not be opened safely (Win32 error {error_code})."
             ) from None
+        try:
+            self._verify_not_reparse(handle, directory=False)
+            if create:
+                self._set_owner_only_dacl(
+                    handle,
+                    sid,
+                    allow_owner_change=True,
+                )
+            else:
+                # Verify ownership before changing any security descriptor.
+                # Never take ownership of an existing secret file; repair only
+                # its DACL through this verified handle.
+                self._set_owner_only_dacl(
+                    handle,
+                    sid,
+                    allow_owner_change=False,
+                )
+        except Exception:
+            # CREATE_NEW proves this attempt created the file. Close its handle
+            # before unlinking so failed ACL setup cannot strand an empty file.
+            try:
+                win32file.CloseHandle(handle)
+            except Exception:
+                pass
+            if create:
+                try:
+                    self._path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise
         self._close(stack, handle)
-        self._verify_not_reparse(handle, directory=False)
-        if create:
-            self._set_owner_only_dacl(
-                handle,
-                sid,
-                allow_owner_change=True,
-            )
-        else:
-            # Verify ownership before changing any security descriptor. Never
-            # take ownership of an existing secret file; repair only its DACL
-            # through this verified handle, then validate the exact result.
-            self._set_owner_only_dacl(
-                handle,
-                sid,
-                allow_owner_change=False,
-            )
         return handle
 
     def exists(self) -> bool:

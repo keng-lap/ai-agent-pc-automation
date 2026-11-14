@@ -168,6 +168,45 @@ class TotpReplayGuard:
             self._last_consumed[owner_key] = step
             return True
 
+    def verify_and_consume_with_secret_loader(
+        self,
+        *,
+        owner_key: str,
+        secret_loader: Callable[[], str | None],
+        code: str,
+        timestamp: float | None = None,
+    ) -> bool:
+        """Load the current secret and consume its code under one replay lock."""
+        if (
+            not isinstance(owner_key, str)
+            or not owner_key
+            or len(owner_key) > 256
+            or not callable(secret_loader)
+        ):
+            return False
+        if timestamp is None:
+            if self._clock is not None:
+                timestamp = self._clock()
+            else:
+                import time
+
+                timestamp = time.time()
+        with self._lock:
+            # Secret replacement uses this same lock. A caller therefore sees
+            # either the old secret before replacement or the new secret after
+            # replacement, never a stale pre-lock snapshot.
+            secret = secret_loader()
+            if not isinstance(secret, str) or not secret:
+                return False
+            step = matching_step(secret, code, timestamp=timestamp)
+            if step is None:
+                return False
+            previous = self._last_consumed.get(owner_key)
+            if previous is not None and step <= previous:
+                return False
+            self._last_consumed[owner_key] = step
+            return True
+
     def consume_step_after(
         self,
         *,

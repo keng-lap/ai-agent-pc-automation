@@ -474,7 +474,14 @@ class AuthenticatorEnrollmentManager:
                 expires_at=expires_at,
             )
 
-    def confirm(self, *, enrollment_id: str, owner_sub: str, code: str) -> bool:
+    def confirm(
+        self,
+        *,
+        enrollment_id: str,
+        owner_sub: str,
+        code: str,
+        expected_replace_existing: bool | None = None,
+    ) -> bool:
         now = self._clock()
         if (
             isinstance(now, bool)
@@ -498,6 +505,11 @@ class AuthenticatorEnrollmentManager:
         with self._lock:
             pending = self._pending.get(enrollment_id)
             if pending is None or pending.owner_sub != owner_sub:
+                return False
+            if expected_replace_existing is not None and (
+                type(expected_replace_existing) is not bool
+                or pending.replace_existing is not expected_replace_existing
+            ):
                 return False
             if float(monotonic_now) >= pending.monotonic_deadline:
                 self._pending.pop(enrollment_id, None)

@@ -369,6 +369,7 @@ def _complete_authenticator_setup(
             enrollment_id=payload.enrollment_id,
             owner_sub=principal.owner_sub,
             code=payload.code,
+            expected_replace_existing=event_type == "auth.recovery",
         )
     except SecretStoreCommitUnknown:
         record_auth_audit_event(
