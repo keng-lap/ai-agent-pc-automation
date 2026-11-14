@@ -234,9 +234,12 @@ lease generation, and append the execution-boundary audit event. A stale lease
 is not proof that a process stopped. Recovery must inspect the persisted process
 creation time and containment object; ambiguity moves the run to UNKNOWN.
 
-Before process creation, persist an execution-intent record and reserve the
-one-use approval. Immediately after process creation, persist PID plus process
-creation timestamp and Windows Job Object identity before reporting RUNNING.
+Queue-time reservation is committed atomically with the QUEUED run and its
+queue audit. At worker claim, consume that reserved approval atomically with
+the QUEUED → STARTING transition, lease creation, and execution-boundary audit,
+before any process is created. Immediately after process creation, persist PID
+plus process creation timestamp and Windows Job Object identity before
+reporting RUNNING.
 A crash between process creation and identity persistence is UNKNOWN and must
 not trigger another launch.
 
@@ -271,8 +274,8 @@ authorization is permitted.
 
 | Threat | Required control | Required negative/acceptance test |
 |---|---|---|
-| Double submit or API retry | Unique idempotency constraint + atomic approval consume/run insert | Concurrent duplicate requests create one run and one consumed approval |
-| Crash at approval/job boundary | Single DB transaction + mandatory audit | Inject crash before/after each write; either full rollback or one complete QUEUED run |
+| Double submit or API retry | Unique idempotency constraint + atomic approval reservation/run insert at queue time; atomic approval consumption/STARTING/lease/audit at worker claim | Concurrent duplicate requests create one QUEUED run and one reserved approval; only one worker claim consumes it |
+| Crash at approval/job boundary | Separate atomic queue-reservation transaction and worker-claim consumption transaction, each with mandatory audit | Inject crash before/after each transaction; queue state is either fully rolled back or fully QUEUED/reserved, and claim is either unconsumed QUEUED or fully STARTING/consumed with lease and audit |
 | Two workers claim one run | Compare-and-set state version + lease generation | Parallel claims yield exactly one STARTING owner |
 | Stale lease while installer survives | Lease is not execution proof; inspect Job Object/process creation identity | Orphan process forces UNKNOWN and never requeues |
 | Child spawns descendants | Non-breakaway Windows Job Object containment | Descendant remains in Job Object; close/cancel terminates complete tree |
