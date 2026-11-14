@@ -65,7 +65,7 @@ class GoogleIdentity:
     sub: str
     email: str
     recently_authenticated: bool = False
-    recent_auth_age_seconds: float | None = None
+    recent_auth_time: float | None = None
 
 
 class OidcTransactionStore:
@@ -375,8 +375,8 @@ class GoogleOidcClient:
             sub=subject,
             email=email,
             recently_authenticated=require_recent_auth and valid_auth_time,
-            recent_auth_age_seconds=(
-                max(0.0, float(now) - float(auth_time))
+            recent_auth_time=(
+                float(auth_time)
                 if require_recent_auth and valid_auth_time
                 else None
             ),
@@ -461,16 +461,22 @@ class ApplicationSessionStore:
         session_id = secrets.token_urlsafe(24)
         expires_at = float(now) + self._ttl_seconds
         monotonic_deadline = float(monotonic_now) + self._ttl_seconds
-        recent_auth_age = identity.recent_auth_age_seconds
+        recent_auth_age = None
         if identity.recently_authenticated:
-            if recent_auth_age is None:
+            auth_time = identity.recent_auth_time
+            if auth_time is None:
+                # Compatibility for trusted in-process identity adapters/tests
+                # that explicitly assert freshness but do not carry OIDC auth_time.
                 recent_auth_age = 0.0
-            if (
-                isinstance(recent_auth_age, bool)
-                or not isinstance(recent_auth_age, (int, float))
-                or not math.isfinite(recent_auth_age)
-                or not 0 <= recent_auth_age <= MAX_RECENT_AUTH_AGE_SECONDS
+            elif (
+                isinstance(auth_time, bool)
+                or not isinstance(auth_time, (int, float))
+                or not math.isfinite(auth_time)
             ):
+                raise OidcAuthenticationError("Google authentication time is invalid.")
+            else:
+                recent_auth_age = max(0.0, float(now) - float(auth_time))
+            if recent_auth_age > MAX_RECENT_AUTH_AGE_SECONDS:
                 raise OidcAuthenticationError("Google authentication is no longer recent.")
         with self._lock:
             self._remove_expired(float(monotonic_now))
