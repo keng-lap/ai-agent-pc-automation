@@ -87,19 +87,27 @@
           <p role="alert">{{ language() === 'th'
             ? 'พื้นที่จัดเก็บ Authenticator มีปัญหา แต่คุณยังใช้ Dashboard และดูสถานะงานได้ คำสั่งเสี่ยงสูงจะถูกระงับจนกว่าจะแก้ไขพื้นที่จัดเก็บ'
             : 'Authenticator storage is unavailable. You can still use the Dashboard and view jobs; high-risk actions remain blocked until storage is repaired.' }}</p>
-          <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
-            {{ language() === 'th' ? 'ตรวจสอบการเข้าสู่ระบบ Google ล่าสุดเพื่อกู้คืน Authenticator' : 'Check Google sign-in freshness to recover authenticator' }}
-          </button>
+          <details class="security-settings">
+            <summary>{{ language() === 'th' ? 'การตั้งค่าความปลอดภัยและการกู้คืน' : 'Security and recovery settings' }}</summary>
+            <p>{{ language() === 'th' ? 'ใช้ตัวเลือกนี้เฉพาะเมื่อ Authenticator สูญหายหรือจำเป็นต้องเปลี่ยนอุปกรณ์' : 'Use this only if your authenticator is lost or you need to replace the device.' }}</p>
+            <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
+              {{ language() === 'th' ? 'ตรวจสอบการเข้าสู่ระบบ Google เพื่อกู้คืน Authenticator' : 'Reauthenticate with Google to recover authenticator' }}
+            </button>
+          </details>
         } @else if (!authenticatorEnrolled()) {
           <p>{{ language() === 'th' ? 'ลงทะเบียนแอป Authenticator ก่อนอนุมัติคำสั่งที่มีความเสี่ยงสูง' : 'Enroll an authenticator app before approving high-risk actions.' }}</p>
           <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorSetup()">
             {{ language() === 'th' ? 'เริ่มลงทะเบียน Authenticator' : 'Set up authenticator' }}
           </button>
         } @else {
-          <p role="status">{{ language() === 'th' ? 'Authenticator พร้อมใช้งาน' : 'Authenticator is enrolled and ready.' }}</p>
-          <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
-            {{ language() === 'th' ? 'เปลี่ยนเครื่องหรือกู้คืน Authenticator' : 'Replace or recover authenticator' }}
-          </button>
+          <p role="status">{{ language() === 'th' ? 'ลงทะเบียน Authenticator แล้ว · พร้อมใช้ยืนยันการอนุมัติ' : 'Authenticator enrolled · ready for approval verification.' }}</p>
+          <details class="security-settings">
+            <summary>{{ language() === 'th' ? 'การตั้งค่าความปลอดภัยเพิ่มเติม' : 'More security settings' }}</summary>
+            <p>{{ language() === 'th' ? 'กู้คืนหรือเปลี่ยน Authenticator เฉพาะเมื่อสูญเสียอุปกรณ์เดิมหรือไม่สามารถใช้รหัสเดิมได้เท่านั้น การยืนยันอุปกรณ์ใหม่จะแทนที่การลงทะเบียนเดิม' : 'Recover or replace your authenticator only if the original device is lost or unavailable. Confirming a replacement will replace the existing enrollment.' }}</p>
+            <button class="send-button" type="button" [disabled]="authBusy()" (click)="beginAuthenticatorRecovery()">
+              {{ language() === 'th' ? 'เริ่มขั้นตอนกู้คืนหรือเปลี่ยนอุปกรณ์' : 'Start authenticator recovery or replacement' }}
+            </button>
+          </details>
         }
         @if (authError()) { <p class="conversation-notice" role="alert">{{ authError() }}</p> }
       </section>
