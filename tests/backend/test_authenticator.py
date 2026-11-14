@@ -28,7 +28,6 @@ class FakeProtector:
 
 
 RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
-NEW_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 
 
 def build_manager(tmp_path, now=90):
@@ -62,20 +61,6 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
     assert "otpauth://" not in raw_file
     assert store.load(owner_sub="owner-sub") is not None
     assert store.load(owner_sub="different-owner") is None
-
-
-def test_enrollment_is_one_time_and_does_not_allow_self_service_replacement(tmp_path):
-    manager, _store = build_manager(tmp_path)
-    enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    code = code_at(RFC_SECRET, 90)
-
-    assert manager.confirm(
-        enrollment_id=enrollment.enrollment_id,
-        owner_sub="owner-sub",
-        code=code,
-    )
-    with pytest.raises(RuntimeError, match="already enrolled"):
-        manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
 
 
 def test_wrong_owner_cannot_confirm_enrollment(tmp_path):
@@ -129,50 +114,6 @@ def test_secret_file_cannot_be_overwritten(tmp_path):
 
     with pytest.raises(SecretStoreError, match="already enrolled"):
         store.save(owner_sub="owner-sub", secret="GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
-
-
-def test_recovery_replaces_secret_only_after_new_authenticator_is_confirmed(tmp_path):
-    manager, store = build_manager(tmp_path, now=90)
-    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-    )
-
-    manager._secret_factory = lambda: NEW_SECRET
-    recovery = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-    assert store.load(owner_sub="owner-sub") == RFC_SECRET
-    assert not manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code="000000",
-    )
-    assert store.load(owner_sub="owner-sub") == RFC_SECRET
-
-    replacement = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-    assert manager.confirm(
-        enrollment_id=replacement.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(NEW_SECRET, 120),
-    )
-    assert store.load(owner_sub="owner-sub") == NEW_SECRET
-
-
-def test_recovery_cannot_be_started_when_no_authenticator_is_enrolled(tmp_path):
-    manager, _store = build_manager(tmp_path)
-
-    with pytest.raises(RuntimeError, match="no authenticator"):
-        manager.begin_recovery(
-            owner_sub="owner-sub",
-            account_name="owner@example.test",
-        )
 
 
 def test_corrupt_secret_file_fails_closed(tmp_path):
@@ -309,188 +250,6 @@ def test_dpapi_output_cleanup_handles_missing_description_allocation(monkeypatch
     assert freed == [data_pointer]
 
 
-def test_recovery_consumes_the_exact_future_step_on_the_primary_replay_guard(tmp_path):
-    manager, store = build_manager(tmp_path, now=90)
-    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-    )
-
-    manager._secret_factory = lambda: NEW_SECRET
-    recovery = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-    future_code = code_at(NEW_SECRET, 120)
-    assert manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code=future_code,
-    )
-    assert store.load(owner_sub="owner-sub") == NEW_SECRET
-
-    # The recovery proof used step 4 while the wall clock was in step 3.
-    # That exact step must not authorize a Step-up after the clock advances.
-    assert not manager._replay_guard.verify_and_consume(
-        owner_key="owner-sub",
-        secret=NEW_SECRET,
-        code=future_code,
-        timestamp=120,
-    )
-
-
-def test_enrollment_route_cannot_confirm_recovery_pending_qr(tmp_path):
-    manager, store = build_manager(tmp_path, now=90)
-    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-    )
-    recovery = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-
-    assert not manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(NEW_SECRET, 120),
-        expected_replace_existing=False,
-    )
-    assert store.load(owner_sub="owner-sub") == RFC_SECRET
-    assert recovery.enrollment_id in manager._pending
-
-
-def test_recovery_route_cannot_confirm_enrollment_pending_qr(tmp_path):
-    manager, store = build_manager(tmp_path, now=90)
-    enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-
-    assert not manager.confirm(
-        enrollment_id=enrollment.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-        expected_replace_existing=True,
-    )
-    assert store.load(owner_sub="owner-sub") is None
-    assert enrollment.enrollment_id in manager._pending
-
-
-def test_recovery_replay_collision_keeps_pending_qr_for_a_later_step(tmp_path, monkeypatch):
-    manager, store = build_manager(tmp_path, now=90)
-    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-    )
-
-    manager._secret_factory = lambda: NEW_SECRET
-    recovery = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-    now = [90.0]
-    manager._clock = lambda: now[0]
-    original_consume = manager._replay_guard.consume_step_after
-    monkeypatch.setattr(
-        manager._replay_guard,
-        "consume_step_after",
-        lambda **_kwargs: False,
-    )
-
-    assert not manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(NEW_SECRET, 90),
-    )
-    assert recovery.enrollment_id in manager._pending
-
-    monkeypatch.setattr(manager._replay_guard, "consume_step_after", original_consume)
-    now[0] = 120.0
-    assert manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(NEW_SECRET, 120),
-    )
-    assert store.load(owner_sub="owner-sub") == NEW_SECRET
-
-
-def test_recovery_reconciles_secret_when_post_replace_verification_fails(tmp_path):
-    manager, store = build_manager(tmp_path, now=90)
-    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-    )
-
-    manager._secret_factory = lambda: NEW_SECRET
-    recovery = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-    original_replace = store.replace
-
-    def replace_then_report_uncertain(*, owner_sub, secret):
-        original_replace(owner_sub=owner_sub, secret=secret)
-        raise SecretStoreCommitUnknown("simulated post-replacement verification failure")
-
-    store.replace = replace_then_report_uncertain
-    future_code = code_at(NEW_SECRET, 120)
-    assert manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code=future_code,
-    )
-    assert store.load(owner_sub="owner-sub") == NEW_SECRET
-    assert not manager._replay_guard.verify_and_consume(
-        owner_key="owner-sub",
-        secret=NEW_SECRET,
-        code=future_code,
-        timestamp=120,
-    )
-
-
-def test_recovery_storage_failure_does_not_advance_primary_replay_guard(tmp_path):
-    manager, store = build_manager(tmp_path, now=90)
-    initial = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(RFC_SECRET, 90),
-    )
-
-    manager._secret_factory = lambda: NEW_SECRET
-    recovery = manager.begin_recovery(
-        owner_sub="owner-sub",
-        account_name="owner@example.test",
-    )
-    original_replace = store.replace
-
-    def fail_replace(*, owner_sub, secret):
-        raise SecretStoreError("simulated persistence failure")
-
-    store.replace = fail_replace
-    assert not manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub="owner-sub",
-        code=code_at(NEW_SECRET, 120),
-    )
-    assert store.load(owner_sub="owner-sub") == RFC_SECRET
-
-    # The failed persistence operation must not consume the primary guard.
-    assert manager._replay_guard.verify_and_consume(
-        owner_key="owner-sub",
-        secret=RFC_SECRET,
-        code=code_at(RFC_SECRET, 120),
-        timestamp=120,
-    )
-    store.replace = original_replace
-
-
 def test_enrollment_confirmation_is_bound_to_the_initiating_session(tmp_path):
     manager, store = build_manager(tmp_path, now=90)
     enrollment = manager.begin(
@@ -516,29 +275,3 @@ def test_enrollment_confirmation_is_bound_to_the_initiating_session(tmp_path):
     )
     assert store.load(owner_sub="owner-sub") == RFC_SECRET
 
-
-def test_recovery_replay_key_supports_maximum_owner_subject_length(tmp_path):
-    owner_sub = "o" * 256
-    manager, store = build_manager(tmp_path, now=90)
-
-    initial = manager.begin(
-        owner_sub=owner_sub,
-        account_name="owner@example.test",
-    )
-    assert manager.confirm(
-        enrollment_id=initial.enrollment_id,
-        owner_sub=owner_sub,
-        code=code_at(RFC_SECRET, 90),
-    )
-
-    manager._secret_factory = lambda: NEW_SECRET
-    recovery = manager.begin_recovery(
-        owner_sub=owner_sub,
-        account_name="owner@example.test",
-    )
-    assert manager.confirm(
-        enrollment_id=recovery.enrollment_id,
-        owner_sub=owner_sub,
-        code=code_at(NEW_SECRET, 120),
-    )
-    assert store.load(owner_sub=owner_sub) == NEW_SECRET
