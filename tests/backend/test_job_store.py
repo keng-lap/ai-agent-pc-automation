@@ -175,3 +175,47 @@ def test_terminal_transition_records_finish_time_and_reboot_flag(tmp_path):
     assert complete["finished_at"] == "2026-11-13T10:00:04.000Z"
     assert complete["result_code"] == "VERIFIED"
     assert complete["reboot_required"] is False
+
+
+def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_path):
+    store = make_store(tmp_path)
+    job = store.create(
+        owner_id=OWNER,
+        tool_id="software.install",
+        action_digest=DIGEST,
+        idempotency_key="cancel-race",
+    )
+    started = store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=0,
+        target=JobState.STARTING,
+        message="Worker claimed job",
+        now=NOW + timedelta(seconds=1),
+    )
+    running = store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=started["version"],
+        target=JobState.RUNNING,
+        message="Process started",
+        now=NOW + timedelta(seconds=2),
+    )
+    cancel_requested = store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=running["version"],
+        target=JobState.CANCEL_REQUESTED,
+        message="Cancellation requested",
+        now=NOW + timedelta(seconds=3),
+    )
+    verifying = store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=cancel_requested["version"],
+        target=JobState.VERIFYING,
+        message="Process completed; verify final state",
+        result_code="PROCESS_COMPLETED",
+        now=NOW + timedelta(seconds=4),
+    )
+    assert verifying["state"] == JobState.VERIFYING.value
