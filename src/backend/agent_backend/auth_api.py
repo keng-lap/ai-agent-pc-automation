@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
