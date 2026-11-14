@@ -241,7 +241,6 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/jobs/{job_id}",
         "/api/auth/session",
         "/api/auth/google/start",
-        "/api/auth/google/reauth/start",
         "/api/authenticator/status",
         "/auth/google/callback",
     }
@@ -257,8 +256,6 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/auth/logout"]) == {"post"}
     assert set(paths["/api/authenticator/enrollment"]) == {"post"}
     assert set(paths["/api/authenticator/enrollment/confirm"]) == {"post"}
-    assert set(paths["/api/authenticator/recovery"]) == {"post"}
-    assert set(paths["/api/authenticator/recovery/confirm"]) == {"post"}
     assert not any(
         path.endswith(("/acknowledgement", "/cancel", "/execute"))
         for path in paths
@@ -346,7 +343,6 @@ def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
         "requests>=2.32",
         "PyYAML>=6.0.2",
         "pywin32>=311; sys_platform == 'win32'",
-        "webauthn>=2.2,<3.0",
     ]
 
 
