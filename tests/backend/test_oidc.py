@@ -291,18 +291,19 @@ def test_session_store_expires_and_revokes_tokens():
 
 
 def test_complete_login_preserves_recent_authentication_purpose_and_one_time_grant():
-    from urllib.parse import parse_qs, urlparse
-
     from agent_backend.oidc import ApplicationSessionStore
 
     claims = valid_claims("placeholder")
     client, _http = build_client(claims=claims)
     start = client.begin_login(require_recent_auth=True)
-    params = parse_qs(urlparse(start.authorization_url).query)
-    claims["nonce"] = params["nonce"][0]
+    query = start.authorization_url.partition("?")[2]
+    params = dict(
+        part.split("=", 1) for part in query.split("&") if "=" in part
+    )
+    claims["nonce"] = params["nonce"]
 
     identity = client.complete_login(
-        state=params["state"][0],
+        state=params["state"],
         code="authorization-code",
     )
     assert identity.sub == "stable-google-sub"
