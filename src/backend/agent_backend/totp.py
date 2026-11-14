@@ -213,6 +213,7 @@ class TotpReplayGuard:
         owner_key: str,
         step: int,
         action: Callable[[], None],
+        consume_on_exception: tuple[type[BaseException], ...] = (),
     ) -> bool:
         """Run an operation and consume its exact TOTP step atomically.
 
@@ -229,13 +230,20 @@ class TotpReplayGuard:
             or not isinstance(step, int)
             or step < 0
             or not callable(action)
+            or not isinstance(consume_on_exception, tuple)
+            or any(not isinstance(kind, type) or not issubclass(kind, BaseException) for kind in consume_on_exception)
         ):
             return False
         with self._lock:
             previous = self._last_consumed.get(owner_key)
             if previous is not None and step <= previous:
                 return False
-            action()
+            try:
+                action()
+            except BaseException as exc:
+                if isinstance(exc, consume_on_exception):
+                    self._last_consumed[owner_key] = step
+                raise
             self._last_consumed[owner_key] = step
             return True
 
