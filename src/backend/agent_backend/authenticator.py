@@ -43,6 +43,10 @@ class SecretStoreError(RuntimeError):
     """Raised when encrypted authenticator secret storage fails."""
 
 
+class AuthenticatorNotEnrolled(RuntimeError):
+    """The owner has no authenticator secret enrolled."""
+
+
 class SecretStoreCommitUnknown(SecretStoreError):
     """Replacement committed, but its final state could not be verified."""
 

@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent_backend.audit import record_optional_audit_event
 from agent_backend.auth_audit import record_auth_audit_event
-from agent_backend.authenticator import SecretStoreError
+from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
 from agent_backend.planner import TaskIntent, TaskPlan, create_task_plan
 from agent_backend.plans import (
     DryRunPlan,
@@ -337,6 +337,12 @@ def approve_plan_review(
             )
             if tool_definition is None or tool_definition.risk_class != "high":
                 raise HTTPException(status_code=403, detail="Tool is not eligible for approval.")
+            def load_current_secret() -> str:
+                secret = services.secret_store.load(owner_sub=principal.owner_sub)
+                if secret is None:
+                    raise AuthenticatorNotEnrolled
+                return secret
+
             try:
                 accepted = services.step_up.verify_and_consume(
                     challenge_id=_payload.challenge_id,
@@ -345,11 +351,14 @@ def approve_plan_review(
                     plan_id=plan.plan_id,
                     action_digest=plan.plan_digest,
                     risk_class=tool_definition.risk_class,
-                    secret_loader=lambda: services.secret_store.load(
-                        owner_sub=principal.owner_sub
-                    ),
+                    secret_loader=load_current_secret,
                     code=_payload.totp_code,
                 )
+            except AuthenticatorNotEnrolled:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Authenticator enrollment required.",
+                ) from None
             except SecretStoreError:
                 raise HTTPException(
                     status_code=503,

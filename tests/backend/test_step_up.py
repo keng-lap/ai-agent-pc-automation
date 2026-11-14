@@ -47,6 +47,29 @@ def verify(store, receipt, **changes):
     return store.verify_and_consume(**values)
 
 
+def test_secret_loader_failure_does_not_consume_challenge_or_count_as_totp_failure():
+    store = build_store()
+    receipt = create(store)
+
+    def unavailable_secret():
+        raise RuntimeError("authenticator not enrolled")
+
+    with pytest.raises(RuntimeError, match="not enrolled"):
+        store.verify_and_consume(
+            challenge_id=receipt.challenge_id,
+            owner_sub=OWNER,
+            session_id=SESSION,
+            plan_id=PLAN_ID,
+            action_digest=DIGEST,
+            risk_class="high",
+            secret_loader=unavailable_secret,
+            code=code_at(RFC_SECRET, 90),
+        )
+    challenge = store.get(receipt.challenge_id)
+    assert challenge.status == "active"
+    assert challenge.failed_attempts == 0
+
+
 def test_secret_loader_runs_under_replay_lock_for_step_up():
     store = build_store()
     receipt = create(store)
