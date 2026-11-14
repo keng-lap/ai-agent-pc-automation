@@ -671,3 +671,51 @@ def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_abse
 
     assert services is not None
     assert services.enrollment._replay_guard._last_consumed.get(OWNER) is None
+
+
+@pytest.mark.parametrize(
+    ("pending_mode", "wrong_confirmation_mode"),
+    [
+        ("recovery", "enrollment"),
+        ("enrollment", "recovery"),
+    ],
+)
+def test_authenticator_confirmation_rejects_pending_mode_mismatch(
+    tmp_path, pending_mode, wrong_confirmation_mode
+):
+    from agent_backend.auth_audit import AUTH_AUDIT_SINK
+
+    AUTH_AUDIT_SINK.clear()
+    client, services, now = build_client(tmp_path)
+    services.enrollment._secret_factory = lambda: NEW_SECRET
+    if pending_mode == "recovery":
+        services.secret_store.save(owner_sub=OWNER, secret=RFC_SECRET)
+    sign_in(client, services, recently_authenticated=True)
+
+    start = client.post(f"/api/authenticator/{pending_mode}", json={})
+    assert start.status_code == 200
+    enrollment_id = start.json()["enrollment_id"]
+    code = code_at(NEW_SECRET, now[0])
+
+    wrong = client.post(
+        f"/api/authenticator/{wrong_confirmation_mode}/confirm",
+        json={"enrollment_id": enrollment_id, "code": code},
+    )
+    assert wrong.status_code == 400
+    assert enrollment_id in services.enrollment._pending
+    assert services.secret_store.load(owner_sub=OWNER) == (
+        RFC_SECRET if pending_mode == "recovery" else None
+    )
+    assert not any(
+        event.outcome == "success"
+        and event.event_type in {"auth.enrollment", "auth.recovery"}
+        for event in AUTH_AUDIT_SINK.snapshot()
+    )
+
+    # A mismatched route must not consume the pending QR or TOTP proof.
+    correct = client.post(
+        f"/api/authenticator/{pending_mode}/confirm",
+        json={"enrollment_id": enrollment_id, "code": code},
+    )
+    assert correct.status_code == 200
+    assert services.secret_store.load(owner_sub=OWNER) == NEW_SECRET
