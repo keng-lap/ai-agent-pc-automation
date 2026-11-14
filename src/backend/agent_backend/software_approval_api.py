@@ -94,11 +94,13 @@ class SoftwareApprovalResult(BaseModel):
     notice: Literal["APPROVED_NOT_EXECUTED"] = "APPROVED_NOT_EXECUTED"
 
 
-def _authenticated_context(request: Request):
+def _authenticated_context(request: Request, *, require_enrolled: bool = True):
     services = getattr(request.app.state, "auth_services", None)
     principal = getattr(request.state, "principal", None)
     if services is None or principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
+    if not require_enrolled:
+        return services, principal, None
     try:
         secret = services.secret_store.load(owner_sub=principal.owner_sub)
     except SecretStoreError:
@@ -213,7 +215,10 @@ def confirm_software_approval(
     request: Request,
 ) -> SoftwareApprovalResult:
     """Consume the one-use TOTP challenge for the exact evidence-bound proposal."""
-    services, principal, _secret = _authenticated_context(request)
+    services, principal, _secret = _authenticated_context(
+        request,
+        require_enrolled=False,
+    )
     plan = _get_install_plan(plan_id)
     with _lock:
         _prune_bindings()

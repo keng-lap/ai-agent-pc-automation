@@ -62,7 +62,11 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         step_up=step_up,
         secret_store=SimpleNamespace(load=lambda owner_sub: "test-secret"),
     )
-    monkeypatch.setattr(api, "_authenticated_context", lambda _request: (services, principal, "test-secret"))
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda _request, **_kwargs: (services, principal, "test-secret"),
+    )
     monkeypatch.setattr(
         api,
         "_get_install_plan",
