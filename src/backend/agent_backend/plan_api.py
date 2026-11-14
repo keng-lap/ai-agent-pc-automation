@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent_backend.audit import record_optional_audit_event
 from agent_backend.auth_audit import record_auth_audit_event
-from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
+from agent_backend.authenticator import SecretStoreError
 from agent_backend.planner import TaskIntent, TaskPlan, create_task_plan
 from agent_backend.plans import (
     DryRunPlan,
