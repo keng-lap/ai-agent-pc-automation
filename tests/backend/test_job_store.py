@@ -196,7 +196,7 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
     running = store.transition(
         job["job_id"],
         owner_id=OWNER,
-        expected_version=started["version"],
+        expected_version=1,
         target=JobState.RUNNING,
         message="Process started",
         now=NOW + timedelta(seconds=2),
@@ -204,7 +204,7 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
     cancel_requested = store.transition(
         job["job_id"],
         owner_id=OWNER,
-        expected_version=running["version"],
+        expected_version=2,
         target=JobState.CANCEL_REQUESTED,
         message="Cancellation requested",
         now=NOW + timedelta(seconds=3),
@@ -212,7 +212,7 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
     verifying = store.transition(
         job["job_id"],
         owner_id=OWNER,
-        expected_version=cancel_requested["version"],
+        expected_version=3,
         target=JobState.VERIFYING,
         message="Process completed; verify final state",
         result_code="PROCESS_COMPLETED",
