@@ -364,3 +364,39 @@ def test_session_store_capacity_is_bounded():
 
     with pytest.raises(OidcAuthenticationError, match="capacity"):
         store.create(identity=identity, allowlist=allowlist)
+
+
+def test_complete_login_preserves_recent_auth_purpose_into_one_time_session_grant():
+    from agent_backend.oidc import ApplicationSessionStore
+
+    now = 1100.0
+    claims = valid_claims("unused")
+    transactions = OidcTransactionStore(clock=lambda: now)
+    transaction = transactions.create(requires_recent_auth=True)
+    claims["nonce"] = transaction.nonce
+    claims["auth_time"] = 1090
+    client, _http = build_client(
+        now=now,
+        claims=claims,
+        transactions=transactions,
+    )
+
+    identity = client.complete_login(
+        state=transaction.state,
+        code="fresh-auth-authorization-code",
+    )
+
+    assert identity.sub == "stable-google-sub"
+    assert identity.recently_authenticated is True
+
+    allowlist = MasterUserAllowlist("stable-google-sub")
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: now,
+        monotonic_clock=lambda: now,
+    )
+    credential = sessions.create(identity=identity, allowlist=allowlist)
+    principal = sessions.resolve(credential.token)
+    assert principal is not None
+    assert sessions.consume_recent_auth(principal, max_age_seconds=300) is True
+    assert sessions.consume_recent_auth(principal, max_age_seconds=300) is False
