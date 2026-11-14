@@ -65,7 +65,7 @@ class GoogleIdentity:
     sub: str
     email: str
     recently_authenticated: bool = False
-    recent_auth_time: float | None = None
+    recent_auth_monotonic_at: float | None = None
 
 
 class OidcTransactionStore:
@@ -191,6 +191,7 @@ class GoogleOidcClient:
         http_session=None,
         token_verifier: Callable[[str], Mapping[str, object]] | None = None,
         clock=None,
+        monotonic_clock=None,
     ) -> None:
         if not isinstance(client_id, str) or not 1 <= len(client_id) <= 512:
             raise ValueError("Google OIDC client ID is required.")
@@ -214,6 +215,7 @@ class GoogleOidcClient:
         self._http = http_session or requests.Session()
         self._token_verifier = token_verifier or self._verify_google_signature
         self._clock = clock or time.time
+        self._monotonic_clock = monotonic_clock or time.monotonic
 
     def begin_login(self, *, require_recent_auth: bool = False) -> LoginStart:
         if type(require_recent_auth) is not bool:
@@ -371,15 +373,22 @@ class GoogleOidcClient:
             or (require_recent_auth and not valid_auth_time)
         ):
             raise OidcAuthenticationError("Google identity claims failed validation.")
+        recent_auth_monotonic_at = None
+        if require_recent_auth and valid_auth_time:
+            monotonic_now = self._monotonic_clock()
+            if (
+                isinstance(monotonic_now, bool)
+                or not isinstance(monotonic_now, (int, float))
+                or not math.isfinite(monotonic_now)
+                or monotonic_now < 0
+            ):
+                raise OidcAuthenticationError("OIDC elapsed-time clock is invalid.")
+            recent_auth_monotonic_at = float(monotonic_now)
         return GoogleIdentity(
             sub=subject,
             email=email,
             recently_authenticated=require_recent_auth and valid_auth_time,
-            recent_auth_time=(
-                float(auth_time)
-                if require_recent_auth and valid_auth_time
-                else None
-            ),
+            recent_auth_monotonic_at=recent_auth_monotonic_at,
         )
 
 
@@ -463,20 +472,21 @@ class ApplicationSessionStore:
         monotonic_deadline = float(monotonic_now) + self._ttl_seconds
         recent_auth_age = None
         if identity.recently_authenticated:
-            auth_time = identity.recent_auth_time
-            if auth_time is None:
+            auth_monotonic_at = identity.recent_auth_monotonic_at
+            if auth_monotonic_at is None:
                 # Compatibility for trusted in-process identity adapters/tests
-                # that explicitly assert freshness but do not carry OIDC auth_time.
+                # that explicitly assert freshness but do not carry OIDC timing.
                 recent_auth_age = 0.0
             elif (
-                isinstance(auth_time, bool)
-                or not isinstance(auth_time, (int, float))
-                or not math.isfinite(auth_time)
+                isinstance(auth_monotonic_at, bool)
+                or not isinstance(auth_monotonic_at, (int, float))
+                or not math.isfinite(auth_monotonic_at)
+                or auth_monotonic_at < 0
             ):
                 raise OidcAuthenticationError("Google authentication time is invalid.")
             else:
-                recent_auth_age = max(0.0, float(now) - float(auth_time))
-            if recent_auth_age > MAX_RECENT_AUTH_AGE_SECONDS:
+                recent_auth_age = float(monotonic_now) - float(auth_monotonic_at)
+            if not 0 <= recent_auth_age <= MAX_RECENT_AUTH_AGE_SECONDS:
                 raise OidcAuthenticationError("Google authentication is no longer recent.")
         with self._lock:
             self._remove_expired(float(monotonic_now))
