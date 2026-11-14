@@ -278,7 +278,7 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     from agent_backend.tools import ToolResult
 
     client, services, now = build_client(tmp_path)
-    sign_in(client, services, recently_authenticated=True)
+    sign_in(client, services)
     enrollment = client.post("/api/authenticator/enrollment", json={}).json()
     assert client.post(
         "/api/authenticator/enrollment/confirm",
@@ -484,18 +484,11 @@ def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_abse
     assert services.enrollment._replay_guard._last_consumed.get(OWNER) is None
 
 
-@pytest.mark.parametrize(
-    ("pending_mode", "wrong_confirmation_mode"),
-    [
-        ("recovery", "enrollment"),
-        ("enrollment", "recovery"),
-    ],
-)
 def test_authenticator_enrollment_confirmation_rejects_a_different_session(
     tmp_path,
 ):
     client, services, now = build_client(tmp_path)
-    original = sign_in(client, services, recently_authenticated=True)
+    original = sign_in(client, services)
     started = client.post("/api/authenticator/enrollment", json={})
     assert started.status_code == 200
 
