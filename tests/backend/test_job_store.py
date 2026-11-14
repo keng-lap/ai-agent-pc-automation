@@ -10,8 +10,23 @@ OWNER = "google-owner-sub"
 DIGEST = "a" * 64
 
 
+class _TestSecureStorage:
+    """Test-only adapter; filesystem security is covered by platform adapter tests."""
+
+    def prepare_database_path(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    def finalize_database_file(self, path):
+        if not path.is_file():
+            raise AssertionError("test database was not created")
+
+
 def make_store(tmp_path):
-    return SQLiteJobStore(tmp_path / "private-state" / "jobs.sqlite3", clock=lambda: NOW)
+    return SQLiteJobStore(
+        tmp_path / "private-state" / "jobs.sqlite3",
+        clock=lambda: NOW,
+        secure_storage=_TestSecureStorage(),
+    )
 
 
 def test_job_is_durable_and_idempotent_across_store_instances(tmp_path):
