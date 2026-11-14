@@ -3,15 +3,13 @@
 The owner secret is protected with Windows DPAPI (current Windows user scope)
 before it is written to the local file. Enrollment material is memory-only and
 expires; the QR data URI is returned once and must never be logged or persisted.
-Replacement requires a fresh Google OIDC authentication ceremony and verifies
-the replacement TOTP before atomically replacing the existing secret.
+No self-service replacement path is provided.
 """
 
 from __future__ import annotations
 
 import base64
 import ctypes
-import hashlib
 import json
 import math
 import os
@@ -46,10 +44,6 @@ class SecretStoreError(RuntimeError):
 
 class AuthenticatorNotEnrolled(RuntimeError):
     """The owner has no authenticator secret enrolled."""
-
-
-class SecretStoreCommitUnknown(SecretStoreError):
-    """Replacement committed, but its final state could not be verified."""
 
 
 class SecretProtector(Protocol):
@@ -234,76 +228,6 @@ class EncryptedTotpSecretFileStore:
                     pass
                 raise SecretStoreError("Encrypted authenticator storage failed.") from None
 
-    def replace(self, *, owner_sub: str, secret: str) -> None:
-        """Atomically replace the enrolled authenticator after verified recovery."""
-        if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
-            raise SecretStoreError("Invalid owner identity.")
-        try:
-            code_at(secret, 0)
-            plaintext = json.dumps(
-                {"owner_sub": owner_sub, "secret": secret},
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-            ciphertext = self._protector.protect(plaintext)
-            if not isinstance(ciphertext, bytes) or not ciphertext:
-                raise SecretStoreError("Secret protection returned invalid data.")
-            envelope = json.dumps(
-                {
-                    "version": 1,
-                    "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("ascii")
-        except (TotpConfigurationError, TypeError, ValueError):
-            raise SecretStoreError("Authenticator secret could not be stored.") from None
-
-        with self._lock:
-            if os.name == "nt":
-                try:
-                    from .windows_secret_storage import (
-                        WindowsSecretFile,
-                        WindowsSecretReplacementCommittedError,
-                    )
-
-                    WindowsSecretFile(self._path).replace(envelope)
-                except WindowsSecretReplacementCommittedError:
-                    raise SecretStoreCommitUnknown(
-                        "Authenticator replacement committed but verification failed."
-                    ) from None
-                except Exception:  # noqa: BLE001 - sanitize platform failures
-                    raise SecretStoreError("Authenticator recovery storage failed.") from None
-                return
-            if self._path.is_symlink() or not self._path.is_file():
-                raise SecretStoreError("Existing authenticator storage is not trusted.")
-            temporary = self._path.with_name(
-                f".{self._path.name}.{secrets.token_hex(16)}.tmp"
-            )
-            descriptor = None
-            try:
-                descriptor = os.open(
-                    temporary,
-                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                    0o600,
-                )
-                with os.fdopen(descriptor, "wb") as stream:
-                    descriptor = None
-                    stream.write(envelope)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(temporary, self._path)
-                if self._path.is_symlink() or not self._path.is_file():
-                    raise OSError("replacement path is not a regular file")
-            except OSError:
-                if descriptor is not None:
-                    os.close(descriptor)
-                try:
-                    temporary.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                raise SecretStoreError("Authenticator recovery storage failed.") from None
-
     def load(self, *, owner_sub: str) -> str | None:
         if not isinstance(owner_sub, str) or not 1 <= len(owner_sub) <= 256:
             return None
@@ -373,7 +297,6 @@ class _PendingEnrollment:
     secret: str
     expires_at: float
     monotonic_deadline: float
-    replace_existing: bool = False
     failed_attempts: int = 0
 
 
