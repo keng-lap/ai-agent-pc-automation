@@ -719,3 +719,38 @@ def test_authenticator_confirmation_rejects_pending_mode_mismatch(
     )
     assert correct.status_code == 200
     assert services.secret_store.load(owner_sub=OWNER) == NEW_SECRET
+
+
+def test_authenticator_enrollment_confirmation_rejects_a_different_session(
+    tmp_path,
+):
+    client, services, now = build_client(tmp_path)
+    original = sign_in(client, services, recently_authenticated=True)
+    started = client.post("/api/authenticator/enrollment", json={})
+    assert started.status_code == 200
+
+    other = services.sessions.create(
+        identity=GoogleIdentity(sub=OWNER, email="owner@example.test"),
+        allowlist=services.allowlist,
+    )
+    client.cookies.set(SESSION_COOKIE_NAME, other.token)
+    denied = client.post(
+        "/api/authenticator/enrollment/confirm",
+        json={
+            "enrollment_id": started.json()["enrollment_id"],
+            "code": code_at(RFC_SECRET, now[0]),
+        },
+    )
+    assert denied.status_code == 400
+    assert services.secret_store.load(owner_sub=OWNER) is None
+
+    client.cookies.set(SESSION_COOKIE_NAME, original.token)
+    confirmed = client.post(
+        "/api/authenticator/enrollment/confirm",
+        json={
+            "enrollment_id": started.json()["enrollment_id"],
+            "code": code_at(RFC_SECRET, now[0]),
+        },
+    )
+    assert confirmed.status_code == 200
+    assert services.secret_store.load(owner_sub=OWNER) == RFC_SECRET
