@@ -45,7 +45,9 @@ def valid_claims(nonce):
     }
 
 
-def build_client(*, now=1100, claims=None, response=None, transactions=None):
+def build_client(
+    *, now=1100, claims=None, response=None, transactions=None, monotonic_clock=None
+):
     claims = claims or valid_claims("expected-nonce")
     http = FakeHttp(response or FakeResponse({"id_token": "signed-id-token"}))
     def verifier(_token):
@@ -58,6 +60,7 @@ def build_client(*, now=1100, claims=None, response=None, transactions=None):
         http_session=http,
         token_verifier=verifier,
         clock=lambda: now,
+        monotonic_clock=monotonic_clock,
     )
     return client, http
 
@@ -294,7 +297,10 @@ def test_complete_login_preserves_recent_authentication_purpose_and_one_time_gra
     from agent_backend.oidc import ApplicationSessionStore
 
     claims = valid_claims("placeholder")
-    client, _http = build_client(claims=claims)
+    client, _http = build_client(
+        claims=claims,
+        monotonic_clock=lambda: 1100.0,
+    )
     start = client.begin_login(require_recent_auth=True)
     query = start.authorization_url.partition("?")[2]
     params = dict(
@@ -379,6 +385,7 @@ def test_complete_login_preserves_recent_auth_purpose_into_one_time_session_gran
         now=now,
         claims=claims,
         transactions=transactions,
+        monotonic_clock=lambda: now,
     )
 
     identity = client.complete_login(
@@ -406,6 +413,7 @@ def test_session_freshness_uses_age_from_google_auth_time_not_session_creation()
     from agent_backend.oidc import ApplicationSessionStore
 
     now = 1100.0
+    monotonic_now = [5000.0]
     claims = valid_claims("unused")
     claims["auth_time"] = 1090
     transactions = OidcTransactionStore(clock=lambda: now)
@@ -415,6 +423,7 @@ def test_session_freshness_uses_age_from_google_auth_time_not_session_creation()
         now=now,
         claims=claims,
         transactions=transactions,
+        monotonic_clock=lambda: monotonic_now[0],
     )
     identity = client.complete_login(
         state=transaction.state,
@@ -422,10 +431,10 @@ def test_session_freshness_uses_age_from_google_auth_time_not_session_creation()
     )
 
     assert identity.recently_authenticated is True
-    assert identity.recent_auth_time == 1090.0
+    assert identity.recent_auth_monotonic_at == 5000.0
 
-    monotonic_now = [5000.0]
-    now = 1350.0
+    # Simulate 260 seconds between provider validation and session creation.
+    monotonic_now[0] += 260
     sessions = ApplicationSessionStore(
         ttl_seconds=1800,
         clock=lambda: now,
@@ -450,9 +459,13 @@ def test_session_store_rejects_recent_auth_age_that_expired_before_creation():
         sub="stable-google-sub",
         email="owner@example.test",
         recently_authenticated=True,
-        recent_auth_time=799.0,
+        recent_auth_monotonic_at=799.0,
     )
-    sessions = ApplicationSessionStore(ttl_seconds=1800, clock=lambda: 1100)
+    sessions = ApplicationSessionStore(
+        ttl_seconds=1800,
+        clock=lambda: 1100,
+        monotonic_clock=lambda: 1100.0,
+    )
     with pytest.raises(OidcAuthenticationError, match="no longer recent"):
         sessions.create(
             identity=identity,
