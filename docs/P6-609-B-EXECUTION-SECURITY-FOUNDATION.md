@@ -130,7 +130,7 @@ Worker claim must be a database transaction:
 2. Atomically set `STARTING`, issue a unique lease token, and append `worker.claimed`.
 3. Commit before any OS process creation.
 4. Revalidate all preflight gates and write `preflight.passed` or `preflight.denied` with a mandatory audit event. A denial transitions to a terminal/non-dispatchable result.
-5. Before process creation, persist `process_start_intent` and its audit event. If this transaction fails, create no process.
+5. In the same transaction that persists `process_start_intent` and its mandatory audit event, recheck that the approval is still `RESERVED`, unexpired by backend time, and not revoked. If the approval recheck or transaction fails, create no process. `RESERVED -> EXPIRED` and `RESERVED -> REVOKED` are terminal non-dispatchable transitions and must be committed with their audit events.
 6. Future launcher must create suspended, assign to the Windows Job Object before resume, persist the PID plus creation time and containment identity, then resume. This launch sequence is a separate P6-609-C implementation/review gate.
 7. If the process may have started but durable identity/ownership cannot be established, mark `UNKNOWN` and reconcile; never requeue automatically.
 
@@ -202,6 +202,7 @@ Every implementation slice must prove:
 - duplicate concurrent requests => at most one durable job;
 - worker lease race => at most one claimant;
 - crash at every transaction boundary => no silent duplicate;
+- approval expires or is revoked after preflight but before process-start intent => intent is not persisted and no process is created;
 - process identity uncertainty => UNKNOWN, never automatic retry;
 - Phase 5 Dry Run remains unchanged and no real-install handler is registered.
 
