@@ -105,11 +105,14 @@ def test_concurrent_challenge_consumption_is_one_time(tmp_path):
 
 def test_default_windows_storage_remains_fail_closed(monkeypatch, tmp_path):
     from agent_backend import durable_step_up
+    from agent_backend.platform_storage import PlatformStorageUnavailable
 
     monkeypatch.setattr(
         durable_step_up,
         "create_platform_secure_storage",
-        lambda: (_ for _ in ()).throw(RuntimeError("Windows storage unavailable")),
+        lambda: (_ for _ in ()).throw(
+            PlatformStorageUnavailable("Windows storage unavailable")
+        ),
     )
-    with pytest.raises(RuntimeError, match="Windows storage unavailable"):
+    with pytest.raises(DurableStepUpUnavailable, match="cannot be trusted"):
         SQLiteStepUpStore(tmp_path / "step-up.sqlite3")
