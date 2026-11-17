@@ -265,7 +265,7 @@ class SQLiteStepUpStore:
 
                 try:
                     secret = secret_loader()
-                except Exception:
+                except OSError:
                     connection.rollback()
                     raise DurableStepUpUnavailable("TOTP secret could not be loaded.") from None
                 step = matching_step(secret, code, timestamp=now) if isinstance(secret, str) else None
