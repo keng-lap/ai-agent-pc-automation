@@ -131,8 +131,11 @@ Worker claim must be a database transaction:
 3. Commit before any OS process creation.
 4. Revalidate all preflight gates and write `preflight.passed` or `preflight.denied` with a mandatory audit event. A denial transitions to a terminal/non-dispatchable result.
 5. In the same transaction that persists `process_start_intent` and its mandatory audit event, recheck that the approval is still `RESERVED`, unexpired by backend time, and not revoked. If the approval recheck or transaction fails, create no process. `RESERVED -> EXPIRED` and `RESERVED -> REVOKED` are terminal non-dispatchable transitions and must be committed with their audit events.
-6. Future launcher must create suspended, assign to the Windows Job Object before resume, persist the PID plus creation time and containment identity, then resume. This launch sequence is a separate P6-609-C implementation/review gate.
-7. If the process may have started but durable identity/ownership cannot be established, mark `UNKNOWN` and reconcile; never requeue automatically.
+6. Immediately before calling the OS process-creation API, the launcher must re-read/revalidate that the approval remains `RESERVED`, is unexpired by backend time, and is not revoked; it must also verify that the process-start intent is still current and bound to this exact job, approval, action digest, and worker lease. If any check fails, create no process and persist a terminal non-dispatchable result with its mandatory audit event.
+7. The process-start intent is short-lived: the launcher must begin process creation within **2 seconds** of the intent commit, measured with a monotonic clock. If that deadline is missed, the intent is stale, no process may be created, and the job must be moved to a terminal non-dispatchable state with its audit event; a fresh approval/reservation is required for another attempt. This limit does not replace the launch-time approval recheck.
+8. Approval revocation and the final launch critical section must be serialized across processes using a backend-owned per-approval launch/revocation gate. Revocation must not report success while a process-creation operation is in progress; the launcher must hold the gate across its final approval/intent checks and the OS process-creation call, then release it after the process identity/creation result is durably recorded. Approval expiry is still checked immediately before the OS call; the gate does not extend approval lifetime.
+9. Future launcher must create suspended, assign to the Windows Job Object before resume, persist the PID plus creation time and containment identity, then resume. This launch sequence is a separate P6-609-C implementation/review gate.
+10. If the process may have started but durable identity/ownership cannot be established, mark `UNKNOWN` and reconcile; never requeue automatically.
 
 ### 4.4 Completion
 
@@ -203,6 +206,9 @@ Every implementation slice must prove:
 - worker lease race => at most one claimant;
 - crash at every transaction boundary => no silent duplicate;
 - approval expires or is revoked after preflight but before process-start intent => intent is not persisted and no process is created;
+- approval expires or is revoked after process-start intent but before process creation => the launch-time recheck/gate fails, no process is created, and a terminal non-dispatchable result is persisted with its audit event;
+- process-start intent older than the 2-second monotonic deadline => stale intent is non-dispatchable and no process is created;
+- revocation racing with process creation => the per-approval cross-process gate serializes the operations; revocation cannot report success while process creation is in progress;
 - process identity uncertainty => UNKNOWN, never automatic retry;
 - Phase 5 Dry Run remains unchanged and no real-install handler is registered.
 
