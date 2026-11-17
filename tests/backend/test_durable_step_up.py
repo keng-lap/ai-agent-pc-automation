@@ -32,6 +32,11 @@ def make_store(tmp_path, now=None):
     )
 
 
+def wrong_code():
+    valid = code_at(SECRET, NOW)
+    return "000000" if valid != "000000" else "000001"
+
+
 def create(store):
     return store.create(
         owner_sub=OWNER,
@@ -89,7 +94,7 @@ def test_invalid_codes_lock_challenge_after_five_attempts(tmp_path):
     store = make_store(tmp_path)
     challenge = create(store)
     for _ in range(5):
-        assert not consume(store, challenge, code="000000")
+        assert not consume(store, challenge, code=wrong_code())
     assert store.get_status(challenge["challenge_id"]) == "locked"
 
 
