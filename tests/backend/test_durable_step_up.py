@@ -91,6 +91,44 @@ def test_expired_challenge_is_persistently_expired(tmp_path):
 
 
 
+def test_challenge_expiring_while_waiting_for_database_lock_is_not_consumed(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    now = [NOW]
+    clock_calls = [0]
+    waiting_for_database_lock = Event()
+
+    def clock():
+        clock_calls[0] += 1
+        if clock_calls[0] == 2:
+            waiting_for_database_lock.set()
+        return now[0]
+
+    store = SQLiteStepUpStore(
+        tmp_path / "private" / "step-up.sqlite3",
+        secure_storage=TestSecureStorage(),
+        clock=clock,
+    )
+    challenge = create(store)
+    locker = store._connect()
+    locker.execute("BEGIN IMMEDIATE")
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(consume, store, challenge)
+            try:
+                assert waiting_for_database_lock.wait(timeout=5)
+                now[0] = challenge["expires_at"] + 1
+            finally:
+                locker.commit()
+            assert not future.result(timeout=5)
+    finally:
+        locker.close()
+
+    assert store.get_status(challenge["challenge_id"]) == "expired"
+
+
 def test_challenge_expiring_while_secret_loads_is_not_consumed(tmp_path):
     now = [NOW]
     store = make_store(tmp_path, now)
