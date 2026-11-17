@@ -101,9 +101,10 @@ def test_challenge_expiring_while_waiting_for_database_lock_is_not_consumed(tmp_
 
     def clock():
         clock_calls[0] += 1
+        value = now[0]
         if clock_calls[0] == 2:
             waiting_for_database_lock.set()
-        return now[0]
+        return value
 
     store = SQLiteStepUpStore(
         tmp_path / "private" / "step-up.sqlite3",
