@@ -90,6 +90,51 @@ def test_expired_challenge_is_persistently_expired(tmp_path):
     assert store.get_status(challenge["challenge_id"]) == "expired"
 
 
+
+def test_challenge_expiring_while_secret_loads_is_not_consumed(tmp_path):
+    now = [NOW]
+    store = make_store(tmp_path, now)
+    challenge = create(store)
+
+    def load_secret():
+        now[0] = challenge["expires_at"] + 1
+        return SECRET
+
+    assert not store.verify_and_consume(
+        challenge_id=challenge["challenge_id"],
+        owner_sub=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN,
+        action_digest=DIGEST,
+        risk_class="high",
+        code=code_at(SECRET, NOW),
+        secret_loader=load_secret,
+    )
+    assert store.get_status(challenge["challenge_id"]) == "expired"
+
+
+def test_clock_rollback_while_secret_loads_invalidates_challenge(tmp_path):
+    now = [NOW]
+    store = make_store(tmp_path, now)
+    challenge = create(store)
+
+    def load_secret():
+        now[0] -= 1
+        return SECRET
+
+    assert not store.verify_and_consume(
+        challenge_id=challenge["challenge_id"],
+        owner_sub=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN,
+        action_digest=DIGEST,
+        risk_class="high",
+        code=code_at(SECRET, NOW),
+        secret_loader=load_secret,
+    )
+    assert store.get_status(challenge["challenge_id"]) == "invalidated"
+
+
 def test_invalid_codes_lock_challenge_after_five_attempts(tmp_path):
     store = make_store(tmp_path)
     challenge = create(store)
@@ -98,14 +143,49 @@ def test_invalid_codes_lock_challenge_after_five_attempts(tmp_path):
     assert store.get_status(challenge["challenge_id"]) == "locked"
 
 
-def test_concurrent_challenge_consumption_is_one_time(tmp_path):
+def _run_concurrent_consumptions(stores, challenges):
     from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
 
-    store = make_store(tmp_path)
-    challenge = create(store)
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(lambda _n: consume(store, challenge), range(2)))
+    barrier = Barrier(len(stores))
+
+    def attempt(index):
+        barrier.wait(timeout=5)
+        return consume(stores[index], challenges[index])
+
+    with ThreadPoolExecutor(max_workers=len(stores)) as pool:
+        return list(pool.map(attempt, range(len(stores))))
+
+
+def test_concurrent_same_challenge_across_store_instances_is_one_time(tmp_path):
+    first = make_store(tmp_path)
+    second = make_store(tmp_path)
+    challenge = create(first)
+
+    results = _run_concurrent_consumptions(
+        [first, second],
+        [challenge, challenge],
+    )
+
     assert sum(results) == 1
+    assert first.get_status(challenge["challenge_id"]) == "consumed"
+
+
+def test_concurrent_distinct_challenges_cannot_reuse_same_totp_step(tmp_path):
+    first = make_store(tmp_path)
+    second = make_store(tmp_path)
+    challenges = [create(first), create(second)]
+
+    results = _run_concurrent_consumptions(
+        [first, second],
+        challenges,
+    )
+
+    assert sum(results) == 1
+    assert sorted(
+        store.get_status(challenge["challenge_id"])
+        for store, challenge in zip([first, second], challenges, strict=True)
+    ) == ["active", "consumed"]
 
 
 def test_default_windows_storage_remains_fail_closed(monkeypatch, tmp_path):
