@@ -139,3 +139,31 @@ def test_active_challenge_capacity_is_bounded(tmp_path):
         create(store)
     with pytest.raises(DurableStepUpConflict, match="capacity"):
         create(store)
+
+
+def test_clock_rollback_invalidates_persisted_challenge(tmp_path):
+    now = [NOW]
+    store = make_store(tmp_path, now)
+    challenge = create(store)
+    now[0] -= 1
+    assert not consume(store, challenge)
+    assert store.get_status(challenge["challenge_id"]) == "invalidated"
+
+
+def test_secret_loader_failure_does_not_consume_challenge(tmp_path):
+    from agent_backend.durable_step_up import DurableStepUpUnavailable
+
+    store = make_store(tmp_path)
+    challenge = create(store)
+    with pytest.raises(DurableStepUpUnavailable, match="secret could not be loaded"):
+        store.verify_and_consume(
+            challenge_id=challenge["challenge_id"],
+            owner_sub=OWNER,
+            session_id=SESSION,
+            plan_id=PLAN,
+            action_digest=DIGEST,
+            risk_class="high",
+            code=code_at(SECRET, NOW),
+            secret_loader=lambda: (_ for _ in ()).throw(OSError("secret backend detail")),
+        )
+    assert store.get_status(challenge["challenge_id"]) == "active"
