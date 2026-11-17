@@ -24,6 +24,9 @@ from .totp import matching_step
 ChallengeStatus = Literal["active", "consumed", "invalidated", "expired", "locked"]
 _MAX_ATTEMPTS = 5
 _MAX_TTL_SECONDS = 300
+_MAX_CHALLENGES = 128
+_OWNER_FAILURE_WINDOW_SECONDS = 300
+_MAX_OWNER_SESSION_FAILURES = 5
 
 
 class DurableStepUpUnavailable(RuntimeError):
@@ -78,6 +81,13 @@ class SQLiteStepUpStore:
                         last_step INTEGER NOT NULL CHECK(last_step >= 0),
                         updated_at REAL NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS step_up_owner_failures (
+                        owner_sub TEXT NOT NULL,
+                        session_id TEXT NOT NULL,
+                        window_started REAL NOT NULL,
+                        failure_count INTEGER NOT NULL CHECK(failure_count BETWEEN 1 AND 5),
+                        PRIMARY KEY(owner_sub, session_id)
+                    );
                     PRAGMA user_version = 1;
                     """
                 )
@@ -127,6 +137,16 @@ class SQLiteStepUpStore:
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
+                    "UPDATE step_up_challenges SET status='expired' WHERE status='active' AND expires_at<=?",
+                    (now,),
+                )
+                active_count = connection.execute(
+                    "SELECT COUNT(*) AS count FROM step_up_challenges WHERE status='active'"
+                ).fetchone()["count"]
+                if active_count >= _MAX_CHALLENGES:
+                    connection.rollback()
+                    raise DurableStepUpConflict("active step-up challenge capacity reached")
+                connection.execute(
                     """INSERT INTO step_up_challenges
                     (challenge_id, owner_sub, session_id, plan_id, action_digest,
                      risk_class, created_at, expires_at, status)
@@ -135,6 +155,8 @@ class SQLiteStepUpStore:
                      now, now + ttl_seconds),
                 )
                 connection.commit()
+        except DurableStepUpConflict:
+            raise
         except (sqlite3.Error, OSError):
             raise DurableStepUpUnavailable("Step-up challenge could not be persisted.") from None
         return {
@@ -195,14 +217,56 @@ class SQLiteStepUpStore:
                     connection.commit()
                     return False
 
+                owner_failures = connection.execute(
+                    """SELECT window_started, failure_count FROM step_up_owner_failures
+                    WHERE owner_sub=? AND session_id=?""",
+                    (owner_sub, session_id),
+                ).fetchone()
+                if (
+                    owner_failures is not None
+                    and now - owner_failures["window_started"] < _OWNER_FAILURE_WINDOW_SECONDS
+                    and owner_failures["failure_count"] >= _MAX_OWNER_SESSION_FAILURES
+                ):
+                    connection.execute(
+                        "UPDATE step_up_challenges SET status='locked' WHERE challenge_id=? AND status='active'",
+                        (challenge_id,),
+                    )
+                    connection.commit()
+                    return False
+
                 secret = secret_loader()
                 step = matching_step(secret, code, timestamp=now) if isinstance(secret, str) else None
                 if step is None:
                     attempts = challenge["failed_attempts"] + 1
-                    status = "locked" if attempts >= _MAX_ATTEMPTS else "active"
+                    if (
+                        owner_failures is None
+                        or now - owner_failures["window_started"] >= _OWNER_FAILURE_WINDOW_SECONDS
+                    ):
+                        window_started, owner_attempts = now, 1
+                    else:
+                        window_started = owner_failures["window_started"]
+                        owner_attempts = owner_failures["failure_count"] + 1
+                    connection.execute(
+                        """INSERT INTO step_up_owner_failures
+                        (owner_sub, session_id, window_started, failure_count)
+                        VALUES (?, ?, ?, ?) ON CONFLICT(owner_sub, session_id) DO UPDATE SET
+                        window_started=excluded.window_started,
+                        failure_count=excluded.failure_count""",
+                        (
+                            owner_sub,
+                            session_id,
+                            window_started,
+                            min(owner_attempts, _MAX_OWNER_SESSION_FAILURES),
+                        ),
+                    )
+                    status = (
+                        "locked"
+                        if attempts >= _MAX_ATTEMPTS or owner_attempts >= _MAX_OWNER_SESSION_FAILURES
+                        else "active"
+                    )
                     connection.execute(
                         "UPDATE step_up_challenges SET failed_attempts=?, status=? WHERE challenge_id=? AND status='active'",
-                        (attempts, status, challenge_id),
+                        (min(attempts, _MAX_ATTEMPTS), status, challenge_id),
                     )
                     connection.commit()
                     return False
