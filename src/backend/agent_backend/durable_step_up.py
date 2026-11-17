@@ -315,7 +315,13 @@ class SQLiteStepUpStore:
 
     @staticmethod
     def _validate_identity(value: str, field: str) -> None:
-        if (\n            not isinstance(value, str)\n            or not value\n            or len(value) > (256 if field == "owner" else 128)\n            or value.strip() != value\n            or any(ord(char) < 0x21 for char in value)\n        ):
+        if (
+            not isinstance(value, str)
+            or not value
+            or len(value) > (256 if field == "owner" else 128)
+            or value.strip() != value
+            or any(ord(char) < 0x21 for char in value)
+        ):
             raise ValueError(f"invalid {field}")
 
     @staticmethod
