@@ -116,3 +116,26 @@ def test_default_windows_storage_remains_fail_closed(monkeypatch, tmp_path):
     )
     with pytest.raises(DurableStepUpUnavailable, match="cannot be trusted"):
         SQLiteStepUpStore(tmp_path / "step-up.sqlite3")
+
+
+def test_owner_session_failure_limit_survives_new_challenge_and_restart(tmp_path):
+    first = make_store(tmp_path)
+    challenge = create(first)
+    for _ in range(5):
+        assert not consume(first, challenge, code="000000")
+    assert first.get_status(challenge["challenge_id"]) == "locked"
+
+    restarted = make_store(tmp_path)
+    next_challenge = create(restarted)
+    assert not consume(restarted, next_challenge)
+    assert restarted.get_status(next_challenge["challenge_id"]) == "locked"
+
+
+def test_active_challenge_capacity_is_bounded(tmp_path):
+    from agent_backend.durable_step_up import DurableStepUpConflict
+
+    store = make_store(tmp_path)
+    for _ in range(128):
+        create(store)
+    with pytest.raises(DurableStepUpConflict, match="capacity"):
+        create(store)
