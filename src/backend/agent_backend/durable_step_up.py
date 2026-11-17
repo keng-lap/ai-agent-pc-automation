@@ -27,6 +27,7 @@ _MAX_TTL_SECONDS = 300
 _MAX_CHALLENGES = 128
 _OWNER_FAILURE_WINDOW_SECONDS = 300
 _MAX_OWNER_SESSION_FAILURES = 5
+_MAX_OWNER_FAILURE_ENTRIES = 128
 
 
 class DurableStepUpUnavailable(RuntimeError):
@@ -137,6 +138,20 @@ class SQLiteStepUpStore:
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
+                    "DELETE FROM step_up_owner_failures WHERE window_started + ? <= ?",
+                    (_OWNER_FAILURE_WINDOW_SECONDS, now),
+                )
+                owner_failure_exists = connection.execute(
+                    "SELECT 1 FROM step_up_owner_failures WHERE owner_sub=? AND session_id=?",
+                    (owner_sub, session_id),
+                ).fetchone()
+                owner_failure_count = connection.execute(
+                    "SELECT COUNT(*) AS count FROM step_up_owner_failures"
+                ).fetchone()["count"]
+                if owner_failure_exists is None and owner_failure_count >= _MAX_OWNER_FAILURE_ENTRIES:
+                    connection.rollback()
+                    raise DurableStepUpConflict("owner/session failure capacity reached")
+                connection.execute(
                     "UPDATE step_up_challenges SET status='expired' WHERE status='active' AND expires_at<=?",
                     (now,),
                 )
@@ -179,7 +194,12 @@ class SQLiteStepUpStore:
         secret_loader: Callable[[], str | None],
     ) -> bool:
         """Verify a code and atomically consume challenge plus replay step."""
-        if not self._valid_identity(owner_sub, session_id) or not callable(secret_loader):
+        if (
+            not self._valid_identity(owner_sub, session_id)
+            or not isinstance(challenge_id, str)
+            or not 1 <= len(challenge_id) <= 64
+            or not callable(secret_loader)
+        ):
             return False
         now = self._now()
         try:
@@ -191,6 +211,13 @@ class SQLiteStepUpStore:
                 ).fetchone()
                 if challenge is None or challenge["status"] != "active":
                     connection.rollback()
+                    return False
+                if now < challenge["created_at"]:
+                    connection.execute(
+                        "UPDATE step_up_challenges SET status='invalidated' WHERE challenge_id=? AND status='active'",
+                        (challenge_id,),
+                    )
+                    connection.commit()
                     return False
                 if challenge["expires_at"] <= now:
                     connection.execute(
@@ -234,7 +261,11 @@ class SQLiteStepUpStore:
                     connection.commit()
                     return False
 
-                secret = secret_loader()
+                try:
+                    secret = secret_loader()
+                except Exception:
+                    connection.rollback()
+                    raise DurableStepUpUnavailable("TOTP secret could not be loaded.") from None
                 step = matching_step(secret, code, timestamp=now) if isinstance(secret, str) else None
                 if step is None:
                     attempts = challenge["failed_attempts"] + 1
@@ -327,8 +358,12 @@ class SQLiteStepUpStore:
     @staticmethod
     def _valid_identity(owner_sub: str, session_id: str) -> bool:
         return (
-            isinstance(owner_sub, str) and 1 <= len(owner_sub) <= 256
-            and owner_sub.strip() == owner_sub and not any(ord(c) < 0x21 for c in owner_sub)
-            and isinstance(session_id, str) and 1 <= len(session_id) <= 128
-            and session_id.strip() == session_id and not any(ord(c) < 0x21 for c in session_id)
+            isinstance(owner_sub, str)
+            and 1 <= len(owner_sub) <= 256
+            and owner_sub.strip() == owner_sub
+            and not any(ord(char) < 0x21 for char in owner_sub)
+            and isinstance(session_id, str)
+            and 1 <= len(session_id) <= 128
+            and session_id.strip() == session_id
+            and not any(ord(char) < 0x21 for char in session_id)
         )
