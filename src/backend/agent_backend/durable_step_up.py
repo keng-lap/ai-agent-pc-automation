@@ -203,10 +203,11 @@ class SQLiteStepUpStore:
             or not callable(secret_loader)
         ):
             return False
-        now = self._now()
+        started_at = self._now()
         try:
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                now = self._now()
                 challenge = connection.execute(
                     "SELECT * FROM step_up_challenges WHERE challenge_id=?",
                     (challenge_id,),
@@ -214,7 +215,7 @@ class SQLiteStepUpStore:
                 if challenge is None or challenge["status"] != "active":
                     connection.rollback()
                     return False
-                if now < challenge["created_at"]:
+                if now < started_at or now < challenge["created_at"]:
                     connection.execute(
                         "UPDATE step_up_challenges SET status='invalidated' WHERE challenge_id=? AND status='active'",
                         (challenge_id,),
@@ -268,14 +269,35 @@ class SQLiteStepUpStore:
                 except OSError:
                     connection.rollback()
                     raise DurableStepUpUnavailable("TOTP secret could not be loaded.") from None
-                step = matching_step(secret, code, timestamp=now) if isinstance(secret, str) else None
+
+                verified_at = self._now()
+                if verified_at < now or verified_at < challenge["created_at"]:
+                    connection.execute(
+                        "UPDATE step_up_challenges SET status='invalidated' WHERE challenge_id=? AND status='active'",
+                        (challenge_id,),
+                    )
+                    connection.commit()
+                    return False
+                if challenge["expires_at"] <= verified_at:
+                    connection.execute(
+                        "UPDATE step_up_challenges SET status='expired' WHERE challenge_id=? AND status='active'",
+                        (challenge_id,),
+                    )
+                    connection.commit()
+                    return False
+
+                step = (
+                    matching_step(secret, code, timestamp=verified_at)
+                    if isinstance(secret, str)
+                    else None
+                )
                 if step is None:
                     attempts = challenge["failed_attempts"] + 1
                     if (
                         owner_failures is None
-                        or now - owner_failures["window_started"] >= _OWNER_FAILURE_WINDOW_SECONDS
+                        or verified_at - owner_failures["window_started"] >= _OWNER_FAILURE_WINDOW_SECONDS
                     ):
-                        window_started, owner_attempts = now, 1
+                        window_started, owner_attempts = verified_at, 1
                     else:
                         window_started = owner_failures["window_started"]
                         owner_attempts = owner_failures["failure_count"] + 1
@@ -315,7 +337,7 @@ class SQLiteStepUpStore:
                     """INSERT INTO totp_replay_counters(owner_sub,last_step,updated_at)
                     VALUES(?,?,?) ON CONFLICT(owner_sub) DO UPDATE SET
                     last_step=excluded.last_step, updated_at=excluded.updated_at""",
-                    (owner_sub, step, now),
+                    (owner_sub, step, verified_at),
                 )
                 changed = connection.execute(
                     "UPDATE step_up_challenges SET status='consumed' WHERE challenge_id=? AND status='active'",
