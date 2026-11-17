@@ -8,6 +8,7 @@ wired into authentication services until the Windows storage gate is reviewed.
 
 from __future__ import annotations
 
+import math
 import secrets
 import sqlite3
 import threading
@@ -244,13 +245,13 @@ class SQLiteStepUpStore:
 
     def _now(self) -> float:
         now = self._clock()
-        if isinstance(now, bool) or not isinstance(now, (int, float)) or now < 0:
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now) or now < 0:
             raise DurableStepUpUnavailable("System clock is invalid.")
         return float(now)
 
     @staticmethod
     def _validate_identity(value: str, field: str) -> None:
-        if not SQLiteStepUpStore._valid_identity(value, ""):
+        if (\n            not isinstance(value, str)\n            or not value\n            or len(value) > (256 if field == "owner" else 128)\n            or value.strip() != value\n            or any(ord(char) < 0x21 for char in value)\n        ):
             raise ValueError(f"invalid {field}")
 
     @staticmethod
