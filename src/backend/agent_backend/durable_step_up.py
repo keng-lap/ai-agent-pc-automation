@@ -53,8 +53,10 @@ class SQLiteStepUpStore:
             raise DurableStepUpUnavailable("Step-up database path must be absolute.")
         self._clock = clock or time.time
         self._lock = threading.RLock()
-        self._secure_storage = secure_storage or create_platform_secure_storage()
+        self._secure_storage = secure_storage
         try:
+            if self._secure_storage is None:
+                self._secure_storage = create_platform_secure_storage()
             self._secure_storage.prepare_database_path(self.path)
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("PRAGMA journal_mode = WAL")
