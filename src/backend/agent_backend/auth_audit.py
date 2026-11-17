@@ -32,6 +32,7 @@ AuthAuditReason = Literal[
     "action_binding_mismatch",
     "rate_limited",
     "trusted_setup_required",
+    "invalid_software_approval",
 ]
 
 MAX_AUTH_AUDIT_EVENTS = 500

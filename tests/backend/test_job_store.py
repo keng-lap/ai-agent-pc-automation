@@ -10,8 +10,23 @@ OWNER = "google-owner-sub"
 DIGEST = "a" * 64
 
 
+class _TestSecureStorage:
+    """Test-only adapter; filesystem security is covered by platform adapter tests."""
+
+    def prepare_database_path(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    def finalize_database_file(self, path):
+        if not path.is_file():
+            raise AssertionError("test database was not created")
+
+
 def make_store(tmp_path):
-    return SQLiteJobStore(tmp_path / "private-state" / "jobs.sqlite3", clock=lambda: NOW)
+    return SQLiteJobStore(
+        tmp_path / "private-state" / "jobs.sqlite3",
+        clock=lambda: NOW,
+        secure_storage=_TestSecureStorage(),
+    )
 
 
 def test_job_is_durable_and_idempotent_across_store_instances(tmp_path):
@@ -175,3 +190,47 @@ def test_terminal_transition_records_finish_time_and_reboot_flag(tmp_path):
     assert complete["finished_at"] == "2026-11-13T10:00:04.000Z"
     assert complete["result_code"] == "VERIFIED"
     assert complete["reboot_required"] is False
+
+
+def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_path):
+    store = make_store(tmp_path)
+    job = store.create(
+        owner_id=OWNER,
+        tool_id="software.install",
+        action_digest=DIGEST,
+        idempotency_key="cancel-race",
+    )
+    store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=0,
+        target=JobState.STARTING,
+        message="Worker claimed job",
+        now=NOW + timedelta(seconds=1),
+    )
+    store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=1,
+        target=JobState.RUNNING,
+        message="Process started",
+        now=NOW + timedelta(seconds=2),
+    )
+    store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=2,
+        target=JobState.CANCEL_REQUESTED,
+        message="Cancellation requested",
+        now=NOW + timedelta(seconds=3),
+    )
+    verifying = store.transition(
+        job["job_id"],
+        owner_id=OWNER,
+        expected_version=3,
+        target=JobState.VERIFYING,
+        message="Process completed; verify final state",
+        result_code="PROCESS_COMPLETED",
+        now=NOW + timedelta(seconds=4),
+    )
+    assert verifying["state"] == JobState.VERIFYING.value

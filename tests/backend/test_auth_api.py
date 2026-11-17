@@ -1,5 +1,7 @@
 from dataclasses import replace
+from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_backend.auth_api import (
@@ -27,6 +29,21 @@ HEADERS = {
     "origin": "http://127.0.0.1:4200",
     "x-local-agent-token": "a" * 64,
 }
+
+AUTH_ENV_VARS = (
+    "GOOGLE_OIDC_CLIENT_ID",
+    "GOOGLE_OIDC_CLIENT_SECRET",
+    "GOOGLE_OIDC_REDIRECT_URI",
+    "MASTER_GOOGLE_SUB",
+    "APP_SESSION_TTL_SECONDS",
+    "AUTHENTICATOR_SECRET_PATH",
+)
+
+
+def clear_auth_environment(monkeypatch):
+    """Keep disabled-auth tests independent of developer .env settings."""
+    for name in AUTH_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
 
 
 class FakeProtector:
@@ -65,7 +82,7 @@ def build_client(tmp_path, *, identity=None):
         google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
         master_google_sub=OWNER,
         app_session_ttl_seconds=1800,
-        authenticator_secret_path=tmp_path / "authenticator.json",
+        authenticator_secret_path=tmp_path / "private" / "authenticator.json",
     )
     replay_guard = TotpReplayGuard(clock=lambda: now[0])
     secret_store = EncryptedTotpSecretFileStore(
@@ -79,6 +96,7 @@ def build_client(tmp_path, *, identity=None):
         sessions=ApplicationSessionStore(
             ttl_seconds=1800,
             clock=lambda: now[0],
+            monotonic_clock=lambda: now[0],
         ),
         secret_store=secret_store,
         enrollment=AuthenticatorEnrollmentManager(
@@ -112,7 +130,8 @@ def sign_in(client, services):
     return credential
 
 
-def test_auth_session_is_disabled_without_google_configuration(tmp_path):
+def test_auth_session_is_disabled_without_google_configuration(tmp_path, monkeypatch):
+    clear_auth_environment(monkeypatch)
     from agent_backend.main import create_app
 
     client = TestClient(
@@ -127,6 +146,7 @@ def test_auth_session_is_disabled_without_google_configuration(tmp_path):
         "enabled": False,
         "authenticated": False,
         "authenticator_enrolled": False,
+        "authenticator_storage_available": False,
     }
 
 
@@ -190,8 +210,8 @@ def test_api_routes_require_master_session_when_auth_is_enabled(tmp_path):
 
 
 def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
-    client, _services, now = build_client(tmp_path)
-    sign_in(client, _services)
+    client, services, now = build_client(tmp_path)
+    sign_in(client, services)
 
     start = client.post("/api/authenticator/enrollment", json={})
     assert start.status_code == 200
@@ -211,6 +231,43 @@ def test_authenticator_enrollment_and_confirmation_are_one_time(tmp_path):
 
     second = client.post("/api/authenticator/enrollment", json={})
     assert second.status_code == 409
+
+
+
+def test_secret_store_failure_does_not_lock_owner_out_of_dashboard(tmp_path, monkeypatch):
+    from agent_backend.authenticator import SecretStoreError
+
+    client, services, _now = build_client(tmp_path)
+    sign_in(client, services)
+
+    def unavailable(*, owner_sub):
+        raise SecretStoreError("simulated storage failure")
+
+    monkeypatch.setattr(services.secret_store, "load", unavailable)
+    response = client.get("/api/auth/session")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": True,
+        "authenticated": True,
+        "authenticator_enrolled": False,
+        "authenticator_storage_available": False,
+    }
+
+
+def test_totp_not_enrolled_does_not_block_google_dashboard_session(tmp_path):
+    client, services, _now = build_client(tmp_path)
+    sign_in(client, services)
+
+    response = client.get("/api/auth/session")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": True,
+        "authenticated": True,
+        "authenticator_enrolled": False,
+        "authenticator_storage_available": True,
+    }
 
 
 def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeypatch):
@@ -305,3 +362,155 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     )
     assert unauthenticated.status_code == 401
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/plans", {"request": "Install Google Chrome", "language": "en"}),
+        ("/api/software/discovery/search", {"query": "Google Chrome"}),
+    ],
+)
+def test_protected_routers_fail_closed_when_authentication_is_disabled(
+    tmp_path, path, payload, monkeypatch
+):
+    clear_auth_environment(monkeypatch)
+    from agent_backend.main import create_app
+
+    client = TestClient(
+        create_app(load_settings(load_env_file=False)),
+        base_url="http://127.0.0.1:8000",
+        headers=HEADERS,
+    )
+
+    response = client.post(path, json=payload)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication is not configured."}
+
+
+@pytest.mark.parametrize(
+    ("environ", "argv"),
+    [
+        ({"WEB_CONCURRENCY": "2"}, []),
+        ({}, ["--workers", "2"]),
+        ({"GUNICORN_CMD_ARGS": "--workers=3"}, []),
+        ({"UVICORN_WORKERS": "not-a-number"}, []),
+    ],
+)
+def test_multi_worker_configuration_is_rejected(environ, argv):
+    from agent_backend.main import enforce_single_worker
+
+    with pytest.raises(RuntimeError):
+        enforce_single_worker(environ=environ, argv=argv)
+
+
+def test_single_worker_configuration_is_accepted():
+    from agent_backend.main import enforce_single_worker
+
+    enforce_single_worker(environ={"WEB_CONCURRENCY": "1"}, argv=[])
+
+
+
+def test_build_auth_services_keeps_google_dashboard_available_when_secret_load_fails(
+    monkeypatch
+):
+    from agent_backend.auth_api import build_auth_services
+    from agent_backend.authenticator import SecretStoreError
+
+    settings = replace(
+        load_settings(load_env_file=False),
+        google_oidc_client_id="test-client-id",
+        google_oidc_client_secret="test-client-secret",
+        google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+        master_google_sub=OWNER,
+        app_session_ttl_seconds=1800,
+        authenticator_secret_path=(
+            Path(__file__).resolve().parents[2]
+            / ".agent-state" / "authenticator" / "authenticator.json"
+        ),
+    )
+
+    def unavailable(self, *, owner_sub):
+        raise SecretStoreError("simulated unreadable storage")
+
+    monkeypatch.setattr(EncryptedTotpSecretFileStore, "load", unavailable)
+    services = build_auth_services(settings)
+    assert services is not None
+
+    from agent_backend.main import create_app
+
+    client = TestClient(
+        create_app(settings, auth_services=services),
+        base_url="http://127.0.0.1:8000",
+        headers=HEADERS,
+    )
+    sign_in(client, services)
+    session = client.get("/api/auth/session")
+    assert session.status_code == 200
+    assert session.json()["authenticated"] is True
+    assert session.json()["authenticator_storage_available"] is False
+    assert client.get("/api/auth/google/start").status_code == 200
+
+
+def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_absent(monkeypatch):
+    from agent_backend.auth_api import build_auth_services
+
+    monkeypatch.setattr(
+        EncryptedTotpSecretFileStore,
+        "load",
+        lambda self, *, owner_sub: None,
+    )
+
+    settings = replace(
+        load_settings(load_env_file=False),
+        google_oidc_client_id="test-client-id",
+        google_oidc_client_secret="test-client-secret",
+        google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+        master_google_sub=OWNER,
+        app_session_ttl_seconds=1800,
+        authenticator_secret_path=(
+            Path(__file__).resolve().parents[2]
+            / ".agent-state" / "authenticator" / "authenticator.json"
+        ),
+    )
+
+    services = build_auth_services(settings)
+
+    assert services is not None
+    assert services.enrollment._replay_guard._last_consumed.get(OWNER) is None
+
+
+def test_authenticator_enrollment_confirmation_rejects_a_different_session(
+    tmp_path,
+):
+    client, services, now = build_client(tmp_path)
+    original = sign_in(client, services)
+    started = client.post("/api/authenticator/enrollment", json={})
+    assert started.status_code == 200
+
+    other = services.sessions.create(
+        identity=GoogleIdentity(sub=OWNER, email="owner@example.test"),
+        allowlist=services.allowlist,
+    )
+    client.cookies.set(SESSION_COOKIE_NAME, other.token)
+    denied = client.post(
+        "/api/authenticator/enrollment/confirm",
+        json={
+            "enrollment_id": started.json()["enrollment_id"],
+            "code": code_at(RFC_SECRET, now[0]),
+        },
+    )
+    assert denied.status_code == 400
+    assert services.secret_store.load(owner_sub=OWNER) is None
+
+    client.cookies.set(SESSION_COOKIE_NAME, original.token)
+    confirmed = client.post(
+        "/api/authenticator/enrollment/confirm",
+        json={
+            "enrollment_id": started.json()["enrollment_id"],
+            "code": code_at(RFC_SECRET, now[0]),
+        },
+    )
+    assert confirmed.status_code == 200
+    assert services.secret_store.load(owner_sub=OWNER) == RFC_SECRET

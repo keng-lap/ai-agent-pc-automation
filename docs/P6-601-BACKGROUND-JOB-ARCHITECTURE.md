@@ -154,3 +154,138 @@ Use synthetic fixtures, isolated temporary directories, fake executables, and sp
 ## Explicit non-goals
 
 This design does not authorize a general command queue, arbitrary BAT/PowerShell/CMD execution, arbitrary script upload, remote job execution, LAN/public access, automatic elevation, automatic retries of ambiguous jobs, or real software installation. Each concrete capability still requires its own bounded task, independent A4 review, tests, CI, and separate Product Owner implementation and enablement approvals.
+
+
+## Normative execution contract addendum — P6-601 A4 remediation
+
+This section is normative for any future implementation. If an implementation
+cannot satisfy a rule below, it must remain disabled and fail closed. This
+addendum does not authorize a worker, installer, scheduler, or machine-changing
+operation.
+
+### Run state transition matrix
+
+Only the following transitions are permitted. All transitions must be persisted
+atomically with the associated audit event and version check.
+
+| From | To | Actor | Required preconditions |
+|---|---|---|---|
+| absent | QUEUED | API | Authenticated owner; schema-valid immutable definition version; current evidence; exact approval reserved (not consumed) in the same transaction; unique idempotency key; queue audit committed |
+| QUEUED | STARTING | Worker | Atomic compare-and-set claim; no unexpired lease exists; claim creates a valid unexpired lease in the same transaction; exact approval and evidence revalidated; approval consumed atomically with STARTING and its audit event; no other active installation |
+| QUEUED | CANCELLED | API | Owner-authorized cancellation before worker claim; cancellation and release of the reserved approval are committed atomically with the terminal audit event |
+| QUEUED | FAILED | Worker/reconciler | Definitive approval expiry/revocation or evidence mismatch before process creation; terminal rejection audit committed |
+| STARTING | RUNNING | Worker | Fixed executable identity verified; process created inside containment boundary; process identity persisted before side-effect start is acknowledged |
+| STARTING | FAILED | Worker/reconciler | Definitive proof no child/installer process started; terminal audit committed |
+| STARTING | UNKNOWN | Reconciler | Process creation outcome or ownership cannot be established |
+| RUNNING | VERIFYING | Worker | Contained process tree has exited; descendants reconciled; bounded output finalized |
+| RUNNING | CANCEL_REQUESTED | API | Owner authorized; cancellation request persisted; no claim that process has stopped |
+| CANCEL_REQUESTED | VERIFYING | Worker/reconciler | Completion is proven and the contained process tree has exited; reconcile descendants and finalize bounded output before post-condition checks |
+| CANCEL_REQUESTED | CANCELLED | Worker/reconciler | Job Object and descendant inspection prove all associated processes terminated before side effects completed |
+| CANCEL_REQUESTED | UNKNOWN | Reconciler | Termination or partial side effects cannot be proven |
+| VERIFYING | SUCCEEDED | Worker | Independent package identity, version, scope and required postconditions all pass |
+| VERIFYING | REBOOT_REQUIRED | Worker | Trusted adapter result explicitly requires reboot; pre-reboot verification is insufficient |
+| VERIFYING | FAILED | Worker | Failure is definitive and postcondition checks prove requested state absent |
+| VERIFYING | UNKNOWN | Worker/reconciler | Contradictory, incomplete or ambiguous evidence |
+| REBOOT_REQUIRED | SUCCEEDED | Reconciler | After restart, process absence and independent postcondition verification both pass |
+| REBOOT_REQUIRED | UNKNOWN | Reconciler | Restart recovery cannot prove the final state |
+| any nonterminal | UNKNOWN | Reconciler | Lease/process ownership lost, durable state corrupt, or outcome ambiguous |
+
+All other transitions are forbidden. In particular: no transition from UNKNOWN
+back to QUEUED/STARTING/RUNNING; no automatic retry after timeout, crash,
+ambiguous process ownership, or partial side effect; no transition to SUCCEEDED
+based only on exit code, missing process, or missing log. Resolution of UNKNOWN
+requires a new user-reviewed proposal and fresh approval, never replay of the
+old run.
+
+### Durable record and transaction contract
+
+The minimum durable schema is versioned and local-only:
+
+- `job_definitions`: definition_id, definition_version, enabled, fixed_tool_id,
+  canonical_typed_config, schedule_timezone, schedule_spec, created_at,
+  updated_at, integrity_version.
+- `job_runs`: run_id, definition_id/version, owner_reference, tool_id,
+  canonical_parameter_digest, evidence_digest, approval_id, idempotency_key,
+  state, state_version, created_at, started_at, finished_at, result_code,
+  reboot_required, verification_result, bounded_log_reference.
+- `job_approvals`: approval_id, owner/session binding, exact action digest,
+  evidence digest, issued_at, expires_at, consumed_at, consumed_by_run_id.
+- `worker_leases`: run_id, worker_instance_id, lease_generation, acquired_at,
+  expires_at, heartbeat_at, process_id, process_creation_time, job_object_id.
+- `job_events`: run_id, monotonically increasing sequence, prior_state,
+  next_state, actor, occurred_at, reason_code, state_version.
+
+Use a transactional local database with integrity constraints and a single
+writer/transaction boundary. The queue transaction must:
+(1) compare the exact owner/session/action/evidence digests and initial expiry;
+(2) reserve (but do not consume) the one-use approval for this immutable run;
+(3) insert exactly one QUEUED run with its idempotency key; and
+(4) append the queue audit event. If any step fails, roll back all four. A
+duplicate idempotency key returns the existing run and never creates a second
+run. A reservation that expires before execution is not consumed and must be
+released or rejected through an audited terminal transition.
+
+Worker claim is a separate atomic transaction: compare QUEUED + expected
+state_version, ensure no unexpired lease and concurrency slot is available,
+then revalidate exact owner/session/action/evidence digests and expiry. If
+revalidation fails, atomically transition QUEUED to terminal FAILED and append
+the rejection audit event; do not create a lease or process. If it succeeds,
+atomically consume the reserved approval, write STARTING, create the unique
+lease generation, and append the execution-boundary audit event. A stale lease
+is not proof that a process stopped. Recovery must inspect the persisted process
+creation time and containment object; ambiguity moves the run to UNKNOWN.
+
+Queue-time reservation is committed atomically with the QUEUED run and its
+queue audit. At worker claim, consume that reserved approval atomically with
+the QUEUED → STARTING transition, lease creation, and execution-boundary audit,
+before any process is created. Immediately after process creation, persist PID
+plus process creation timestamp and Windows Job Object identity before
+reporting RUNNING.
+A crash between process creation and identity persistence is UNKNOWN and must
+not trigger another launch.
+
+### Windows process containment contract
+
+A Windows worker must create the child suspended, assign it to a newly created
+Job Object configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, then resume
+only after assignment and process identity persistence succeed. The Job Object
+must disallow breakaway. The worker retains the Job Object handle for the full
+run. Cancellation terminates the Job Object and waits for all associated
+processes to exit; it must not kill by image name or PID alone. If assignment,
+query, termination, or descendant reconciliation fails, mark UNKNOWN. If the
+installer escapes containment or a descendant remains, execution is not
+considered stopped. A4 must inspect the exact native API flags, handle lifetime,
+race handling, and tests before enablement.
+
+### Scheduler semantics
+
+Schedules use an explicit IANA timezone, default `Asia/Bangkok`. Persist the
+timezone and the evaluated UTC occurrence. For a nonexistent local time during
+a DST spring-forward gap, skip that occurrence and record MISFIRE_SKIPPED. For
+an ambiguous fall-back local time, execute only the first occurrence (earlier
+UTC instant) and persist the deduplication key. On downtime, do not catch up
+missed recurring runs automatically; record skipped occurrences. One-time
+schedules that are missed while the backend is stopped become EXPIRED. Overlap
+policy is fixed to FORBID for installation jobs; a scheduled trigger creates a
+new approval-required proposal and never inherits prior approval. No automatic
+catch-up, coalescing into an unreviewed action, or standing side-effect
+authorization is permitted.
+
+### Threat-to-control-to-test release matrix
+
+| Threat | Required control | Required negative/acceptance test |
+|---|---|---|
+| Double submit or API retry | Unique idempotency constraint + atomic approval reservation/run insert at queue time; atomic approval consumption/STARTING/lease/audit at worker claim | Concurrent duplicate requests create one QUEUED run and one reserved approval; only one worker claim consumes it |
+| Crash at approval/job boundary | Separate atomic queue-reservation transaction and worker-claim consumption transaction, each with mandatory audit | Inject crash before/after each transaction; queue state is either fully rolled back or fully QUEUED/reserved, and claim is either unconsumed QUEUED or fully STARTING/consumed with lease and audit |
+| Two workers claim one run | Compare-and-set state version + lease generation | Parallel claims yield exactly one STARTING owner |
+| Stale lease while installer survives | Lease is not execution proof; inspect Job Object/process creation identity | Orphan process forces UNKNOWN and never requeues |
+| Child spawns descendants | Non-breakaway Windows Job Object containment | Descendant remains in Job Object; close/cancel terminates complete tree |
+| PID reuse | PID + process creation timestamp + Job Object identity | Reused PID cannot be mistaken for original process |
+| DST/misfire duplicate | Persist timezone + UTC occurrence dedupe key | Gap skipped; fold runs once; downtime never auto-catches up |
+| Approval/evidence mutation | Canonical digest equality at consume and claim | Any changed package/version/source/hash/scope requires new approval |
+| Audit storage failure | Mandatory transactional fail-closed ledger | Ledger failure prevents process creation |
+| Exit code lies or incomplete install | Independent package identity/version/scope verification | Exit 0 with absent/wrong package never yields SUCCEEDED |
+
+No runtime work may start until the schema/migration, transactional semantics,
+native process containment, scheduler behavior, recovery model, and this matrix
+have a concrete implementation plan reviewed by A4.

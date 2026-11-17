@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .job_lifecycle import JobLifecycleError, JobState
+from .job_lifecycle import ALLOWED_TRANSITIONS, JobLifecycleError, JobState
 from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
 
 MAX_PROGRESS_LENGTH = 160
@@ -27,30 +27,6 @@ _VALID_LEVELS = frozenset({"INFO", "WARN", "ERROR"})
 _TERMINAL_STATES = frozenset(
     {JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED, JobState.UNKNOWN}
 )
-_ALLOWED_TRANSITIONS = {
-    JobState.QUEUED: frozenset({JobState.STARTING, JobState.CANCELLED, JobState.FAILED}),
-    JobState.STARTING: frozenset(
-        {JobState.RUNNING, JobState.CANCEL_REQUESTED, JobState.FAILED, JobState.UNKNOWN}
-    ),
-    JobState.RUNNING: frozenset(
-        {
-            JobState.VERIFYING,
-            JobState.CANCEL_REQUESTED,
-            JobState.FAILED,
-            JobState.REBOOT_REQUIRED,
-            JobState.UNKNOWN,
-        }
-    ),
-    JobState.VERIFYING: frozenset(
-        {JobState.SUCCEEDED, JobState.FAILED, JobState.REBOOT_REQUIRED, JobState.UNKNOWN}
-    ),
-    JobState.REBOOT_REQUIRED: frozenset({JobState.VERIFYING, JobState.UNKNOWN}),
-    JobState.CANCEL_REQUESTED: frozenset({JobState.CANCELLED, JobState.UNKNOWN}),
-    JobState.SUCCEEDED: frozenset(),
-    JobState.FAILED: frozenset(),
-    JobState.CANCELLED: frozenset(),
-    JobState.UNKNOWN: frozenset(),
-}
 
 
 class JobStoreUnavailable(RuntimeError):
@@ -341,7 +317,7 @@ class SQLiteJobStore:
                 if row["version"] != expected_version:
                     raise JobStoreConflict("job version is stale")
                 current = JobState(row["state"])
-                if target not in _ALLOWED_TRANSITIONS[current]:
+                if target not in ALLOWED_TRANSITIONS[current]:
                     raise JobStoreConflict("job state transition is not allowed")
                 started_at = row["started_at"] or (
                     timestamp if target in {JobState.STARTING, JobState.RUNNING} else None

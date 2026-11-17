@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,7 +16,7 @@ from .authenticator import (
     SecretStoreError,
     WindowsDpapiProtector,
 )
-from .config import Settings
+from .config import Settings, validate_authenticator_secret_path
 from .oidc import (
     ApplicationSessionStore,
     GoogleOidcClient,
@@ -26,6 +27,8 @@ from .oidc import (
 )
 from .step_up import StepUpChallengeStore
 from .totp import TotpReplayGuard
+
+logger = logging.getLogger(__name__)
 
 SESSION_COOKIE_NAME = "agent_session"
 router = APIRouter()
@@ -47,6 +50,7 @@ class AuthSessionResponse(BaseModel):
     enabled: bool
     authenticated: bool
     authenticator_enrolled: bool = False
+    authenticator_storage_available: bool = True
 
 
 class GoogleLoginStartResponse(BaseModel):
@@ -84,13 +88,26 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
     ):
         raise RuntimeError("Google authentication settings are incomplete.")
 
+    secret_path = validate_authenticator_secret_path(settings.authenticator_secret_path)
     secret_store = EncryptedTotpSecretFileStore(
-        settings.authenticator_secret_path,
+        secret_path,
         WindowsDpapiProtector(),
     )
     replay_guard = TotpReplayGuard()
-    if secret_store.load(owner_sub=settings.master_google_sub) is not None:
+    # Seed replay protection independently of storage availability. The seed
+    # depends only on the current time-step, not on reading the stored secret.
+    try:
+        stored_secret = secret_store.load(owner_sub=settings.master_google_sub)
+    except SecretStoreError:
+        # Storage state is unknown, so seed replay protection conservatively.
+        # Preserve Google sign-in and the read-only Dashboard in degraded mode;
+        # high-risk requests independently load the secret and fail closed.
         replay_guard.block_through_current_step(owner_key=settings.master_google_sub)
+    else:
+        # Do not block the first enrollment's current TOTP step when no secret
+        # exists. A known enrolled secret must be protected across restarts.
+        if stored_secret is not None:
+            replay_guard.block_through_current_step(owner_key=settings.master_google_sub)
     return AuthServices(
         oidc=GoogleOidcClient(
             client_id=settings.google_oidc_client_id,
@@ -111,18 +128,17 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
     )
 
 
-def require_session(request: Request) -> SessionPrincipal | None:
-    """Require the enrolled Master User session when authentication is enabled."""
+def require_session(request: Request) -> SessionPrincipal:
+    """Fail closed unless an enrolled Master User session is available."""
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
-        return None
+        raise HTTPException(status_code=503, detail="Authentication is not configured.")
     token = request.cookies.get(SESSION_COOKIE_NAME)
     principal = services.sessions.resolve(token or "")
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     request.state.principal = principal
     return principal
-
 
 def _services(request: Request) -> AuthServices:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
@@ -147,19 +163,45 @@ def _frontend_redirect(request: Request, status: str) -> RedirectResponse:
 def get_auth_session(request: Request) -> AuthSessionResponse:
     services: AuthServices | None = getattr(request.app.state, "auth_services", None)
     if services is None:
-        return AuthSessionResponse(enabled=False, authenticated=False)
+        logger.warning(
+            "auth.session status=services_unavailable authenticator_enrolled=false storage_available=false"
+        )
+        return AuthSessionResponse(
+            enabled=False,
+            authenticated=False,
+            authenticator_storage_available=False,
+        )
     token = request.cookies.get(SESSION_COOKIE_NAME)
     principal = services.sessions.resolve(token or "")
     if principal is None:
+        logger.info(
+            "auth.session status=unauthenticated authenticator_enrolled=false storage_available=unknown"
+        )
         return AuthSessionResponse(enabled=True, authenticated=False)
     try:
         enrolled = services.secret_store.load(owner_sub=principal.owner_sub) is not None
-    except SecretStoreError:
-        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+        storage_available = True
+    except SecretStoreError as exc:
+        # Keep the Google-authenticated owner session usable. Risky operations
+        # independently fail closed when the authenticator secret cannot load.
+        enrolled = False
+        storage_available = False
+        logger.error(
+            "auth.session status=secret_store_error authenticator_enrolled=false "
+            "storage_available=false error_type=%s",
+            type(exc).__name__,
+        )
+    logger.info(
+        "auth.session status=ok authenticated=true authenticator_enrolled=%s "
+        "storage_available=%s",
+        str(enrolled).lower(),
+        str(storage_available).lower(),
+    )
     return AuthSessionResponse(
         enabled=True,
         authenticated=True,
         authenticator_enrolled=enrolled,
+        authenticator_storage_available=storage_available,
     )
 
 
@@ -257,12 +299,17 @@ def authenticator_status(request: Request) -> AuthSessionResponse:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         enrolled = services.secret_store.load(owner_sub=principal.owner_sub) is not None
+        storage_available = True
     except SecretStoreError:
-        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+        # Keep the Google-authenticated owner session usable. Risky operations
+        # independently fail closed when the authenticator secret cannot load.
+        enrolled = False
+        storage_available = False
     return AuthSessionResponse(
         enabled=True,
         authenticated=True,
         authenticator_enrolled=enrolled,
+        authenticator_storage_available=storage_available,
     )
 
 
@@ -278,8 +325,14 @@ def begin_authenticator_enrollment(
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
+        if services.secret_store.is_configured():
+            raise HTTPException(status_code=409, detail="Authenticator is already enrolled.")
+    except SecretStoreError:
+        raise HTTPException(status_code=503, detail="Authenticator storage unavailable.") from None
+    try:
         start = services.enrollment.begin(
             owner_sub=principal.owner_sub,
+            session_id=principal.session_id,
             account_name="Master User",
         )
     except (RuntimeError, ValueError):
@@ -298,12 +351,11 @@ def confirm_authenticator_enrollment(
 ) -> dict[str, bool]:
     services = _services(request)
     principal = require_session(request)
-    if principal is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
     confirmed = services.enrollment.confirm(
         enrollment_id=payload.enrollment_id,
         owner_sub=principal.owner_sub,
         code=payload.code,
+        session_id=principal.session_id,
     )
     if not confirmed:
         record_auth_audit_event(

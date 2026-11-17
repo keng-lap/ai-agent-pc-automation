@@ -65,7 +65,12 @@ class FakeChatApi {
   refineCalls: Array<{ planId: string; request: string; clarification: string; language: UiLanguage }> = [];
   approvalCalls: string[] = [];
   stepUpCalls: string[] = [];
-  authSession = { enabled: false, authenticated: false, authenticator_enrolled: false };
+  authSession: {
+    enabled: boolean;
+    authenticated: boolean;
+    authenticator_enrolled: boolean;
+    authenticator_storage_available?: boolean;
+  } = { enabled: false, authenticated: false, authenticator_enrolled: false };
   refineResponder: (planId: string, request: string, clarification: string, language: UiLanguage) => Observable<PlanReviewResponse> = (_planId, request, clarification) => of({
     request,
     interpretation: { category: 'development_task', goal: request, target: 'Java' },
@@ -268,6 +273,7 @@ describe('App chat UI (T-202)', () => {
     httpTestingController?.verify();
     httpTestingController = null;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
 
@@ -908,6 +914,8 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ตอบกลับภาษาไทย');
     expect(fixture.nativeElement.textContent).toContain('security check');
   });
+
+
 });
 
 

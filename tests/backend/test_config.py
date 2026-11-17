@@ -76,6 +76,7 @@ def test_google_auth_configuration_accepts_complete_loopback_setup(monkeypatch):
     assert settings.google_oidc_redirect_uri == "http://127.0.0.1:8000/auth/google/callback"
     assert settings.app_session_ttl_seconds == 1800
     assert settings.authenticator_secret_path.name == "authenticator.json"
+    assert settings.authenticator_secret_path.parent.name == "authenticator"
 
 
 @pytest.mark.parametrize("ttl", ["0", "59", "86401", "invalid"])
@@ -106,4 +107,21 @@ def test_google_auth_configuration_rejects_non_loopback_redirect(monkeypatch, re
     monkeypatch.setenv("GOOGLE_OIDC_REDIRECT_URI", redirect_uri)
 
     with pytest.raises(ConfigError):
+        load_settings(load_env_file=False)
+
+
+
+def test_google_auth_configuration_rejects_secret_path_outside_dedicated_state_directory(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("GOOGLE_OIDC_CLIENT_ID", "client-id")
+    monkeypatch.setenv("GOOGLE_OIDC_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MASTER_GOOGLE_SUB", "stable-google-sub")
+    monkeypatch.setenv("APP_SESSION_TTL_SECONDS", "1800")
+    monkeypatch.setenv(
+        "AUTHENTICATOR_SECRET_PATH",
+        str(tmp_path / "shared" / "authenticator.json"),
+    )
+
+    with pytest.raises(ConfigError, match="dedicated .agent-state/authenticator"):
         load_settings(load_env_file=False)

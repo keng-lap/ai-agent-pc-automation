@@ -315,6 +315,7 @@ export class App implements AfterViewChecked {
   protected readonly authEnabled = signal(false);
   protected readonly authenticated = signal(false);
   protected readonly authenticatorEnrolled = signal(false);
+  protected readonly authenticatorStorageAvailable = signal(true);
   protected readonly authBusy = signal(false);
   protected readonly authError = signal('');
   protected readonly enrollmentId = signal('');
@@ -348,18 +349,41 @@ export class App implements AfterViewChecked {
           this.authEnabled.set(session.enabled);
           this.authenticated.set(session.authenticated);
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
+          this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
+          this.logAuthenticatorUiState("auth-session-loaded");
         },
         error: () => {
           this.authEnabled.set(true);
           this.authenticated.set(false);
           this.authenticatorEnrolled.set(false);
+          this.authenticatorStorageAvailable.set(false);
           this.authError.set(this.language() === 'th'
             ? 'เชื่อมต่อระบบยืนยันตัวตนไม่ได้ กรุณาตรวจสอบ Backend'
             : 'Could not reach the authentication service. Check the backend.');
           this.authReady.set(true);
+          this.logAuthenticatorUiState("auth-session-error");
         },
       });
+  }
+
+  private logAuthenticatorUiState(reason: string): void {
+    const state = {
+      reason,
+      authReady: this.authReady(),
+      authEnabled: this.authEnabled(),
+      authenticated: this.authenticated(),
+      authenticatorEnrolled: this.authenticatorEnrolled(),
+      authenticatorStorageAvailable: this.authenticatorStorageAvailable(),
+      visibleBranch: !this.authReady()
+        ? "loading"
+        : !this.authenticatorStorageAvailable()
+          ? "storage-unavailable"
+          : !this.authenticatorEnrolled()
+            ? "enrollment-prompt"
+            : "enrolled-status",
+    };
+    console.info("[authenticator-ui]", state);
   }
 
   protected loginWithGoogle(): void {
@@ -423,11 +447,19 @@ export class App implements AfterViewChecked {
           this.qrDataUri.set('');
           this.authCode.set('');
           this.authenticatorEnrolled.set(true);
+          this.authenticatorStorageAvailable.set(true);
+          this.refreshAuthSession();
         },
         error: () => this.authError.set(this.language() === 'th'
           ? 'รหัสไม่ถูกต้องหรือหมดอายุ ลองเริ่มลงทะเบียนใหม่'
           : 'Invalid or expired code. Start enrollment again.'),
       });
+  }
+
+  protected cancelAuthenticatorSetup(): void {
+    this.enrollmentId.set('');
+    this.qrDataUri.set('');
+    this.authCode.set('');
   }
 
   protected logout(): void {
@@ -664,6 +696,7 @@ export class App implements AfterViewChecked {
       this.authEnabled()
       && this.authenticated()
       && this.authenticatorEnrolled()
+      && this.authenticatorStorageAvailable()
       && review.dry_run_plan
       && !review.approved
       && review.questions.length === 0

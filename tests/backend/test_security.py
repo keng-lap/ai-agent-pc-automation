@@ -342,6 +342,7 @@ def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
         "google-auth>=2.62.1",
         "requests>=2.32",
         "PyYAML>=6.0.2",
+        "pywin32>=311; sys_platform == 'win32'",
     ]
 
 
@@ -391,7 +392,10 @@ async def _unexpected_app(scope, receive, send):
 
 
 
-def test_google_oidc_callback_accepts_google_origin_without_local_agent_token():
+def test_google_oidc_callback_accepts_google_origin_without_local_agent_token(monkeypatch):
+    # This test covers the callback's auth-disabled response. A developer's
+    # .env must not silently turn it into a live OIDC callback test.
+    monkeypatch.setattr(app.state, "auth_services", None)
     callback_client = TestClient(app, base_url=BASE_URL)
     response = callback_client.get(
         "/auth/google/callback?state=opaque-state-value-123456&code=opaque-code",

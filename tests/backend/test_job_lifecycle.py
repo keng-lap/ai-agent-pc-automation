@@ -163,6 +163,50 @@ def test_running_cancel_requires_worker_confirmation_before_cancelled():
     assert cancelled.lease is None
 
 
+def test_cancel_requested_completion_enters_verifying_before_final_result():
+    store, job = _create()
+    claimed, lease = _claim(store, job)
+    running = store.transition(
+        job.job_id,
+        worker_id=lease.worker_id,
+        lease_token=lease.token,
+        expected_version=claimed.version,
+        target=JobState.RUNNING,
+        now=NOW + timedelta(seconds=1),
+    )
+    assert running.state is JobState.RUNNING
+    requested = store.request_cancel(
+        job.job_id,
+        owner_id="owner-1",
+        now=NOW + timedelta(seconds=2),
+    )
+
+    assert requested.state is JobState.CANCEL_REQUESTED
+    verifying = store.transition(
+        job.job_id,
+        worker_id=lease.worker_id,
+        lease_token=lease.token,
+        expected_version=requested.version,
+        target=JobState.VERIFYING,
+        now=NOW + timedelta(seconds=3),
+        result_code="PROCESS_COMPLETED",
+    )
+    assert verifying.state is JobState.VERIFYING
+    assert verifying.lease == lease
+
+    succeeded = store.transition(
+        job.job_id,
+        worker_id=lease.worker_id,
+        lease_token=lease.token,
+        expected_version=verifying.version,
+        target=JobState.SUCCEEDED,
+        now=NOW + timedelta(seconds=4),
+        result_code="POSTCONDITION_VERIFIED",
+    )
+    assert succeeded.state is JobState.SUCCEEDED
+    assert succeeded.lease is None
+
+
 def test_expired_worker_lease_becomes_unknown_and_is_never_requeued():
     store, job = _create()
     _claimed, _lease = _claim(store, job)

@@ -31,7 +31,7 @@ RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 
 def build_manager(tmp_path, now=90):
     store = EncryptedTotpSecretFileStore(
-        tmp_path / "authenticator.json",
+        tmp_path / "private" / "authenticator.json",
         FakeProtector(),
     )
     manager = AuthenticatorEnrollmentManager(
@@ -55,25 +55,23 @@ def test_secret_store_encrypts_before_writing_and_binds_owner(tmp_path):
         owner_sub="owner-sub",
         code=code_at(RFC_SECRET, 90),
     )
-    raw_file = (tmp_path / "authenticator.json").read_text(encoding="ascii")
+    raw_file = store._path.read_text(encoding="ascii")
     assert "owner-sub" not in raw_file
     assert "otpauth://" not in raw_file
     assert store.load(owner_sub="owner-sub") is not None
     assert store.load(owner_sub="different-owner") is None
 
 
-def test_enrollment_is_one_time_and_does_not_allow_self_service_replacement(tmp_path):
-    manager, _store = build_manager(tmp_path)
-    enrollment = manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
-    code = code_at(RFC_SECRET, 90)
 
-    assert manager.confirm(
-        enrollment_id=enrollment.enrollment_id,
-        owner_sub="owner-sub",
-        code=code,
-    )
+def test_enrollment_cannot_start_when_authenticator_is_already_enrolled(tmp_path):
+    manager, store = build_manager(tmp_path)
+    store.save(owner_sub="owner-sub", secret=RFC_SECRET)
+
     with pytest.raises(RuntimeError, match="already enrolled"):
-        manager.begin(owner_sub="owner-sub", account_name="owner@example.test")
+        manager.begin(
+            owner_sub="owner-sub",
+            account_name="owner@example.test",
+        )
 
 
 def test_wrong_owner_cannot_confirm_enrollment(tmp_path):
@@ -106,7 +104,7 @@ def test_invalid_totp_exhausts_five_enrollment_attempts(tmp_path):
 
 def test_expired_enrollment_cannot_be_confirmed(tmp_path):
     now = [90.0]
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
+    store = EncryptedTotpSecretFileStore(tmp_path / "private" / "authenticator.json", FakeProtector())
     manager = AuthenticatorEnrollmentManager(
         secret_store=store,
         clock=lambda: now[0],
@@ -122,7 +120,7 @@ def test_expired_enrollment_cannot_be_confirmed(tmp_path):
 
 
 def test_secret_file_cannot_be_overwritten(tmp_path):
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
+    store = EncryptedTotpSecretFileStore(tmp_path / "private" / "authenticator.json", FakeProtector())
     store.save(owner_sub="owner-sub", secret="GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
 
     with pytest.raises(SecretStoreError, match="already enrolled"):
@@ -130,8 +128,9 @@ def test_secret_file_cannot_be_overwritten(tmp_path):
 
 
 def test_corrupt_secret_file_fails_closed(tmp_path):
-    store = EncryptedTotpSecretFileStore(tmp_path / "authenticator.json", FakeProtector())
-    (tmp_path / "authenticator.json").write_text(
+    store = EncryptedTotpSecretFileStore(tmp_path / "private" / "authenticator.json", FakeProtector())
+    (tmp_path / "private").mkdir()
+    (tmp_path / "private" / "authenticator.json").write_text(
         json.dumps({"version": 1, "ciphertext": "not-base64!"}),
         encoding="ascii",
     )
@@ -168,7 +167,7 @@ def test_enrollment_expiry_uses_monotonic_time_after_wall_clock_rollback(tmp_pat
     wall_time = [100000.0]
     monotonic_time = [200.0]
     store = EncryptedTotpSecretFileStore(
-        tmp_path / "authenticator.json",
+        tmp_path / "private" / "authenticator.json",
         FakeProtector(),
     )
     manager = AuthenticatorEnrollmentManager(
@@ -260,3 +259,30 @@ def test_dpapi_output_cleanup_handles_missing_description_allocation(monkeypatch
     WindowsDpapiProtector._free_output_buffers(FakeKernel32(), target)
 
     assert freed == [data_pointer]
+
+
+def test_enrollment_confirmation_is_bound_to_the_initiating_session(tmp_path):
+    manager, store = build_manager(tmp_path, now=90)
+    enrollment = manager.begin(
+        owner_sub="owner-sub",
+        session_id="session-a-identifier-0001",
+        account_name="owner@example.test",
+    )
+
+    assert not manager.confirm(
+        enrollment_id=enrollment.enrollment_id,
+        owner_sub="owner-sub",
+        session_id="session-b-identifier-0002",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert store.load(owner_sub="owner-sub") is None
+    assert enrollment.enrollment_id in manager._pending
+
+    assert manager.confirm(
+        enrollment_id=enrollment.enrollment_id,
+        owner_sub="owner-sub",
+        session_id="session-a-identifier-0001",
+        code=code_at(RFC_SECRET, 90),
+    )
+    assert store.load(owner_sub="owner-sub") == RFC_SECRET
+

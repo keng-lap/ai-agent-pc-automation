@@ -250,6 +250,7 @@ export interface AuthSession {
   enabled: boolean;
   authenticated: boolean;
   authenticator_enrolled: boolean;
+  authenticator_storage_available?: boolean;
 }
 
 export interface GoogleLoginStart {

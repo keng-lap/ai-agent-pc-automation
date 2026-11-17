@@ -1,4 +1,5 @@
 import stat
+import sys
 
 import pytest
 
@@ -21,6 +22,7 @@ def test_unreviewed_platforms_fail_closed(platform):
         create_platform_secure_storage(platform=platform)
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux ownership checks require geteuid")
 def test_linux_adapter_creates_private_state_directory_and_database(tmp_path):
     adapter = LinuxSecureStorage()
     database = tmp_path / "private-state" / "jobs.sqlite3"
@@ -33,6 +35,7 @@ def test_linux_adapter_creates_private_state_directory_and_database(tmp_path):
     assert stat.S_IMODE(database.stat().st_mode) == 0o600
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux adapter test")
 def test_linux_adapter_rejects_symlink_database_path(tmp_path):
     adapter = LinuxSecureStorage()
     target = tmp_path / "target.sqlite3"
