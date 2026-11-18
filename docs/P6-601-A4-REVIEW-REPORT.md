@@ -1,177 +1,129 @@
-# P6-601 — A4 Independent QA / Security Review Report
+# P6-601 — A4 Independent QA / Security Review Reassessment
 
 ## Review disposition
 
-**Conclusion: CHANGES REQUIRED.**
+**Conclusion: CHANGES REQUIRED — runtime execution remains blocked.**
 
-The read-only review is complete for the exact source snapshot below. The current implementation remains Dry Run / proposal-only and no current code path reviewed here launches WinGet or an installer. This report does not authorize execution, runtime enablement, or merge.
+This is a read-only reassessment of the earlier A4 report against the current `main` snapshot. It distinguishes findings already remediated in code from findings that remain open or are only partially addressed. It does not authorize installer execution, worker dispatch, runtime enablement, or merge.
 
 | Field | Value |
 |---|---|
 | Repository | `keng-lap/ai-agent-pc-automation` |
-| Exact reviewed baseline | `310a582bcee99f4c2f90f9ac8a719a15fb88eec9` |
+| Previously reviewed baseline | `310a582bcee99f4c2f90f9ac8a719a15fb88eec9` |
+| Reassessed baseline | `c8ba0324174fc90779f55d5ad7fe0d29dfb01082` |
 | Branch | `main` |
-| Review lane | A4 — QA / Security |
-| Review mode | Read-only source and design review |
-| Live Windows inspection | Not performed |
-| Tests executed by reviewer | None |
-| CI evidence independently re-run/verified for this review | None |
+| Review lane | A4 — QA / Security reassessment |
+| Review mode | Read-only source and design inspection |
+| Live Windows 11 Home acceptance | Not performed |
+| Tests executed as part of this reassessment | None |
+| CI independently verified for this exact baseline | Not verified |
 
-The review inspected the Phase 6 baseline, A4 packet, source map, Trusted Software Discovery and Background Job Architecture documents; current OIDC/session, DPAPI/TOTP, step-up, plan, policy, dispatch, audit, middleware and app-composition code; the current software discovery/evidence/approval boundary; and selected related backend tests. File inspection is not equivalent to executing those tests.
+The reassessment compared the previous report with the current source, Windows secret-storage implementation, authentication and OIDC routes, audit schema, step-up module, Background Job Architecture addendum, P6-602 containment/status contracts, and the PR #165 security-review status document. Source inspection is not equivalent to executing tests or independently reviewing native Windows behavior.
 
 ## Executive assessment
 
-### Controls that are present
+The current product boundary remains local-first and proposal/Dry Run only. The inspected software approval API explicitly states that it has no installer dispatch, package-manager call, background-job enqueue, or machine side effect. The job-store and process-containment modules describe foundations and contracts; they do not constitute authorization to launch installers.
 
-- Google authorization-code flow uses PKCE S256, one-time server-side state/nonce, a fixed loopback redirect, bounded token exchange, ID-token signature verification through Google Auth, issuer/audience/authorized-party checks, nonce, expiry/issued-at, verified email and a stable Google `sub` allowlist.
-- Application sessions use high-entropy bearer tokens, retain only token digests, enforce absolute expiry with monotonic deadlines, support revocation, and are explicitly process-local.
-- TOTP uses a 160-bit secret, six digits, 30-second steps, a bounded ±1-step window, constant-time code comparison and a thread-safe one-use-per-step replay guard.
-- Step-up challenges bind owner, session, plan ID, action digest and server-derived risk; challenges are short-lived, one-use, bounded and rate-limited.
-- Plan approval now authenticates before returning a cached Dry Run result. A cached result is not a reusable execution grant.
-- Tool catalog, policy and handler dispatch are backend-owned and fixed. Current handlers only return Dry Run results.
-- Authenticator secret bytes are protected using current-user Windows DPAPI. The DPAPI cleanup path now frees both returned data and description allocations.
-- Software evidence is minted only from backend discovery/staging facts. Publisher signer trust anchors default-deny; an unconfigured trust anchor prevents evidence registration.
-- The exact-artifact adapter prepares a local manifest from approval-bound evidence and locks the prepared files against write/delete while the lock context is held. It does not invoke WinGet.
+### Finding disposition
 
-### Findings requiring remediation or explicit disposition
-
-| ID | Severity | Area | Finding |
+| ID | Severity | Current disposition | Evidence / remaining action |
 |---|---|---|---|
-| A4-P6-601-01 | Medium | Auth-disabled route dependencies | `require_session` returns `None` when auth services are absent. Router-level `Depends(require_session)` therefore does not enforce authentication in auth-disabled mode. The current software-approval API has its own explicit auth-service/principal check and no installer dispatch exists, so this is not evidence of a current install-approval bypass. However, plan and discovery routes are reachable without an application session, contrary to the Phase 6 fail-closed rule; future routes could mistakenly rely only on the dependency. |
-| A4-P6-601-02 | Medium | Windows DPAPI secret-file storage | `EncryptedTotpSecretFileStore` uses `Path.is_symlink()` checks and `os.open(..., O_CREAT | O_EXCL, 0o600)`, but does not establish/verify a restrictive Windows DACL, owner SID, trusted parent directory or handle-based reparse-point policy. POSIX mode `0o600` is not proof of a Windows ACL. DPAPI protects secret confidentiality, but permissive path/ACL handling can still permit replacement/deletion (availability/integrity) and path-race risks. |
-| A4-P6-601-03 | Medium | Authenticator enrollment ceremony | A valid application session can start initial TOTP enrollment without a fresh Google re-authentication or other recent-authentication check. The QR is one-time and confirmation proves possession of the newly generated TOTP secret, but a stolen still-valid session could enroll an attacker-controlled factor before the owner has enrolled one. Require a narrowly scoped recent-authentication ceremony before initial enrollment, or document and approve a compensating trusted-setup assumption. |
-| A4-P6-601-04 | Medium | Process-local security state | Session, OIDC transaction, TOTP replay, step-up challenge, plan, approval-cache and evidence-registry state are process-local. The docs disclose this, but application startup/deployment does not enforce a single worker. Multiple workers can split login/challenge state and do not share TOTP replay consumption. Until shared atomic storage exists, reject unsupported multi-worker configuration and test the guard. |
-| A4-P6-601-05 | Medium | Background Job architecture | The architecture describes the right high-level controls, but is not yet an implementable execution contract: it lacks a normative transition table with allowed/forbidden edges, durable schema and transaction boundaries, atomic approval-consumption/job-creation/worker-claim ordering, lease ownership rules, and a concrete Windows process-tree containment contract (for example, Job Object ownership and descendant/orphan handling). Scheduler DST/misfire/overlap semantics are required but not fully decided. Do not begin runtime execution work from this document alone. |
-| A4-P6-601-06 | Low | Authentication audit schema | `software_approval_api.py` records denial reason `invalid_software_approval`, but that value is absent from the `AuthAuditReason` Literal in `auth_audit.py`. Pydantic validation therefore fails and `record_auth_audit_event` silently returns `False`; the denial event is dropped. Add the reason to the schema or use an existing valid reason and add a regression test. |
-| A4-P6-601-07 | Low | Step-up documentation | The module docstring in `step_up.py` says the challenge store is not wired to the P1 route, while `auth_api.py` constructs the store and `plan_api.py` creates and consumes challenges. Update the stale description so future reviewers do not infer the wrong trust boundary. |
+| A4-P6-601-01 | Medium | **REMEDIATED IN MAIN** | `require_session` now raises 503 when auth services are unavailable and 401 when no valid session exists. Protected routers use this dependency. Retain route-level regression coverage. |
+| A4-P6-601-02 | Medium | **IMPLEMENTED; ACCEPTANCE EVIDENCE PENDING** | Windows secret storage now uses handle-based operations, verifies current-user owner SID and protected owner-only DACL, rejects reparse points, and performs I/O through validated handles. Windows workflow and tests exist. This reassessment did not execute the Windows workflow or target-machine acceptance; do not claim the native control is independently certified. |
+| A4-P6-601-03 | Medium | **OPEN — SECURITY / PRODUCT DECISION REQUIRED** | Initial TOTP enrollment still appears to authorize QR issuance using the existing application session only. The route does not show a fresh Google re-authentication or recent-authentication check, and OIDC validation checks `iat` age but not an `auth_time` freshness requirement. Decide whether to implement a narrowly scoped enrollment ceremony or explicitly accept the trusted-setup/session-theft residual risk. |
+| A4-P6-601-04 | Medium | **REMEDIATED IN MAIN FOR KNOWN LAUNCH CONFIGURATIONS** | `main.py` calls `enforce_single_worker()` and rejects known multi-worker environment/CLI settings. Security state remains process-local; shared multi-worker support is still unsupported and must remain so. |
+| A4-P6-601-05 | Medium | **PARTIALLY ADDRESSED — RUNTIME RELEASE BLOCKER REMAINS** | Background Job Architecture now contains a normative transition matrix, durable-record/transaction contract, worker lease and approval ordering, Windows Job Object containment requirements, scheduler DST/misfire semantics, and a threat-to-control-to-test matrix. P6-602 documents and code add lifecycle/store/status/containment foundations. However, the P6-602 containment document still lists the reviewed suspended-process launcher, Windows durable-store ACL adapter, crash/recovery behavior and Windows acceptance as not yet complete. No real worker/installer dispatch is authorized. |
+| A4-P6-601-06 | Low | **REMEDIATED IN MAIN** | `AuthAuditReason` now includes `invalid_software_approval`, matching the denial path. Confirm the regression test remains in the relevant suite. |
+| A4-P6-601-07 | Low | **REMEDIATED IN MAIN** | `step_up.py` now accurately states that the current plan API creates and consumes the challenges and documents the process-local limitation. |
 
-## Detailed findings
+## Detailed reassessment
 
-### A4-P6-601-01 — Router dependency is not an authentication gate when auth is disabled
+### A4-P6-601-01 — Auth-disabled route dependency
 
-**Affected code:** `src/backend/agent_backend/auth_api.py` — `require_session`; `src/backend/agent_backend/main.py` — `create_app` router dependencies; `software_discovery_api.py`; `plan_api.py`.
+**Disposition: REMEDIATED IN MAIN.**
 
-When `request.app.state.auth_services` is `None`, `require_session` returns `None` rather than rejecting the request. `main.py` installs this function as a dependency for the plan, software-discovery and software-approval routers. The dependency therefore behaves as an authentication bypass in the no-auth configuration.
+The current `require_session` raises HTTP 503 when authentication services are unavailable and HTTP 401 when the session cannot be resolved. The old behavior returning `None` is no longer present. `main.py` applies the dependency to chat, plan, software-discovery and software-approval routers. The job router is separately included and must continue to enforce authentication on its own endpoints; its current status API contract explicitly requires an authenticated local session.
 
-The software-approval endpoints additionally call `_authenticated_context`, which rejects missing services/principal; this review found no current installer dispatch. The defect is that other protected routes (including read-only plan and discovery operations) are not actually protected, and the common dependency is unsafe as a future side-effect gate.
+This finding may be closed as a source-level defect, subject to the existing disabled-auth route regression tests. This reassessment did not execute those tests.
 
-**Required remediation:**
-1. Separate intentionally public routes (health, login start/callback, unauthenticated session-status response) from authenticated routers.
-2. Make the authenticated dependency raise 401/503 when authentication is disabled for routes that require it; do not use `None` as a successful dependency result.
-3. Add tests with auth disabled for every protected route, including plan read/create, discovery, software approval and all future job endpoints.
-4. Keep the internal exact-approval check as defense in depth.
+### A4-P6-601-02 — Windows authenticator secret-file ACL and path trust
 
-**Current impact:** no real install execution was found. This remains a policy and future execution release blocker.
+**Disposition: IMPLEMENTED; NATIVE ACCEPTANCE NOT VERIFIED.**
 
-### A4-P6-601-02 — Windows secret-file ACL and path trust are not established
+The current `windows_secret_storage.py` is materially different from the old path-based implementation. It opens path components with reparse-point-aware flags, verifies the current-user owner SID, applies and verifies a protected DACL with one owner allow ACE, rejects path-redirection reparse points, and performs reads/writes through validated handles. The authenticator store delegates Windows operations to this adapter.
 
-**Affected code:** `src/backend/agent_backend/authenticator.py` — `EncryptedTotpSecretFileStore.save/load/is_configured`.
+A dedicated Windows Authenticator DPAPI workflow and Windows tests are present. The PR #165 review-status document correctly says these controls still require Windows CI evidence and target Windows 11 Home acceptance; that document is not itself a sign-off. This reassessment did not retrieve a successful run for the exact reassessed main SHA or perform target-machine testing. Keep the status as implemented but not independently accepted.
 
-The file store performs a pre-open symlink check and creates parent directories automatically. It relies on `0o600` at file creation, which does not establish a restrictive Windows DACL. It also does not validate the owner/effective DACL through the same open handle or establish that the parent path is trusted and free of reparse-point redirection.
+### A4-P6-601-03 — Initial authenticator enrollment freshness
 
-DPAPI current-user protection reduces the confidentiality impact of reading the ciphertext, but does not prevent a process/user with path write access from deleting or replacing the file and causing authentication denial or integrity loss.
+**Disposition: OPEN.**
 
-**Required remediation:** implement a Windows-specific handle-based open/validation strategy; reject reparse points/races; verify owner SID and protected DACL for the current Windows user; require a trusted parent path without recursively changing arbitrary parent ACLs; perform I/O through the validated handle. Add Windows CI tests for effective ACLs, owner, symlink/reparse rejection and race resistance. Do not treat POSIX mode bits as Windows security evidence.
+The current `begin_authenticator_enrollment` route calls `require_session`, checks storage/enrollment state, and then returns one-time QR material. The route does not show a fresh Google re-authentication ceremony or a recent-authentication grant. The current OIDC token validation enforces an `iat` age bound but does not validate an `auth_time` claim or require a fresh authentication event.
 
-### A4-P6-601-03 — Initial authenticator enrollment lacks recent re-authentication
+A still-valid stolen application session can therefore remain a concern before the owner has enrolled TOTP. The one-time QR, owner/session binding, expiry, attempt limits and TOTP confirmation reduce other risks but do not prove recent Google authentication.
 
-**Affected code:** `src/backend/agent_backend/auth_api.py` — `begin_authenticator_enrollment`; `authenticator.py` — `AuthenticatorEnrollmentManager.begin/confirm`.
+The PR #165 security-review status document explicitly narrowed scope to existing Google sign-in/session and one-time TOTP enrollment, and removed recovery/replacement/WebAuthn work. That scope decision does not itself resolve this finding. Do not reintroduce recovery or replacement features as part of this finding. The Product Owner must either approve a bounded fresh-auth enrollment design or explicitly accept and document the trusted-setup residual risk before claiming this control is closed.
 
-The enrollment manager correctly binds a pending enrollment to the authenticated owner, invalidates an older pending QR, expires it, limits failed attempts, consumes a TOTP step and stores the secret only after successful confirmation. However, the HTTP route authorizes enrollment using only the existing application session. There is no recent Google re-authentication or equivalent step-up before establishing the first factor.
+### A4-P6-601-04 — Process-local state and multi-worker deployment
 
-**Threat precondition:** an attacker obtains a still-valid owner session before TOTP has been enrolled.
+**Disposition: REMEDIATED FOR CURRENT SUPPORTED DEPLOYMENT.**
 
-**Impact:** the attacker can establish the authenticator factor used for subsequent step-up operations, subject to the victim not already having an enrolled secret.
+The current app invokes `enforce_single_worker()` during app creation. It rejects known multi-worker settings from `WEB_CONCURRENCY`, `UVICORN_WORKERS`, `GUNICORN_WORKERS`, `GUNICORN_CMD_ARGS`, and parsed worker CLI arguments. The implementation explains that multi-worker mode is unsupported while security state remains process-local.
 
-**Required remediation:** require a fresh OIDC re-authentication (with a one-time, session-bound enrollment transaction) before returning enrollment QR material. Rotate the application session after successful enrollment. If the project intentionally accepts this residual for a physically trusted first-run setup, record the explicit threat assumption and Product Owner acceptance; do not silently call the current route phishing-resistant or resistant to session theft.
+This closes the earlier missing startup guard for the configurations inspected. It does not make the state shared or safe for multi-worker deployment. Any launch mechanism not covered by the guard must be documented and tested before use.
 
-### A4-P6-601-04 — Process-local state is documented but multi-worker mode is not rejected
+### A4-P6-601-05 — Background Job architecture and execution contract
 
-**Affected code:** `oidc.py`, `step_up.py`, `totp.py`, `plans.py`, `plan_api.py`, `software_evidence.py`, `main.py` and deployment configuration.
+**Disposition: DESIGN SUBSTANTIALLY EXPANDED; IMPLEMENTATION / ACCEPTANCE GATES REMAIN.**
 
-The code correctly uses locks within one process and the docs state that the state is process-local. That is not equivalent to cross-process atomicity. Multiple workers would each have independent sessions, pending OIDC state, TOTP replay history, challenges, plans, approvals and evidence.
+The current Background Job Architecture includes:
+- A normative permitted-transition matrix and explicit forbidden transitions.
+- Atomic queue reservation and worker-claim/approval-consumption ordering.
+- Versioned durable-record fields, transaction boundaries and worker lease metadata.
+- Windows Job Object containment, suspended process assignment, process identity persistence, descendant termination and UNKNOWN handling.
+- Scheduler timezone, DST gap/fold, misfire and overlap semantics.
+- Threat-to-control-to-test release requirements, including crash injection and duplicate-claim cases.
 
-A request routed to a different worker can fail unexpectedly; more importantly, separate workers do not share the one-use TOTP replay guard. The current architecture cannot claim replay protection across workers.
+P6-602 adds lifecycle, SQLite operational history, read-only status API and a Windows Job Object wrapper. However, the P6-602 containment foundation explicitly leaves important gates incomplete: a reviewed suspended-process launcher, Windows durable-store DACL/owner/reparse/handle protections, crash/recovery and orphan reconciliation, and Windows acceptance tests. The job-store implementation itself documents Windows as unavailable until its native storage adapter is implemented and independently reviewed.
 
-**Required remediation:** until shared durable atomic state is implemented and reviewed, enforce one worker at startup/launcher configuration and document the supported invocation. Add a negative test proving unsupported worker counts/configurations are rejected. Before multi-worker support, use shared atomic consume semantics for TOTP replay, challenge consumption, approval consumption and job claiming.
+Therefore, the original finding that the architecture lacked a normative contract is substantially addressed, but **P6-601 architecture/runtime acceptance has not passed**. No code in this reassessment authorizes a worker, WinGet invocation, installer launch, arbitrary process, or host mutation. Keep runtime dispatch disabled until each capability-specific implementation and review gate passes.
 
-### A4-P6-601-05 — Background Job design needs a normative state/persistence/process contract
+### A4-P6-601-06 — Invalid software-approval audit reason
 
-**Affected document:** `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`.
+**Disposition: REMEDIATED IN MAIN.**
 
-The document correctly prohibits arbitrary scripts, shell steps, automatic elevation, automatic retries of ambiguous jobs, and success based only on exit code. It also correctly requires per-run approval for side effects and UNKNOWN state for ambiguous recovery.
-
-Before implementation, the following must be normative rather than left as prose:
-- Full transition matrix, including actor, preconditions, atomic state mutation and forbidden transitions.
-- Job Definition/Run/evidence/approval/worker-lease schema, versioning, integrity, ACL and retention/deletion rules.
-- Transaction order for consuming approval, creating a job, claiming a job and recording execution-start; crash injection at every boundary must not permit duplicate execution.
-- Worker lease ownership, stale-lease recovery and proof of process identity.
-- Windows process containment and descendant lifecycle, including process-tree termination, orphan detection and UNKNOWN semantics.
-- Scheduler timezone/DST/misfire/overlap behavior and bounded catch-up rules.
-- Exact relationship between operational job history and the separate mandatory fail-closed security audit ledger.
-
-**Required remediation:** add a design addendum and threat-to-control-to-test matrix before runtime implementation is proposed. This is a design blocker, not a claim that a worker currently exists.
-
-### A4-P6-601-06 — Invalid software-approval audit reason is silently discarded
-
-**Affected code:** `src/backend/agent_backend/software_approval_api.py` — denial event; `src/backend/agent_backend/auth_audit.py` — `AuthAuditReason` and `record_auth_audit_event`.
-
-The denial path passes `invalid_software_approval`, which is not an allowed `AuthAuditReason`. The event model rejects it; the wrapper catches the validation error and returns `False`. The API response is still denied, but the intended audit record is lost without surfacing an error.
-
-**Required remediation:** add the literal or use an existing semantically correct reason. Add a test asserting the event appears in the sink for that denial path. This optional sink remains diagnostic only and must not be treated as the mandatory execution ledger.
+The current `AuthAuditReason` literal includes `invalid_software_approval`, which matches the denial path in `software_approval_api.py`. The original schema mismatch is no longer present in source. The regression test must remain enabled and pass in CI before this is treated as test-verified.
 
 ### A4-P6-601-07 — Stale step-up module documentation
 
-**Affected code:** `src/backend/agent_backend/step_up.py` module docstring.
+**Disposition: REMEDIATED IN MAIN.**
 
-The code is wired through `build_auth_services` and the plan API; the docstring still says it is not wired to the P1 route. This is documentation drift. Update it and retain the explicit single-process limitation.
+The current `step_up.py` module docstring says the plan API creates and consumes challenges and accurately states the process-local limitation. The earlier statement that the challenge store was not wired to the plan route is gone.
 
-## Explicit dispositions of the review packet questions
+## Current security boundary
 
-| Review topic | A4 disposition |
-|---|---|
-| OIDC PKCE/state/nonce/signature/issuer/audience/expiry/allowlist | Controls are present in the inspected code. No live Google round-trip or independent token-signature test was run in this review. |
-| Session token entropy/digest/TTL/revocation | Present. Process-local and restart-invalidated by design. |
-| DPAPI protection and native allocation cleanup | DPAPI current-user protection and both output-buffer cleanup paths are present. Windows ACL/path hardening remains a finding. |
-| TOTP profile, skew, constant-time comparison and replay | RFC-style 6-digit/30-second HMAC-SHA1 implementation, ±1 step, constant-time compare and per-owner replay guard are present. Replay state is process-local; multi-worker use is unsupported. |
-| Step-up exact-action binding, expiry, attempts and replay | Owner/session/plan/digest/risk binding and one-time consumption are present. Stale module docstring is recorded above. |
-| Auth-disabled route behavior | Router dependency is not fail-closed when auth services are absent; see A4-P6-601-01. Current software approval has a second internal guard. |
-| Approval cache/idempotency | Current cache is Dry Run response idempotency only and is checked after fresh step-up verification. It is not an execution authorization primitive. |
-| Audit fail-open behavior | Current auth/security sinks are bounded process-local optional diagnostics. Acceptable only for the current non-side-effecting boundary; insufficient for any side effect. |
-| Trusted Software Discovery / TOCTOU | Discovery is explicitly conditional; staged binary evidence and signer fingerprint are bound into evidence/approval. Publisher trust anchors default-deny. Exact manifest lock must remain held throughout any future WinGet read/execute interval. No install path is enabled. |
-| Background Job architecture | High-level safety intent is sound; normative transition, persistence/transaction and Windows process-containment details remain incomplete; see A4-P6-601-05. |
-| Loopback HTTP cookie with `Secure=False` | Accepted only under the documented loopback-only HTTP deployment with strict Host/Origin and local-token checks. It does not protect against same-user malware, browser compromise or a compromised local process. Do not expose the service to LAN/public interfaces. |
-
-## Threat-to-control-to-test traceability
-
-| Threat | Existing control | Evidence reviewed | Remaining test/remediation |
-|---|---|---|---|
-| OIDC login CSRF/replay | One-time state and nonce; PKCE S256 | `oidc.py`, `test_oidc.py` | Execute full suite; test callback concurrency and malformed provider responses |
-| Wrong Google account | Stable `sub` allowlist | `oidc.py`, `auth_api.py` | Test live configured owner flow; no live test performed |
-| Session theft/replay | High-entropy token, digest storage, expiry, revoke, HttpOnly/SameSite cookie | `oidc.py`, `auth_api.py` | Add recent-auth enrollment ceremony; document local-process threat |
-| TOTP replay | Per-owner monotonic-step guard | `totp.py`, `step_up.py`, tests | Enforce one worker or shared atomic storage; execute concurrency tests |
-| Action/parameter substitution | Plan digest + owner/session/action/risk-bound challenge | `plans.py`, `step_up.py`, `plan_api.py` | Execute negative and concurrency tests; preserve new execution-specific state machine |
-| Auth disabled | Router dependency plus internal approval check | `main.py`, `auth_api.py`, `software_approval_api.py` | Fix dependency behavior and test every protected route |
-| Secret-file disclosure/tamper/DoS | Current-user DPAPI encryption | `authenticator.py`, selected tests | Windows ACL, handle/reparse and race tests |
-| Audit loss | Strict allowlist, bounded optional sinks | `audit.py`, `auth_audit.py`, approval API | Fix invalid reason; implement separate mandatory durable ledger before side effects |
-| Manifest/evidence substitution | Exact hashes, source commit, approval digest, signer fingerprint, default-deny anchor | discovery/evidence/approval/adapter modules | Keep manifest lock across entire future execution; add Windows acceptance evidence |
-| Duplicate/ambiguous jobs | Architecture requires idempotency and UNKNOWN state | Background Job Architecture document | Normative atomic state machine, persistence schema, process containment and crash-injection tests |
+- Google OIDC remains the primary sign-in mechanism for the local Master User.
+- TOTP enrollment and exact-action Step-up remain the second-factor controls; no recovery/replacement or alternate-factor bypass is included.
+- Sessions, OIDC transactions, TOTP replay state, Step-up challenges and related in-memory approval/evidence state remain process-local.
+- Multi-worker deployment remains unsupported.
+- Software approval remains proposal/Dry Run only.
+- Job history/status foundations do not authorize job execution.
+- No real WinGet invocation, installer execution, arbitrary shell/script execution, LAN/public control, or live PC mutation is authorized.
 
 ## Test and evidence statement
 
-The reviewer did **not** execute pytest, Ruff, frontend tests, Windows DPAPI tests, WinTrust/signature tests, or live Windows acceptance tests. The reviewer did not independently verify GitHub Actions results for the reviewed main SHA. The existence of test files or prior PR CI records is not represented here as a test pass.
+This reassessment did not run pytest, Ruff, frontend tests, Windows DPAPI/ACL tests, process-containment tests, or live Windows acceptance. The presence of test files and workflow definitions is not a test pass. CI for the exact reassessed main SHA `c8ba0324174fc90779f55d5ad7fe0d29dfb01082` was not independently verified in this review.
 
-Required before closing the findings:
-1. Add focused regression tests for A4-P6-601-01, A4-P6-601-03, A4-P6-601-04 and A4-P6-601-06.
-2. Run backend tests and Ruff on the remediation head; verify import ordering before reporting CI green.
-3. Run Windows-specific DPAPI, ACL, reparse-point and process-boundary tests on Windows CI.
-4. Independently review the remediation diff and exact test evidence.
-5. Keep all installer/process dispatch disabled until the separate capability-specific A4 review and Product Owner enablement decision.
+Before closing the remaining gates:
+1. Resolve A4-P6-601-03 through a bounded design and explicit Product Owner disposition.
+2. Obtain successful Windows CI evidence for authenticator storage and process-containment workflows on the exact relevant code head.
+3. Complete the Windows durable job-store security adapter and reviewed suspended-process launcher before any worker dispatch.
+4. Execute focused tests, full relevant backend tests and Ruff; preserve exact command output and CI run links.
+5. Obtain an independent A4 review of the exact remediation diff and Windows evidence.
+6. Keep installer/process dispatch disabled until the capability-specific A4 review and separate Product Owner enablement decision pass.
 
 ## Final gate
 
-**P6-601 A4 review: completed with CHANGES REQUIRED.**
+**A4 reassessment: CHANGES REQUIRED.** Findings 01, 04, 06 and 07 are remediated in current source; finding 02 is implemented but lacks verified native acceptance evidence; finding 03 remains open; finding 05 is substantially improved at design level but has incomplete implementation and Windows acceptance gates.
 
-**P6-601 architecture acceptance: not yet passed.** The current runtime remains Dry Run / proposal-only. No WinGet invocation, installer execution, background worker, job dispatch, or live PC mutation is authorized by this report.
-
-The Product Owner must explicitly disposition the Medium findings before any side-effecting runtime task is started. Low findings should also be corrected in the same bounded remediation work where practical. This report does not approve a PR or authorize merge.
+**P6-601 architecture/runtime acceptance: NOT PASSED.** This report does not authorize execution, enablement, or merge.
