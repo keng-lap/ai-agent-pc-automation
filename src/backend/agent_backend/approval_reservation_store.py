@@ -94,7 +94,7 @@ class SQLiteApprovalReservationStore:
             raise ApprovalReservationUnavailable("Approval-store path must be absolute.")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._lock = threading.RLock()
-        self._secure_storage = secure_storage or create_platform_secure_storage()
+        self._secure_storage = secure_storage or create_platform_secure_storage(path=self.path)
         try:
             self._secure_storage.prepare_database_path(self.path)
             self._initialize()
