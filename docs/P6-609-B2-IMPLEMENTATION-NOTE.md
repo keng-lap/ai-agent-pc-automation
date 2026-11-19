@@ -150,3 +150,31 @@ The earlier entry saying no runtime code had changed describes the initial note-
 - Added immutable reservation receipt enforcement; B2 reservations cannot be changed into `QUEUED` by direct database updates.
 - Added a regression test that attempts each prohibited SQL mutation directly.
 - This is defense in depth, not a substitute for Windows filesystem ACL protection. Windows storage remains fail-closed until its dedicated adapter is implemented and reviewed.
+
+
+### Windows SQLite storage design gate — 2026-11-19
+
+The existing `WindowsSecretFile` implementation must not be reused as if it were a SQLite adapter:
+
+- It is designed for one bounded secret file and performs I/O through a verified Windows handle.
+- The Python SQLite connection in this repository opens a database by pathname and may create companion files such as `-wal`, `-shm`, or rollback journals.
+- Securing only the main database file after SQLite opens it would leave a creation/ACL window and would not prove that companion files inherit a restrictive ACL.
+- Checking a path and then passing that path to SQLite is not equivalent to keeping the checked file identity pinned through the open.
+
+Therefore Windows remains fail-closed. The next adapter design must prove, before enabling it:
+1. Current-user SID ownership and a protected owner-only DACL on the database directory, with correctly scoped inheritance for SQLite companion files.
+2. Reparse-point rejection and safe handling of pre-existing database and companion files.
+3. No unsafe path replacement between validation and SQLite open; if the standard SQLite pathname API cannot meet the required handle-race boundary, use a reviewed VFS/handle strategy or explicitly narrow and approve the threat model rather than claiming handle safety.
+4. Windows CI coverage for create/open/reopen, WAL and rollback-journal behavior, ACL inheritance, owner mismatch, reparse points, and concurrent access.
+
+Do not weaken the existing `WindowsSecretFile` checks or enable Windows by simply returning a new adapter from the platform factory.
+
+### Validation snapshot — 2026-11-19
+
+At head `af3bab6435e61c6a62c9b80293f2555bec4eee36`:
+- Backend tests: passed.
+- AI reviewer unit tests: passed.
+- Ruff: passed.
+- CodeQL Python, JavaScript/TypeScript, and Actions analyses: passed.
+- Frontend unit tests: passed; Playwright desktop/mobile viewport E2E and frontend build were still running at the time of this note.
+- CodeRabbit: no submitted review exists because PR #168 remains Draft. Its comment explicitly says Draft PRs are not automatically reviewed by default.
