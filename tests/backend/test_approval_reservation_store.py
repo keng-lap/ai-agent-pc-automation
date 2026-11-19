@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
@@ -77,6 +78,28 @@ def test_reservation_is_durable_and_exactly_idempotent(tmp_path):
     assert first.state == "RESERVED"
 
 
+
+def test_concurrent_same_request_returns_one_stable_receipt(tmp_path):
+    store_a = make_store(tmp_path)
+    store_b = make_store(tmp_path)
+    create_approval(store_a)
+    barrier = threading.Barrier(2)
+
+    def reserve_from(store):
+        barrier.wait()
+        return reserve(store)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = list(pool.map(reserve_from, (store_a, store_b)))
+
+    assert first == second
+    with sqlite3.connect(store_a.path) as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) FROM job_reservations"
+        ).fetchone()[0]
+    assert count == 1
+
+
 def test_idempotency_key_cannot_be_reused_for_another_approval(tmp_path):
     store = make_store(tmp_path)
     create_approval(store)
@@ -142,13 +165,17 @@ def test_revocation_and_reservation_have_one_serialized_winner(tmp_path):
     store_b = make_store(tmp_path)
     create_approval(store_a)
 
+    barrier = threading.Barrier(2)
+
     def try_reserve():
+        barrier.wait()
         try:
             return reserve(store_a)
         except ApprovalReservationConflict:
             return "conflict"
 
     def try_revoke():
+        barrier.wait()
         try:
             store_b.revoke(approval_id="approval-1", owner_id=OWNER, now=NOW)
             return "revoked"
