@@ -209,3 +209,30 @@ Reason: the current handle-pinning/pathname-SQLite design protects against other
 - explicit project-owner acceptance of the same-user-process threat-model boundary, or a stronger design that removes that limitation.
 
 Until all three are satisfied, `create_platform_secure_storage(platform="win32")` remains fail-closed. The new adapter must not be treated as production-enabled merely because it is importable or its tests pass.
+
+
+### Validation snapshot — current B2 implementation — 2026-11-19
+
+Validated head before this documentation-only update: `a48edd5c8b110e220db0f423223f0da34912d068`.
+
+Linux CI:
+- Backend: 519 passed, 14 skipped.
+- AI reviewer unit tests: 13 passed.
+- Ruff: passed.
+- Frontend unit tests, Playwright desktop/mobile viewport E2E, and frontend build: passed.
+- CodeQL Python, JavaScript/TypeScript, and Actions: passed.
+
+Windows Process Containment workflow:
+- Windows Authenticator/DPAPI tests: 40 passed.
+- Job lifecycle/process containment tests: 13 passed, 1 skipped.
+- Platform storage, Windows SQLite adapter, and approval reservation tests: 16 passed, 3 skipped.
+- The Windows SQLite tests exercised inherited owner-only DACLs for the database and WAL/SHM files, rollback-journal ACL inheritance, owner repair for SQLite-created files, reparse-point rejection, and directory rename denial while verified handles remain pinned.
+
+The Windows adapter is still deliberately not selected by `create_platform_secure_storage(platform="win32")`. Windows runtime stores therefore remain fail-closed until the explicit same-user-process threat-model boundary is approved and the adapter receives independent security review.
+
+CodeRabbit status:
+- PR #168 remains Draft.
+- No submitted review or review threads exist. The existing CodeRabbit comment explicitly confirms Draft PRs are not automatically reviewed by default.
+- Do not mark Ready for review until the remaining B2/API and Windows enablement gates are resolved.
+
+This validation snapshot is tied to `a48edd5`; this note-only commit does not change source or test code and will cause a fresh CI run on the new PR head.
