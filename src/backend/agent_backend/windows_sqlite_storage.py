@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 from contextlib import ExitStack
 from pathlib import Path
+from typing import Self
 
 from .platform_storage import PlatformStorageUnavailable
 from .windows_secret_storage import WindowsSecretFile
@@ -228,7 +229,7 @@ class WindowsSQLiteStorage:
                 _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
                 None,
             )
-        except pywintypes.error:
+        except _pywintypes.error:
             raise WindowsSQLiteStorageError(
                 "New SQLite file could not be opened to verify inherited ACL."
             ) from None
@@ -359,7 +360,7 @@ class WindowsSQLiteStorage:
         self._sid = None
         self._initially_missing.clear()
 
-    def __enter__(self) -> WindowsSQLiteStorage:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_exc) -> None:
