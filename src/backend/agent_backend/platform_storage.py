@@ -255,10 +255,13 @@ class WindowsSecureStorage:
             components = [*reversed(path.parent.parents), path.parent]
             directory_handle = None
             for component in components:
+                access = self._READ_ATTRIBUTES | self._READ_CONTROL
+                if component == path.parent:
+                    access |= self._WRITE_DAC
                 try:
                     handle = file.CreateFile(
                         str(component),
-                        self._READ_ATTRIBUTES | self._READ_CONTROL | self._WRITE_DAC,
+                        access,
                         self._SHARE_READ | self._SHARE_WRITE, None, self._OPEN_EXISTING,
                         self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
                     )
