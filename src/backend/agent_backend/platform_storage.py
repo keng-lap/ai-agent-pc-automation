@@ -11,22 +11,27 @@ from __future__ import annotations
 import os
 import stat
 import sys
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import Iterator, Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
     """The current platform has no reviewed secure-storage implementation."""
 
 
+class DatabaseProtectionLease(Protocol):
+    """Protection held for the complete lifetime of one SQLite connection."""
+
+    def verify(self) -> None:
+        """Verify the database and every present SQLite sidecar."""
+
+
 class SecureStorageAdapter(Protocol):
     """OS-specific filesystem security contract for the SQLite database."""
 
-    def prepare_database_path(self, path: Path) -> None:
-        """Validate and prepare the private parent and existing database path."""
-
-    def finalize_database_file(self, path: Path) -> None:
-        """Apply/verify the database file's final access controls."""
+    def protect_database(self, path: Path) -> Iterator[DatabaseProtectionLease]:
+        """Hold path protection until the caller closes its SQLite connection."""
 
 
 class LinuxSecureStorage:
@@ -80,31 +85,55 @@ class LinuxSecureStorage:
                 "Job-store path could not be secured."
             ) from None
 
-    def finalize_database_file(self, path: Path) -> None:
+    @contextmanager
+    def protect_database(self, path: Path):
+        self.prepare_database_path(path)
+        lease = _LinuxDatabaseProtectionLease(path)
         try:
-            path.chmod(0o600)
-            info = path.lstat()
-            if stat.S_ISLNK(info.st_mode):
-                raise PlatformStorageUnavailable(
-                    "Job-store database path changed to a symbolic link."
-                )
-            if not stat.S_ISREG(info.st_mode):
-                raise PlatformStorageUnavailable(
-                    "Job-store database changed to an unsafe file type."
-                )
-            if info.st_uid != os.geteuid():
-                raise PlatformStorageUnavailable(
-                    "Job-store database is not owned by the current user."
-                )
-            if stat.S_IMODE(info.st_mode) & 0o077:
-                raise PlatformStorageUnavailable(
-                    "Job-store database permissions are too broad."
-                )
+            yield lease
+        finally:
+            # The caller closes SQLite before this context exits. Verify once
+            # more at lease release so sidecars created during the connection
+            # lifetime cannot escape the private-file checks.
+            lease.verify()
+
+
+class _LinuxDatabaseProtectionLease:
+    """Re-verify SQLite's complete file set while the parent remains private."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def verify(self) -> None:
+        try:
+            for candidate in (
+                self._path,
+                Path(f"{self._path}-wal"),
+                Path(f"{self._path}-shm"),
+                Path(f"{self._path}-journal"),
+            ):
+                if not candidate.exists() and not candidate.is_symlink():
+                    continue
+                info = candidate.lstat()
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                    raise PlatformStorageUnavailable(
+                        "Job-store database or sidecar is not a regular file."
+                    )
+                if info.st_uid != os.geteuid():
+                    raise PlatformStorageUnavailable(
+                        "Job-store database or sidecar is not owned by the current user."
+                    )
+                candidate.chmod(0o600)
+                verified = candidate.lstat()
+                if stat.S_IMODE(verified.st_mode) & 0o077:
+                    raise PlatformStorageUnavailable(
+                        "Job-store database or sidecar permissions are too broad."
+                    )
         except PlatformStorageUnavailable:
             raise
         except OSError:
             raise PlatformStorageUnavailable(
-                "Job-store database permissions could not be secured."
+                "Job-store database or sidecar permissions could not be secured."
             ) from None
 
 
