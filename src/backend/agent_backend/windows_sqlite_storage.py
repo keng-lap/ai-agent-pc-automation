@@ -15,10 +15,8 @@ import os
 from contextlib import ExitStack
 from pathlib import Path
 
-from .windows_secret_storage import (
-    WindowsSecretFile,
-    WindowsSecretStorageError,
-)
+from .platform_storage import PlatformStorageUnavailable
+from .windows_secret_storage import WindowsSecretFile
 
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
@@ -34,7 +32,7 @@ _FILE_ALL_ACCESS = 0x001F01FF
 _SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
 
 
-class WindowsSQLiteStorageError(RuntimeError):
+class WindowsSQLiteStorageError(PlatformStorageUnavailable):
     """Windows SQLite storage could not be proven private and stable."""
 
 
