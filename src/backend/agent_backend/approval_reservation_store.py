@@ -168,6 +168,41 @@ class SQLiteApprovalReservationStore:
                     );
                     CREATE INDEX IF NOT EXISTS idx_approval_audit_approval
                         ON approval_audit_events(approval_id, sequence);
+
+                    -- Approval identity and evidence bindings never change after
+                    -- creation. Only the lifecycle state/version may advance.
+                    CREATE TRIGGER IF NOT EXISTS approval_bindings_immutable
+                    BEFORE UPDATE OF approval_id, owner_id, session_id, plan_id,
+                        plan_digest, action_digest, evidence_expires_at, created_at
+                    ON approval_records
+                    BEGIN
+                        SELECT RAISE(ABORT, 'approval bindings are immutable');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS approval_records_no_delete
+                    BEFORE DELETE ON approval_records
+                    BEGIN
+                        SELECT RAISE(ABORT, 'approval records cannot be deleted');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS approval_audit_no_update
+                    BEFORE UPDATE ON approval_audit_events
+                    BEGIN
+                        SELECT RAISE(ABORT, 'approval audit is append-only');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS approval_audit_no_delete
+                    BEFORE DELETE ON approval_audit_events
+                    BEGIN
+                        SELECT RAISE(ABORT, 'approval audit is append-only');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS reservations_no_update
+                    BEFORE UPDATE ON job_reservations
+                    BEGIN
+                        SELECT RAISE(ABORT, 'reservation receipts are immutable');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS reservations_no_delete
+                    BEFORE DELETE ON job_reservations
+                    BEGIN
+                        SELECT RAISE(ABORT, 'reservation receipts cannot be deleted');
+                    END;
                     PRAGMA user_version = 1;
                     """
                 )
