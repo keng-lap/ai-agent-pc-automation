@@ -226,3 +226,41 @@ def test_audit_failure_rolls_back_approval_and_reservation(tmp_path):
 
     assert state == "ACTIVE"
     assert reservation_count == 0
+
+
+def test_approval_bindings_and_audit_ledger_are_append_only(tmp_path):
+    store = make_store(tmp_path)
+    create_approval(store)
+    receipt = reserve(store)
+
+    with sqlite3.connect(store.path) as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="approval bindings are immutable"):
+            connection.execute(
+                "UPDATE approval_records SET action_digest=? WHERE approval_id=?",
+                ("c" * 64, "approval-1"),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="approval records cannot be deleted"):
+            connection.execute(
+                "DELETE FROM approval_records WHERE approval_id=?",
+                ("approval-1",),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="approval audit is append-only"):
+            connection.execute(
+                "UPDATE approval_audit_events SET reason='owner_revoked' WHERE approval_id=?",
+                ("approval-1",),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="approval audit is append-only"):
+            connection.execute(
+                "DELETE FROM approval_audit_events WHERE approval_id=?",
+                ("approval-1",),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="reservation receipts are immutable"):
+            connection.execute(
+                "UPDATE job_reservations SET state='QUEUED' WHERE reservation_id=?",
+                (receipt.reservation_id,),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="reservation receipts cannot be deleted"):
+            connection.execute(
+                "DELETE FROM job_reservations WHERE reservation_id=?",
+                (receipt.reservation_id,),
+            )
