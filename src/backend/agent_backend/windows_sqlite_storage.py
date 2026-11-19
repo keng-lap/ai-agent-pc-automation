@@ -48,6 +48,7 @@ class WindowsSQLiteStorage:
         self._stack: ExitStack | None = None
         self._directory_handle = None
         self._sid = None
+        self._initially_missing: set[str] = set()
 
     @staticmethod
     def _api():
@@ -133,12 +134,17 @@ class WindowsSQLiteStorage:
             )
 
     @classmethod
-    def _secure_existing_file(cls, path: Path, sid) -> bool:
+    def _secure_existing_file(
+        cls, path: Path, sid, *, allow_owner_change: bool = False
+    ) -> bool:
         pywintypes, win32file, security = cls._api()
         try:
             handle = win32file.CreateFile(
                 str(path),
-                _GENERIC_READ | _READ_CONTROL | _WRITE_DAC,
+                _GENERIC_READ
+                | _READ_CONTROL
+                | _WRITE_DAC
+                | (_WRITE_OWNER if allow_owner_change else 0),
                 _FILE_SHARE_READ | _FILE_SHARE_WRITE,
                 None,
                 _OPEN_EXISTING,
@@ -170,9 +176,20 @@ class WindowsSQLiteStorage:
                 security.SE_FILE_OBJECT,
                 security.OWNER_SECURITY_INFORMATION,
             )
-            if descriptor.GetSecurityDescriptorOwner() != sid:
-                raise WindowsSQLiteStorageError(
-                    "SQLite file owner SID is not the current user."
+            owner = descriptor.GetSecurityDescriptorOwner()
+            if owner != sid:
+                if not allow_owner_change:
+                    raise WindowsSQLiteStorageError(
+                        "SQLite file owner SID is not the current user."
+                    )
+                security.SetSecurityInfo(
+                    handle,
+                    security.SE_FILE_OBJECT,
+                    security.OWNER_SECURITY_INFORMATION,
+                    sid,
+                    None,
+                    None,
+                    None,
                 )
 
             acl = security.ACL()
@@ -226,10 +243,10 @@ class WindowsSQLiteStorage:
                 security.OWNER_SECURITY_INFORMATION
                 | security.DACL_SECURITY_INFORMATION,
             )
-            if descriptor.GetSecurityDescriptorOwner() != sid:
-                raise WindowsSQLiteStorageError(
-                    "New SQLite file owner SID is not the current user."
-                )
+            # SQLite may create files with the process token's default
+            # owner (for example, BUILTIN\\Administrators on an elevated
+            # runner). The inherited DACL, not this owner field, must protect
+            # the file from other identities until finalize repairs ownership.
             dacl = descriptor.GetSecurityDescriptorDacl()
             if dacl is None or dacl.GetAceCount() != 1:
                 raise WindowsSQLiteStorageError(
@@ -300,10 +317,11 @@ class WindowsSQLiteStorage:
             self._sid = sid
             self._stack = stack
             for suffix in _SQLITE_SUFFIXES:
-                self._secure_existing_file(
+                if not self._secure_existing_file(
                     Path(str(self.path) + suffix),
                     sid,
-                )
+                ):
+                    self._initially_missing.add(suffix)
         except Exception as exc:
             stack.close()
             self._stack = None
@@ -324,7 +342,11 @@ class WindowsSQLiteStorage:
             raise WindowsSQLiteStorageError("SQLite path differs from prepared path.")
         self._verify_directory_dacl(self._directory_handle, self._sid)
         for suffix in _SQLITE_SUFFIXES:
-            self._secure_existing_file(Path(str(self.path) + suffix), self._sid)
+            self._secure_existing_file(
+                Path(str(self.path) + suffix),
+                self._sid,
+                allow_owner_change=suffix in self._initially_missing,
+            )
 
     def close(self) -> None:
         """Release pinned directory handles after every SQLite connection closes."""
@@ -333,6 +355,7 @@ class WindowsSQLiteStorage:
         self._stack = None
         self._directory_handle = None
         self._sid = None
+        self._initially_missing.clear()
 
     def __enter__(self) -> WindowsSQLiteStorage:
         return self
