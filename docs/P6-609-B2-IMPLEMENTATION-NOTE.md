@@ -197,3 +197,15 @@ Important limits / acceptance gates:
 - The design protects against other Windows identities replacing the protected directory; it does not claim protection against another process running as the same Windows user.
 - Existing path-based SQLite behavior still needs independent security review and Windows acceptance. The adapter remains fail-closed if any ACL/owner/reparse verification fails.
 - API integration is still outstanding. No Worker, process creation, WinGet, or install execution is added.
+
+
+### Windows enablement gate retained — 2026-11-19
+
+The Windows SQLite adapter is present for isolated Windows CI/security evaluation, but the platform factory deliberately continues to reject Windows. It is not enabled for the live approval or job stores yet.
+
+Reason: the current handle-pinning/pathname-SQLite design protects against other Windows identities replacing the secured directory, but it does not protect against another process running as the same Windows user. This threat-model boundary has not been explicitly approved by the project owner. Windows enablement therefore requires:
+- successful Windows runner results for the adapter's ACL, sidecar, reparse-point, and directory-rename tests;
+- independent security review of the path-based SQLite integration and ACL inheritance assumptions;
+- explicit project-owner acceptance of the same-user-process threat-model boundary, or a stronger design that removes that limitation.
+
+Until all three are satisfied, `create_platform_secure_storage(platform="win32")` remains fail-closed. The new adapter must not be treated as production-enabled merely because it is importable or its tests pass.
