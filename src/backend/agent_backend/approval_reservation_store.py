@@ -355,10 +355,8 @@ class SQLiteApprovalReservationStore:
                     ).fetchone()
                     connection.commit()
                     return self._receipt(row)
-        except (ApprovalReservationError,):
+        except ApprovalReservationError:
             raise
-        except sqlite3.IntegrityError:
-            raise ApprovalReservationConflict("reservation uniqueness constraint rejected request") from None
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Reservation could not be persisted.") from None
         if expired:
@@ -400,7 +398,9 @@ class SQLiteApprovalReservationStore:
         except ApprovalReservationError:
             raise
         except sqlite3.Error:
-            raise ApprovalReservationUnavailable("Approval revocation could not be persisted.") from None
+            raise ApprovalReservationUnavailable(
+                "Approval revocation could not be persisted."
+            ) from None
 
     def get_reservation(
         self, *, reservation_id: str, owner_id: str
