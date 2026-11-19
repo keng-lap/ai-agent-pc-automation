@@ -130,7 +130,11 @@ def test_windows_lease_rejects_untrusted_sidecar_dacl(tmp_path):
             finally:
                 _win32file.CloseHandle(handle)
 
-            with pytest.raises(PlatformStorageUnavailable, match="DACL"):
+            # An empty protected DACL can deny READ_CONTROL itself, so the
+            # adapter must fail closed when it cannot inspect the descriptor.
+            with pytest.raises(
+                PlatformStorageUnavailable, match="sidecar security could not be checked"
+            ):
                 lease.verify()
         finally:
             sidecar.unlink(missing_ok=True)
