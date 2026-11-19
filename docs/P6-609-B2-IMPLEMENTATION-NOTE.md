@@ -2,7 +2,7 @@
 
 ## Status
 
-**Planned / implementation not yet complete.** This note records the approved implementation sequence and the verified baseline gaps. It is not evidence that durable approval, job reservation, or real execution has been implemented.
+**In progress / not production-ready.** The approved implementation sequence and baseline gaps are recorded here. A first isolated SQLite store and tests have been added, but API integration, Windows secure storage, CI validation, and independent review remain incomplete. This is not evidence that the application can execute installations.
 
 ## Product-owner direction
 
@@ -101,3 +101,39 @@ Implement only the durable authorization/reservation boundary needed before any 
 
 - 2026-11-19: Created this implementation note and a dedicated branch from current main after inspecting PR #167 and the main approval/job/step-up/audit/containment paths.
 - 2026-11-19: No runtime code changed, no tests were run in this work slice, no PR was merged, and no machine-changing action was performed.
+
+## Implementation update — 2026-11-19
+
+### B2.1 / B2.2 first isolated store slice
+
+Branch: `feat/P6-609-B2-durable-approval-reservation`
+
+Commits:
+- `5e08ba8d56395696ef6c581b29a971ec949dfe24`: add `approval_reservation_store.py`.
+- `743406f057b7522fc4c529a57592f6abddcea704`: add focused store tests.
+- `572bac32afa848738086b52f75025f1ad32260d8`: classify reservation audit-write failures as store-unavailable, so they fail closed.
+- `092283bfdcee2b0b84ce2c9de994525c424e3411`: assert the audit failure is surfaced as unavailable.
+
+Implemented in this slice:
+- Separate SQLite schema for immutable approval bindings, inert reservation receipts, and allowlisted approval audit events.
+- `BEGIN IMMEDIATE` serialization and database uniqueness for approval consumption and idempotency.
+- Exact owner/session/plan/plan-digest/action-digest matching.
+- Backend-clock expiry transition persisted with its denial audit event.
+- Revocation and reservation serialized against the same database.
+- Exact retry returns the original reservation receipt; a mismatched retry is rejected.
+- Owner-scoped reservation lookup.
+- Audit insertion shares the state-transition transaction; a failed audit insert rolls back reservation and approval-state changes.
+- Tests added for restart durability, idempotency, binding mismatch, owner isolation, expiry, concurrent reserve/revoke, and audit rollback.
+
+Not yet implemented / not yet proven:
+- The new store is not wired into `software_approval_api.py`; existing process-local approval state remains in the live API path.
+- The reservation is intentionally an inert `RESERVED` receipt, not a queued worker job and not a dispatch capability.
+- The new store uses the existing secure-storage adapter interface. The repository's default adapter still rejects Windows; therefore this code is not production-usable on the target Windows machine until the native Windows DACL/owner-SID/reparse-point/handle-race adapter is implemented and reviewed.
+- No test suite or Ruff run has been executed in this work slice; CI evidence is pending.
+- No independent security review has been completed.
+
+The first test slice is intentionally isolated. Do not treat B2 as complete, do not merge this branch, and do not proceed to B3/B4/P6-609-C or real installation until the remaining gates are satisfied.
+
+## Work-log correction
+
+The earlier entry saying no runtime code had changed describes the initial note-only commit at that time. It is historical and is superseded by the implementation updates above.
