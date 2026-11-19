@@ -198,7 +198,9 @@ class WindowsSecureStorage:
             if not fn(ctypes.c_void_p(int(handle)), 9, ctypes.byref(info), ctypes.sizeof(info)):
                 raise PlatformStorageUnavailable("Windows reparse tag could not be verified.")
             if info.tag in {0xA000000C, 0xA0000003}:
-                raise PlatformStorageUnavailable("Windows path contains a redirection reparse point.")
+                raise PlatformStorageUnavailable(
+                    "Windows path contains a redirection reparse point."
+                )
         if bool(attrs & cls._DIRECTORY) != directory:
             raise PlatformStorageUnavailable("Windows SQLite path has an unsafe file type.")
 
@@ -251,12 +253,15 @@ class WindowsSecureStorage:
             for component in components:
                 try:
                     handle = file.CreateFile(
-                        str(component), self._READ_ATTRIBUTES | self._READ_CONTROL | self._WRITE_DAC,
+                        str(component),
+                        self._READ_ATTRIBUTES | self._READ_CONTROL | self._WRITE_DAC,
                         self._SHARE_READ | self._SHARE_WRITE, None, self._OPEN_EXISTING,
                         self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
                     )
                 except pywintypes.error:
-                    raise PlatformStorageUnavailable("Windows SQLite directory could not be pinned.") from None
+                    raise PlatformStorageUnavailable(
+                        "Windows SQLite directory could not be pinned."
+                    ) from None
                 stack.callback(file.CloseHandle, handle)
                 self._check_type(handle, True)
                 directory_handle = handle
@@ -293,7 +298,9 @@ class _WindowsDatabaseProtectionLease:
                     code = exc.args[0]
                 if code in (2, 3):
                     continue
-                raise PlatformStorageUnavailable("SQLite sidecar security could not be checked.") from None
+                raise PlatformStorageUnavailable(
+                    "SQLite sidecar security could not be checked."
+                ) from None
             try:
                 adapter._check_type(handle, False)
                 adapter._verify_owner(handle, self._sid)
@@ -302,12 +309,16 @@ class _WindowsDatabaseProtectionLease:
                 )
                 dacl = desc.GetSecurityDescriptorDacl()
                 if dacl is None or dacl.GetAceCount() != 1:
-                    raise PlatformStorageUnavailable("SQLite database or sidecar DACL is not private.")
+                    raise PlatformStorageUnavailable(
+                        "SQLite database or sidecar DACL is not private."
+                    )
                 header, mask, ace_sid = dacl.GetAce(0)
                 if (header[0] != security.ACCESS_ALLOWED_ACE_TYPE
                         or not header[1] & adapter._INHERITED
                         or mask != adapter._ALL_ACCESS or ace_sid != self._sid):
-                    raise PlatformStorageUnavailable("SQLite database or sidecar DACL is not inherited safely.")
+                    raise PlatformStorageUnavailable(
+                        "SQLite database or sidecar DACL is not inherited safely."
+                    )
             finally:
                 file.CloseHandle(handle)
 
