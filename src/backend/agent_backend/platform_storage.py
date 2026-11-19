@@ -249,7 +249,7 @@ class WindowsSecureStorage:
             raise PlatformStorageUnavailable("Windows SQLite path is unavailable or not absolute.")
         if not path.drive or path.drive.startswith("\\\\"):
             raise PlatformStorageUnavailable("Windows SQLite path must be on a local drive.")
-        _ctypes, pywintypes, _api, _con, file, _security = self._api()
+        ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
             if path.parent.parent == path.parent:
