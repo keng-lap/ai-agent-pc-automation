@@ -148,6 +148,7 @@ class WindowsSecureStorage:
     _READ_ATTRIBUTES = 0x80
     _READ_CONTROL = 0x20000
     _WRITE_DAC = 0x40000
+    _WRITE_OWNER = 0x80000
     _SHARE_READ = 0x1
     _SHARE_WRITE = 0x2
     _SHARE_DELETE = 0x4
