@@ -61,3 +61,4 @@ def test_linux_lease_rejects_unsafe_sqlite_sidecar(tmp_path):
 
         with pytest.raises(PlatformStorageUnavailable, match="sidecar"):
             lease.verify()
+        sidecar.unlink()
