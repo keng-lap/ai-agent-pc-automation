@@ -113,6 +113,8 @@ Commits:
 - `743406f057b7522fc4c529a57592f6abddcea704`: add focused store tests.
 - `572bac32afa848738086b52f75025f1ad32260d8`: classify reservation audit-write failures as store-unavailable, so they fail closed.
 - `092283bfdcee2b0b84ce2c9de994525c424e3411`: assert the audit failure is surfaced as unavailable.
+- `2d16366c3a119ec31c89c8f713b44d965edf7677`: remove an unused state constant.
+- `e41832b457758bb910f7ee90794000465da6b749`: add barrier-coordinated concurrent idempotency and reserve/revoke tests.
 
 Implemented in this slice:
 - Separate SQLite schema for immutable approval bindings, inert reservation receipts, and allowlisted approval audit events.
@@ -123,7 +125,7 @@ Implemented in this slice:
 - Exact retry returns the original reservation receipt; a mismatched retry is rejected.
 - Owner-scoped reservation lookup.
 - Audit insertion shares the state-transition transaction; a failed audit insert rolls back reservation and approval-state changes.
-- Tests added for restart durability, idempotency, binding mismatch, owner isolation, expiry, concurrent reserve/revoke, and audit rollback.
+- Tests added for restart durability, idempotency across independent store instances, binding mismatch, owner isolation, expiry, barrier-coordinated concurrent reserve/revoke, and audit rollback.
 
 Not yet implemented / not yet proven:
 - The new store is not wired into `software_approval_api.py`; existing process-local approval state remains in the live API path.
