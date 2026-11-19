@@ -149,7 +149,10 @@ def create_platform_secure_storage(
     if current.startswith("linux"):
         return LinuxSecureStorage()
     if current == "win32":
-        return WindowsSecureStorage()
+        raise PlatformStorageUnavailable(
+            "Windows job-store storage remains disabled until the native adapter "
+            "passes dedicated Windows integration tests and independent security review."
+        )
     if current == "darwin":
         raise PlatformStorageUnavailable(
             "macOS job-store storage is disabled pending native ACL and "
