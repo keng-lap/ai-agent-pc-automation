@@ -336,15 +336,34 @@ class _WindowsDatabaseProtectionLease:
     def __init__(self, path: Path, sid):
         self._path = path
         self._sid = sid
+        # Entries already present before the private directory is leased must
+        # already belong to this user. New SQLite files may need their owner
+        # corrected because Windows can assign the token's default owner.
+        self._preexisting = {
+            str(entry).casefold()
+            for entry in self._entries()
+            if os.path.lexists(entry)
+        }
+
+    def _entries(self):
+        return (
+            self._path,
+            Path(f"{self._path}-wal"),
+            Path(f"{self._path}-shm"),
+            Path(f"{self._path}-journal"),
+        )
 
     def verify(self):
         adapter = WindowsSecureStorage
         _ctypes, pywintypes, _api, _con, file, security = adapter._api()
-        for entry in (self._path, Path(f"{self._path}-wal"),
-                      Path(f"{self._path}-shm"), Path(f"{self._path}-journal")):
+        for entry in self._entries():
+            is_new = str(entry).casefold() not in self._preexisting
+            access = adapter._READ_ATTRIBUTES | adapter._READ_CONTROL
+            if is_new:
+                access |= adapter._WRITE_OWNER
             try:
                 handle = file.CreateFile(
-                    str(entry), adapter._READ_ATTRIBUTES | adapter._READ_CONTROL,
+                    str(entry), access,
                     adapter._SHARE_READ | adapter._SHARE_WRITE | adapter._SHARE_DELETE,
                     None, adapter._OPEN_EXISTING, adapter._OPEN_REPARSE_POINT, None,
                 )
@@ -359,6 +378,15 @@ class _WindowsDatabaseProtectionLease:
                 ) from None
             try:
                 adapter._check_type(handle, False)
+                if is_new:
+                    # This entry appeared only after the directory DACL was
+                    # restricted to the current SID. Correct the Windows
+                    # token-default owner, then verify it explicitly.
+                    security.SetSecurityInfo(
+                        handle, security.SE_FILE_OBJECT,
+                        security.OWNER_SECURITY_INFORMATION,
+                        self._sid, None, None, None,
+                    )
                 adapter._verify_owner(handle, self._sid)
                 desc = security.GetSecurityInfo(
                     handle, security.SE_FILE_OBJECT, security.DACL_SECURITY_INFORMATION
