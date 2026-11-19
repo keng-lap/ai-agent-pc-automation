@@ -11,10 +11,11 @@ import secrets
 import sqlite3
 import threading
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .job_lifecycle import ALLOWED_TRANSITIONS, JobLifecycleError, JobState
 from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
