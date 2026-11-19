@@ -81,3 +81,43 @@ def test_windows_sqlite_storage_rejects_existing_database_reparse_point(tmp_path
     with pytest.raises(WindowsSQLiteStorageError, match="reparse point"):
         storage.prepare_database_path(database)
     storage.close()
+
+
+def test_windows_sqlite_storage_secures_rollback_journal(tmp_path):
+    database = tmp_path / "private" / "approval.sqlite3"
+    storage = WindowsSQLiteStorage(database)
+    connection = None
+    try:
+        storage.prepare_database_path(database)
+        connection = sqlite3.connect(database)
+        mode = connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+        assert mode.lower() == "delete"
+        connection.execute("CREATE TABLE evidence (value TEXT NOT NULL)")
+        connection.commit()
+
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("INSERT INTO evidence(value) VALUES ('private')")
+        journal = type(database)(str(database) + "-journal")
+        assert journal.exists()
+        storage._verify_inherited_file_dacl(journal, storage._sid)
+
+        storage.finalize_database_file(database)
+        _pywintypes, win32file, _security = storage._api()
+        handle = win32file.CreateFile(
+            str(journal),
+            0x80000000 | 0x00020000,
+            0x00000001 | 0x00000002,
+            None,
+            3,
+            0x00000080 | 0x00200000,
+            None,
+        )
+        try:
+            storage._verify_file_dacl(handle, storage._sid)
+        finally:
+            win32file.CloseHandle(handle)
+        connection.rollback()
+    finally:
+        if connection is not None:
+            connection.close()
+        storage.close()
