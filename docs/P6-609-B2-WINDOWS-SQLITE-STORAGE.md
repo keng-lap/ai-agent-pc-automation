@@ -2,7 +2,9 @@
 
 ## Status and authority
 
-**Status: implementation contract; no Windows SQLite adapter is enabled by this document.**
+**Status: partial implementation; Windows SQLite storage remains disabled.**
+
+The shared storage contract and `SQLiteJobStore` now use a connection-scoped protection lease. The Linux adapter verifies the database and present WAL/SHM/journal entries while the connection is open and again as the lease is released. This is an intermediate refactor only; it does not implement Windows native directory handles, DACL inheritance, sidecar verification, or Windows enablement.
 
 This slice enables no worker, approval reservation, installer process, WinGet invocation, or machine-changing behavior. The existing Windows fail-closed behavior remains mandatory until implementation, Windows CI, target-machine acceptance, and independent security review pass.
 
