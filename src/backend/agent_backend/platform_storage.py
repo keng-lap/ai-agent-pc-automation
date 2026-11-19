@@ -121,18 +121,11 @@ def create_platform_secure_storage(
     if current.startswith("linux"):
         return LinuxSecureStorage()
     if current == "win32":
-        if path is None:
-            raise PlatformStorageUnavailable(
-                "Windows SQLite storage requires an explicit database path."
-            )
-        try:
-            from .windows_sqlite_storage import WindowsSQLiteStorage
-
-            return WindowsSQLiteStorage(path)
-        except (ImportError, OSError, TypeError, ValueError, RuntimeError):
-            raise PlatformStorageUnavailable(
-                "Windows SQLite storage is unavailable."
-            ) from None
+        raise PlatformStorageUnavailable(
+            "Windows SQLite adapter is implemented but remains disabled pending "
+            "Windows acceptance, independent security review, and explicit approval "
+            "of the same-user process threat-model boundary."
+        )
     if current == "darwin":
         raise PlatformStorageUnavailable(
             "macOS job-store storage is disabled pending native ACL and "
