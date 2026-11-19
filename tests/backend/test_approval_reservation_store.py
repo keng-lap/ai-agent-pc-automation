@@ -8,6 +8,7 @@ from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
     ApprovalReservationExpired,
     ApprovalReservationNotFound,
+    ApprovalReservationUnavailable,
     SQLiteApprovalReservationStore,
 )
 
@@ -185,7 +186,7 @@ def test_audit_failure_rolls_back_approval_and_reservation(tmp_path):
             """
         )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ApprovalReservationUnavailable):
         reserve(store)
 
     with sqlite3.connect(store.path) as connection:
