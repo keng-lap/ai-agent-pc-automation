@@ -27,9 +27,9 @@ def test_linux_adapter_creates_private_state_directory_and_database(tmp_path):
     adapter = LinuxSecureStorage()
     database = tmp_path / "private-state" / "jobs.sqlite3"
 
-    adapter.prepare_database_path(database)
-    database.touch()
-    adapter.finalize_database_file(database)
+    with adapter.protect_database(database) as lease:
+        database.touch()
+        lease.verify()
 
     assert stat.S_IMODE(database.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(database.stat().st_mode) == 0o600
@@ -46,3 +46,18 @@ def test_linux_adapter_rejects_symlink_database_path(tmp_path):
 
     with pytest.raises(PlatformStorageUnavailable, match="symbolic link"):
         adapter.prepare_database_path(link)
+
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux adapter test")
+def test_linux_lease_rejects_unsafe_sqlite_sidecar(tmp_path):
+    adapter = LinuxSecureStorage()
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+
+    with adapter.protect_database(database) as lease:
+        database.touch()
+        sidecar = database.with_name(database.name + "-wal")
+        sidecar.symlink_to(database)
+
+        with pytest.raises(PlatformStorageUnavailable, match="sidecar"):
+            lease.verify()
