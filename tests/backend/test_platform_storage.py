@@ -16,10 +16,15 @@ def test_linux_platform_selects_linux_secure_storage():
     )
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin", "freebsd"])
+@pytest.mark.parametrize("platform", ["darwin", "freebsd"])
 def test_unreviewed_platforms_fail_closed(platform):
     with pytest.raises(PlatformStorageUnavailable):
         create_platform_secure_storage(platform=platform)
+
+
+def test_windows_platform_requires_an_explicit_database_path():
+    with pytest.raises(PlatformStorageUnavailable, match="explicit database path"):
+        create_platform_secure_storage(platform="win32")
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux ownership checks require geteuid")
