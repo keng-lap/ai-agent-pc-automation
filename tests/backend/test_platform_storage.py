@@ -51,3 +51,15 @@ def test_linux_adapter_rejects_symlink_database_path(tmp_path):
 
     with pytest.raises(PlatformStorageUnavailable, match="symbolic link"):
         adapter.prepare_database_path(link)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows adapter selection")
+def test_windows_platform_selects_sqlite_adapter(tmp_path):
+    from agent_backend.windows_sqlite_storage import WindowsSQLiteStorage
+
+    adapter = create_platform_secure_storage(
+        platform="win32",
+        path=tmp_path / "private-state" / "approval.sqlite3",
+    )
+    assert isinstance(adapter, WindowsSQLiteStorage)
+    adapter.close()
