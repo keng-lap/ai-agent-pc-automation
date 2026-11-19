@@ -200,6 +200,62 @@ class WindowsSQLiteStorage:
             win32file.CloseHandle(handle)
 
     @classmethod
+    def _verify_inherited_file_dacl(cls, path: Path, sid) -> None:
+        pywintypes, win32file, security = cls._api()
+        try:
+            handle = win32file.CreateFile(
+                str(path),
+                _GENERIC_READ | _READ_CONTROL,
+                _FILE_SHARE_READ | _FILE_SHARE_WRITE,
+                None,
+                _OPEN_EXISTING,
+                _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
+                None,
+            )
+        except pywintypes.error:
+            raise WindowsSQLiteStorageError(
+                "New SQLite file could not be opened to verify inherited ACL."
+            ) from None
+        try:
+            attributes = win32file.GetFileInformationByHandle(handle)[0]
+            if attributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY):
+                raise WindowsSQLiteStorageError(
+                    "New SQLite file has an unsafe file attribute."
+                )
+            descriptor = security.GetSecurityInfo(
+                handle,
+                security.SE_FILE_OBJECT,
+                security.OWNER_SECURITY_INFORMATION
+                | security.DACL_SECURITY_INFORMATION,
+            )
+            if descriptor.GetSecurityDescriptorOwner() != sid:
+                raise WindowsSQLiteStorageError(
+                    "New SQLite file owner SID is not the current user."
+                )
+            dacl = descriptor.GetSecurityDescriptorDacl()
+            if dacl is None or dacl.GetAceCount() != 1:
+                raise WindowsSQLiteStorageError(
+                    "New SQLite file did not inherit an owner-only DACL."
+                )
+            header, mask, ace_sid = dacl.GetAce(0)
+            if (
+                header[0] != security.ACCESS_ALLOWED_ACE_TYPE
+                or header[1] != security.INHERITED_ACE
+                or mask != _FILE_ALL_ACCESS
+                or ace_sid != sid
+            ):
+                raise WindowsSQLiteStorageError(
+                    "New SQLite file inherited an unexpected DACL."
+                )
+            control, _revision = descriptor.GetSecurityDescriptorControl()
+            if control & security.SE_DACL_PROTECTED:
+                raise WindowsSQLiteStorageError(
+                    "New SQLite file did not inherit its directory DACL."
+                )
+        finally:
+            win32file.CloseHandle(handle)
+
+    @classmethod
     def _verify_file_dacl(cls, handle, sid) -> None:
         _pywintypes, _win32file, security = cls._api()
         descriptor = security.GetSecurityInfo(
