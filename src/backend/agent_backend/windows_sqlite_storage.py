@@ -216,7 +216,7 @@ class WindowsSQLiteStorage:
 
     @classmethod
     def _verify_inherited_file_dacl(cls, path: Path, sid) -> None:
-        pywintypes, win32file, security = cls._api()
+        _pywintypes, win32file, security = cls._api()
         try:
             handle = win32file.CreateFile(
                 str(path),
