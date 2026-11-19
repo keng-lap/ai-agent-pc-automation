@@ -1,4 +1,6 @@
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+import sqlite3
 
 import pytest
 
@@ -247,3 +249,49 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
         now=NOW + timedelta(seconds=4),
     )
     assert verifying["state"] == JobState.VERIFYING.value
+
+
+
+def test_connection_closes_before_protection_lease_is_released(tmp_path, monkeypatch):
+    store = make_store(tmp_path)
+    events = []
+    original_connect = sqlite3.connect
+
+    class TrackingConnection(sqlite3.Connection):
+        def close(self):
+            events.append("connection-close")
+            super().close()
+
+    class RecordingStorage:
+        @contextmanager
+        def protect_database(self, path):
+            events.append("lease-enter")
+
+            class Lease:
+                def verify(self):
+                    events.append("lease-verify")
+
+            try:
+                yield Lease()
+            finally:
+                events.append("lease-exit")
+
+    monkeypatch.setattr(store, "_secure_storage", RecordingStorage())
+    monkeypatch.setattr(
+        "agent_backend.job_store.sqlite3.connect",
+        lambda *args, **kwargs: original_connect(
+            *args, factory=TrackingConnection, **kwargs
+        ),
+    )
+
+    with store._connection():
+        events.append("connection-in-use")
+
+    assert events == [
+        "lease-enter",
+        "lease-verify",
+        "connection-in-use",
+        "lease-verify",
+        "connection-close",
+        "lease-exit",
+    ]
