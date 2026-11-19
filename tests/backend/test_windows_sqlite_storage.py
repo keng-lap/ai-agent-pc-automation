@@ -30,6 +30,11 @@ def test_windows_sqlite_storage_secures_database_and_wal_sidecars(tmp_path):
         connection.execute("INSERT INTO evidence(value) VALUES ('private')")
         connection.commit()
 
+        for suffix in ("", "-wal", "-shm"):
+            path = type(database)(str(database) + suffix)
+            if path.exists():
+                storage._verify_inherited_file_dacl(path, storage._sid)
+
         storage.finalize_database_file(database)
         for suffix in ("", "-wal", "-shm"):
             path = type(database)(str(database) + suffix)
