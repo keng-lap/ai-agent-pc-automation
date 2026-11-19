@@ -13,7 +13,7 @@ import stat
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import ContextManager, Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
@@ -30,7 +30,7 @@ class DatabaseProtectionLease(Protocol):
 class SecureStorageAdapter(Protocol):
     """OS-specific filesystem security contract for the SQLite database."""
 
-    def protect_database(self, path: Path) -> Iterator[DatabaseProtectionLease]:
+    def protect_database(self, path: Path) -> ContextManager[DatabaseProtectionLease]:
         """Hold path protection until the caller closes its SQLite connection."""
 
 
