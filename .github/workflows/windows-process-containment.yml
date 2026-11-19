@@ -33,7 +33,14 @@ on:
       - "tests/backend/test_authenticator.py"
       - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/agent_backend/process_containment.py"
+      - "src/backend/agent_backend/platform_storage.py"
+      - "src/backend/agent_backend/windows_sqlite_storage.py"
+      - "src/backend/agent_backend/approval_reservation_store.py"
+      - "src/backend/agent_backend/job_store.py"
       - "src/backend/agent_backend/job_lifecycle.py"
+      - "tests/backend/test_platform_storage.py"
+      - "tests/backend/test_windows_sqlite_storage.py"
+      - "tests/backend/test_approval_reservation_store.py"
       - "tests/backend/test_job_lifecycle.py"
       - "tests/backend/test_process_containment.py"
       - "src/backend/pyproject.toml"
@@ -59,3 +66,5 @@ jobs:
         run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_auth_api.py tests/backend/test_windows_secret_storage.py -q
       - name: Test job lifecycle and Windows containment API
         run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py -q
+      - name: Test Windows SQLite ACL and approval reservation storage
+        run: python -m pytest tests/backend/test_platform_storage.py tests/backend/test_windows_sqlite_storage.py tests/backend/test_approval_reservation_store.py -q
