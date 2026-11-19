@@ -99,7 +99,17 @@ class SQLiteApprovalReservationStore:
             self._secure_storage.prepare_database_path(self.path)
             self._initialize()
         except PlatformStorageUnavailable as exc:
+            self.close()
             raise ApprovalReservationUnavailable(str(exc)) from None
+        except Exception:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Release platform storage handles after all database operations stop."""
+        close = getattr(self._secure_storage, "close", None)
+        if close is not None:
+            close()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(
