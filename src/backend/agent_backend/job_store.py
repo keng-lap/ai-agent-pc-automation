@@ -11,10 +11,10 @@ import secrets
 import sqlite3
 import threading
 import uuid
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .job_lifecycle import ALLOWED_TRANSITIONS, JobLifecycleError, JobState
 from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
@@ -63,6 +63,7 @@ class SQLiteJobStore:
     Filesystem protection is delegated to a platform adapter. Linux is the
     only enabled platform; Windows and macOS remain fail-closed until their
     native security adapters are implemented and independently reviewed.
+    Every SQLite connection is enclosed by a platform protection lease.
     """
 
     def __init__(self, path: Path | str, *, clock=None, secure_storage=None) -> None:
@@ -72,28 +73,35 @@ class SQLiteJobStore:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._lock = threading.RLock()
         self._secure_storage = secure_storage or create_platform_secure_storage()
-        try:
-            self._secure_storage.prepare_database_path(self.path)
-        except PlatformStorageUnavailable as exc:
-            raise JobStoreUnavailable(str(exc)) from None
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
-            self.path,
-            timeout=5.0,
-            isolation_level=None,
-            check_same_thread=False,
-        )
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
-        connection.execute("PRAGMA synchronous = FULL")
-        return connection
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """Keep the platform protection lease alive until SQLite is closed."""
+        try:
+            with self._secure_storage.protect_database(self.path) as lease:
+                connection = sqlite3.connect(
+                    self.path,
+                    timeout=5.0,
+                    isolation_level=None,
+                    check_same_thread=False,
+                )
+                try:
+                    connection.row_factory = sqlite3.Row
+                    connection.execute("PRAGMA foreign_keys = ON")
+                    connection.execute("PRAGMA busy_timeout = 5000")
+                    connection.execute("PRAGMA synchronous = FULL")
+                    lease.verify()
+                    yield connection
+                    lease.verify()
+                finally:
+                    connection.close()
+        except PlatformStorageUnavailable as exc:
+            raise JobStoreUnavailable(str(exc)) from None
 
     def _initialize(self) -> None:
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("PRAGMA journal_mode = WAL")
                 connection.executescript(
                     """
@@ -163,7 +171,7 @@ class SQLiteJobStore:
         timestamp = _utc_text(now or self._clock())
         job_id = str(uuid.uuid4())
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 existing = connection.execute(
                     "SELECT * FROM job_records WHERE owner_id=? AND idempotency_key=?",
@@ -201,7 +209,7 @@ class SQLiteJobStore:
     def get_for_owner(self, job_id: str, owner_id: str) -> dict[str, Any]:
         self._validate_identity(owner_id, "owner_id")
         try:
-            with closing(self._connect()) as connection:
+            with self._connection() as connection:
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
                     (job_id, owner_id),
@@ -219,7 +227,7 @@ class SQLiteJobStore:
         if type(limit) is not int or not 1 <= limit <= MAX_JOBS_PER_QUERY:
             raise ValueError("limit must be between 1 and 25")
         try:
-            with closing(self._connect()) as connection:
+            with self._connection() as connection:
                 rows = connection.execute(
                     """
                     SELECT * FROM job_records
@@ -248,7 +256,7 @@ class SQLiteJobStore:
             raise ValueError("invalid event level")
         timestamp = _utc_text(now or self._clock())
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
@@ -306,7 +314,7 @@ class SQLiteJobStore:
             raise ValueError("reboot_required must be boolean")
         timestamp = _utc_text(now or self._clock())
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
