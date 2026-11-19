@@ -252,28 +252,76 @@ class WindowsSecureStorage:
         _ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
-            components = [*reversed(path.parent.parents), path.parent]
-            directory_handle = None
-            for component in components:
-                access = self._READ_ATTRIBUTES | self._READ_CONTROL
-                if component == path.parent:
-                    access |= self._WRITE_DAC
+            if path.parent.parent == path.parent:
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite database must be inside a dedicated state directory."
+                )
+            # Pin ancestors first. The final state directory is handled
+            # separately so first-run creation can set its owner explicitly.
+            for component in reversed(path.parent.parents):
                 try:
                     handle = file.CreateFile(
                         str(component),
-                        access,
+                        self._READ_ATTRIBUTES | self._READ_CONTROL,
+                        self._SHARE_READ | self._SHARE_WRITE,
+                        None, self._OPEN_EXISTING,
+                        self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
+                    )
+                except pywintypes.error:
+                    raise PlatformStorageUnavailable(
+                        "Windows SQLite ancestor directory could not be pinned."
+                    ) from None
+                stack.callback(file.CloseHandle, handle)
+                self._check_type(handle, True)
+
+            created = False
+            final_access = self._READ_ATTRIBUTES | self._READ_CONTROL | self._WRITE_DAC
+            try:
+                directory_handle = file.CreateFile(
+                    str(path.parent), final_access,
+                    self._SHARE_READ | self._SHARE_WRITE, None, self._OPEN_EXISTING,
+                    self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
+                )
+            except pywintypes.error as exc:
+                code = getattr(exc, "winerror", None)
+                if code is None and getattr(exc, "args", None):
+                    code = exc.args[0]
+                if code not in (2, 3):
+                    raise PlatformStorageUnavailable(
+                        "Existing Windows SQLite state directory could not be opened safely."
+                    ) from None
+                create_directory = ctypes.WinDLL(
+                    "Kernel32.dll", use_last_error=True
+                ).CreateDirectoryW
+                create_directory.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p]
+                create_directory.restype = ctypes.c_int
+                if not create_directory(str(path.parent), None):
+                    create_error = ctypes.get_last_error()
+                    if create_error != 183:
+                        raise PlatformStorageUnavailable(
+                            "Windows SQLite state directory could not be created safely."
+                        ) from None
+                else:
+                    created = True
+                try:
+                    directory_handle = file.CreateFile(
+                        str(path.parent),
+                        final_access | (self._WRITE_OWNER if created else 0),
                         self._SHARE_READ | self._SHARE_WRITE, None, self._OPEN_EXISTING,
                         self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
                     )
                 except pywintypes.error:
                     raise PlatformStorageUnavailable(
-                        "Windows SQLite directory could not be pinned."
+                        "Windows SQLite state directory could not be pinned safely."
                     ) from None
-                stack.callback(file.CloseHandle, handle)
-                self._check_type(handle, True)
-                directory_handle = handle
-            # Do not change an arbitrary ancestor: only secure the dedicated
-            # database directory itself, which is pinned above.
+            stack.callback(file.CloseHandle, directory_handle)
+            self._check_type(directory_handle, True)
+            if created:
+                security = self._api()[5]
+                security.SetSecurityInfo(
+                    directory_handle, security.SE_FILE_OBJECT,
+                    security.OWNER_SECURITY_INFORMATION, sid, None, None, None,
+                )
             self._secure_directory(directory_handle, sid)
             lease = _WindowsDatabaseProtectionLease(path, sid)
             lease.verify()
