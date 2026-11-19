@@ -13,7 +13,7 @@ import stat
 import sys
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
@@ -165,6 +165,7 @@ class WindowsSecureStorage:
     def _api():
         try:
             import ctypes
+
             import pywintypes
             import win32api
             import win32con
@@ -189,7 +190,10 @@ class WindowsSecureStorage:
         attrs = file.GetFileInformationByHandle(handle)[0]
         if attrs & cls._REPARSE:
             class TagInfo(ctypes.Structure):
-                _fields_ = [("attributes", ctypes.c_uint32), ("tag", ctypes.c_uint32)]
+                _fields_: ClassVar[list[tuple[str, object]]] = [
+                    ("attributes", ctypes.c_uint32),
+                    ("tag", ctypes.c_uint32),
+                ]
             info = TagInfo()
             kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
             fn = kernel.GetFileInformationByHandleEx
