@@ -22,9 +22,12 @@ def test_unreviewed_platforms_fail_closed(platform):
         create_platform_secure_storage(platform=platform)
 
 
-def test_windows_platform_requires_an_explicit_database_path():
-    with pytest.raises(PlatformStorageUnavailable, match="explicit database path"):
-        create_platform_secure_storage(platform="win32")
+def test_windows_platform_remains_disabled_pending_security_acceptance(tmp_path):
+    with pytest.raises(PlatformStorageUnavailable, match="same-user process"):
+        create_platform_secure_storage(
+            platform="win32",
+            path=tmp_path / "private-state" / "approval.sqlite3",
+        )
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux ownership checks require geteuid")
@@ -53,16 +56,6 @@ def test_linux_adapter_rejects_symlink_database_path(tmp_path):
         adapter.prepare_database_path(link)
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows adapter selection")
-def test_windows_platform_selects_sqlite_adapter(tmp_path):
-    from agent_backend.windows_sqlite_storage import WindowsSQLiteStorage
-
-    adapter = create_platform_secure_storage(
-        platform="win32",
-        path=tmp_path / "private-state" / "approval.sqlite3",
-    )
-    assert isinstance(adapter, WindowsSQLiteStorage)
-    adapter.close()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows platform selection")
