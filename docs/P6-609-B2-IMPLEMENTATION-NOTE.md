@@ -178,3 +178,22 @@ At head `af3bab6435e61c6a62c9b80293f2555bec4eee36`:
 - CodeQL Python, JavaScript/TypeScript, and Actions analyses: passed.
 - Frontend unit tests: passed; Playwright desktop/mobile viewport E2E and frontend build were still running at the time of this note.
 - CodeRabbit: no submitted review exists because PR #168 remains Draft. Its comment explicitly says Draft PRs are not automatically reviewed by default.
+
+
+### Windows SQLite adapter implementation slice — 2026-11-19
+
+Implemented a dedicated `WindowsSQLiteStorage` adapter and wired both SQLite approval-reservation and operational job stores to request a path-bound platform adapter.
+
+Security behavior implemented:
+- Pins verified directory/ancestor handles for the adapter lifetime using the existing Windows handle-opening primitive; the handles deny delete sharing to block directory replacement by another Windows identity while SQLite uses pathname I/O.
+- Applies and verifies a protected current-user-only directory DACL with object/container inheritance so newly created SQLite database, WAL, SHM, and rollback-journal files inherit the owner-only access rule at creation.
+- Validates pre-existing database and sidecar files by handle, rejects reparse-point files and non-regular files, verifies owner SID, and repairs only the DACL of files already owned by the current user.
+- Revalidates database-directory ACL and existing SQLite files after initialization.
+- Adds Windows-only integration tests for WAL/SHM ACLs, directory rename denial while pinned, and pre-existing database reparse-point rejection.
+- Extends the Windows CI workflow to run the SQLite storage, platform-selection, and approval reservation tests.
+
+Important limits / acceptance gates:
+- Windows integration tests have not yet run on this new commit; wait for the Windows runner result before claiming the adapter is validated.
+- The design protects against other Windows identities replacing the protected directory; it does not claim protection against another process running as the same Windows user.
+- Existing path-based SQLite behavior still needs independent security review and Windows acceptance. The adapter remains fail-closed if any ACL/owner/reparse verification fails.
+- API integration is still outstanding. No Worker, process creation, WinGet, or install execution is added.
