@@ -63,3 +63,12 @@ def test_windows_platform_selects_sqlite_adapter(tmp_path):
     )
     assert isinstance(adapter, WindowsSQLiteStorage)
     adapter.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows platform selection")
+def test_windows_platform_selection_fails_closed_on_non_windows_host(tmp_path):
+    with pytest.raises(PlatformStorageUnavailable):
+        create_platform_secure_storage(
+            platform="win32",
+            path=tmp_path / "private-state" / "approval.sqlite3",
+        )
