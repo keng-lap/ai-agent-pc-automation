@@ -16,10 +16,18 @@ def test_linux_platform_selects_linux_secure_storage():
     )
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin", "freebsd"])
+@pytest.mark.parametrize("platform", ["darwin", "freebsd"])
 def test_unreviewed_platforms_fail_closed(platform):
     with pytest.raises(PlatformStorageUnavailable):
         create_platform_secure_storage(platform=platform)
+
+
+def test_windows_platform_remains_disabled_pending_security_acceptance(tmp_path):
+    with pytest.raises(PlatformStorageUnavailable, match="same-user process"):
+        create_platform_secure_storage(
+            platform="win32",
+            path=tmp_path / "private-state" / "approval.sqlite3",
+        )
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux ownership checks require geteuid")
@@ -46,3 +54,14 @@ def test_linux_adapter_rejects_symlink_database_path(tmp_path):
 
     with pytest.raises(PlatformStorageUnavailable, match="symbolic link"):
         adapter.prepare_database_path(link)
+
+
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows platform selection")
+def test_windows_platform_selection_fails_closed_on_non_windows_host(tmp_path):
+    with pytest.raises(PlatformStorageUnavailable):
+        create_platform_secure_storage(
+            platform="win32",
+            path=tmp_path / "private-state" / "approval.sqlite3",
+        )

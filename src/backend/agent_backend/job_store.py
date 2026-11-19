@@ -71,12 +71,22 @@ class SQLiteJobStore:
             raise JobStoreUnavailable("Job-store path must be absolute.")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._lock = threading.RLock()
-        self._secure_storage = secure_storage or create_platform_secure_storage()
+        self._secure_storage = secure_storage or create_platform_secure_storage(path=self.path)
         try:
             self._secure_storage.prepare_database_path(self.path)
+            self._initialize()
         except PlatformStorageUnavailable as exc:
+            self.close()
             raise JobStoreUnavailable(str(exc)) from None
-        self._initialize()
+        except Exception:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Release platform storage handles after all database operations stop."""
+        close = getattr(self._secure_storage, "close", None)
+        if close is not None:
+            close()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(
