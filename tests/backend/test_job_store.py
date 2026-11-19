@@ -10,15 +10,28 @@ OWNER = "google-owner-sub"
 DIGEST = "a" * 64
 
 
+class _TestProtectionLease:
+    def __init__(self, path):
+        self.path = path
+
+    def verify(self):
+        if not self.path.is_file():
+            raise AssertionError("test database was not created")
+
+
 class _TestSecureStorage:
     """Test-only adapter; filesystem security is covered by platform adapter tests."""
 
-    def prepare_database_path(self, path):
-        path.parent.mkdir(parents=True, exist_ok=True)
+    from contextlib import contextmanager
 
-    def finalize_database_file(self, path):
-        if not path.is_file():
-            raise AssertionError("test database was not created")
+    @contextmanager
+    def protect_database(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lease = _TestProtectionLease(path)
+        try:
+            yield lease
+        finally:
+            lease.verify()
 
 
 def make_store(tmp_path):
