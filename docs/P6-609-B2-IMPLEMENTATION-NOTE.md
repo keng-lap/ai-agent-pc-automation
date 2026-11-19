@@ -78,12 +78,12 @@ Implement only the durable authorization/reservation boundary needed before any 
 
 ## Mandatory acceptance tests
 
-- Same approval + same idempotency key + same exact binding returns one stable job receipt, including concurrent calls through two independent store instances.
+- Same approval + same idempotency key + same exact binding returns one stable reservation receipt, including concurrent calls through two independent store instances.
 - Same key with a different owner/session/plan/action digest is rejected.
-- Approval expiry immediately before reservation creates no job and records the expiry transition.
+- Approval expiry immediately before reservation creates no reservation and records the expiry transition.
 - Revocation racing reservation has exactly one serialized winner; no revoked approval can produce a queued job.
 - Duplicate confirmation/replay cannot create a second reservation.
-- Database error or audit-write error rolls back both approval and job changes.
+- Database error or audit-write error rolls back both approval and reservation changes.
 - Reopen/restart preserves approval state, job reservation, and audit history.
 - Owner A cannot read or mutate owner B's approval/job.
 - No test path creates an OS process or invokes a package manager.
@@ -139,3 +139,5 @@ The first test slice is intentionally isolated. Do not treat B2 as complete, do 
 ## Work-log correction
 
 The earlier entry saying no runtime code had changed describes the initial note-only commit at that time. It is historical and is superseded by the implementation updates above.
+
+- 2026-11-19: Clarified the implemented B2 lifecycle: approval state is `ACTIVE` before consumption and becomes `RESERVED`, `EXPIRED`, or `REVOKED`; the associated reservation remains inert and is not handed to a worker in B2.
