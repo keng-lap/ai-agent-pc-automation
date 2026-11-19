@@ -328,6 +328,7 @@ class WindowsSQLiteStorage:
             self._stack = None
             self._directory_handle = None
             self._sid = None
+            self._initially_missing.clear()
             if isinstance(exc, WindowsSQLiteStorageError):
                 raise
             raise WindowsSQLiteStorageError(
