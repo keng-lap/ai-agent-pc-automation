@@ -19,7 +19,6 @@ from .platform_storage import PlatformStorageUnavailable, create_platform_secure
 
 _DIGEST_LENGTH = 64
 _PLAN_ID_LENGTH = 32
-_APPROVAL_STATES = frozenset({"ACTIVE", "RESERVED", "EXPIRED", "REVOKED"})
 
 
 class ApprovalReservationError(RuntimeError):
