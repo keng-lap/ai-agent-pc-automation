@@ -141,3 +141,12 @@ The first test slice is intentionally isolated. Do not treat B2 as complete, do 
 The earlier entry saying no runtime code had changed describes the initial note-only commit at that time. It is historical and is superseded by the implementation updates above.
 
 - 2026-11-19: Clarified the implemented B2 lifecycle: approval state is `ACTIVE` before consumption and becomes `RESERVED`, `EXPIRED`, or `REVOKED`; the associated reservation remains inert and is not handed to a worker in B2.
+
+
+### Additional B2 hardening — append-only records
+
+- Added SQLite triggers to prevent mutation/deletion of approval identity and evidence bindings after creation.
+- Added append-only enforcement for approval audit events.
+- Added immutable reservation receipt enforcement; B2 reservations cannot be changed into `QUEUED` by direct database updates.
+- Added a regression test that attempts each prohibited SQL mutation directly.
+- This is defense in depth, not a substitute for Windows filesystem ACL protection. Windows storage remains fail-closed until its dedicated adapter is implemented and reviewed.
