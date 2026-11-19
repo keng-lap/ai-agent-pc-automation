@@ -11,7 +11,12 @@ on:
       - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/agent_backend/process_containment.py"
       - "src/backend/agent_backend/job_lifecycle.py"
+      - "src/backend/agent_backend/platform_storage.py"
+      - "src/backend/agent_backend/job_store.py"
       - "tests/backend/test_job_lifecycle.py"
+      - "tests/backend/test_platform_storage.py"
+      - "tests/backend/test_job_store.py"
+      - "tests/backend/test_jobs_api.py"
       - "tests/backend/test_process_containment.py"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
@@ -27,7 +32,12 @@ on:
       - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/agent_backend/process_containment.py"
       - "src/backend/agent_backend/job_lifecycle.py"
+      - "src/backend/agent_backend/platform_storage.py"
+      - "src/backend/agent_backend/job_store.py"
       - "tests/backend/test_job_lifecycle.py"
+      - "tests/backend/test_platform_storage.py"
+      - "tests/backend/test_job_store.py"
+      - "tests/backend/test_jobs_api.py"
       - "tests/backend/test_process_containment.py"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
@@ -50,5 +60,5 @@ jobs:
         run: python -m pip install -e "src/backend[dev]"
       - name: Test Windows authenticator storage and DPAPI
         run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_auth_api.py tests/backend/test_windows_secret_storage.py -q
-      - name: Test job lifecycle and Windows containment API
-        run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py -q
+      - name: Test job lifecycle, Windows storage gate, and containment API
+        run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py tests/backend/test_platform_storage.py tests/backend/test_job_store.py tests/backend/test_jobs_api.py -q
