@@ -68,47 +68,10 @@ def test_linux_lease_rejects_unsafe_sqlite_sidecar(tmp_path):
 
 
 
-def _set_windows_directory_owner_to_current_user(path):
-    import win32api
-    import win32con
-    import win32file
-    import win32security
-
-    token = win32security.OpenProcessToken(
-        win32api.GetCurrentProcess(), win32con.TOKEN_QUERY
-    )
-    try:
-        sid = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
-    finally:
-        win32api.CloseHandle(token)
-    handle = win32file.CreateFile(
-        str(path),
-        0x00020000 | 0x00080000,
-        0x00000001 | 0x00000002,
-        None,
-        3,
-        0x02000000 | 0x00200000,
-        None,
-    )
-    try:
-        win32security.SetSecurityInfo(
-            handle,
-            win32security.SE_FILE_OBJECT,
-            win32security.OWNER_SECURITY_INFORMATION,
-            sid,
-            None,
-            None,
-            None,
-        )
-    finally:
-        win32file.CloseHandle(handle)
-
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
 def test_windows_lease_protects_database_and_sqlite_wal_sidecars(tmp_path):
     state_directory = tmp_path / "private-state"
-    state_directory.mkdir()
-    _set_windows_directory_owner_to_current_user(state_directory)
     database = state_directory / "jobs.sqlite3"
     adapter = WindowsSecureStorage()
 
