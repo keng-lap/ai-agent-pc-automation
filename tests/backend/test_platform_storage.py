@@ -93,7 +93,6 @@ def test_windows_lease_protects_database_and_sqlite_wal_sidecars(tmp_path):
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
 def test_windows_lease_rejects_untrusted_sidecar_dacl(tmp_path):
     state_directory = tmp_path / "private-state"
-    state_directory.mkdir()
     database = state_directory / "jobs.sqlite3"
     adapter = WindowsSecureStorage()
 
