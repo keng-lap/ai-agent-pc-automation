@@ -1,9 +1,10 @@
 """Platform-specific protection for the local SQLite job database.
 
 The Job Store depends on this narrow interface instead of embedding OS checks.
-Linux is currently the only enabled adapter. Windows remains fail-closed until
-native DACL, owner SID, reparse-point and handle-based path-race protections
-are implemented and independently reviewed. macOS remains unsupported.
+Linux and Windows adapters implement private SQLite-directory storage.
+Windows requires an explicit database path and pins verified directory handles;
+macOS remains unsupported. Windows enablement is gated by its dedicated
+Windows-only ACL, sidecar, and path-replacement integration tests.
 """
 
 from __future__ import annotations
@@ -128,7 +129,7 @@ def create_platform_secure_storage(
             from .windows_sqlite_storage import WindowsSQLiteStorage
 
             return WindowsSQLiteStorage(path)
-        except (ImportError, OSError, TypeError, ValueError):
+        except (ImportError, OSError, TypeError, ValueError, RuntimeError):
             raise PlatformStorageUnavailable(
                 "Windows SQLite storage is unavailable."
             ) from None
