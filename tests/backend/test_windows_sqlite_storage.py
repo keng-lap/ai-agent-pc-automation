@@ -66,7 +66,10 @@ def test_windows_sqlite_storage_pins_directory_against_rename(tmp_path):
 
 def test_windows_sqlite_storage_rejects_existing_database_reparse_point(tmp_path):
     database = tmp_path / "private" / "approval.sqlite3"
-    database.parent.mkdir()
+    setup = WindowsSQLiteStorage(database)
+    setup.prepare_database_path(database)
+    setup.close()
+
     target = tmp_path / "target.sqlite3"
     target.touch()
     try:
