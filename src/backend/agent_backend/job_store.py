@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 import threading
 import uuid
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterator
@@ -142,7 +142,6 @@ class SQLiteJobStore:
                     PRAGMA user_version = 1;
                     """
                 )
-            self._secure_storage.finalize_database_file(self.path)
         except JobStoreUnavailable:
             raise
         except PlatformStorageUnavailable as exc:
