@@ -684,7 +684,7 @@ class _WindowsDatabaseProtectionLease:
 
     def verify(self):
         adapter = WindowsSecureStorage
-        _ctypes, _pywintypes, _api, _con, file, security = adapter._api()
+        _ctypes, _pywintypes, _api, _con, file, _security = adapter._api()
         try:
             for entry in self._entries():
                 access = adapter._READ_ATTRIBUTES | adapter._READ_CONTROL
