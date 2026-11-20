@@ -144,3 +144,11 @@ This closes the CI validation requirement for this revision only. It does not gr
 ## Concurrent store-instance regression (2026-11-20)
 
 Added a Windows-native integration test that opens two independent `SQLiteJobStore` instances against the same protected NTFS database, submits twelve writes concurrently through both instances, and verifies that all committed jobs are recoverable. This extends the Windows acceptance coverage for concurrent store instances and SQLite locking. The test must pass on the exact PR head; it does not replace the remaining wrong-owner/broad-DACL and reparse-point database/sidecar fixtures.
+
+## Concurrent first-open owner race remediation (2026-11-20)
+
+The exact-head Windows concurrency regression exposed a race: one lease could observe a newly-created SQLite database/sidecar before another lease completed the post-open owner-SID correction. The second lease then classified the entry as pre-existing and correctly rejected its unexpected owner.
+
+The adapter now acquires a per-user, per-canonical-database-path Windows named mutex before pinning the directory and taking the database/sidecar snapshot. The mutex remains held for the complete protection-lease and SQLite-connection lifetime, including post-open owner/DACL verification and connection close. This deliberately serializes access to the same protected database across independent store instances/processes; it favors deterministic security initialization over parallel connections. Different database paths remain independent. The mutex uses the Windows local-session namespace and the OS-created default security descriptor; inability to create or acquire it fails closed.
+
+The Windows concurrent-store integration test must pass on the exact new head. This is a race-remediation attempt, not security approval; Windows storage remains disabled and the PR remains Draft.
