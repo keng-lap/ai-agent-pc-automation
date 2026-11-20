@@ -46,8 +46,9 @@ class JobStoreCommittedButUnverified(RuntimeError):
         self.committed_version = committed_version
         super().__init__(
             "Job write committed but storage verification failed; after storage is "
-            "trusted again, reconcile by reading this job_id and comparing its "
-            "persisted state with the intended update; do not retry blindly."
+            "trusted again, call get_persisted_version_for_owner(job_id, owner_id) "
+            "and compare it with committed_version before reconciling current state; "
+            "do not retry blindly."
         )
 
 
@@ -90,8 +91,8 @@ class SQLiteJobStore:
         self._initialize()
 
     @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
-        """Keep the platform protection lease alive until SQLite is closed."""
+    def _connection(self, *, require_wal: bool = True) -> Iterator[sqlite3.Connection]:
+        """Keep the protection lease alive and reject replacement databases outside WAL."""
         try:
             with self._secure_storage.protect_database(self.path) as lease:
                 connection = sqlite3.connect(
@@ -105,6 +106,12 @@ class SQLiteJobStore:
                     connection.execute("PRAGMA foreign_keys = ON")
                     connection.execute("PRAGMA busy_timeout = 5000")
                     connection.execute("PRAGMA synchronous = FULL")
+                    if require_wal:
+                        journal_mode = connection.execute("PRAGMA journal_mode").fetchone()
+                        if not journal_mode or str(journal_mode[0]).lower() != "wal":
+                            raise JobStoreUnavailable(
+                                "Job-store database is not in the required WAL mode."
+                            )
                     lease.verify()
                     yield connection
                     lease.verify()
@@ -115,7 +122,7 @@ class SQLiteJobStore:
 
     def _initialize(self) -> None:
         try:
-            with self._lock, self._connection() as connection:
+            with self._lock, self._connection(require_wal=False) as connection:
                 journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()
                 if not journal_mode or str(journal_mode[0]).lower() != "wal":
                     raise JobStoreUnavailable(
@@ -238,6 +245,23 @@ class SQLiteJobStore:
             raise
         except (sqlite3.Error, OSError):
             raise JobStoreUnavailable("Job history could not be read.") from None
+
+    def get_persisted_version_for_owner(self, job_id: str, owner_id: str) -> int:
+        """Return the owner-scoped row version for committed-write reconciliation."""
+        self._validate_identity(owner_id, "owner_id")
+        try:
+            with self._connection() as connection:
+                row = connection.execute(
+                    "SELECT version FROM job_records WHERE job_id=? AND owner_id=?",
+                    (job_id, owner_id),
+                ).fetchone()
+                if row is None:
+                    raise JobLifecycleError("job not found")
+                return int(row["version"])
+        except JobLifecycleError:
+            raise
+        except (sqlite3.Error, OSError):
+            raise JobStoreUnavailable("Job version could not be read.") from None
 
     def list_for_owner(self, owner_id: str, *, limit: int = 25) -> list[dict[str, Any]]:
         self._validate_identity(owner_id, "owner_id")
