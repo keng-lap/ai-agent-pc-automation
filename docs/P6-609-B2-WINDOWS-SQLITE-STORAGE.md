@@ -177,3 +177,18 @@ The fresh review of head `a73587a` identified additional issues; the PR is not r
 - **Windows mutex key:** key generation now normalizes the absolute path lexically and does not call `Path.resolve()`, avoiding reparse-point traversal or network lookup before namespace validation.
 - **Windows mutex contention test:** a small wait seam lets the integration test signal when the second thread reaches the native wait boundary before asserting that the first lease excludes it.
 - **Still pending:** exact-head CI, fresh CodeRabbit review of the new head, and independent native security review. Windows storage remains disabled and this PR remains Draft.
+
+
+## Exact-head validation after follow-up review (2026-11-20)
+
+Exact PR head: `83f41a22fefc8976260e57549325da63c650fddd`.
+
+- Backend pytest: **526 passed, 24 skipped**.
+- Ruff: **passed** (`All checks passed!`).
+- Windows Process Containment: **passed** — storage/lifecycle step reports **55 passed, 6 skipped**; authenticator/DPAPI step reports **40 passed**.
+- Frontend unit tests: **passed**.
+- Playwright desktop/mobile viewport E2E: **passed**.
+- Frontend build: **passed**.
+- AI PR Diff Trigger: **passed**.
+
+The Linux second-process POSIX-lock regression passed as part of backend pytest. The Windows ACE-format rejection and mutex wait-boundary regression passed as part of the Windows suite. These results validate the exact commit's automated tests only; they do not replace fresh CodeRabbit review, independent native security review, or Windows 11 Home target acceptance. Windows storage remains disabled and PR #169 remains Draft.
