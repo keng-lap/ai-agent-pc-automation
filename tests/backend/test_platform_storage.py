@@ -471,9 +471,20 @@ def test_windows_adapter_translates_native_api_error_to_store_error(
         "_protect_database",
         classmethod(lambda _cls, path: fail_during_native_acquisition(path)),
     )
+    class TestLease:
+        @staticmethod
+        def verify():
+            return None
+
+    class TestStorage:
+        @contextmanager
+        def protect_database(self, database_path):
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+            yield TestLease()
+
     store = SQLiteJobStore(
         tmp_path / "private-state" / "jobs.sqlite3",
-        secure_storage=LinuxSecureStorage(),
+        secure_storage=TestStorage(),
     )
     store._secure_storage = WindowsSecureStorage()
 
