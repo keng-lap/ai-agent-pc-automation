@@ -209,3 +209,27 @@ These additions are awaiting exact-head CI and a fresh CodeRabbit review. The PR
 ## Directory-identity mutex remediation (2026-11-20)
 
 The previous lexical-path mutex key could be bypassed when the same NTFS directory was addressed through a long path and its 8.3 short-name alias. The mutex now derives its key from the validated directory handle's volume serial number and file index. Directory ancestry and the final state directory are pinned and verified first; only then is the mutex acquired, before the SQLite file set is created or opened. This removes path-spelling aliases from the coordination key without resolving an untrusted path. The conservative lock scope is the complete dedicated state directory, so separate database files in one directory are serialized; distinct directory identities remain independent. A Windows integration regression uses GetShortPathNameW and skips only when the runner has 8.3 aliases disabled. This remediation still requires exact-head Windows CI and fresh independent review; Windows storage remains disabled.
+
+
+## Current exact-head status (2026-11-20; supersedes earlier snapshots)
+
+The following status supersedes earlier commit-specific snapshots in this document, including the older exact-head references to `ed89fe0`, `83f41a2`, and the statement that the later lifecycle/recovery additions were awaiting CI.
+
+- **Current PR head:** `f4673461f87dbaf2e59123cc3442ae099421b4cf`.
+- **Exact-head GitHub Actions:** all three pull-request workflows completed successfully:
+  - CI — run `44771961397` — success.
+  - Windows Process Containment — run `44771961347` — success.
+  - AI PR Diff Trigger — run `44771961387` — success.
+- The Windows workflow includes the ancestor-rename regression. Its test fixture now creates the existing `outer/middle` ancestors before lease acquisition and leaves the final `private-state` directory for the adapter to create. This correction is in the current head.
+- The latest CodeRabbit request against this head returned **Review finished** at 2026-11-20 16:18 UTC. CodeRabbit also stated that its incremental review system does not re-review already-reviewed commits. Therefore this response is **not** a fresh full review or an independent security approval. The ancestor-rename finding is marked addressed in `f467346`.
+- The PR currently has 17 review threads and zero unresolved threads. Resolved/outdated thread status is not equivalent to a CodeRabbit approval or security sign-off.
+
+**Still required before this B2 slice can be accepted or merged:**
+
+1. Independent native Windows security review of the ctypes/NT API ABI and structures, handle lifetime/cleanup, file and mutex DACLs, access masks, global mutex namespace, and ancestor rename exclusion.
+2. A completed B2-specific threat-model review.
+3. A real Windows 11 Home target-machine acceptance run.
+4. A two-logon-session test proving the same user's sessions coordinate on the same global mutex.
+5. Completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL and database/sidecar reparse-point cases.
+
+GitHub-hosted Windows CI is automated evidence for this exact commit; it is not a substitute for the independent review or target-machine acceptance above. Windows production storage remains disabled. This PR remains Draft, open, and unmerged. No worker execution, installer invocation, or real installation is authorized by this slice.
