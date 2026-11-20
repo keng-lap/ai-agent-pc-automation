@@ -13,7 +13,7 @@ import stat
 import sys
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
@@ -265,7 +265,7 @@ class WindowsSecureStorage:
         kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
 
         class UnicodeString(ctypes.Structure):
-            _fields_ = [
+            _fields_: ClassVar[list[tuple[str, object]]] = [
                 ("Length", ctypes.c_ushort),
                 ("MaximumLength", ctypes.c_ushort),
                 ("Buffer", ctypes.c_wchar_p),
