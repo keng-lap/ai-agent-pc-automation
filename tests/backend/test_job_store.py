@@ -277,11 +277,13 @@ def test_connection_closes_before_protection_lease_is_released(tmp_path, monkeyp
                 events.append("lease-exit")
 
     monkeypatch.setattr(store, "_secure_storage", RecordingStorage())
+    def tracked_connect(*args, **kwargs):
+        events.append("connection-open")
+        return original_connect(*args, factory=TrackingConnection, **kwargs)
+
     monkeypatch.setattr(
         "agent_backend.job_store.sqlite3.connect",
-        lambda *args, **kwargs: original_connect(
-            *args, factory=TrackingConnection, **kwargs
-        ),
+        tracked_connect,
     )
 
     with store._connection():
@@ -289,6 +291,7 @@ def test_connection_closes_before_protection_lease_is_released(tmp_path, monkeyp
 
     assert events == [
         "lease-enter",
+        "connection-open",
         "lease-verify",
         "connection-in-use",
         "lease-verify",
