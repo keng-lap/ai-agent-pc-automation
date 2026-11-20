@@ -1,19 +1,19 @@
 import sqlite3
-from contextlib import contextmanager
 import stat
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from agent_backend.job_store import JobStoreUnavailable, SQLiteJobStore
 from agent_backend.platform_storage import (
+    _WindowsDatabaseProtectionLease,
     LinuxSecureStorage,
     PlatformStorageUnavailable,
     WindowsSecureStorage,
-    _WindowsDatabaseProtectionLease,
     create_platform_secure_storage,
 )
 
