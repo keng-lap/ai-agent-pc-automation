@@ -7,9 +7,11 @@ Run "hold" in logon session A and "probe" in session B as the same Windows user.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_backend.platform_storage import (
@@ -38,6 +40,9 @@ def main() -> int:
         return 2
 
     adapter = WindowsSecureStorage()
+    sid_text = adapter._api()[5].ConvertSidToStringSid(adapter._sid())
+    sid_fingerprint = hashlib.sha256(sid_text.encode("utf-8")).hexdigest()[:16]
+    timestamp = lambda: datetime.now(timezone.utc).isoformat()
     if args.mode == "hold":
         try:
             with adapter.protect_database(database):
@@ -46,11 +51,18 @@ def main() -> int:
                     "mode": "hold",
                     "pid": os.getpid(),
                     "user": os.environ.get("USERNAME", ""),
+                    "user_sid_sha256": sid_fingerprint,
+                    "timestamp_utc": timestamp(),
                     "database": str(database),
                     "hold_seconds": args.hold_seconds,
                 }), flush=True)
                 time.sleep(args.hold_seconds)
-            print(json.dumps({"result": "LOCK_RELEASED", "pid": os.getpid()}), flush=True)
+            print(json.dumps({
+                "result": "LOCK_RELEASED",
+                "pid": os.getpid(),
+                "user_sid_sha256": sid_fingerprint,
+                "timestamp_utc": timestamp(),
+            }), flush=True)
             return 0
         except PlatformStorageUnavailable as exc:
             print(f"FAIL: holder could not acquire the production mutex/lease: {exc}", flush=True)
@@ -69,6 +81,8 @@ def main() -> int:
                 "mode": "verify",
                 "pid": os.getpid(),
                 "user": os.environ.get("USERNAME", ""),
+                "user_sid_sha256": sid_fingerprint,
+                "timestamp_utc": timestamp(),
                 "database": str(database),
             }), flush=True)
             return 0
@@ -79,6 +93,8 @@ def main() -> int:
                 "mode": "probe",
                 "pid": os.getpid(),
                 "user": os.environ.get("USERNAME", ""),
+                "user_sid_sha256": sid_fingerprint,
+                "timestamp_utc": timestamp(),
                 "database": str(database),
                 "detail": str(exc),
             }), flush=True)
