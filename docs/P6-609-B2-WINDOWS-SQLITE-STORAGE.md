@@ -117,3 +117,6 @@ The final state-directory operation no longer uses a path-based CreateDirectoryW
 3. Retains the handle returned by NtCreateFile (or opens the pre-existing child relative to the same parent after a create collision) and verifies that exact handle before SQLite is allowed to open the database.
 
 This is intended to bind creation/open and verification to the same directory object, removing the former create-then-reopen-by-path substitution window. It is **not yet accepted as closed**: the exact-head Windows native workflow must validate the NtCreateFile structure/handle interop and all existing Windows acceptance tests, followed by independent review. Windows storage remains disabled and this PR remains Draft.
+
+
+Additional native Windows tests now attempt to prove that the leased state directory cannot be renamed while its handle is held, and that all directory handles are released after a forced verification failure. These tests must pass on the exact PR head before the parent namespace mitigation can be considered validated.
