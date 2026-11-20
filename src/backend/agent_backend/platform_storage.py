@@ -292,22 +292,31 @@ class WindowsSecureStorage:
             kernel.LocalFree.restype = ctypes.c_void_p
             kernel.LocalFree(descriptor)
 
-    @contextmanager
-    def protect_database(self, path: Path):
-        if os.name != "nt" or not isinstance(path, Path) or not path.is_absolute():
-            raise PlatformStorageUnavailable("Windows SQLite path is unavailable or not absolute.")
-        if not path.drive or path.drive.startswith("\\\\"):
-            raise PlatformStorageUnavailable("Windows SQLite path must be on a local drive.")
-        ctypes, pywintypes, _api, _con, file, _security = self._api()
+    @classmethod
+    def _drive_type(cls, drive_root: str) -> int:
+        ctypes = cls._api()[0]
         kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
         get_drive_type = kernel.GetDriveTypeW
         get_drive_type.argtypes = [ctypes.c_wchar_p]
         get_drive_type.restype = ctypes.c_uint32
+        return int(get_drive_type(drive_root))
+
+    @classmethod
+    def _require_fixed_local_drive(cls, path: Path) -> None:
+        if not path.drive or path.drive.startswith("\\\\"):
+            raise PlatformStorageUnavailable("Windows SQLite path must be on a local drive.")
         drive_root = path.drive + "\\"
-        if get_drive_type(drive_root) != 3:  # DRIVE_FIXED only; reject mapped/network/removable.
+        if cls._drive_type(drive_root) != 3:  # DRIVE_FIXED only; reject mapped/network/removable.
             raise PlatformStorageUnavailable(
                 "Windows SQLite path must be on a fixed local drive."
             )
+
+    @contextmanager
+    def protect_database(self, path: Path):
+        if os.name != "nt" or not isinstance(path, Path) or not path.is_absolute():
+            raise PlatformStorageUnavailable("Windows SQLite path is unavailable or not absolute.")
+        self._require_fixed_local_drive(path)
+        _ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
             if path.parent.parent == path.parent:
