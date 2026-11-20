@@ -192,3 +192,13 @@ Exact PR head: `83f41a22fefc8976260e57549325da63c650fddd`.
 - AI PR Diff Trigger: **passed**.
 
 The Linux second-process POSIX-lock regression passed as part of backend pytest. The Windows ACE-format rejection and mutex wait-boundary regression passed as part of the Windows suite. These results validate the exact commit's automated tests only; they do not replace fresh CodeRabbit review, independent native security review, or Windows 11 Home target acceptance. Windows storage remains disabled and PR #169 remains Draft.
+
+
+## Additional CodeRabbit follow-up (2026-11-20)
+
+Two previously reported lifecycle/recovery gaps were also closed:
+
+- Every normal `SQLiteJobStore` connection now reads the persisted `PRAGMA journal_mode` and fails closed unless it is `wal`. Only the one-time initialization connection is allowed to set WAL before schema creation. A regression switches an existing database to DELETE mode after initialization and proves the next store read is rejected.
+- `get_persisted_version_for_owner(job_id, owner_id)` provides an owner-scoped recovery read for `JobStoreCommittedButUnverified`. Callers can compare the persisted row version with the exception's `committed_version` before reconciling state. The public job summary remains unchanged; a different owner cannot read the version.
+
+These additions are awaiting exact-head CI and a fresh CodeRabbit review. The PR remains Draft and Windows storage remains disabled.
