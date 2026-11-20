@@ -620,5 +620,5 @@ def test_windows_lease_rejects_reparse_point_ancestor(tmp_path):
     database = linked_parent / "private-state" / "jobs.sqlite3"
     with pytest.raises(
         PlatformStorageUnavailable, match="unsupported reparse point"
-    ):
-        WindowsSecureStorage().protect_database(database).__enter__()
+    ), WindowsSecureStorage().protect_database(database):
+        pytest.fail("A reparse-point ancestor must be rejected before SQLite opens.")
