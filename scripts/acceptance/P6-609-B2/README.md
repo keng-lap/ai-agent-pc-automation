@@ -59,7 +59,13 @@ Wait until it prints `LOCK_ACQUIRED`. Leave this process running.
 
 Expected result: `PASS_CONTENTION_BLOCKED`. This confirms session B reached the production lease and timed out while session A held the same global mutex.
 
-Return to session A and wait for `LOCK_RELEASED`. Then run the Probe command once more in session B. It should now acquire and release the lease normally; the current helper's Probe mode intentionally treats successful acquisition as a failure while testing contention. For the post-release check, run the storage test suite again or use the dedicated acceptance evidence from a subsequent review-approved test procedure.
+Return to session A and wait for `LOCK_RELEASED`. Then run the post-release verification in session B:
+
+```powershell
+.\scripts\acceptance\P6-609-B2\test-multisession.ps1 -Mode VerifyReleased
+```
+
+Expected result: `PASS_ACQUIRED_AFTER_RELEASE`. This proves the mutex was not left permanently owned after session A released its lease.
 
 If session B reports any error other than the expected mutex timeout, the cross-session gate has **not** passed. Capture both logs and session identity/timestamps. Do not change ACLs, run as Administrator, or use a different user to make the test pass.
 
