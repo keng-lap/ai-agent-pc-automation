@@ -161,7 +161,6 @@ class WindowsSecureStorage:
     _READ_ATTRIBUTES = 0x80
     _READ_CONTROL = 0x20000
     _WRITE_DAC = 0x40000
-    _WRITE_OWNER = 0x80000
     _SHARE_READ = 0x1
     _SHARE_WRITE = 0x2
     _SHARE_DELETE = 0x4
@@ -182,7 +181,6 @@ class WindowsSecureStorage:
     _STATUS_OBJECT_NAME_COLLISION = 0xC0000035
     _OI = 0x01
     _CI = 0x02
-    _INHERITED = 0x10
 
     @staticmethod
     def _api():
@@ -531,10 +529,9 @@ class WindowsSecureStorage:
     def _database_mutex(cls, path: Path, sid):
         """Serialize Windows SQLite file-set initialization across processes.
 
-        SQLite may create the database/WAL/SHM between two leases' initial
-        snapshots. A per-user, per-canonical-path named mutex ensures one
-        connection completes its post-open owner/DACL verification before a
-        second lease classifies those entries as pre-existing.
+        A per-user, per-canonical-path named mutex serializes creation and
+        verification of the complete SQLite file set and the connection
+        lifetime. Owner validation does not depend on a pathname snapshot.
         """
         ctypes = cls._api()[0]
         security = cls._api()[5]
