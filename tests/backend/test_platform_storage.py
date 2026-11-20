@@ -126,8 +126,8 @@ def test_windows_lease_rejects_untrusted_sidecar_dacl(tmp_path):
             _ctypes, _pywintypes, _win32api, _win32con, _win32file, win32security = (
                 adapter._api()
             )
-            # Replace the inherited ACL with an empty, protected DACL. A file
-            # with this descriptor must not be accepted as a SQLite sidecar.
+            # A protected Everyone ACE is readable but broader than the
+            # explicit current-user-only ACL required for SQLite files.
             handle = _win32file.CreateFile(
                 str(sidecar),
                 0x00040000 | 0x00020000,
@@ -138,7 +138,13 @@ def test_windows_lease_rejects_untrusted_sidecar_dacl(tmp_path):
                 None,
             )
             try:
-                empty_acl = win32security.ACL()
+                broad_acl = win32security.ACL()
+                everyone = win32security.CreateWellKnownSid(
+                    win32security.WinWorldSid, None
+                )
+                broad_acl.AddAccessAllowedAceEx(
+                    win32security.ACL_REVISION, 0, 0x001F01FF, everyone
+                )
                 win32security.SetSecurityInfo(
                     handle,
                     win32security.SE_FILE_OBJECT,
@@ -146,16 +152,14 @@ def test_windows_lease_rejects_untrusted_sidecar_dacl(tmp_path):
                     | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
                     None,
                     None,
-                    empty_acl,
+                    broad_acl,
                     None,
                 )
             finally:
                 _win32file.CloseHandle(handle)
 
-            # An empty protected DACL can deny READ_CONTROL itself, so the
-            # adapter must fail closed when it cannot inspect the descriptor.
             with pytest.raises(
-                PlatformStorageUnavailable, match="sidecar security could not be checked"
+                PlatformStorageUnavailable, match="explicit owner-only ACL"
             ):
                 lease.verify()
         finally:
@@ -492,3 +496,111 @@ def test_windows_adapter_translates_native_api_error_to_store_error(
         JobStoreUnavailable, match="Windows security APIs failed"
     ), store._connection():
         pytest.fail("The native acquisition error must fail before SQLite opens.")
+
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native wrong-owner fixture")
+def test_windows_lease_rejects_wrong_owner_without_repair(tmp_path, monkeypatch):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    sidecar = Path(f"{database}-wal")
+    adapter = WindowsSecureStorage()
+
+    with adapter.protect_database(database) as lease:
+        _ctypes, pywintypes, _api, _con, win32file, win32security = adapter._api()
+        current_sid = adapter._sid()
+        foreign_sid = win32security.CreateWellKnownSid(
+            win32security.WinBuiltinAdministratorsSid, None
+        )
+        if foreign_sid == current_sid:
+            pytest.skip("No distinct alternate owner SID is available")
+
+        handle = win32file.CreateFile(
+            str(sidecar),
+            0x00080000 | 0x00020000,
+            0x00000001 | 0x00000002 | 0x00000004,
+            None,
+            3,
+            0x00200000,
+            None,
+        )
+        try:
+            try:
+                win32security.SetSecurityInfo(
+                    handle,
+                    win32security.SE_FILE_OBJECT,
+                    win32security.OWNER_SECURITY_INFORMATION,
+                    foreign_sid,
+                    None,
+                    None,
+                    None,
+                )
+            except pywintypes.error:
+                pytest.skip("Runner cannot assign an alternate file owner")
+        finally:
+            win32file.CloseHandle(handle)
+
+        original_set_security_info = win32security.SetSecurityInfo
+        owner_mutations = []
+
+        def record_owner_mutation(*args, **kwargs):
+            owner_mutations.append(args)
+            return original_set_security_info(*args, **kwargs)
+
+        monkeypatch.setattr(win32security, "SetSecurityInfo", record_owner_mutation)
+        with pytest.raises(PlatformStorageUnavailable, match="owner SID"):
+            lease.verify()
+        assert owner_mutations == []
+
+        # Restore a safe fixture before the lease's final verification.
+        restore = win32file.CreateFile(
+            str(sidecar),
+            0x00080000 | 0x00020000,
+            0x00000001 | 0x00000002 | 0x00000004,
+            None,
+            3,
+            0x00200000,
+            None,
+        )
+        try:
+            original_set_security_info(
+                restore,
+                win32security.SE_FILE_OBJECT,
+                win32security.OWNER_SECURITY_INFORMATION,
+                current_sid,
+                None,
+                None,
+                None,
+            )
+        finally:
+            win32file.CloseHandle(restore)
+        sidecar.unlink()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native reparse-point fixture")
+@pytest.mark.parametrize("suffix", ["", "-wal"])
+def test_windows_lease_rejects_database_or_sidecar_reparse_point(
+    tmp_path, suffix
+):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    target = tmp_path / "outside-target.bin"
+    target.write_bytes(b"outside")
+    adapter = WindowsSecureStorage()
+
+    with adapter.protect_database(database) as lease:
+        entry = Path(f"{database}{suffix}")
+        backup = entry.with_name(entry.name + ".original")
+        entry.replace(backup)
+        try:
+            try:
+                entry.symlink_to(target)
+            except OSError:
+                backup.replace(entry)
+                pytest.skip("Runner does not permit creating a symbolic link")
+            with pytest.raises(
+                PlatformStorageUnavailable, match="unsupported reparse point"
+            ):
+                lease.verify()
+        finally:
+            entry.unlink(missing_ok=True)
+            if backup.exists():
+                backup.replace(entry)
