@@ -16,7 +16,12 @@ $outDir = Join-Path $RepoRoot "artifacts\\P6-609-B2"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $log = Join-Path $outDir ("multisession-" + $(if ($Mode -eq "VerifyReleased") { "verify" } else { $Mode.ToLowerInvariant() }) + ".log")
 
-if (-not [System.IO.Path]::IsPathRooted($DatabasePath)) { throw "DatabasePath must be absolute." }
+# This runner provisions ancestors before invoking Python. Require a drive-rooted
+# path (for example C:\\Users\\...); IsPathRooted alone also accepts
+# root-relative (\\Users\\...) and drive-relative (C:folder) paths.
+if ($DatabasePath -notmatch '^[A-Za-z]:\\\\') {
+    throw "DatabasePath must be fully qualified with a drive root (for example C:\\Users\\...)."
+}
 
 # The adapter creates the final protected state directory (DatabasePath's
 # parent). Its immediate parent and all higher ancestors must already exist
