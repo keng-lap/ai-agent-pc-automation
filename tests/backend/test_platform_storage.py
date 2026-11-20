@@ -392,6 +392,7 @@ def test_windows_lease_prevents_ancestor_directory_rename_while_held(tmp_path):
     database = ancestor / "middle" / "private-state" / "jobs.sqlite3"
     replacement = tmp_path / "renamed-outer"
     adapter = WindowsSecureStorage()
+    (ancestor / "middle").mkdir(parents=True)
 
     with adapter.protect_database(database):
         with pytest.raises(OSError):
