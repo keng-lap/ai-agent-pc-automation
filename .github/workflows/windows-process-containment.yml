@@ -19,6 +19,7 @@ on:
       - "tests/backend/test_job_store.py"
       - "tests/backend/test_jobs_api.py"
       - "tests/backend/test_process_containment.py"
+      - "scripts/acceptance/P6-609-B2/**"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
   push:
@@ -41,6 +42,7 @@ on:
       - "tests/backend/test_job_store.py"
       - "tests/backend/test_jobs_api.py"
       - "tests/backend/test_process_containment.py"
+      - "scripts/acceptance/P6-609-B2/**"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
 
@@ -79,7 +81,10 @@ jobs:
             }
           }
           python -m ruff check scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
+          if ($LASTEXITCODE -ne 0) { throw "Ruff failed with exit code $LASTEXITCODE." }
           python scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py --help
+          if ($LASTEXITCODE -ne 0) { throw "Mutex probe CLI smoke test failed with exit code $LASTEXITCODE." }
           python -m py_compile scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
+          if ($LASTEXITCODE -ne 0) { throw "Python compilation failed with exit code $LASTEXITCODE." }
       - name: Test job lifecycle, Windows storage gate, and containment API
         run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py tests/backend/test_platform_storage.py tests/backend/test_job_store.py tests/backend/test_jobs_api.py -q
