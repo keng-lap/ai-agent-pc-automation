@@ -115,7 +115,6 @@ def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
         probe = """
 import errno
 import fcntl
-import os
 import sys
 
 with open(sys.argv[1], "r+b") as shm_file:
