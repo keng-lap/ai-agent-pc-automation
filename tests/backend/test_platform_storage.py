@@ -283,9 +283,10 @@ def test_windows_lease_releases_directory_handles_after_verification_failure(
         classmethod(fail_directory_verification),
     )
 
-    with pytest.raises(PlatformStorageUnavailable, match="forced verification failure"):
-        with adapter.protect_database(database):
-            pytest.fail("The protection lease must fail before SQLite is opened.")
+    with pytest.raises(
+        PlatformStorageUnavailable, match="forced verification failure"
+    ), adapter.protect_database(database):
+        pytest.fail("The protection lease must fail before SQLite is opened.")
 
     # A successful rename proves the directory and parent handles were
     # released by ExitStack on the exception path.
