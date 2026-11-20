@@ -17,6 +17,47 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $log = Join-Path $outDir ("multisession-" + $(if ($Mode -eq "VerifyReleased") { "verify" } else { $Mode.ToLowerInvariant() }) + ".log")
 
 if (-not [System.IO.Path]::IsPathRooted($DatabasePath)) { throw "DatabasePath must be absolute." }
+
+# The adapter creates the final protected state directory (DatabasePath's
+# parent). Its immediate parent and all higher ancestors must already exist
+# so the adapter can pin and validate them before creating that directory.
+$databaseDirectory = Split-Path -Parent $DatabasePath
+$requiredAncestor = Split-Path -Parent $databaseDirectory
+if ([string]::IsNullOrWhiteSpace($databaseDirectory) -or [string]::IsNullOrWhiteSpace($requiredAncestor)) {
+    throw "DatabasePath must include a dedicated state directory beneath an existing parent."
+}
+
+# Find the first existing ancestor, then reject reparse points/non-directories
+# throughout the existing chain before creating any missing intermediate path.
+$missingAncestors = @()
+$cursor = $requiredAncestor
+while ($cursor -and -not (Test-Path -LiteralPath $cursor)) {
+    $missingAncestors += $cursor
+    $parent = Split-Path -Parent $cursor
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $cursor) { break }
+    $cursor = $parent
+}
+if (-not $cursor -or -not (Test-Path -LiteralPath $cursor)) {
+    throw "Could not find an existing ancestor for the acceptance directory."
+}
+
+$existingCursor = $cursor
+while ($existingCursor) {
+    $item = Get-Item -LiteralPath $existingCursor -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "Acceptance path ancestor is not a regular directory: $existingCursor"
+    }
+    $parent = Split-Path -Parent $existingCursor
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $existingCursor) { break }
+    $existingCursor = $parent
+}
+
+# Create only missing intermediate ancestors. Do not create DatabasePath's
+# parent: WindowsSecureStorage owns creation and validation of that directory.
+[array]::Reverse($missingAncestors)
+foreach ($directory in $missingAncestors) {
+    New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
+}
 if ($Mode -eq "Hold") {
     Write-Host "SESSION A: Keep this window open. Start the probe in a distinct Windows session for the same user SID."
     Write-Host "Use the exact same repository path and DatabasePath in session B."
