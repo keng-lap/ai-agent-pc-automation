@@ -793,22 +793,37 @@ def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
             self.calls.append(args)
             return self.result
 
+    class FakeStructure:
+        def __init__(self, *values):
+            self.nLength, self.lpSecurityDescriptor, self.bInheritHandle = values
+
     create_mutex = FakeFunction(1234)
     wait_for_single_object = FakeFunction(0x00000102)  # WAIT_TIMEOUT
     release_mutex = FakeFunction(1)
     close_handle = FakeFunction(1)
+    local_free = FakeFunction(None)
+    convert = FakeFunction(1)
     kernel = SimpleNamespace(
         CreateMutexW=create_mutex,
         WaitForSingleObject=wait_for_single_object,
         ReleaseMutex=release_mutex,
         CloseHandle=close_handle,
+        LocalFree=local_free,
+    )
+    advapi = SimpleNamespace(
+        ConvertStringSecurityDescriptorToSecurityDescriptorW=convert
     )
     fake_ctypes = SimpleNamespace(
-        WinDLL=lambda *_args, **_kwargs: kernel,
-        c_void_p=object,
+        WinDLL=lambda name, **_kwargs: advapi if name == "Advapi32.dll" else kernel,
+        Structure=FakeStructure,
+        c_ulong=int,
+        c_void_p=lambda: object(),
         c_int=int,
         c_wchar_p=str,
         c_uint32=int,
+        POINTER=lambda _kind: object(),
+        byref=lambda value: ("byref", value),
+        sizeof=lambda _kind: 12,
     )
 
     class FakeFile:
@@ -837,9 +852,12 @@ def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
         pytest.fail("The mutex timeout must fail before yielding the lease.")
 
     assert wait_for_single_object.calls[0][1] == 5_000
-    assert "AgentBackend.SQLiteJobStore." in create_mutex.calls[0][2]
+    assert "Global\\AgentBackend.SQLiteJobStore." in create_mutex.calls[0][2]
+    assert "O:S-1-5-21-123D:P(A;;0x001F0001;;;S-1-5-21-123)(A;;0x001F0001;;;SY)" == convert.calls[0][0]
+    assert create_mutex.calls[0][0][1].lpSecurityDescriptor is not None
     assert close_handle.calls == [(1234,)]
     assert release_mutex.calls == []
+    assert len(local_free.calls) == 1
 
 
 @pytest.mark.parametrize(
