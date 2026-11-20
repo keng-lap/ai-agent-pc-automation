@@ -123,3 +123,8 @@ Additional native Windows tests now attempt to prove that the leased state direc
 
 
 The first Windows-native rename test showed that pinning the immediate parent with child-creation access alone did not block a rename of its child. The parent handle now also requests `FILE_DELETE_CHILD` while continuing to omit `FILE_SHARE_DELETE`; the exact-head Windows test must prove that this prevents namespace mutation for the lease lifetime. This is a targeted remediation hypothesis until the Windows runner confirms it.
+
+
+## Rename-lease CI finding and correction (2026-11-20)
+
+The exact-head Windows test showed that omitting `FILE_SHARE_DELETE` was not sufficient because the final directory handle requested metadata-only access. Windows sharing checks for rename/delete are applied when the existing directory open has a data-access right such as `FILE_LIST_DIRECTORY`; metadata-only `FILE_READ_ATTRIBUTES` does not activate that guard. The final directory handle now requests `FILE_LIST_DIRECTORY` together with `SYNCHRONIZE`, while continuing to omit `FILE_SHARE_DELETE`. The unnecessary `FILE_DELETE_CHILD` right was removed from the immediate-parent handle to preserve least privilege. This is a targeted correction; exact-head Windows CI must still prove the rename test fails as expected and the cleanup test passes.
