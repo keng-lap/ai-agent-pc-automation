@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from agent_backend.job_store import SQLiteJobStore
+from agent_backend.job_store import JobStoreUnavailable, SQLiteJobStore
 from agent_backend.platform_storage import (
     LinuxSecureStorage,
     PlatformStorageUnavailable,
     WindowsSecureStorage,
+    _WindowsDatabaseProtectionLease,
     create_platform_secure_storage,
 )
 
@@ -67,6 +68,23 @@ def test_linux_lease_rejects_unsafe_sqlite_sidecar(tmp_path):
         with pytest.raises(PlatformStorageUnavailable, match="sidecar"):
             lease.verify()
         sidecar.unlink()
+
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux pre-open sidecar validation test")
+def test_linux_adapter_rejects_preexisting_sidecar_before_sqlite_connect(tmp_path, monkeypatch):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    database.parent.mkdir(mode=0o700)
+    target = tmp_path / "target"
+    target.write_text("not a database")
+    Path(f"{database}-journal").symlink_to(target)
+
+    def unexpected_connect(*_args, **_kwargs):
+        pytest.fail("SQLite must not open when a pre-existing sidecar is unsafe")
+
+    monkeypatch.setattr("agent_backend.job_store.sqlite3.connect", unexpected_connect)
+    with pytest.raises(JobStoreUnavailable, match="sidecar"):
+        SQLiteJobStore(database, secure_storage=LinuxSecureStorage())
 
 
 
@@ -310,14 +328,93 @@ def test_windows_lease_releases_directory_handles_after_verification_failure(
         "_verify_directory",
         classmethod(fail_directory_verification),
     )
+    _ctypes, _pywintypes, _win32api, _win32con, win32file, _security = adapter._api()
+    opened_handles = []
+    closed_handles = []
+    original_create = win32file.CreateFile
+    original_close = win32file.CloseHandle
+    original_final_open = WindowsSecureStorage._create_or_open_private_directory
+
+    def track_create(*args, **kwargs):
+        handle = original_create(*args, **kwargs)
+        opened_handles.append(handle)
+        return handle
+
+    def track_close(handle):
+        closed_handles.append(handle)
+        return original_close(handle)
+
+    def track_final_open(cls, *args, **kwargs):
+        handle = original_final_open(*args, **kwargs)
+        opened_handles.append(handle)
+        return handle
+
+    monkeypatch.setattr(win32file, "CreateFile", track_create)
+    monkeypatch.setattr(win32file, "CloseHandle", track_close)
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_create_or_open_private_directory",
+        classmethod(track_final_open),
+    )
 
     with pytest.raises(
         PlatformStorageUnavailable, match="forced verification failure"
     ), adapter.protect_database(database):
         pytest.fail("The protection lease must fail before SQLite is opened.")
 
-    # A successful rename proves the directory and parent handles were
-    # released by ExitStack on the exception path.
+    assert {int(handle) for handle in opened_handles} == {
+        int(handle) for handle in closed_handles
+    }
+    # Keep the real namespace check separate: every retained directory handle
+    # must be closed and the final directory must then be renameable.
     state_directory.rename(replacement)
     assert replacement.is_dir()
 
+
+
+
+def test_windows_lease_never_changes_owner_of_untrusted_entry(monkeypatch):
+    class FakeFile:
+        @staticmethod
+        def CreateFile(*_args, **_kwargs):
+            return object()
+
+        @staticmethod
+        def GetFileInformationByHandle(_handle):
+            return (0,)
+
+        @staticmethod
+        def CloseHandle(_handle):
+            return None
+
+    class FakeDescriptor:
+        @staticmethod
+        def GetSecurityDescriptorOwner():
+            return "foreign-sid"
+
+    class FakeSecurity:
+        SE_FILE_OBJECT = 1
+        OWNER_SECURITY_INFORMATION = 1
+        DACL_SECURITY_INFORMATION = 4
+
+        @staticmethod
+        def GetSecurityInfo(_handle, _kind, _flags):
+            return FakeDescriptor()
+
+        @staticmethod
+        def SetSecurityInfo(*_args, **_kwargs):
+            pytest.fail("Verification must never repair an untrusted file owner")
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_api",
+        staticmethod(lambda: (None, None, None, None, FakeFile(), FakeSecurity())),
+    )
+    lease = _WindowsDatabaseProtectionLease(Path("C:/private/jobs.sqlite3"), "current-sid")
+    with pytest.raises(PlatformStorageUnavailable, match="owner SID"):
+        lease.verify()
+
+
+def test_windows_native_api_errors_are_recognized_for_translation():
+    NativeError = type("error", (Exception,), {"__module__": "pywintypes"})
+    assert WindowsSecureStorage._is_native_error(NativeError("failed"))
