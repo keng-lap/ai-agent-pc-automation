@@ -158,6 +158,13 @@ class WindowsSecureStorage:
     _DIRECTORY = 0x10
     _REPARSE = 0x400
     _ALL_ACCESS = 0x001F01FF
+    _FILE_ADD_SUBDIRECTORY = 0x0004
+    _FILE_CREATE = 2
+    _FILE_OPEN = 1
+    _FILE_DIRECTORY_FILE = 0x00000001
+    _FILE_SYNCHRONOUS_IO_NONALERT = 0x00000020
+    _OBJ_CASE_INSENSITIVE = 0x00000040
+    _STATUS_OBJECT_NAME_COLLISION = 0xC0000035
     _OI = 0x01
     _CI = 0x02
     _INHERITED = 0x10
@@ -245,11 +252,40 @@ class WindowsSecureStorage:
             )
 
     @classmethod
-    def _create_private_directory(cls, path: Path, sid) -> bool:
-        """Atomically create the state directory with its final owner-only DACL."""
+    def _create_or_open_private_directory(cls, parent_handle, name: str, sid):
+        """Create/open the exact child relative to a pinned parent handle.
+
+        NtCreateFile returns the handle to the object created/opened in the
+        same operation. This avoids the CreateDirectoryW-then-open-by-path
+        namespace gap in which a child entry could otherwise be substituted.
+        """
         ctypes, _pywintypes, _api, _con, _file, security = cls._api()
-        kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        ntdll = ctypes.WinDLL("ntdll.dll")
         advapi = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
+        kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+
+        class UnicodeString(ctypes.Structure):
+            _fields_ = [
+                ("Length", ctypes.c_ushort),
+                ("MaximumLength", ctypes.c_ushort),
+                ("Buffer", ctypes.c_wchar_p),
+            ]
+
+        class ObjectAttributes(ctypes.Structure):
+            _fields_ = [
+                ("Length", ctypes.c_ulong),
+                ("RootDirectory", ctypes.c_void_p),
+                ("ObjectName", ctypes.POINTER(UnicodeString)),
+                ("Attributes", ctypes.c_ulong),
+                ("SecurityDescriptor", ctypes.c_void_p),
+                ("SecurityQualityOfService", ctypes.c_void_p),
+            ]
+
+        class IoStatusBlock(ctypes.Structure):
+            _fields_ = [
+                ("Status", ctypes.c_void_p),
+                ("Information", ctypes.c_size_t),
+            ]
 
         sid_text = security.ConvertSidToStringSid(sid)
         sddl = f"O:{sid_text}D:P(A;OICI;0x001F01FF;;;{sid_text})"
@@ -265,28 +301,65 @@ class WindowsSecureStorage:
                 "Secure Windows SQLite directory security descriptor could not be created."
             )
 
-        class SecurityAttributes(ctypes.Structure):
-            _fields_: ClassVar[list[tuple[str, object]]] = [
-                ("nLength", ctypes.c_uint32),
-                ("lpSecurityDescriptor", ctypes.c_void_p),
-                ("bInheritHandle", ctypes.c_int),
-            ]
-
-        attributes = SecurityAttributes(
-            ctypes.sizeof(SecurityAttributes), descriptor, 0
+        name_buffer = ctypes.create_unicode_buffer(name)
+        object_name = UnicodeString(
+            len(name.encode("utf-16-le")),
+            len(name.encode("utf-16-le")) + 2,
+            ctypes.cast(name_buffer, ctypes.c_wchar_p),
         )
-        create_directory = kernel.CreateDirectoryW
-        create_directory.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(SecurityAttributes)]
-        create_directory.restype = ctypes.c_int
+        attributes = ObjectAttributes(
+            ctypes.sizeof(ObjectAttributes),
+            parent_handle,
+            ctypes.pointer(object_name),
+            cls._OBJ_CASE_INSENSITIVE,
+            descriptor,
+            None,
+        )
+        io_status = IoStatusBlock()
+        result_handle = ctypes.c_void_p()
+        nt_create_file = ntdll.NtCreateFile
+        nt_create_file.argtypes = [
+            ctypes.POINTER(ctypes.c_void_p), ctypes.c_uint32,
+            ctypes.POINTER(ObjectAttributes), ctypes.POINTER(IoStatusBlock),
+            ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32,
+            ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+        ]
+        nt_create_file.restype = ctypes.c_long
+        desired_access = cls._READ_ATTRIBUTES | cls._READ_CONTROL | 0x00100000
+        share_access = cls._SHARE_READ | cls._SHARE_WRITE
+        create_options = (
+            cls._FILE_DIRECTORY_FILE
+            | cls._FILE_OPEN_REPARSE_POINT
+            | cls._FILE_SYNCHRONOUS_IO_NONALERT
+        )
         try:
-            if create_directory(str(path), ctypes.byref(attributes)):
-                return True
-            error = ctypes.get_last_error()
-            if error == 183:  # ERROR_ALREADY_EXISTS: verify, never rewrite.
-                return False
-            raise PlatformStorageUnavailable(
-                "Windows SQLite state directory could not be created securely."
+            status = nt_create_file(
+                ctypes.byref(result_handle), desired_access,
+                ctypes.byref(attributes), ctypes.byref(io_status),
+                None, 0x10, share_access, cls._FILE_CREATE,
+                create_options, None, 0,
             )
+            if status < 0:
+                unsigned_status = status & 0xFFFFFFFF
+                if unsigned_status != cls._STATUS_OBJECT_NAME_COLLISION:
+                    raise PlatformStorageUnavailable(
+                        "Windows SQLite state directory could not be created securely."
+                    )
+                # Another initializer may have won the create race. Open the
+                # existing child relative to the same pinned parent and verify
+                # its descriptor; never repair or replace it.
+                attributes.SecurityDescriptor = None
+                status = nt_create_file(
+                    ctypes.byref(result_handle), desired_access,
+                    ctypes.byref(attributes), ctypes.byref(io_status),
+                    None, 0, share_access, cls._FILE_OPEN,
+                    create_options, None, 0,
+                )
+                if status < 0:
+                    raise PlatformStorageUnavailable(
+                        "Existing Windows SQLite state directory could not be opened safely."
+                    )
+            return result_handle
         finally:
             kernel.LocalFree.argtypes = [ctypes.c_void_p]
             kernel.LocalFree.restype = ctypes.c_void_p
@@ -341,22 +414,24 @@ class WindowsSecureStorage:
                 stack.callback(file.CloseHandle, handle)
                 self._check_type(handle, True)
 
-            # Create with the final protected owner-only DACL in the
-            # CreateDirectoryW call itself. Existing directories are never
-            # re-permissioned; they must already satisfy the exact policy.
-            self._create_private_directory(path.parent, sid)
-            try:
-                directory_handle = file.CreateFile(
-                    str(path.parent),
-                    self._READ_ATTRIBUTES | self._READ_CONTROL,
-                    self._SHARE_READ | self._SHARE_WRITE,
-                    None, self._OPEN_EXISTING,
-                    self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
-                )
-            except pywintypes.error:
-                raise PlatformStorageUnavailable(
-                    "Windows SQLite state directory could not be pinned safely."
-                ) from None
+            # Open and pin the immediate parent with child-creation rights.
+            # Its ancestors are already pinned above, so its namespace cannot
+            # be renamed while the child is created relative to this handle.
+            parent_handle = file.CreateFile(
+                str(path.parent.parent),
+                self._READ_ATTRIBUTES | self._READ_CONTROL | self._FILE_ADD_SUBDIRECTORY,
+                self._SHARE_READ | self._SHARE_WRITE,
+                None, self._OPEN_EXISTING,
+                self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
+            )
+            stack.callback(file.CloseHandle, parent_handle)
+            self._check_type(parent_handle, True)
+
+            # NtCreateFile creates or opens the final child relative to the
+            # pinned parent and returns that exact directory handle atomically.
+            directory_handle = self._create_or_open_private_directory(
+                parent_handle, path.parent.name, sid
+            )
             stack.callback(file.CloseHandle, directory_handle)
             self._check_type(directory_handle, True)
             self._verify_directory(directory_handle, sid)
