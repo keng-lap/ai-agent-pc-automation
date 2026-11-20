@@ -13,6 +13,7 @@ from agent_backend.job_store import JobStoreUnavailable, SQLiteJobStore
 from agent_backend.platform_storage import (
     LinuxSecureStorage,
     PlatformStorageUnavailable,
+    _LinuxDatabaseProtectionLease,
     WindowsSecureStorage,
     _WindowsDatabaseProtectionLease,
     create_platform_secure_storage,
