@@ -11,8 +11,15 @@ on:
       - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/agent_backend/process_containment.py"
       - "src/backend/agent_backend/job_lifecycle.py"
+      - "src/backend/agent_backend/platform_storage.py"
+      - "src/backend/agent_backend/job_store.py"
+      - "src/backend/agent_backend/jobs_api.py"
       - "tests/backend/test_job_lifecycle.py"
+      - "tests/backend/test_platform_storage.py"
+      - "tests/backend/test_job_store.py"
+      - "tests/backend/test_jobs_api.py"
       - "tests/backend/test_process_containment.py"
+      - "scripts/acceptance/P6-609-B2/**"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
   push:
@@ -27,8 +34,15 @@ on:
       - "tests/backend/test_windows_secret_storage.py"
       - "src/backend/agent_backend/process_containment.py"
       - "src/backend/agent_backend/job_lifecycle.py"
+      - "src/backend/agent_backend/platform_storage.py"
+      - "src/backend/agent_backend/job_store.py"
+      - "src/backend/agent_backend/jobs_api.py"
       - "tests/backend/test_job_lifecycle.py"
+      - "tests/backend/test_platform_storage.py"
+      - "tests/backend/test_job_store.py"
+      - "tests/backend/test_jobs_api.py"
       - "tests/backend/test_process_containment.py"
+      - "scripts/acceptance/P6-609-B2/**"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
 
@@ -50,5 +64,27 @@ jobs:
         run: python -m pip install -e "src/backend[dev]"
       - name: Test Windows authenticator storage and DPAPI
         run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_auth_api.py tests/backend/test_windows_secret_storage.py -q
-      - name: Test job lifecycle and Windows containment API
-        run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py -q
+      - name: Validate B2 Windows acceptance scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem 'scripts/acceptance/P6-609-B2' -Filter '*.ps1' | Sort-Object FullName
+          if (-not $files) { throw 'No B2 PowerShell acceptance scripts were found.' }
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName, [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+            }
+          }
+          python -m ruff check scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
+          if ($LASTEXITCODE -ne 0) { throw "Ruff failed with exit code $LASTEXITCODE." }
+          python scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py --help
+          if ($LASTEXITCODE -ne 0) { throw "Mutex probe CLI smoke test failed with exit code $LASTEXITCODE." }
+          python -m py_compile scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
+          if ($LASTEXITCODE -ne 0) { throw "Python compilation failed with exit code $LASTEXITCODE." }
+      - name: Test job lifecycle, Windows storage gate, and containment API
+        run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py tests/backend/test_platform_storage.py tests/backend/test_job_store.py tests/backend/test_jobs_api.py -q

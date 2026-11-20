@@ -11,7 +11,8 @@ import secrets
 import sqlite3
 import threading
 import uuid
-from contextlib import closing
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,20 @@ class JobStoreUnavailable(RuntimeError):
 
 class JobStoreConflict(RuntimeError):
     """An idempotency key or lifecycle transition conflicts with existing data."""
+
+
+class JobStoreCommittedButUnverified(RuntimeError):
+    """A write committed, but the storage lease could not verify it afterward."""
+
+    def __init__(self, job_id: str, committed_version: int) -> None:
+        self.job_id = job_id
+        self.committed_version = committed_version
+        super().__init__(
+            "Job write committed but storage verification failed; after storage is "
+            "trusted again, call get_persisted_version_for_owner(job_id, owner_id) "
+            "and compare it with committed_version before reconciling current state; "
+            "do not retry blindly."
+        )
 
 
 def _utc_text(value: datetime | None = None) -> str:
@@ -63,6 +78,7 @@ class SQLiteJobStore:
     Filesystem protection is delegated to a platform adapter. Linux is the
     only enabled platform; Windows and macOS remain fail-closed until their
     native security adapters are implemented and independently reviewed.
+    Every SQLite connection is enclosed by a platform protection lease.
     """
 
     def __init__(self, path: Path | str, *, clock=None, secure_storage=None) -> None:
@@ -72,29 +88,46 @@ class SQLiteJobStore:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._lock = threading.RLock()
         self._secure_storage = secure_storage or create_platform_secure_storage()
-        try:
-            self._secure_storage.prepare_database_path(self.path)
-        except PlatformStorageUnavailable as exc:
-            raise JobStoreUnavailable(str(exc)) from None
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
-            self.path,
-            timeout=5.0,
-            isolation_level=None,
-            check_same_thread=False,
-        )
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
-        connection.execute("PRAGMA synchronous = FULL")
-        return connection
+    @contextmanager
+    def _connection(self, *, require_wal: bool = True) -> Iterator[sqlite3.Connection]:
+        """Keep the protection lease alive and reject replacement databases outside WAL."""
+        try:
+            with self._secure_storage.protect_database(self.path) as lease:
+                connection = sqlite3.connect(
+                    self.path,
+                    timeout=5.0,
+                    isolation_level=None,
+                    check_same_thread=False,
+                )
+                try:
+                    connection.row_factory = sqlite3.Row
+                    connection.execute("PRAGMA foreign_keys = ON")
+                    connection.execute("PRAGMA busy_timeout = 5000")
+                    connection.execute("PRAGMA synchronous = FULL")
+                    if require_wal:
+                        journal_mode = connection.execute("PRAGMA journal_mode").fetchone()
+                        if not journal_mode or str(journal_mode[0]).lower() != "wal":
+                            raise JobStoreUnavailable(
+                                "Job-store database is not in the required WAL mode."
+                            )
+                    lease.verify()
+                    yield connection
+                    lease.verify()
+                finally:
+                    connection.close()
+        except PlatformStorageUnavailable as exc:
+            raise JobStoreUnavailable(str(exc)) from None
 
     def _initialize(self) -> None:
         try:
-            with self._lock, closing(self._connect()) as connection:
-                connection.execute("PRAGMA journal_mode = WAL")
+            with self._lock, self._connection(require_wal=False) as connection:
+                journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()
+                if not journal_mode or str(journal_mode[0]).lower() != "wal":
+                    raise JobStoreUnavailable(
+                        "Job-store database could not enter required WAL mode."
+                    )
                 connection.executescript(
                     """
                     CREATE TABLE IF NOT EXISTS job_records (
@@ -134,7 +167,6 @@ class SQLiteJobStore:
                     PRAGMA user_version = 1;
                     """
                 )
-            self._secure_storage.finalize_database_file(self.path)
         except JobStoreUnavailable:
             raise
         except PlatformStorageUnavailable as exc:
@@ -163,7 +195,7 @@ class SQLiteJobStore:
         timestamp = _utc_text(now or self._clock())
         job_id = str(uuid.uuid4())
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 existing = connection.execute(
                     "SELECT * FROM job_records WHERE owner_id=? AND idempotency_key=?",
@@ -201,7 +233,7 @@ class SQLiteJobStore:
     def get_for_owner(self, job_id: str, owner_id: str) -> dict[str, Any]:
         self._validate_identity(owner_id, "owner_id")
         try:
-            with closing(self._connect()) as connection:
+            with self._connection() as connection:
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
                     (job_id, owner_id),
@@ -214,12 +246,29 @@ class SQLiteJobStore:
         except (sqlite3.Error, OSError):
             raise JobStoreUnavailable("Job history could not be read.") from None
 
+    def get_persisted_version_for_owner(self, job_id: str, owner_id: str) -> int:
+        """Return the owner-scoped row version for committed-write reconciliation."""
+        self._validate_identity(owner_id, "owner_id")
+        try:
+            with self._connection() as connection:
+                row = connection.execute(
+                    "SELECT version FROM job_records WHERE job_id=? AND owner_id=?",
+                    (job_id, owner_id),
+                ).fetchone()
+                if row is None:
+                    raise JobLifecycleError("job not found")
+                return int(row["version"])
+        except JobLifecycleError:
+            raise
+        except (sqlite3.Error, OSError):
+            raise JobStoreUnavailable("Job version could not be read.") from None
+
     def list_for_owner(self, owner_id: str, *, limit: int = 25) -> list[dict[str, Any]]:
         self._validate_identity(owner_id, "owner_id")
         if type(limit) is not int or not 1 <= limit <= MAX_JOBS_PER_QUERY:
             raise ValueError("limit must be between 1 and 25")
         try:
-            with closing(self._connect()) as connection:
+            with self._connection() as connection:
                 rows = connection.execute(
                     """
                     SELECT * FROM job_records
@@ -247,8 +296,9 @@ class SQLiteJobStore:
         if level not in _VALID_LEVELS:
             raise ValueError("invalid event level")
         timestamp = _utc_text(now or self._clock())
+        committed = False
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
@@ -274,10 +324,17 @@ class SQLiteJobStore:
                     (job_id, timestamp, row["state"], level, safe_message),
                 )
                 connection.commit()
+                committed = True
                 return self.get_for_owner(job_id, owner_id)
         except (JobLifecycleError, JobStoreConflict):
             raise
-        except (sqlite3.Error, OSError):
+        except JobStoreUnavailable as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
+            raise
+        except (sqlite3.Error, OSError) as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
             raise JobStoreUnavailable("Job progress could not be persisted.") from None
 
     def transition(
@@ -305,8 +362,9 @@ class SQLiteJobStore:
         if type(reboot_required) is not bool:
             raise ValueError("reboot_required must be boolean")
         timestamp = _utc_text(now or self._clock())
+        committed = False
         try:
-            with self._lock, closing(self._connect()) as connection:
+            with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT * FROM job_records WHERE job_id=? AND owner_id=?",
@@ -344,10 +402,17 @@ class SQLiteJobStore:
                     (job_id, timestamp, target.value, level, safe_message),
                 )
                 connection.commit()
+                committed = True
                 return self.get_for_owner(job_id, owner_id)
         except (JobLifecycleError, JobStoreConflict):
             raise
-        except (sqlite3.Error, OSError):
+        except JobStoreUnavailable as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
+            raise
+        except (sqlite3.Error, OSError) as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
             raise JobStoreUnavailable("Job transition could not be persisted.") from None
 
     @staticmethod

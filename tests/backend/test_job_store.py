@@ -1,24 +1,45 @@
+import sqlite3
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from agent_backend.job_lifecycle import JobLifecycleError, JobState
-from agent_backend.job_store import JobStoreConflict, SQLiteJobStore
+from agent_backend.job_store import (
+    JobStoreCommittedButUnverified,
+    JobStoreConflict,
+    JobStoreUnavailable,
+    SQLiteJobStore,
+)
+from agent_backend.platform_storage import PlatformStorageUnavailable
 
 NOW = datetime(2026, 11, 13, 10, 0, tzinfo=UTC)
 OWNER = "google-owner-sub"
 DIGEST = "a" * 64
 
 
+class _TestProtectionLease:
+    def __init__(self, path):
+        self.path = path
+
+    def verify(self):
+        if not self.path.is_file():
+            raise AssertionError("test database was not created")
+
+
 class _TestSecureStorage:
     """Test-only adapter; filesystem security is covered by platform adapter tests."""
 
-    def prepare_database_path(self, path):
-        path.parent.mkdir(parents=True, exist_ok=True)
+    from contextlib import contextmanager
 
-    def finalize_database_file(self, path):
-        if not path.is_file():
-            raise AssertionError("test database was not created")
+    @contextmanager
+    def protect_database(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lease = _TestProtectionLease(path)
+        try:
+            yield lease
+        finally:
+            lease.verify()
 
 
 def make_store(tmp_path):
@@ -234,3 +255,180 @@ def test_durable_job_store_allows_cancelled_process_to_finish_verification(tmp_p
         now=NOW + timedelta(seconds=4),
     )
     assert verifying["state"] == JobState.VERIFYING.value
+
+
+
+def test_connection_closes_before_protection_lease_is_released(tmp_path, monkeypatch):
+    store = make_store(tmp_path)
+    events = []
+    original_connect = sqlite3.connect
+
+    class TrackingConnection(sqlite3.Connection):
+        def close(self):
+            events.append("connection-close")
+            super().close()
+
+    class RecordingStorage:
+        @contextmanager
+        def protect_database(self, path):
+            events.append("lease-enter")
+
+            class Lease:
+                def verify(self):
+                    events.append("lease-verify")
+
+            try:
+                yield Lease()
+            finally:
+                events.append("lease-exit")
+
+    monkeypatch.setattr(store, "_secure_storage", RecordingStorage())
+    def tracked_connect(*args, **kwargs):
+        events.append("connection-open")
+        return original_connect(*args, factory=TrackingConnection, **kwargs)
+
+    monkeypatch.setattr(
+        "agent_backend.job_store.sqlite3.connect",
+        tracked_connect,
+    )
+
+    with store._connection():
+        events.append("connection-in-use")
+
+    assert events == [
+        "lease-enter",
+        "connection-open",
+        "lease-verify",
+        "connection-in-use",
+        "lease-verify",
+        "connection-close",
+        "lease-exit",
+    ]
+
+
+
+def test_initialization_fails_closed_when_sqlite_cannot_enable_wal(tmp_path, monkeypatch):
+    original_connect = sqlite3.connect
+
+    class FakeCursor:
+        @staticmethod
+        def fetchone():
+            return ("delete",)
+
+    class ConnectionProxy:
+        def __init__(self, *args, **kwargs):
+            self._connection = original_connect(*args, **kwargs)
+
+        @property
+        def row_factory(self):
+            return self._connection.row_factory
+
+        @row_factory.setter
+        def row_factory(self, value):
+            self._connection.row_factory = value
+
+        def execute(self, sql, *args):
+            if sql.strip().upper() == "PRAGMA JOURNAL_MODE = WAL":
+                return FakeCursor()
+            return self._connection.execute(sql, *args)
+
+        def executescript(self, sql):
+            return self._connection.executescript(sql)
+
+        def close(self):
+            self._connection.close()
+
+    monkeypatch.setattr(
+        "agent_backend.job_store.sqlite3.connect",
+        lambda *args, **kwargs: ConnectionProxy(*args, **kwargs),
+    )
+    with pytest.raises(JobStoreUnavailable, match="WAL mode"):
+        SQLiteJobStore(
+            tmp_path / "private-state" / "jobs.sqlite3",
+            secure_storage=_TestSecureStorage(),
+        )
+
+
+
+
+
+def test_existing_store_rejects_database_replaced_with_non_wal_mode(tmp_path):
+    store = make_store(tmp_path)
+    job = store.create(
+        owner_id=OWNER,
+        tool_id="software.install",
+        action_digest=DIGEST,
+        idempotency_key="replace-journal-mode",
+    )
+
+    connection = sqlite3.connect(store.path)
+    try:
+        mode = connection.execute("PRAGMA journal_mode = DELETE").fetchone()
+        assert mode and mode[0].lower() == "delete"
+    finally:
+        connection.close()
+
+    with pytest.raises(JobStoreUnavailable, match="required WAL mode"):
+        store.get_for_owner(job["job_id"], OWNER)
+
+
+@pytest.mark.parametrize("operation", ["progress", "transition"])
+def test_committed_write_reports_unverified_outcome(tmp_path, operation):
+    store = make_store(tmp_path)
+    job = store.create(
+        owner_id=OWNER,
+        tool_id="software.install",
+        action_digest=DIGEST,
+        idempotency_key=f"committed-unverified-{operation}",
+    )
+
+    class FailOnOuterLeaseExit:
+        def __init__(self):
+            self.verifications = 0
+
+        @contextmanager
+        def protect_database(self, path):
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            class Lease:
+                def verify(inner_self):
+                    self.verifications += 1
+                    if self.verifications == 4:
+                        raise PlatformStorageUnavailable("forced post-commit verification failure")
+
+            yield Lease()
+
+    store._secure_storage = FailOnOuterLeaseExit()
+    with pytest.raises(JobStoreCommittedButUnverified) as raised:
+        if operation == "progress":
+            store.update_progress(
+                job["job_id"],
+                owner_id=OWNER,
+                expected_version=0,
+                message="Committed progress",
+            )
+        else:
+            store.transition(
+                job["job_id"],
+                owner_id=OWNER,
+                expected_version=0,
+                target=JobState.STARTING,
+                message="Committed transition",
+            )
+
+    assert raised.value.job_id == job["job_id"]
+    assert raised.value.committed_version == 1
+
+    # Reconcile only after the trusted storage adapter is restored.
+    store._secure_storage = _TestSecureStorage()
+    recovered = store.get_for_owner(job["job_id"], OWNER)
+    assert (
+        store.get_persisted_version_for_owner(job["job_id"], OWNER)
+        == raised.value.committed_version
+    )
+    with pytest.raises(JobLifecycleError, match="job not found"):
+        store.get_persisted_version_for_owner(job["job_id"], "different-owner")
+    if operation == "progress":
+        assert recovered["progress_message"] == "Committed progress"
+    else:
+        assert recovered["state"] == JobState.STARTING.value

@@ -16,15 +16,28 @@ HEADERS = {
 OWNER = "google-owner-sub"
 
 
+class _TestProtectionLease:
+    def __init__(self, path):
+        self.path = path
+
+    def verify(self):
+        if not self.path.is_file():
+            raise AssertionError("test database was not created")
+
+
 class _TestSecureStorage:
     """Test-only adapter; production platform gates remain unchanged."""
 
-    def prepare_database_path(self, path):
-        path.parent.mkdir(parents=True, exist_ok=True)
+    from contextlib import contextmanager
 
-    def finalize_database_file(self, path):
-        if not path.is_file():
-            raise AssertionError("test database was not created")
+    @contextmanager
+    def protect_database(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lease = _TestProtectionLease(path)
+        try:
+            yield lease
+        finally:
+            lease.verify()
 
 
 def build_client(tmp_path, *, authenticated=True):
