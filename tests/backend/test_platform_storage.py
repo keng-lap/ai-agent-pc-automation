@@ -442,7 +442,7 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
 
     original_create_or_open = WindowsSecureStorage._create_or_open_private_file
 
-    def pause_after_first_database_creation(cls, path, sid):
+    def pause_after_first_database_creation(_cls, path, sid):
         original_create_or_open(path, sid)
         if path == database:
             first_created_database.set()
