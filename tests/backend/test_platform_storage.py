@@ -1,4 +1,5 @@
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 import stat
 import sys
 from pathlib import Path
@@ -250,6 +251,33 @@ def test_windows_job_store_persists_across_real_store_reopen(tmp_path):
     assert recovered["job_id"] == created["job_id"]
     assert recovered["state"] == created["state"] == "QUEUED"
     assert recovered["recent_events"][0]["message"] == "Job accepted into the local queue"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native concurrent SQLite integration test")
+def test_windows_job_store_concurrent_instances_share_durable_database(tmp_path):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    first = SQLiteJobStore(database, secure_storage=WindowsSecureStorage())
+    second = SQLiteJobStore(database, secure_storage=WindowsSecureStorage())
+
+    def create_job(index: int):
+        store = first if index % 2 == 0 else second
+        return store.create(
+            owner_id="windows-concurrent-owner",
+            tool_id="software.install",
+            action_digest=f"{index:064x}",
+            idempotency_key=f"windows-concurrent-{index}",
+        )
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        created = list(executor.map(create_job, range(12)))
+
+    assert len({job["job_id"] for job in created}) == 12
+    recovered = first.list_for_owner("windows-concurrent-owner", limit=25)
+    assert len(recovered) == 12
+    assert {job["job_id"] for job in recovered} == {
+        job["job_id"] for job in created
+    }
+
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native handle-lifetime integration test")
 def test_windows_lease_prevents_state_directory_rename_while_held(tmp_path):
