@@ -500,8 +500,7 @@ def test_windows_native_api_errors_are_recognized_for_translation():
 def test_windows_named_mutex_serializes_long_and_short_path_aliases(
     tmp_path, monkeypatch
 ):
-    import ctypes
-
+    ctypes = WindowsSecureStorage._api()[0]
     kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
     get_short_path = kernel.GetShortPathNameW
     get_short_path.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
