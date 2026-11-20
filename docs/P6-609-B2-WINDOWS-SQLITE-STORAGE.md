@@ -139,3 +139,8 @@ Exact PR head: `ed89fe06e7e47f9beb4493406194332fd0748e84`.
 - The rename-lease regression and exception-path handle-cleanup regression are included in that exact-head Windows job.
 
 This closes the CI validation requirement for this revision only. It does not grant independent security approval or Windows 11 Home target-machine acceptance. The broader acceptance matrix (including wrong-owner/broad-DACL database and sidecar fixtures, reparse-point database/sidecar fixtures, concurrent store instances, and explicit no-fallback tests) remains to be completed. Windows storage remains fail-closed; this PR remains Draft.
+
+
+## Concurrent store-instance regression (2026-11-20)
+
+Added a Windows-native integration test that opens two independent `SQLiteJobStore` instances against the same protected NTFS database, submits twelve writes concurrently through both instances, and verifies that all committed jobs are recoverable. This extends the Windows acceptance coverage for concurrent store instances and SQLite locking. The test must pass on the exact PR head; it does not replace the remaining wrong-owner/broad-DACL and reparse-point database/sidecar fixtures.
