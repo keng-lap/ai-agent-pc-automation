@@ -452,3 +452,30 @@ def test_windows_named_mutex_serializes_same_database_leases(tmp_path):
         second.result(timeout=5)
 
     assert second_acquired.is_set()
+
+
+
+def test_windows_adapter_translates_native_api_error_to_store_error(
+    tmp_path, monkeypatch
+):
+    NativeError = type("error", (Exception,), {"__module__": "pywintypes"})
+
+    @contextmanager
+    def fail_during_native_acquisition(_path):
+        raise NativeError("native API failure")
+        yield
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_protect_database",
+        classmethod(lambda _cls, path: fail_during_native_acquisition(path)),
+    )
+    store = SQLiteJobStore(
+        tmp_path / "private-state" / "jobs.sqlite3",
+        secure_storage=LinuxSecureStorage(),
+    )
+    store._secure_storage = WindowsSecureStorage()
+
+    with pytest.raises(JobStoreUnavailable, match="Windows security APIs failed"):
+        with store._connection():
+            pytest.fail("The native acquisition error must fail before SQLite opens.")
