@@ -429,11 +429,30 @@ def test_windows_native_api_errors_are_recognized_for_translation():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows named-mutex integration test")
-def test_windows_named_mutex_serializes_same_database_leases(tmp_path):
+def test_windows_named_mutex_serializes_same_database_file_creation(
+    tmp_path, monkeypatch
+):
     database = tmp_path / "private-state" / "jobs.sqlite3"
+    first_created_database = threading.Event()
+    continue_first_creation = threading.Event()
     first_acquired = threading.Event()
     release_first = threading.Event()
+    second_started = threading.Event()
     second_acquired = threading.Event()
+
+    original_create_or_open = WindowsSecureStorage._create_or_open_private_file
+
+    def pause_after_first_database_creation(cls, path, sid):
+        original_create_or_open(path, sid)
+        if path == database:
+            first_created_database.set()
+            assert continue_first_creation.wait(timeout=5)
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_create_or_open_private_file",
+        classmethod(pause_after_first_database_creation),
+    )
 
     def hold_first_lease():
         with WindowsSecureStorage().protect_database(database):
@@ -441,16 +460,24 @@ def test_windows_named_mutex_serializes_same_database_leases(tmp_path):
             assert release_first.wait(timeout=5)
 
     def acquire_second_lease():
+        second_started.set()
         with WindowsSecureStorage().protect_database(database):
             second_acquired.set()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         first = executor.submit(hold_first_lease)
-        assert first_acquired.wait(timeout=5)
+        assert first_created_database.wait(timeout=5)
         second = executor.submit(acquire_second_lease)
         try:
-            # The second adapter must wait while the first owns the per-path
-            # mutex; it cannot snapshot or verify the same SQLite file set yet.
+            assert second_started.wait(timeout=5)
+            # Pause A after it created the main database but before it has
+            # finished creating/verifying the complete SQLite file set.
+            assert not second_acquired.wait(timeout=0.2)
+        finally:
+            continue_first_creation.set()
+        assert first_acquired.wait(timeout=5)
+        try:
+            # B remains excluded while A holds the successful protection lease.
             assert not second_acquired.wait(timeout=0.2)
         finally:
             release_first.set()
