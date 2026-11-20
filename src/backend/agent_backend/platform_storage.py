@@ -13,7 +13,7 @@ import stat
 import sys
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
@@ -266,7 +266,7 @@ class WindowsSecureStorage:
             )
 
         class SecurityAttributes(ctypes.Structure):
-            _fields_ = [
+            _fields_: ClassVar[list[tuple[str, object]]] = [
                 ("nLength", ctypes.c_uint32),
                 ("lpSecurityDescriptor", ctypes.c_void_p),
                 ("bInheritHandle", ctypes.c_int),
