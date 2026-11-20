@@ -42,7 +42,8 @@ def main() -> int:
     adapter = WindowsSecureStorage()
     sid_text = adapter._api()[5].ConvertSidToStringSid(adapter._sid())
     sid_fingerprint = hashlib.sha256(sid_text.encode("utf-8")).hexdigest()[:16]
-    timestamp = lambda: datetime.now(timezone.utc).isoformat()
+    def timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat()
     if args.mode == "hold":
         try:
             with adapter.protect_database(database):
