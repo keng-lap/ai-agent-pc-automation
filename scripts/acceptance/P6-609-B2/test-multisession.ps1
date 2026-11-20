@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)][ValidateSet("Hold","Probe")][string]$Mode,
+    [Parameter(Mandatory=$true)][ValidateSet("Hold","Probe","VerifyReleased")][string]$Mode,
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
     [string]$DatabasePath = (Join-Path $env:LOCALAPPDATA "AI-Agent-PC-Automation\B2-Acceptance\jobs.sqlite3"),
     [int]$HoldSeconds = 90
@@ -14,7 +14,7 @@ $python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 $helper = Join-Path $PSScriptRoot "windows_b2_mutex_probe.py"
 $outDir = Join-Path $RepoRoot "artifacts\P6-609-B2"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-$log = Join-Path $outDir ("multisession-" + $Mode.ToLowerInvariant() + ".log")
+$log = Join-Path $outDir ("multisession-" + $(if ($Mode -eq "VerifyReleased") { "verify" } else { $Mode.ToLowerInvariant() }) + ".log")
 
 if (-not [System.IO.Path]::IsPathRooted($DatabasePath)) { throw "DatabasePath must be absolute." }
 if ($Mode -eq "Hold") {
