@@ -454,9 +454,17 @@ class WindowsSecureStorage:
             acquired = True
             yield
         finally:
-            if acquired:
-                release_mutex(handle)
-            close_handle(handle)
+            release_succeeded = True
+            close_succeeded = True
+            try:
+                if acquired:
+                    release_succeeded = bool(release_mutex(handle))
+            finally:
+                close_succeeded = bool(close_handle(handle))
+            if not release_succeeded or not close_succeeded:
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite initialization mutex could not be released safely."
+                )
 
     @staticmethod
     def _is_native_error(exc: Exception) -> bool:
