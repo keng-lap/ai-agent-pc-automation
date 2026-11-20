@@ -160,7 +160,7 @@ class WindowsSecureStorage:
     _REPARSE = 0x400
     _ALL_ACCESS = 0x001F01FF
     _FILE_ADD_SUBDIRECTORY = 0x0004
-    _FILE_DELETE_CHILD = 0x0040
+    _FILE_LIST_DIRECTORY = 0x0001
     _FILE_CREATE = 2
     _FILE_OPEN = 1
     _FILE_DIRECTORY_FILE = 0x00000001
@@ -327,7 +327,14 @@ class WindowsSecureStorage:
             ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
         ]
         nt_create_file.restype = ctypes.c_long
-        desired_access = cls._READ_ATTRIBUTES | cls._READ_CONTROL | 0x00100000
+        # FILE_LIST_DIRECTORY is a data-access bit: without it, Windows does
+        # not apply the no-FILE_SHARE_DELETE guard to directory rename opens.
+        desired_access = (
+            cls._READ_ATTRIBUTES
+            | cls._READ_CONTROL
+            | cls._FILE_LIST_DIRECTORY
+            | 0x00100000  # SYNCHRONIZE
+        )
         share_access = cls._SHARE_READ | cls._SHARE_WRITE
         create_options = (
             cls._FILE_DIRECTORY_FILE
@@ -424,8 +431,7 @@ class WindowsSecureStorage:
                     str(path.parent.parent),
                     self._READ_ATTRIBUTES
                     | self._READ_CONTROL
-                    | self._FILE_ADD_SUBDIRECTORY
-                    | self._FILE_DELETE_CHILD,
+                    | self._FILE_ADD_SUBDIRECTORY,
                     self._SHARE_READ | self._SHARE_WRITE,
                     None, self._OPEN_EXISTING,
                     self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
