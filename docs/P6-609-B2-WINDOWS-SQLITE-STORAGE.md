@@ -100,7 +100,7 @@ This slice does not implement durable approval, TOTP integration, execution audi
 
 The first independent review identified four blocking concerns. The current implementation addresses them as follows, but this is not a final approval:
 
-- **First-run ACL window:** new directories are created with a protected owner-only security descriptor supplied to `CreateDirectoryW`; owner/DACL are then verified from the opened handle.
+- **First-run ACL window:** new directories are created relative to a pinned parent with `NtCreateFile`; the protected owner-only security descriptor is supplied in that same native call, and the returned handle is verified directly.
 - **Existing directory mutation:** existing directories are never re-permissioned. They must already have the exact protected owner-only ACL or initialization fails closed.
 - **Mapped/network drives:** `GetDriveTypeW` must report `DRIVE_FIXED`; mapped network and removable volumes are rejected.
 - **Reparse points:** every reparse point is rejected until a specific provider/tag is separately reviewed and allow-listed.
@@ -112,7 +112,7 @@ Windows storage remains disabled in the production factory. The new Windows regr
 
 The final state-directory operation no longer uses a path-based CreateDirectoryW followed by a separate path-based open. The adapter now:
 
-1. Pins the final directory's immediate parent with child-creation rights and without FILE_SHARE_DELETE.
+1. Pins the final directory's immediate parent with `FILE_ADD_SUBDIRECTORY` and without `FILE_SHARE_DELETE`; it does not request `FILE_DELETE_CHILD`.
 2. Creates the child relative to that pinned parent using NtCreateFile, supplying the protected owner-only security descriptor in the same call.
 3. Retains the handle returned by NtCreateFile (or opens the pre-existing child relative to the same parent after a create collision) and verifies that exact handle before SQLite is allowed to open the database.
 
@@ -122,12 +122,12 @@ This is intended to bind creation/open and verification to the same directory ob
 Additional native Windows tests now attempt to prove that the leased state directory cannot be renamed while its handle is held, and that all directory handles are released after a forced verification failure. These tests must pass on the exact PR head before the parent namespace mitigation can be considered validated.
 
 
-The first Windows-native rename test showed that pinning the immediate parent with child-creation access alone did not block a rename of its child. The parent handle now also requests `FILE_DELETE_CHILD` while continuing to omit `FILE_SHARE_DELETE`; the exact-head Windows test must prove that this prevents namespace mutation for the lease lifetime. This is a targeted remediation hypothesis until the Windows runner confirms it.
+**Historical attempt (superseded):** an earlier revision added `FILE_DELETE_CHILD` to the parent handle after the first rename test. That access right was subsequently removed; it is not requested by the current implementation.
 
 
 ## Rename-lease CI finding and correction (2026-11-20)
 
-The exact-head Windows test showed that omitting `FILE_SHARE_DELETE` was not sufficient because the final directory handle requested metadata-only access. Windows sharing checks for rename/delete are applied when the existing directory open has a data-access right such as `FILE_LIST_DIRECTORY`; metadata-only `FILE_READ_ATTRIBUTES` does not activate that guard. The final directory handle now requests `FILE_LIST_DIRECTORY` together with `SYNCHRONIZE`, while continuing to omit `FILE_SHARE_DELETE`. The unnecessary `FILE_DELETE_CHILD` right was removed from the immediate-parent handle to preserve least privilege. This is a targeted correction; exact-head Windows CI must still prove the rename test fails as expected and the cleanup test passes.
+The exact-head Windows test showed that omitting `FILE_SHARE_DELETE` was not sufficient when the final directory handle requested metadata-only access. The final directory handle now requests `FILE_LIST_DIRECTORY` together with `SYNCHRONIZE`, while continuing to omit `FILE_SHARE_DELETE`. The earlier `FILE_DELETE_CHILD` request on the immediate-parent handle was removed to preserve least privilege.
 
 
 ## Exact-head CI result (2026-11-20)
