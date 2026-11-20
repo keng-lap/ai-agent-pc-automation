@@ -349,6 +349,29 @@ def test_initialization_fails_closed_when_sqlite_cannot_enable_wal(tmp_path, mon
         )
 
 
+
+
+
+def test_existing_store_rejects_database_replaced_with_non_wal_mode(tmp_path):
+    store = make_store(tmp_path)
+    job = store.create(
+        owner_id=OWNER,
+        tool_id="software.install",
+        action_digest=DIGEST,
+        idempotency_key="replace-journal-mode",
+    )
+
+    connection = sqlite3.connect(store.path)
+    try:
+        mode = connection.execute("PRAGMA journal_mode = DELETE").fetchone()
+        assert mode and mode[0].lower() == "delete"
+    finally:
+        connection.close()
+
+    with pytest.raises(JobStoreUnavailable, match="required WAL mode"):
+        store.get_for_owner(job["job_id"], OWNER)
+
+
 @pytest.mark.parametrize("operation", ["progress", "transition"])
 def test_committed_write_reports_unverified_outcome(tmp_path, operation):
     store = make_store(tmp_path)
@@ -399,6 +422,12 @@ def test_committed_write_reports_unverified_outcome(tmp_path, operation):
     # Reconcile only after the trusted storage adapter is restored.
     store._secure_storage = _TestSecureStorage()
     recovered = store.get_for_owner(job["job_id"], OWNER)
+    assert (
+        store.get_persisted_version_for_owner(job["job_id"], OWNER)
+        == raised.value.committed_version
+    )
+    with pytest.raises(JobLifecycleError, match="job not found"):
+        store.get_persisted_version_for_owner(job["job_id"], "different-owner")
     if operation == "progress":
         assert recovered["progress_message"] == "Committed progress"
     else:
