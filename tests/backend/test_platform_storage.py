@@ -10,10 +10,10 @@ import pytest
 
 from agent_backend.job_store import JobStoreUnavailable, SQLiteJobStore
 from agent_backend.platform_storage import (
-    _WindowsDatabaseProtectionLease,
     LinuxSecureStorage,
     PlatformStorageUnavailable,
     WindowsSecureStorage,
+    _WindowsDatabaseProtectionLease,
     create_platform_secure_storage,
 )
 
@@ -488,6 +488,7 @@ def test_windows_adapter_translates_native_api_error_to_store_error(
     )
     store._secure_storage = WindowsSecureStorage()
 
-    with pytest.raises(JobStoreUnavailable, match="Windows security APIs failed"):
-        with store._connection():
-            pytest.fail("The native acquisition error must fail before SQLite opens.")
+    with pytest.raises(
+        JobStoreUnavailable, match="Windows security APIs failed"
+    ), store._connection():
+        pytest.fail("The native acquisition error must fail before SQLite opens.")
