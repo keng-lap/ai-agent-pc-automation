@@ -563,23 +563,36 @@ class WindowsSecureStorage:
         return int(wait_function(handle, timeout_ms))
 
     @classmethod
-    @contextmanager
-    def _database_mutex(cls, path: Path, sid):
-        """Serialize Windows SQLite file-set initialization across processes.
+    def _directory_identity(cls, directory_handle) -> tuple[int, int]:
+        """Return the stable NTFS volume/file identity from a pinned directory handle."""
+        file = cls._api()[4]
+        try:
+            info = file.GetFileInformationByHandle(directory_handle)
+            if not isinstance(info, tuple) or len(info) < 10:
+                raise ValueError("unexpected BY_HANDLE_FILE_INFORMATION shape")
+            volume_serial = int(info[4])
+            file_index = (int(info[8]) << 32) | int(info[9])
+        except (TypeError, ValueError, IndexError, OverflowError):
+            raise PlatformStorageUnavailable(
+                "Windows SQLite state directory identity could not be verified."
+            ) from None
+        return volume_serial, file_index
 
-        A per-user, per-canonical-path named mutex serializes creation and
-        verification of the complete SQLite file set and the connection
-        lifetime. Owner validation does not depend on a pathname snapshot.
+    @classmethod
+    @contextmanager
+    def _database_mutex(cls, directory_handle, sid):
+        """Serialize leases by validated directory identity, not path spelling.
+
+        A per-user, per-directory-identity mutex makes long and 8.3 short
+        path aliases converge on the same lock. The directory must already
+        be pinned and verified before this mutex is acquired.
         """
         ctypes = cls._api()[0]
         security = cls._api()[5]
         sid_text = security.ConvertSidToStringSid(sid)
-        # Normalize lexically only. Path.resolve() may follow an untrusted
-        # reparse point and trigger an SMB/network lookup before validation.
-        canonical_path = os.path.normcase(os.path.abspath(os.fspath(path))).casefold()
-        key = hashlib.sha256(
-            f"{sid_text}\\0{canonical_path}".encode()
-        ).hexdigest()
+        volume_serial, file_index = cls._directory_identity(directory_handle)
+        identity = f"{volume_serial:08x}\\0{file_index:016x}"
+        key = hashlib.sha256(f"{sid_text}\\0{identity}".encode()).hexdigest()
         mutex_name = f"Local\\AgentBackend.SQLiteJobStore.{key}"
 
         kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
@@ -654,9 +667,6 @@ class WindowsSecureStorage:
         _ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
-            # Serialize same-database leases until SQLite closes and all
-            # database/sidecar entries have been verified.
-            stack.enter_context(self._database_mutex(path, sid))
             if path.parent.parent == path.parent:
                 raise PlatformStorageUnavailable(
                     "Windows SQLite database must be inside a dedicated state directory."
@@ -700,6 +710,10 @@ class WindowsSecureStorage:
             stack.callback(file.CloseHandle, directory_handle)
             self._check_type(directory_handle, True)
             self._verify_directory(directory_handle, sid)
+            # The pinned, verified directory handle supplies a stable volume
+            # and file ID. Acquire the mutex only now so path aliases cannot
+            # bypass same-directory serialization.
+            stack.enter_context(self._database_mutex(directory_handle, sid))
             lease = _WindowsDatabaseProtectionLease(path, sid)
             # Pre-create the complete SQLite file set with an explicit owner
             # and protected DACL. SQLite never gets to create an entry using
