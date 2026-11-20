@@ -386,6 +386,21 @@ def test_windows_lease_prevents_state_directory_rename_while_held(tmp_path):
         assert not replacement.exists()
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native ancestor handle-lifetime integration test")
+def test_windows_lease_prevents_ancestor_directory_rename_while_held(tmp_path):
+    ancestor = tmp_path / "outer"
+    database = ancestor / "middle" / "private-state" / "jobs.sqlite3"
+    replacement = tmp_path / "renamed-outer"
+    adapter = WindowsSecureStorage()
+
+    with adapter.protect_database(database):
+        with pytest.raises(OSError):
+            ancestor.rename(replacement)
+        assert ancestor.is_dir()
+        assert not replacement.exists()
+
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native handle-cleanup integration test")
 def test_windows_lease_releases_directory_handles_after_verification_failure(
     tmp_path, monkeypatch
