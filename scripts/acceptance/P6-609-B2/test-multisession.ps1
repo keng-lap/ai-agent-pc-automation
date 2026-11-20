@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][ValidateSet("Hold","Probe","VerifyReleased")][string]$Mode,
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
-    [string]$DatabasePath = (Join-Path $env:LOCALAPPDATA "AI-Agent-PC-Automation\B2-Acceptance\jobs.sqlite3"),
+    [string]$DatabasePath = (Join-Path $env:LOCALAPPDATA "AI-Agent-PC-Automation\jobs.sqlite3"),
     [int]$HoldSeconds = 90
 )
 
