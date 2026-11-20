@@ -1,3 +1,4 @@
+import ctypes
 import sqlite3
 import stat
 import sys
@@ -5,6 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -622,3 +624,55 @@ def test_windows_lease_rejects_reparse_point_ancestor(tmp_path):
         PlatformStorageUnavailable, match="unsupported reparse point"
     ), WindowsSecureStorage().protect_database(database):
         pytest.fail("A reparse-point ancestor must be rejected before SQLite opens.")
+
+
+
+def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
+    class FakeFunction:
+        def __init__(self, result):
+            self.result = result
+            self.calls = []
+
+        def __call__(self, *args):
+            self.calls.append(args)
+            return self.result
+
+    create_mutex = FakeFunction(1234)
+    wait_for_single_object = FakeFunction(0x00000102)  # WAIT_TIMEOUT
+    release_mutex = FakeFunction(1)
+    close_handle = FakeFunction(1)
+    kernel = SimpleNamespace(
+        CreateMutexW=create_mutex,
+        WaitForSingleObject=wait_for_single_object,
+        ReleaseMutex=release_mutex,
+        CloseHandle=close_handle,
+    )
+    fake_ctypes = SimpleNamespace(
+        WinDLL=lambda *_args, **_kwargs: kernel,
+        c_void_p=ctypes.c_void_p,
+        c_int=ctypes.c_int,
+        c_wchar_p=ctypes.c_wchar_p,
+        c_uint32=ctypes.c_uint32,
+    )
+
+    class FakeSecurity:
+        @staticmethod
+        def ConvertSidToStringSid(_sid):
+            return "S-1-5-21-123"
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_api",
+        staticmethod(lambda: (fake_ctypes, None, None, None, None, FakeSecurity())),
+    )
+
+    with pytest.raises(
+        PlatformStorageUnavailable, match="mutex acquisition timed out"
+    ), WindowsSecureStorage._database_mutex(
+        Path("C:/private-state/jobs.sqlite3"), "current-user-sid"
+    ):
+        pytest.fail("The mutex timeout must fail before yielding the lease.")
+
+    assert wait_for_single_object.calls[0][1] == 5_000
+    assert close_handle.calls == [(1234,)]
+    assert release_mutex.calls == []
