@@ -98,7 +98,6 @@ def test_linux_adapter_rejects_preexisting_sidecar_before_sqlite_connect(tmp_pat
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux POSIX lock regression test")
 def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
     import fcntl
-    import os
     import subprocess
 
     database = tmp_path / "private-state" / "jobs.sqlite3"
@@ -107,9 +106,10 @@ def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
     shm_path = Path(f"{database}-shm")
     shm_path.touch(mode=0o600)
 
-    descriptor = os.open(shm_path, os.O_RDWR)
+    shm_file = shm_path.open("r+b")
+    descriptor = shm_file.fileno()
     try:
-        fcntl.lockf(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, os.SEEK_SET)
+        fcntl.lockf(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
         _LinuxDatabaseProtectionLease(database).verify()
 
         probe = """
@@ -118,10 +118,10 @@ import fcntl
 import os
 import sys
 
-fd = os.open(sys.argv[1], os.O_RDWR)
-try:
+with open(sys.argv[1], "r+b") as shm_file:
+    fd = shm_file.fileno()
     try:
-        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, os.SEEK_SET)
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
     except OSError as exc:
         if exc.errno in (errno.EACCES, errno.EAGAIN):
             print("blocked")
@@ -129,8 +129,6 @@ try:
             raise
     else:
         print("acquired")
-finally:
-    os.close(fd)
 """
         result = subprocess.run(
             [sys.executable, "-c", probe, str(shm_path)],
@@ -140,8 +138,8 @@ finally:
         )
         assert result.stdout.strip() == "blocked"
     finally:
-        fcntl.lockf(descriptor, fcntl.LOCK_UN, 1, 0, os.SEEK_SET)
-        os.close(descriptor)
+        fcntl.lockf(descriptor, fcntl.LOCK_UN, 1, 0, 0)
+        shm_file.close()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
