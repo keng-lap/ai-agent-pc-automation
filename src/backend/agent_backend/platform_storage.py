@@ -90,6 +90,9 @@ class LinuxSecureStorage:
     def protect_database(self, path: Path):
         self.prepare_database_path(path)
         lease = _LinuxDatabaseProtectionLease(path)
+        # Reject an unsafe pre-existing sidecar before SQLite can open the
+        # database or follow any of its sidecar names.
+        lease.verify()
         try:
             yield lease
         finally:
@@ -113,23 +116,32 @@ class _LinuxDatabaseProtectionLease:
                 Path(f"{self._path}-shm"),
                 Path(f"{self._path}-journal"),
             ):
-                if not candidate.exists() and not candidate.is_symlink():
+                flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+                flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+                try:
+                    descriptor = os.open(candidate, flags)
+                except FileNotFoundError:
+                    # SQLite may remove a WAL/SHM/journal between checks.
+                    # Absence at the atomic open point is a normal state.
                     continue
-                info = candidate.lstat()
-                if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-                    raise PlatformStorageUnavailable(
-                        "Job-store database or sidecar is not a regular file."
-                    )
-                if info.st_uid != os.geteuid():
-                    raise PlatformStorageUnavailable(
-                        "Job-store database or sidecar is not owned by the current user."
-                    )
-                candidate.chmod(0o600)
-                verified = candidate.lstat()
-                if stat.S_IMODE(verified.st_mode) & 0o077:
-                    raise PlatformStorageUnavailable(
-                        "Job-store database or sidecar permissions are too broad."
-                    )
+                try:
+                    info = os.fstat(descriptor)
+                    if not stat.S_ISREG(info.st_mode):
+                        raise PlatformStorageUnavailable(
+                            "Job-store database or sidecar is not a regular file."
+                        )
+                    if info.st_uid != os.geteuid():
+                        raise PlatformStorageUnavailable(
+                            "Job-store database or sidecar is not owned by the current user."
+                        )
+                    os.fchmod(descriptor, 0o600)
+                    verified = os.fstat(descriptor)
+                    if stat.S_IMODE(verified.st_mode) & 0o077:
+                        raise PlatformStorageUnavailable(
+                            "Job-store database or sidecar permissions are too broad."
+                        )
+                finally:
+                    os.close(descriptor)
         except PlatformStorageUnavailable:
             raise
         except OSError:
@@ -446,24 +458,40 @@ class WindowsSecureStorage:
                 release_mutex(handle)
             close_handle(handle)
 
+    @staticmethod
+    def _is_native_error(exc: Exception) -> bool:
+        """Identify pywin32 exceptions without translating application errors."""
+        return type(exc).__module__ == "pywintypes"
+
     @contextmanager
     def protect_database(self, path: Path):
+        try:
+            with self._protect_database(path) as lease:
+                yield lease
+        except PlatformStorageUnavailable:
+            raise
+        except Exception as exc:
+            if self._is_native_error(exc):
+                raise PlatformStorageUnavailable(
+                    "Windows security APIs failed while acquiring or releasing the SQLite lease."
+                ) from None
+            raise
+
+    @contextmanager
+    def _protect_database(self, path: Path):
         if os.name != "nt" or not isinstance(path, Path) or not path.is_absolute():
             raise PlatformStorageUnavailable("Windows SQLite path is unavailable or not absolute.")
         self._require_fixed_local_drive(path)
         _ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
-            # Hold this mutex until SQLite closes and the lease releases.
-            # This closes the owner-fixup race between independent store
-            # instances/processes observing a newly created database/sidecar.
+            # Serialize same-database leases until SQLite closes and all
+            # database/sidecar entries have been verified.
             stack.enter_context(self._database_mutex(path, sid))
             if path.parent.parent == path.parent:
                 raise PlatformStorageUnavailable(
                     "Windows SQLite database must be inside a dedicated state directory."
                 )
-            # Pin ancestors first. The final state directory is handled
-            # separately so first-run creation can set its owner explicitly.
             for component in reversed(path.parent.parents):
                 try:
                     handle = file.CreateFile(
@@ -480,9 +508,6 @@ class WindowsSecureStorage:
                 stack.callback(file.CloseHandle, handle)
                 self._check_type(handle, True)
 
-            # Open and pin the immediate parent with child-creation rights.
-            # Its ancestors are already pinned above, so its namespace cannot
-            # be renamed while the child is created relative to this handle.
             try:
                 parent_handle = file.CreateFile(
                     str(path.parent.parent),
@@ -500,8 +525,6 @@ class WindowsSecureStorage:
             stack.callback(file.CloseHandle, parent_handle)
             self._check_type(parent_handle, True)
 
-            # NtCreateFile creates or opens the final child relative to the
-            # pinned parent and returns that exact directory handle atomically.
             directory_handle = self._create_or_open_private_directory(
                 parent_handle, path.parent.name, sid
             )
@@ -520,14 +543,6 @@ class _WindowsDatabaseProtectionLease:
     def __init__(self, path: Path, sid):
         self._path = path
         self._sid = sid
-        # Entries already present before the private directory is leased must
-        # already belong to this user. New SQLite files may need their owner
-        # corrected because Windows can assign the token's default owner.
-        self._preexisting = {
-            str(entry).casefold()
-            for entry in self._entries()
-            if os.path.lexists(entry)
-        }
 
     def _entries(self):
         return (
@@ -539,56 +554,61 @@ class _WindowsDatabaseProtectionLease:
 
     def verify(self):
         adapter = WindowsSecureStorage
-        _ctypes, pywintypes, _api, _con, file, security = adapter._api()
-        for entry in self._entries():
-            is_new = str(entry).casefold() not in self._preexisting
-            access = adapter._READ_ATTRIBUTES | adapter._READ_CONTROL
-            if is_new:
-                access |= adapter._WRITE_OWNER
-            try:
-                handle = file.CreateFile(
-                    str(entry), access,
-                    adapter._SHARE_READ | adapter._SHARE_WRITE | adapter._SHARE_DELETE,
-                    None, adapter._OPEN_EXISTING, adapter._OPEN_REPARSE_POINT, None,
-                )
-            except pywintypes.error as exc:
-                code = getattr(exc, "winerror", None)
-                if code is None and getattr(exc, "args", None):
-                    code = exc.args[0]
-                if code in (2, 3):
-                    continue
-                raise PlatformStorageUnavailable(
-                    "SQLite sidecar security could not be checked."
-                ) from None
-            try:
-                adapter._check_type(handle, False)
-                if is_new:
-                    # This entry appeared only after the directory DACL was
-                    # restricted to the current SID. Correct the Windows
-                    # token-default owner, then verify it explicitly.
-                    security.SetSecurityInfo(
-                        handle, security.SE_FILE_OBJECT,
-                        security.OWNER_SECURITY_INFORMATION,
-                        self._sid, None, None, None,
+        _ctypes, _pywintypes, _api, _con, file, security = adapter._api()
+        try:
+            for entry in self._entries():
+                access = adapter._READ_ATTRIBUTES | adapter._READ_CONTROL
+                try:
+                    handle = file.CreateFile(
+                        str(entry), access,
+                        adapter._SHARE_READ | adapter._SHARE_WRITE | adapter._SHARE_DELETE,
+                        None, adapter._OPEN_EXISTING, adapter._OPEN_REPARSE_POINT, None,
                     )
-                adapter._verify_owner(handle, self._sid)
-                desc = security.GetSecurityInfo(
-                    handle, security.SE_FILE_OBJECT, security.DACL_SECURITY_INFORMATION
-                )
-                dacl = desc.GetSecurityDescriptorDacl()
-                if dacl is None or dacl.GetAceCount() != 1:
-                    raise PlatformStorageUnavailable(
-                        "SQLite database or sidecar DACL is not private."
+                except Exception as exc:
+                    if adapter._is_native_error(exc):
+                        code = getattr(exc, "winerror", None)
+                        if code is None and getattr(exc, "args", None):
+                            code = exc.args[0]
+                        if code in (2, 3):
+                            continue
+                        raise PlatformStorageUnavailable(
+                            "SQLite sidecar security could not be checked."
+                        ) from None
+                    raise
+                try:
+                    adapter._check_type(handle, False)
+                    # Never change the owner of a file based on a pathname
+                    # snapshot. A newly observed name is not proof SQLite
+                    # created that object; require the expected owner as-is.
+                    adapter._verify_owner(handle, self._sid)
+                    desc = security.GetSecurityInfo(
+                        handle, security.SE_FILE_OBJECT, security.DACL_SECURITY_INFORMATION
                     )
-                header, mask, ace_sid = dacl.GetAce(0)
-                if (header[0] != security.ACCESS_ALLOWED_ACE_TYPE
+                    dacl = desc.GetSecurityDescriptorDacl()
+                    if dacl is None or dacl.GetAceCount() != 1:
+                        raise PlatformStorageUnavailable(
+                            "SQLite database or sidecar DACL is not private."
+                        )
+                    header, mask, ace_sid = dacl.GetAce(0)
+                    if (
+                        header[0] != security.ACCESS_ALLOWED_ACE_TYPE
                         or not header[1] & adapter._INHERITED
-                        or mask != adapter._ALL_ACCESS or ace_sid != self._sid):
-                    raise PlatformStorageUnavailable(
-                        "SQLite database or sidecar DACL is not inherited safely."
-                    )
-            finally:
-                file.CloseHandle(handle)
+                        or mask != adapter._ALL_ACCESS
+                        or ace_sid != self._sid
+                    ):
+                        raise PlatformStorageUnavailable(
+                            "SQLite database or sidecar DACL is not inherited safely."
+                        )
+                finally:
+                    file.CloseHandle(handle)
+        except PlatformStorageUnavailable:
+            raise
+        except Exception as exc:
+            if adapter._is_native_error(exc):
+                raise PlatformStorageUnavailable(
+                    "Windows security APIs failed while verifying SQLite files."
+                ) from None
+            raise
 
 
 def create_platform_secure_storage(
