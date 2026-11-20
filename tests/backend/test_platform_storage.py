@@ -1,4 +1,3 @@
-import ctypes
 import sqlite3
 import stat
 import sys
@@ -649,10 +648,10 @@ def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
     )
     fake_ctypes = SimpleNamespace(
         WinDLL=lambda *_args, **_kwargs: kernel,
-        c_void_p=ctypes.c_void_p,
-        c_int=ctypes.c_int,
-        c_wchar_p=ctypes.c_wchar_p,
-        c_uint32=ctypes.c_uint32,
+        c_void_p=object,
+        c_int=int,
+        c_wchar_p=str,
+        c_uint32=int,
     )
 
     class FakeSecurity:
