@@ -252,7 +252,7 @@ class WindowsSecureStorage:
         advapi = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
 
         sid_text = security.ConvertSidToStringSid(sid)
-        sddl = f"O:{sid_text}D:P(A;OICI;GA;;;{sid_text})"
+        sddl = f"O:{sid_text}D:P(A;OICI;0x001F01FF;;;{sid_text})"
         descriptor = ctypes.c_void_p()
         convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
         convert.argtypes = [
@@ -303,12 +303,11 @@ class WindowsSecureStorage:
         get_drive_type = kernel.GetDriveTypeW
         get_drive_type.argtypes = [ctypes.c_wchar_p]
         get_drive_type.restype = ctypes.c_uint32
-        drive_root = path.drive + "\\\\"
+        drive_root = path.drive + "\\"
         if get_drive_type(drive_root) != 3:  # DRIVE_FIXED only; reject mapped/network/removable.
             raise PlatformStorageUnavailable(
                 "Windows SQLite path must be on a fixed local drive."
             )
-        ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
             if path.parent.parent == path.parent:
