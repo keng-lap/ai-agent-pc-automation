@@ -120,3 +120,6 @@ This is intended to bind creation/open and verification to the same directory ob
 
 
 Additional native Windows tests now attempt to prove that the leased state directory cannot be renamed while its handle is held, and that all directory handles are released after a forced verification failure. These tests must pass on the exact PR head before the parent namespace mitigation can be considered validated.
+
+
+The first Windows-native rename test showed that pinning the immediate parent with child-creation access alone did not block a rename of its child. The parent handle now also requests `FILE_DELETE_CHILD` while continuing to omit `FILE_SHARE_DELETE`; the exact-head Windows test must prove that this prevents namespace mutation for the lease lifetime. This is a targeted remediation hypothesis until the Windows runner confirms it.
