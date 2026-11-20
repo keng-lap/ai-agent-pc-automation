@@ -511,7 +511,7 @@ def test_windows_named_mutex_serializes_long_and_short_path_aliases(
     if not short_length or short_length >= len(short_buffer):
         pytest.skip("Runner does not provide an 8.3 short-path alias")
     short_root = Path(short_buffer.value)
-    if os.path.normcase(str(short_root)) == os.path.normcase(str(tmp_path)):
+    if str(short_root).casefold() == str(tmp_path).casefold():
         pytest.skip("8.3 short-path aliases are disabled on this volume")
 
     database = tmp_path / "private-state" / "jobs.sqlite3"
