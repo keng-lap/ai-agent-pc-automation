@@ -138,3 +138,94 @@ def test_windows_lease_rejects_untrusted_sidecar_dacl(tmp_path):
                 lease.verify()
         finally:
             sidecar.unlink(missing_ok=True)
+
+
+
+def test_windows_reparse_points_are_rejected_without_tag_allowlist(monkeypatch):
+    class FakeFile:
+        @staticmethod
+        def GetFileInformationByHandle(_handle):
+            return (WindowsSecureStorage._REPARSE,)
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_api",
+        staticmethod(lambda: (None, None, None, None, FakeFile(), None)),
+    )
+    with pytest.raises(PlatformStorageUnavailable, match="unsupported reparse point"):
+        WindowsSecureStorage._check_type(object(), True)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows drive type policy test")
+def test_windows_adapter_rejects_mapped_network_drive(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_drive_type",
+        classmethod(lambda _cls, _root: 4),  # DRIVE_REMOTE
+    )
+    with pytest.raises(PlatformStorageUnavailable, match="fixed local drive"):
+        WindowsSecureStorage._require_fixed_local_drive(tmp_path / "jobs.sqlite3")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
+def test_windows_adapter_does_not_rewrite_existing_directory_acl(tmp_path):
+    state_directory = tmp_path / "private-state"
+    state_directory.mkdir()
+    database = state_directory / "jobs.sqlite3"
+    adapter = WindowsSecureStorage()
+    _ctypes, _pywintypes, _win32api, _win32con, win32file, win32security = (
+        adapter._api()
+    )
+
+    handle = win32file.CreateFile(
+        str(state_directory),
+        0x00020000,
+        0x00000001 | 0x00000002,
+        None,
+        3,
+        0x02000000 | 0x00200000,
+        None,
+    )
+    try:
+        before = win32security.GetSecurityInfo(
+            handle,
+            win32security.SE_FILE_OBJECT,
+            win32security.OWNER_SECURITY_INFORMATION
+            | win32security.DACL_SECURITY_INFORMATION,
+        )
+        before_owner = before.GetSecurityDescriptorOwner()
+        before_acl = before.GetSecurityDescriptorDacl()
+        before_aces = [
+            before_acl.GetAce(index) for index in range(before_acl.GetAceCount())
+        ]
+    finally:
+        win32file.CloseHandle(handle)
+
+    with pytest.raises(PlatformStorageUnavailable):
+        with adapter.protect_database(database):
+            pytest.fail("An existing non-dedicated directory must not be accepted.")
+
+    handle = win32file.CreateFile(
+        str(state_directory),
+        0x00020000,
+        0x00000001 | 0x00000002,
+        None,
+        3,
+        0x02000000 | 0x00200000,
+        None,
+    )
+    try:
+        after = win32security.GetSecurityInfo(
+            handle,
+            win32security.SE_FILE_OBJECT,
+            win32security.OWNER_SECURITY_INFORMATION
+            | win32security.DACL_SECURITY_INFORMATION,
+        )
+        after_acl = after.GetSecurityDescriptorDacl()
+        after_aces = [
+            after_acl.GetAce(index) for index in range(after_acl.GetAceCount())
+        ]
+        assert after.GetSecurityDescriptorOwner() == before_owner
+        assert after_aces == before_aces
+    finally:
+        win32file.CloseHandle(handle)
