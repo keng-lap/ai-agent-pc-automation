@@ -116,9 +116,17 @@ class _LinuxDatabaseProtectionLease:
                 Path(f"{self._path}-shm"),
                 Path(f"{self._path}-journal"),
             ):
-                flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-                flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+                path_only = getattr(os, "O_PATH", None)
+                if path_only is None:
+                    raise PlatformStorageUnavailable(
+                        "Lock-safe Linux file verification is unavailable."
+                    )
+                flags = path_only | getattr(os, "O_CLOEXEC", 0)
+                flags |= getattr(os, "O_NOFOLLOW", 0)
                 try:
+                    # O_PATH pins the entry without opening a regular file
+                    # description that could release this process's POSIX
+                    # locks on SQLite's database or -shm inode when closed.
                     descriptor = os.open(candidate, flags)
                 except FileNotFoundError:
                     # SQLite may remove a WAL/SHM/journal between checks.
@@ -134,7 +142,10 @@ class _LinuxDatabaseProtectionLease:
                         raise PlatformStorageUnavailable(
                             "Job-store database or sidecar is not owned by the current user."
                         )
-                    os.fchmod(descriptor, 0o600)
+                    if stat.S_IMODE(info.st_mode) & 0o077:
+                        # chmod through the procfs fd link targets this exact
+                        # pinned inode; no ordinary descriptor is opened.
+                        os.chmod(f"/proc/self/fd/{descriptor}", 0o600)
                     verified = os.fstat(descriptor)
                     if stat.S_IMODE(verified.st_mode) & 0o077:
                         raise PlatformStorageUnavailable(
@@ -227,6 +238,28 @@ class WindowsSecureStorage:
         if desc.GetSecurityDescriptorOwner() != sid:
             raise PlatformStorageUnavailable("Windows SQLite entry owner SID is not current user.")
 
+    @staticmethod
+    def _read_conventional_allow_ace(dacl):
+        """Reject ACE formats pywin32 cannot represent as a conventional tuple."""
+        try:
+            ace = dacl.GetAce(0)
+            if (
+                not isinstance(ace, tuple)
+                or len(ace) != 3
+                or not isinstance(ace[0], tuple)
+                or len(ace[0]) != 2
+            ):
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite security descriptor uses an unsupported ACE format."
+                )
+            return ace
+        except PlatformStorageUnavailable:
+            raise
+        except (NotImplementedError, TypeError, ValueError, IndexError):
+            raise PlatformStorageUnavailable(
+                "Windows SQLite security descriptor uses an unsupported ACE format."
+            ) from None
+
     @classmethod
     def _verify_directory(cls, handle, sid):
         """Accept only an already-private, protected application state directory.
@@ -248,7 +281,7 @@ class WindowsSecureStorage:
             raise PlatformStorageUnavailable(
                 "Windows SQLite state directory DACL is not private."
             )
-        header, mask, ace_sid = dacl.GetAce(0)
+        header, mask, ace_sid = cls._read_conventional_allow_ace(dacl)
         if (
             header[0] != security.ACCESS_ALLOWED_ACE_TYPE
             or header[1] != (cls._OI | cls._CI)
@@ -403,7 +436,7 @@ class WindowsSecureStorage:
             raise PlatformStorageUnavailable(
                 "SQLite database or sidecar DACL is not private."
             )
-        header, mask, ace_sid = dacl.GetAce(0)
+        header, mask, ace_sid = cls._read_conventional_allow_ace(dacl)
         if (
             header[0] != security.ACCESS_ALLOWED_ACE_TYPE
             or header[1] != 0
@@ -524,6 +557,11 @@ class WindowsSecureStorage:
                 "Windows SQLite path must be on a fixed local drive."
             )
 
+    @staticmethod
+    def _wait_for_mutex(wait_function, handle, timeout_ms: int) -> int:
+        """Small seam for deterministic contention tests around the native wait."""
+        return int(wait_function(handle, timeout_ms))
+
     @classmethod
     @contextmanager
     def _database_mutex(cls, path: Path, sid):
@@ -536,7 +574,9 @@ class WindowsSecureStorage:
         ctypes = cls._api()[0]
         security = cls._api()[5]
         sid_text = security.ConvertSidToStringSid(sid)
-        canonical_path = os.path.normcase(str(path.resolve(strict=False))).casefold()
+        # Normalize lexically only. Path.resolve() may follow an untrusted
+        # reparse point and trigger an SMB/network lookup before validation.
+        canonical_path = os.path.normcase(os.path.abspath(os.fspath(path))).casefold()
         key = hashlib.sha256(
             f"{sid_text}\\0{canonical_path}".encode()
         ).hexdigest()
@@ -563,7 +603,7 @@ class WindowsSecureStorage:
             )
         acquired = False
         try:
-            wait_result = wait_for_single_object(handle, 5_000)
+            wait_result = cls._wait_for_mutex(wait_for_single_object, handle, 5_000)
             if wait_result == 0x00000102:  # WAIT_TIMEOUT
                 raise PlatformStorageUnavailable(
                     "Windows SQLite initialization mutex acquisition timed out."
