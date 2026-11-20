@@ -593,11 +593,41 @@ class WindowsSecureStorage:
         volume_serial, file_index = cls._directory_identity(directory_handle)
         identity = f"{volume_serial:08x}\\0{file_index:016x}"
         key = hashlib.sha256(f"{sid_text}\\0{identity}".encode()).hexdigest()
-        mutex_name = f"Local\\AgentBackend.SQLiteJobStore.{key}"
+        mutex_name = f"Global\\AgentBackend.SQLiteJobStore.{key}"
 
         kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        advapi = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
+
+        class SecurityAttributes(ctypes.Structure):
+            _fields_: ClassVar[list[tuple[str, object]]] = [
+                ("nLength", ctypes.c_ulong),
+                ("lpSecurityDescriptor", ctypes.c_void_p),
+                ("bInheritHandle", ctypes.c_int),
+            ]
+
+        sid_text = security.ConvertSidToStringSid(sid)
+        sddl = f"O:{sid_text}D:P(A;;0x001F0001;;;{sid_text})(A;;0x001F0001;;;SY)"
+        descriptor = ctypes.c_void_p()
+        convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        convert.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+        convert.restype = ctypes.c_int
+        if not convert(sddl, 1, ctypes.byref(descriptor), None):
+            raise PlatformStorageUnavailable(
+                "Windows SQLite mutex security descriptor could not be created."
+            )
+        attributes = SecurityAttributes(
+            ctypes.sizeof(SecurityAttributes), descriptor, 0
+        )
+
         create_mutex = kernel.CreateMutexW
-        create_mutex.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
+        create_mutex.argtypes = [
+            ctypes.POINTER(SecurityAttributes), ctypes.c_int, ctypes.c_wchar_p
+        ]
         create_mutex.restype = ctypes.c_void_p
         wait_for_single_object = kernel.WaitForSingleObject
         wait_for_single_object.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
@@ -609,7 +639,13 @@ class WindowsSecureStorage:
         close_handle.argtypes = [ctypes.c_void_p]
         close_handle.restype = ctypes.c_int
 
-        handle = create_mutex(None, 0, mutex_name)
+        try:
+            handle = create_mutex(ctypes.byref(attributes), 0, mutex_name)
+        finally:
+            local_free = kernel.LocalFree
+            local_free.argtypes = [ctypes.c_void_p]
+            local_free.restype = ctypes.c_void_p
+            local_free(descriptor)
         if not handle:
             raise PlatformStorageUnavailable(
                 "Windows SQLite initialization mutex could not be created."
