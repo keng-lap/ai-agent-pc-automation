@@ -497,10 +497,25 @@ def test_windows_native_api_errors_are_recognized_for_translation():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows named-mutex integration test")
-def test_windows_named_mutex_serializes_same_database_file_creation(
+def test_windows_named_mutex_serializes_long_and_short_path_aliases(
     tmp_path, monkeypatch
 ):
+    import ctypes
+
+    kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+    get_short_path = kernel.GetShortPathNameW
+    get_short_path.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    get_short_path.restype = ctypes.c_uint32
+    short_buffer = ctypes.create_unicode_buffer(32768)
+    short_length = get_short_path(str(tmp_path), short_buffer, len(short_buffer))
+    if not short_length or short_length >= len(short_buffer):
+        pytest.skip("Runner does not provide an 8.3 short-path alias")
+    short_root = Path(short_buffer.value)
+    if os.path.normcase(str(short_root)) == os.path.normcase(str(tmp_path)):
+        pytest.skip("8.3 short-path aliases are disabled on this volume")
+
     database = tmp_path / "private-state" / "jobs.sqlite3"
+    aliased_database = short_root / "private-state" / "jobs.sqlite3"
     first_created_database = threading.Event()
     first_creation_paused = threading.Event()
     continue_first_creation = threading.Event()
@@ -545,7 +560,7 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
     def acquire_second_lease():
         second_thread.active = True
         second_started.set()
-        with WindowsSecureStorage().protect_database(database):
+        with WindowsSecureStorage().protect_database(aliased_database):
             second_acquired.set()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -739,14 +754,6 @@ def test_windows_lease_rejects_reparse_point_ancestor(tmp_path):
 
 
 def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
-    monkeypatch.setattr(
-        Path,
-        "resolve",
-        lambda *_args, **_kwargs: pytest.fail(
-            "Mutex key generation must not resolve or follow filesystem paths."
-        ),
-    )
-
     class FakeFunction:
         def __init__(self, result):
             self.result = result
@@ -774,6 +781,11 @@ def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
         c_uint32=int,
     )
 
+    class FakeFile:
+        @staticmethod
+        def GetFileInformationByHandle(_handle):
+            return (0, None, None, None, 0x1234, None, None, None, 0x1, 0x2)
+
     class FakeSecurity:
         @staticmethod
         def ConvertSidToStringSid(_sid):
@@ -782,17 +794,20 @@ def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
     monkeypatch.setattr(
         WindowsSecureStorage,
         "_api",
-        staticmethod(lambda: (fake_ctypes, None, None, None, None, FakeSecurity())),
+        staticmethod(
+            lambda: (fake_ctypes, None, None, None, FakeFile(), FakeSecurity())
+        ),
     )
 
     with pytest.raises(
         PlatformStorageUnavailable, match="mutex acquisition timed out"
     ), WindowsSecureStorage._database_mutex(
-        Path("C:/private-state/jobs.sqlite3"), "current-user-sid"
+        object(), "current-user-sid"
     ):
         pytest.fail("The mutex timeout must fail before yielding the lease.")
 
     assert wait_for_single_object.calls[0][1] == 5_000
+    assert "AgentBackend.SQLiteJobStore." in create_mutex.calls[0][2]
     assert close_handle.calls == [(1234,)]
     assert release_mutex.calls == []
 
