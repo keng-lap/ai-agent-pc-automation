@@ -41,7 +41,7 @@ Runs the Windows-named cases in `test_platform_storage.py`, including wrong-owne
 
 Use the same repository checkout and exact same absolute database path in both sessions. The default is:
 
-`%LOCALAPPDATA%\AI-Agent-PC-Automation\B2-Acceptance\jobs.sqlite3`
+`%LOCALAPPDATA%\AI-Agent-PC-Automation\jobs.sqlite3`
 
 **Session A:** open PowerShell and run:
 
