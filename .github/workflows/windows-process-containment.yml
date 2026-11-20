@@ -78,6 +78,8 @@ jobs:
               $errors | Format-List | Out-String | Write-Error
             }
           }
+          python -m ruff check scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
+          python scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py --help
           python -m py_compile scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
       - name: Test job lifecycle, Windows storage gate, and containment API
         run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py tests/backend/test_platform_storage.py tests/backend/test_job_store.py tests/backend/test_jobs_api.py -q
