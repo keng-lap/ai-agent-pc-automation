@@ -38,6 +38,18 @@ class JobStoreConflict(RuntimeError):
     """An idempotency key or lifecycle transition conflicts with existing data."""
 
 
+class JobStoreCommittedButUnverified(RuntimeError):
+    """A write committed, but the storage lease could not verify it afterward."""
+
+    def __init__(self, job_id: str, committed_version: int) -> None:
+        self.job_id = job_id
+        self.committed_version = committed_version
+        super().__init__(
+            "Job write committed but storage verification failed; after storage is "
+            "trusted again, reconcile by reading this job_id and checking its version."
+        )
+
+
 def _utc_text(value: datetime | None = None) -> str:
     current = value or datetime.now(UTC)
     if current.tzinfo is None:
@@ -103,7 +115,11 @@ class SQLiteJobStore:
     def _initialize(self) -> None:
         try:
             with self._lock, self._connection() as connection:
-                connection.execute("PRAGMA journal_mode = WAL")
+                journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()
+                if not journal_mode or str(journal_mode[0]).lower() != "wal":
+                    raise JobStoreUnavailable(
+                        "Job-store database could not enter required WAL mode."
+                    )
                 connection.executescript(
                     """
                     CREATE TABLE IF NOT EXISTS job_records (
