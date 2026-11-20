@@ -409,7 +409,7 @@ class WindowsSecureStorage:
         sid_text = security.ConvertSidToStringSid(sid)
         canonical_path = os.path.normcase(str(path.resolve(strict=False))).casefold()
         key = hashlib.sha256(
-            f"{sid_text}\\0{canonical_path}".encode("utf-8")
+            f"{sid_text}\\0{canonical_path}".encode()
         ).hexdigest()
         mutex_name = f"Local\\AgentBackend.SQLiteJobStore.{key}"
 
