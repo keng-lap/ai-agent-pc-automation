@@ -13,7 +13,7 @@ import stat
 import sys
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
@@ -187,7 +187,7 @@ class WindowsSecureStorage:
 
     @classmethod
     def _check_type(cls, handle, directory):
-        ctypes, _pywintypes, _api, _con, file, _security = cls._api()
+        _ctypes, _pywintypes, _api, _con, file, _security = cls._api()
         attrs = file.GetFileInformationByHandle(handle)[0]
         if attrs & cls._REPARSE:
             # This adapter has no reviewed allow-list of reparse providers.
