@@ -434,6 +434,7 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
 ):
     database = tmp_path / "private-state" / "jobs.sqlite3"
     first_created_database = threading.Event()
+    first_creation_paused = threading.Event()
     continue_first_creation = threading.Event()
     first_acquired = threading.Event()
     release_first = threading.Event()
@@ -444,7 +445,8 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
 
     def pause_after_first_database_creation(_cls, path, sid):
         original_create_or_open(path, sid)
-        if path == database:
+        if path == database and not first_creation_paused.is_set():
+            first_creation_paused.set()
             first_created_database.set()
             assert continue_first_creation.wait(timeout=5)
 
