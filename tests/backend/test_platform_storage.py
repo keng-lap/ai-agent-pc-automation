@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from agent_backend.job_store import SQLiteJobStore
 from agent_backend.platform_storage import (
     LinuxSecureStorage,
     PlatformStorageUnavailable,
@@ -228,3 +229,24 @@ def test_windows_adapter_does_not_rewrite_existing_directory_acl(tmp_path):
         assert after_aces == before_aces
     finally:
         win32file.CloseHandle(handle)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native SQLite persistence integration test")
+def test_windows_job_store_persists_across_real_store_reopen(tmp_path):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    first = SQLiteJobStore(database, secure_storage=WindowsSecureStorage())
+    created = first.create(
+        owner_id="windows-owner",
+        tool_id="software.install",
+        action_digest="a" * 64,
+        idempotency_key="windows-reopen-1",
+    )
+
+    # A distinct store instance must recover the committed record from the
+    # same NTFS database after the first store has completed its operations.
+    reopened = SQLiteJobStore(database, secure_storage=WindowsSecureStorage())
+    recovered = reopened.get_for_owner(created["job_id"], "windows-owner")
+
+    assert recovered["job_id"] == created["job_id"]
+    assert recovered["state"] == created["state"] == "QUEUED"
+    assert recovered["recent_events"][0]["message"] == "Job accepted into the local queue"
