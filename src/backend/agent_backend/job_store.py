@@ -271,6 +271,7 @@ class SQLiteJobStore:
         if level not in _VALID_LEVELS:
             raise ValueError("invalid event level")
         timestamp = _utc_text(now or self._clock())
+        committed = False
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -298,10 +299,17 @@ class SQLiteJobStore:
                     (job_id, timestamp, row["state"], level, safe_message),
                 )
                 connection.commit()
+                committed = True
                 return self.get_for_owner(job_id, owner_id)
         except (JobLifecycleError, JobStoreConflict):
             raise
-        except (sqlite3.Error, OSError):
+        except JobStoreUnavailable as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
+            raise
+        except (sqlite3.Error, OSError) as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
             raise JobStoreUnavailable("Job progress could not be persisted.") from None
 
     def transition(
@@ -329,6 +337,7 @@ class SQLiteJobStore:
         if type(reboot_required) is not bool:
             raise ValueError("reboot_required must be boolean")
         timestamp = _utc_text(now or self._clock())
+        committed = False
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -368,10 +377,17 @@ class SQLiteJobStore:
                     (job_id, timestamp, target.value, level, safe_message),
                 )
                 connection.commit()
+                committed = True
                 return self.get_for_owner(job_id, owner_id)
         except (JobLifecycleError, JobStoreConflict):
             raise
-        except (sqlite3.Error, OSError):
+        except JobStoreUnavailable as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
+            raise
+        except (sqlite3.Error, OSError) as exc:
+            if committed:
+                raise JobStoreCommittedButUnverified(job_id, expected_version + 1) from exc
             raise JobStoreUnavailable("Job transition could not be persisted.") from None
 
     @staticmethod
