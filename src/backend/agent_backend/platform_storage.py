@@ -563,7 +563,11 @@ class WindowsSecureStorage:
             )
         acquired = False
         try:
-            wait_result = wait_for_single_object(handle, 0xFFFFFFFF)
+            wait_result = wait_for_single_object(handle, 5_000)
+            if wait_result == 0x00000102:  # WAIT_TIMEOUT
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite initialization mutex acquisition timed out."
+                )
             if wait_result not in (0x00000000, 0x00000080):
                 raise PlatformStorageUnavailable(
                     "Windows SQLite initialization mutex could not be acquired."
