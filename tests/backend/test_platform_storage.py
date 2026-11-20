@@ -201,9 +201,8 @@ def test_windows_adapter_does_not_rewrite_existing_directory_acl(tmp_path):
     finally:
         win32file.CloseHandle(handle)
 
-    with pytest.raises(PlatformStorageUnavailable):
-        with adapter.protect_database(database):
-            pytest.fail("An existing non-dedicated directory must not be accepted.")
+    with pytest.raises(PlatformStorageUnavailable), adapter.protect_database(database):
+        pytest.fail("An existing non-dedicated directory must not be accepted.")
 
     handle = win32file.CreateFile(
         str(state_directory),
