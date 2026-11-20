@@ -259,7 +259,7 @@ class WindowsSecureStorage:
         same operation. This avoids the CreateDirectoryW-then-open-by-path
         namespace gap in which a child entry could otherwise be substituted.
         """
-        ctypes, _pywintypes, _api, _con, _file, security = cls._api()
+        ctypes, pywintypes, _api, _con, _file, security = cls._api()
         ntdll = ctypes.WinDLL("ntdll.dll")
         advapi = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
         kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
