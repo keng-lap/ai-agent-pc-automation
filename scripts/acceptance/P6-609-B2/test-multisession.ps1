@@ -25,7 +25,7 @@ if ($Mode -eq "Hold") {
 Push-Location $RepoRoot
 try {
     $env:PYTHONPATH = (Join-Path $RepoRoot "src\backend")
-    & $python $helper $Mode.ToLowerInvariant() --database $DatabasePath --hold-seconds $HoldSeconds 2>&1 |
+    & $python $helper $(if ($Mode -eq "VerifyReleased") { "verify" } else { $Mode.ToLowerInvariant() }) --database $DatabasePath --hold-seconds $HoldSeconds 2>&1 |
         Tee-Object -FilePath $log
     $code = $LASTEXITCODE
     if ($code -ne 0) { throw "Cross-session $Mode probe failed with exit code $code. See $log" }
