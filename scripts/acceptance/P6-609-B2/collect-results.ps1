@@ -1,8 +1,8 @@
 [CmdletBinding()]
-param([string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path)
+param([string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..\\..")).Path)
 
 $ErrorActionPreference = "Stop"
-$outDir = Join-Path $RepoRoot "artifacts\P6-609-B2"
+$outDir = Join-Path $RepoRoot "artifacts\\P6-609-B2"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $summary = Join-Path $outDir "environment.txt"
 
@@ -19,7 +19,7 @@ $summary = Join-Path $outDir "environment.txt"
     "Git status:"
     (& git -C $RepoRoot status --short 2>&1)
     "Python:"
-    (& (Join-Path $RepoRoot ".venv\Scripts\python.exe") --version 2>&1)
+    (& (Join-Path $RepoRoot ".venv\\Scripts\\python.exe") --version 2>&1)
     "Volume:"
     (Get-Volume -DriveLetter ([System.IO.Path]::GetPathRoot($env:LOCALAPPDATA).Substring(0,1)) |
         Select-Object DriveLetter,FileSystem,DriveType,HealthStatus | Format-List | Out-String)
@@ -27,7 +27,7 @@ $summary = Join-Path $outDir "environment.txt"
 
 $zip = Join-Path $outDir ("P6-609-B2-evidence-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".zip")
 $evidenceFiles = Get-ChildItem -Path $outDir -File |
-    Where-Object { $_.FullName -ne $zip } |
+    Where-Object { $_.Extension -ne ".zip" -and $_.FullName -ne $zip } |
     Select-Object -ExpandProperty FullName
 if (-not $evidenceFiles) { throw "No evidence files were found in $outDir." }
 Compress-Archive -Path $evidenceFiles -DestinationPath $zip -Force
