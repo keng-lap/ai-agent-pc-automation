@@ -496,25 +496,9 @@ def test_windows_native_api_errors_are_recognized_for_translation():
 
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows named-mutex integration test")
-def test_windows_named_mutex_serializes_long_and_short_path_aliases(
-    tmp_path, monkeypatch
+def _assert_windows_database_mutex_serializes_paths(
+    tmp_path, first_database, second_database, monkeypatch
 ):
-    ctypes = WindowsSecureStorage._api()[0]
-    kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
-    get_short_path = kernel.GetShortPathNameW
-    get_short_path.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
-    get_short_path.restype = ctypes.c_uint32
-    short_buffer = ctypes.create_unicode_buffer(32768)
-    short_length = get_short_path(str(tmp_path), short_buffer, len(short_buffer))
-    if not short_length or short_length >= len(short_buffer):
-        pytest.skip("Runner does not provide an 8.3 short-path alias")
-    short_root = Path(short_buffer.value)
-    if str(short_root).casefold() == str(tmp_path).casefold():
-        pytest.skip("8.3 short-path aliases are disabled on this volume")
-
-    database = tmp_path / "private-state" / "jobs.sqlite3"
-    aliased_database = short_root / "private-state" / "jobs.sqlite3"
     first_created_database = threading.Event()
     first_creation_paused = threading.Event()
     continue_first_creation = threading.Event()
@@ -540,7 +524,7 @@ def test_windows_named_mutex_serializes_long_and_short_path_aliases(
 
     def pause_after_first_database_creation(_cls, path, sid):
         original_create_or_open(path, sid)
-        if path == database and not first_creation_paused.is_set():
+        if path == first_database and not first_creation_paused.is_set():
             first_creation_paused.set()
             first_created_database.set()
             assert continue_first_creation.wait(timeout=5)
@@ -552,14 +536,14 @@ def test_windows_named_mutex_serializes_long_and_short_path_aliases(
     )
 
     def hold_first_lease():
-        with WindowsSecureStorage().protect_database(database):
+        with WindowsSecureStorage().protect_database(first_database):
             first_acquired.set()
             assert release_first.wait(timeout=5)
 
     def acquire_second_lease():
         second_thread.active = True
         second_started.set()
-        with WindowsSecureStorage().protect_database(aliased_database):
+        with WindowsSecureStorage().protect_database(second_database):
             second_acquired.set()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -584,6 +568,38 @@ def test_windows_named_mutex_serializes_long_and_short_path_aliases(
         second.result(timeout=5)
 
     assert second_acquired.is_set()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows named-mutex integration test")
+def test_windows_named_mutex_serializes_same_path(tmp_path, monkeypatch):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    _assert_windows_database_mutex_serializes_paths(
+        tmp_path, database, database, monkeypatch
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows named-mutex integration test")
+def test_windows_named_mutex_serializes_long_and_short_path_aliases(
+    tmp_path, monkeypatch
+):
+    ctypes = WindowsSecureStorage._api()[0]
+    kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+    get_short_path = kernel.GetShortPathNameW
+    get_short_path.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    get_short_path.restype = ctypes.c_uint32
+    short_buffer = ctypes.create_unicode_buffer(32768)
+    short_length = get_short_path(str(tmp_path), short_buffer, len(short_buffer))
+    if not short_length or short_length >= len(short_buffer):
+        pytest.skip("Runner does not provide an 8.3 short-path alias")
+    short_root = Path(short_buffer.value)
+    if str(short_root).casefold() == str(tmp_path).casefold():
+        pytest.skip("8.3 short-path aliases are disabled on this volume")
+
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    aliased_database = short_root / "private-state" / "jobs.sqlite3"
+    _assert_windows_database_mutex_serializes_paths(
+        tmp_path, database, aliased_database, monkeypatch
+    )
 
 
 
