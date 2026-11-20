@@ -675,7 +675,9 @@ class WindowsSecureStorage:
                 try:
                     handle = file.CreateFile(
                         str(component),
-                        self._READ_ATTRIBUTES | self._READ_CONTROL,
+                        self._READ_ATTRIBUTES
+                        | self._READ_CONTROL
+                        | self._FILE_LIST_DIRECTORY,
                         self._SHARE_READ | self._SHARE_WRITE,
                         None, self._OPEN_EXISTING,
                         self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
