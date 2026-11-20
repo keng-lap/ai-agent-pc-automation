@@ -19,7 +19,7 @@ $log = Join-Path $outDir ("multisession-" + $(if ($Mode -eq "VerifyReleased") { 
 # This runner provisions ancestors before invoking Python. Require a drive-rooted
 # path (for example C:\\Users\\...); IsPathRooted alone also accepts
 # root-relative (\\Users\\...) and drive-relative (C:folder) paths.
-if ($DatabasePath -notmatch '^[A-Za-z]:\\') {
+if ($DatabasePath -notmatch '^[A-Za-z]:[\\/]') {
     throw "DatabasePath must be fully qualified with a drive root (for example C:\\Users\\...)."
 }
 
