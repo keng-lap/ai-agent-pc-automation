@@ -14,7 +14,7 @@ import hashlib
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agent_backend.platform_storage import (
@@ -57,7 +57,7 @@ def main() -> int:
     session_id = _session_id()
 
     def timestamp() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     if args.mode == "hold":
         try:
