@@ -12,7 +12,7 @@ $log = Join-Path $outDir "test-storage.log"
 
 Push-Location (Join-Path $RepoRoot 'src\backend')
 try {
-    & $python -m pytest tests/backend/test_platform_storage.py tests/backend/test_job_store.py -q 2>&1 |
+    & $python -m pytest ../../tests/backend/test_platform_storage.py ../../tests/backend/test_job_store.py -q 2>&1 |
         Tee-Object -FilePath $log
     $code = $LASTEXITCODE
     if ($code -ne 0) { throw "B2 storage pytest failed with exit code $code. See $log" }
