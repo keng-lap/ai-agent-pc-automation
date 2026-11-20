@@ -8,6 +8,7 @@ are implemented and independently reviewed. macOS remains unsupported.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
 import sys
@@ -393,6 +394,58 @@ class WindowsSecureStorage:
                 "Windows SQLite path must be on a fixed local drive."
             )
 
+    @classmethod
+    @contextmanager
+    def _database_mutex(cls, path: Path, sid):
+        """Serialize Windows SQLite file-set initialization across processes.
+
+        SQLite may create the database/WAL/SHM between two leases' initial
+        snapshots. A per-user, per-canonical-path named mutex ensures one
+        connection completes its post-open owner/DACL verification before a
+        second lease classifies those entries as pre-existing.
+        """
+        ctypes = cls._api()[0]
+        security = cls._api()[5]
+        sid_text = security.ConvertSidToStringSid(sid)
+        canonical_path = os.path.normcase(str(path.resolve(strict=False))).casefold()
+        key = hashlib.sha256(
+            f"{sid_text}\\0{canonical_path}".encode("utf-8")
+        ).hexdigest()
+        mutex_name = f"Local\\AgentBackend.SQLiteJobStore.{key}"
+
+        kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        create_mutex = kernel.CreateMutexW
+        create_mutex.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
+        create_mutex.restype = ctypes.c_void_p
+        wait_for_single_object = kernel.WaitForSingleObject
+        wait_for_single_object.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        wait_for_single_object.restype = ctypes.c_uint32
+        release_mutex = kernel.ReleaseMutex
+        release_mutex.argtypes = [ctypes.c_void_p]
+        release_mutex.restype = ctypes.c_int
+        close_handle = kernel.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_int
+
+        handle = create_mutex(None, 0, mutex_name)
+        if not handle:
+            raise PlatformStorageUnavailable(
+                "Windows SQLite initialization mutex could not be created."
+            )
+        acquired = False
+        try:
+            wait_result = wait_for_single_object(handle, 0xFFFFFFFF)
+            if wait_result not in (0x00000000, 0x00000080):
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite initialization mutex could not be acquired."
+                )
+            acquired = True
+            yield
+        finally:
+            if acquired:
+                release_mutex(handle)
+            close_handle(handle)
+
     @contextmanager
     def protect_database(self, path: Path):
         if os.name != "nt" or not isinstance(path, Path) or not path.is_absolute():
@@ -401,6 +454,10 @@ class WindowsSecureStorage:
         _ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
+            # Hold this mutex until SQLite closes and the lease releases.
+            # This closes the owner-fixup race between independent store
+            # instances/processes observing a newly created database/sidecar.
+            stack.enter_context(self._database_mutex(path, sid))
             if path.parent.parent == path.parent:
                 raise PlatformStorageUnavailable(
                     "Windows SQLite database must be inside a dedicated state directory."
