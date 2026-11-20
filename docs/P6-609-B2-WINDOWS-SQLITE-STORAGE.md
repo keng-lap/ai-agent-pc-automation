@@ -128,3 +128,14 @@ The first Windows-native rename test showed that pinning the immediate parent wi
 ## Rename-lease CI finding and correction (2026-11-20)
 
 The exact-head Windows test showed that omitting `FILE_SHARE_DELETE` was not sufficient because the final directory handle requested metadata-only access. Windows sharing checks for rename/delete are applied when the existing directory open has a data-access right such as `FILE_LIST_DIRECTORY`; metadata-only `FILE_READ_ATTRIBUTES` does not activate that guard. The final directory handle now requests `FILE_LIST_DIRECTORY` together with `SYNCHRONIZE`, while continuing to omit `FILE_SHARE_DELETE`. The unnecessary `FILE_DELETE_CHILD` right was removed from the immediate-parent handle to preserve least privilege. This is a targeted correction; exact-head Windows CI must still prove the rename test fails as expected and the cleanup test passes.
+
+
+## Exact-head CI result (2026-11-20)
+
+Exact PR head: `ed89fe06e7e47f9beb4493406194332fd0748e84`.
+
+- CI workflow: **passed** — backend tests, AI reviewer unit tests, Ruff, frontend unit tests, Playwright desktop/mobile viewport E2E, and frontend build.
+- Windows Process Containment workflow: **passed** — Windows native storage/job lifecycle and containment test job completed successfully.
+- The rename-lease regression and exception-path handle-cleanup regression are included in that exact-head Windows job.
+
+This closes the CI validation requirement for this revision only. It does not grant independent security approval or Windows 11 Home target-machine acceptance. The broader acceptance matrix (including wrong-owner/broad-DACL database and sidecar fixtures, reparse-point database/sidecar fixtures, concurrent store instances, and explicit no-fallback tests) remains to be completed. Windows storage remains fail-closed; this PR remains Draft.
