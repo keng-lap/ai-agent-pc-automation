@@ -2,9 +2,9 @@
 
 ## Status and authority
 
-**Status: partial implementation; Windows SQLite storage remains disabled.**
+**Status: implementation in progress; Windows SQLite storage remains disabled.**
 
-The shared storage contract and `SQLiteJobStore` now use a connection-scoped protection lease. The Linux adapter verifies the database and present WAL/SHM/journal entries while the connection is open and again as the lease is released. This is an intermediate refactor only; it does not implement Windows native directory handles, DACL inheritance, sidecar verification, or Windows enablement.
+The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates a new state directory with an explicit protected owner-only DACL in the creation call, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and verifies database/sidecar owner and inherited DACL. These changes are not yet accepted for production: Windows integration coverage, independent review, exact-head CI, and Windows 11 Home acceptance remain required.
 
 This slice enables no worker, approval reservation, installer process, WinGet invocation, or machine-changing behavior. The existing Windows fail-closed behavior remains mandatory until implementation, Windows CI, target-machine acceptance, and independent security review pass.
 
@@ -12,7 +12,7 @@ Base reviewed: `main` at branch creation. Work is isolated on `feat/P6-609-b2-wi
 
 ## Problem statement
 
-`SQLiteJobStore` delegates path protection to `SecureStorageAdapter`. Linux is enabled; Windows intentionally raises `PlatformStorageUnavailable`. The separate `WindowsSecretFile` implementation is useful reference code, but it is not a SQLite adapter: SQLite opens the database and its sidecars by pathname and creates/uses `-wal` and `-shm` files. A secure implementation must protect the complete SQLite file set and the path namespace for the full lifetime of each connection.
+`SQLiteJobStore` delegates path protection to `SecureStorageAdapter`. Linux is enabled; Windows has a native adapter implementation but intentionally remains disabled by `create_platform_secure_storage()` pending review and acceptance. The separate `WindowsSecretFile` implementation is useful reference code, but it is not a SQLite adapter: SQLite opens the database and its sidecars by pathname and creates/uses `-wal` and `-shm` files. A secure implementation must protect the complete SQLite file set and the path namespace for the full lifetime of each connection.
 
 Do not simply call `WindowsSecretFile` on the main database file and then pass its path to sqlite3. That would leave SQLite sidecar creation and path substitution outside the verified-handle boundary.
 
@@ -23,7 +23,7 @@ Do not simply call `WindowsSecretFile` on the main database file and then pass i
 - Accept only an absolute local-drive path beneath a dedicated application-owned state directory; reject UNC/network paths, device paths, relative paths, and unsupported path forms.
 - Open each ancestor component with `FILE_FLAG_OPEN_REPARSE_POINT`; inspect the opened handle, reject path-redirection reparse tags, verify directory type, and retain handles without `FILE_SHARE_DELETE` for the entire SQLite connection lifetime.
 - Never take ownership of an existing directory. The final application state directory must be owned by the current process token's user SID.
-- Apply and verify a protected DACL on the dedicated state directory. The DACL must grant access only to the current user SID and must provide the intended inheritance semantics for SQLite-created children. Do not alter ACLs on shared ancestors such as the user's profile directory.
+- Create a new dedicated state directory atomically with an explicit protected DACL granting access only to the current user SID, including intended inheritance for SQLite-created children. For an existing directory, verify the exact owner/DACL and fail closed if it differs; never rewrite an existing directory ACL. Do not alter ACLs on shared ancestors such as the user's profile directory.
 - If any ancestor cannot be pinned or verified, fail closed before SQLite opens the database.
 
 ### 2. Database and sidecar protection
@@ -94,3 +94,15 @@ Before enabling Windows storage:
 ## Explicit non-goals
 
 This slice does not implement durable approval, TOTP integration, execution audit, worker scheduling, suspended process creation, Job Object dispatch, package-manager adapters, publisher trust anchors, or real installation.
+
+
+## Security review remediation status (2026-11-20)
+
+The first independent review identified four blocking concerns. The current implementation addresses them as follows, but this is not a final approval:
+
+- **First-run ACL window:** new directories are created with a protected owner-only security descriptor supplied to `CreateDirectoryW`; owner/DACL are then verified from the opened handle.
+- **Existing directory mutation:** existing directories are never re-permissioned. They must already have the exact protected owner-only ACL or initialization fails closed.
+- **Mapped/network drives:** `GetDriveTypeW` must report `DRIVE_FIXED`; mapped network and removable volumes are rejected.
+- **Reparse points:** every reparse point is rejected until a specific provider/tag is separately reviewed and allow-listed.
+
+Windows storage remains disabled in the production factory. The new Windows regression tests cover rejection of arbitrary reparse tags, mapped drive types, and non-private pre-existing state directories without ACL mutation. Additional native Windows acceptance cases in the checklist above remain open.
