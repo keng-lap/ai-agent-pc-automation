@@ -1,6 +1,7 @@
 import sqlite3
 import stat
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -418,3 +419,36 @@ def test_windows_lease_never_changes_owner_of_untrusted_entry(monkeypatch):
 def test_windows_native_api_errors_are_recognized_for_translation():
     NativeError = type("error", (Exception,), {"__module__": "pywintypes"})
     assert WindowsSecureStorage._is_native_error(NativeError("failed"))
+
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows named-mutex integration test")
+def test_windows_named_mutex_serializes_same_database_leases(tmp_path):
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    first_acquired = threading.Event()
+    release_first = threading.Event()
+    second_acquired = threading.Event()
+
+    def hold_first_lease():
+        with WindowsSecureStorage().protect_database(database):
+            first_acquired.set()
+            assert release_first.wait(timeout=5)
+
+    def acquire_second_lease():
+        with WindowsSecureStorage().protect_database(database):
+            second_acquired.set()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(hold_first_lease)
+        assert first_acquired.wait(timeout=5)
+        second = executor.submit(acquire_second_lease)
+        try:
+            # The second adapter must wait while the first owns the per-path
+            # mutex; it cannot snapshot or verify the same SQLite file set yet.
+            assert not second_acquired.wait(timeout=0.2)
+        finally:
+            release_first.set()
+        first.result(timeout=5)
+        second.result(timeout=5)
+
+    assert second_acquired.is_set()
