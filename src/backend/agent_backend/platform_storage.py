@@ -272,7 +272,7 @@ class WindowsSecureStorage:
             ]
 
         class ObjectAttributes(ctypes.Structure):
-            _fields_ = [
+            _fields_: ClassVar[list[tuple[str, object]]] = [
                 ("Length", ctypes.c_ulong),
                 ("RootDirectory", ctypes.c_void_p),
                 ("ObjectName", ctypes.POINTER(UnicodeString)),
@@ -282,7 +282,7 @@ class WindowsSecureStorage:
             ]
 
         class IoStatusBlock(ctypes.Structure):
-            _fields_ = [
+            _fields_: ClassVar[list[tuple[str, object]]] = [
                 ("Status", ctypes.c_void_p),
                 ("Information", ctypes.c_size_t),
             ]
