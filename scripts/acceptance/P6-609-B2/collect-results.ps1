@@ -26,6 +26,10 @@ $summary = Join-Path $outDir "environment.txt"
 ) | Set-Content -Encoding UTF8 $summary
 
 $zip = Join-Path $outDir ("P6-609-B2-evidence-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".zip")
-Compress-Archive -Path (Join-Path $outDir "*") -DestinationPath $zip -Force
+$evidenceFiles = Get-ChildItem -Path $outDir -File |
+    Where-Object { $_.FullName -ne $zip } |
+    Select-Object -ExpandProperty FullName
+if (-not $evidenceFiles) { throw "No evidence files were found in $outDir." }
+Compress-Archive -Path $evidenceFiles -DestinationPath $zip -Force
 Write-Host "Evidence summary: $summary"
 Write-Host "Evidence archive: $zip"
