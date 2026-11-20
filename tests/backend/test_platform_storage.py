@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import contextmanager
 import stat
 import sys
 import threading
