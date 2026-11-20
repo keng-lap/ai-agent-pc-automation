@@ -10,7 +10,7 @@ $outDir = Join-Path $RepoRoot "artifacts\P6-609-B2"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $log = Join-Path $outDir "test-security.log"
 
-Push-Location $RepoRoot
+Push-Location (Join-Path $RepoRoot 'src\backend')
 try {
     & $python -m pytest tests/backend/test_platform_storage.py -q -k "windows" 2>&1 |
         Tee-Object -FilePath $log
