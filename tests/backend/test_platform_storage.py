@@ -604,3 +604,21 @@ def test_windows_lease_rejects_database_or_sidecar_reparse_point(
             entry.unlink(missing_ok=True)
             if backup.exists():
                 backup.replace(entry)
+
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native ancestor reparse-point fixture")
+def test_windows_lease_rejects_reparse_point_ancestor(tmp_path):
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    try:
+        linked_parent.symlink_to(real_parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("Runner does not permit creating a directory symbolic link")
+
+    database = linked_parent / "private-state" / "jobs.sqlite3"
+    with pytest.raises(
+        PlatformStorageUnavailable, match="unsupported reparse point"
+    ):
+        WindowsSecureStorage().protect_database(database).__enter__()
