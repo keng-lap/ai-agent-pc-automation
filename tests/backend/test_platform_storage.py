@@ -95,13 +95,19 @@ def test_linux_adapter_rejects_preexisting_sidecar_before_sqlite_connect(tmp_pat
 
 
 
-def _probe_posix_lock_from_child(path, result_queue):
+def _probe_posix_lock_from_child(path, result_queue, lock_offset):
     import errno
     import fcntl
 
     with Path(path).open("r+b") as shm_file:
         try:
-            fcntl.lockf(shm_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
+            fcntl.lockf(
+                shm_file.fileno(),
+                fcntl.LOCK_EX | fcntl.LOCK_NB,
+                1,
+                lock_offset,
+                0,
+            )
         except OSError as exc:
             if exc.errno in (errno.EACCES, errno.EAGAIN):
                 result_queue.put("blocked")
@@ -113,25 +119,30 @@ def _probe_posix_lock_from_child(path, result_queue):
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux POSIX lock regression test")
 def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
-    import fcntl
     import multiprocessing
 
     database = tmp_path / "private-state" / "jobs.sqlite3"
     database.parent.mkdir(mode=0o700)
-    database.touch(mode=0o600)
-    shm_path = Path(f"{database}-shm")
-    shm_path.touch(mode=0o600)
+    connection = sqlite3.connect(database, isolation_level=None)
+    try:
+        mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()
+        assert mode and mode[0].lower() == "wal"
+        connection.execute("CREATE TABLE lock_probe (value TEXT)")
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("INSERT INTO lock_probe VALUES ('writer holds WAL lock')")
 
-    with shm_path.open("r+b") as shm_file:
-        descriptor = shm_file.fileno()
-        fcntl.lockf(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
+        shm_path = Path(f"{database}-shm")
+        assert shm_path.is_file()
         _LinuxDatabaseProtectionLease(database).verify()
 
+        # SQLite's Unix WAL VFS uses byte 120 (SQLITE_SHM_BASE + WRITE_LOCK)
+        # for its writer lock. A second process must not acquire that byte
+        # while the first SQLite connection still owns the write transaction.
         context = multiprocessing.get_context("spawn")
         result_queue = context.Queue()
         process = context.Process(
             target=_probe_posix_lock_from_child,
-            args=(str(shm_path), result_queue),
+            args=(str(shm_path), result_queue, 120),
         )
         process.start()
         process.join(timeout=10)
@@ -143,7 +154,10 @@ def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
         assert result_queue.get(timeout=2) == "blocked"
         result_queue.close()
         result_queue.join_thread()
-        fcntl.lockf(descriptor, fcntl.LOCK_UN, 1, 0, 0)
+    finally:
+        if connection.in_transaction:
+            connection.rollback()
+        connection.close()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
