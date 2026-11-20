@@ -250,3 +250,45 @@ def test_windows_job_store_persists_across_real_store_reopen(tmp_path):
     assert recovered["job_id"] == created["job_id"]
     assert recovered["state"] == created["state"] == "QUEUED"
     assert recovered["recent_events"][0]["message"] == "Job accepted into the local queue"
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native handle-lifetime integration test")
+def test_windows_lease_prevents_state_directory_rename_while_held(tmp_path):
+    state_directory = tmp_path / "private-state"
+    database = state_directory / "jobs.sqlite3"
+    replacement = tmp_path / "replacement-state"
+    adapter = WindowsSecureStorage()
+
+    with adapter.protect_database(database):
+        with pytest.raises(OSError):
+            state_directory.rename(replacement)
+        assert state_directory.is_dir()
+        assert not replacement.exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native handle-cleanup integration test")
+def test_windows_lease_releases_directory_handles_after_verification_failure(
+    tmp_path, monkeypatch
+):
+    state_directory = tmp_path / "private-state"
+    database = state_directory / "jobs.sqlite3"
+    replacement = tmp_path / "released-state"
+    adapter = WindowsSecureStorage()
+
+    def fail_directory_verification(_cls, _handle, _sid):
+        raise PlatformStorageUnavailable("forced verification failure")
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_verify_directory",
+        classmethod(fail_directory_verification),
+    )
+
+    with pytest.raises(PlatformStorageUnavailable, match="forced verification failure"):
+        with adapter.protect_database(database):
+            pytest.fail("The protection lease must fail before SQLite is opened.")
+
+    # A successful rename proves the directory and parent handles were
+    # released by ExitStack on the exception path.
+    state_directory.rename(replacement)
+    assert replacement.is_dir()
+
