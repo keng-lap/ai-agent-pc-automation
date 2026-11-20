@@ -46,7 +46,8 @@ class JobStoreCommittedButUnverified(RuntimeError):
         self.committed_version = committed_version
         super().__init__(
             "Job write committed but storage verification failed; after storage is "
-            "trusted again, reconcile by reading this job_id and comparing its persisted state with the intended update; do not retry blindly."
+            "trusted again, reconcile by reading this job_id and comparing its "
+            "persisted state with the intended update; do not retry blindly."
         )
 
 
