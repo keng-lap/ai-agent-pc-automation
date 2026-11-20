@@ -476,8 +476,7 @@ class WindowsSecureStorage:
         handle_value = create_file(
             str(path), access, sharing, ctypes.byref(attributes), 1, flags, None
         )
-        created = handle_value not in (None, 0, invalid_handle)
-        if not created:
+        if handle_value in (None, 0, invalid_handle):
             error = ctypes.get_last_error()
             if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
                 kernel.LocalFree.argtypes = [ctypes.c_void_p]
@@ -501,10 +500,12 @@ class WindowsSecureStorage:
             cls._check_type(handle, False)
             cls._verify_file_security(handle, sid)
         finally:
-            file.CloseHandle(handle)
-            kernel.LocalFree.argtypes = [ctypes.c_void_p]
-            kernel.LocalFree.restype = ctypes.c_void_p
-            kernel.LocalFree(descriptor)
+            try:
+                file.CloseHandle(handle)
+            finally:
+                kernel.LocalFree.argtypes = [ctypes.c_void_p]
+                kernel.LocalFree.restype = ctypes.c_void_p
+                kernel.LocalFree(descriptor)
 
     @classmethod
     def _drive_type(cls, drive_root: str) -> int:
