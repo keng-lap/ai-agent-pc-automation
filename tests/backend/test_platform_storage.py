@@ -92,6 +92,57 @@ def test_linux_adapter_rejects_preexisting_sidecar_before_sqlite_connect(tmp_pat
 
 
 
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux POSIX lock regression test")
+def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
+    import fcntl
+    import os
+    import subprocess
+
+    database = tmp_path / "private-state" / "jobs.sqlite3"
+    database.parent.mkdir(mode=0o700)
+    database.touch(mode=0o600)
+    shm_path = Path(f"{database}-shm")
+    shm_path.touch(mode=0o600)
+
+    descriptor = os.open(shm_path, os.O_RDWR)
+    try:
+        fcntl.lockf(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, os.SEEK_SET)
+        _LinuxDatabaseProtectionLease(database).verify()
+
+        probe = """
+import errno
+import fcntl
+import os
+import sys
+
+fd = os.open(sys.argv[1], os.O_RDWR)
+try:
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, os.SEEK_SET)
+    except OSError as exc:
+        if exc.errno in (errno.EACCES, errno.EAGAIN):
+            print("blocked")
+        else:
+            raise
+    else:
+        print("acquired")
+finally:
+    os.close(fd)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", probe, str(shm_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert result.stdout.strip() == "blocked"
+    finally:
+        fcntl.lockf(descriptor, fcntl.LOCK_UN, 1, 0, os.SEEK_SET)
+        os.close(descriptor)
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
 def test_windows_lease_protects_database_and_sqlite_wal_sidecars(tmp_path):
     state_directory = tmp_path / "private-state"
@@ -439,7 +490,20 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
     first_acquired = threading.Event()
     release_first = threading.Event()
     second_started = threading.Event()
+    second_waiting = threading.Event()
     second_acquired = threading.Event()
+    second_thread = threading.local()
+
+    original_wait = WindowsSecureStorage._wait_for_mutex
+
+    def observe_mutex_wait(wait_function, handle, timeout_ms):
+        if getattr(second_thread, "active", False):
+            second_waiting.set()
+        return original_wait(wait_function, handle, timeout_ms)
+
+    monkeypatch.setattr(
+        WindowsSecureStorage, "_wait_for_mutex", staticmethod(observe_mutex_wait)
+    )
 
     original_create_or_open = WindowsSecureStorage._create_or_open_private_file
 
@@ -462,6 +526,7 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
             assert release_first.wait(timeout=5)
 
     def acquire_second_lease():
+        second_thread.active = True
         second_started.set()
         with WindowsSecureStorage().protect_database(database):
             second_acquired.set()
@@ -472,15 +537,16 @@ def test_windows_named_mutex_serializes_same_database_file_creation(
         second = executor.submit(acquire_second_lease)
         try:
             assert second_started.wait(timeout=5)
-            # Pause A after it created the main database but before it has
-            # finished creating/verifying the complete SQLite file set.
-            assert not second_acquired.wait(timeout=0.2)
+            # Observe B at the native mutex wait boundary before asserting
+            # that it cannot enter while A is still initializing the file set.
+            assert second_waiting.wait(timeout=5)
+            assert not second_acquired.is_set()
         finally:
             continue_first_creation.set()
         assert first_acquired.wait(timeout=5)
         try:
             # B remains excluded while A holds the successful protection lease.
-            assert not second_acquired.wait(timeout=0.2)
+            assert not second_acquired.is_set()
         finally:
             release_first.set()
         first.result(timeout=5)
@@ -656,6 +722,14 @@ def test_windows_lease_rejects_reparse_point_ancestor(tmp_path):
 
 
 def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
+    monkeypatch.setattr(
+        Path,
+        "resolve",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Mutex key generation must not resolve or follow filesystem paths."
+        ),
+    )
+
     class FakeFunction:
         def __init__(self, result):
             self.result = result
@@ -704,3 +778,60 @@ def test_windows_mutex_timeout_closes_handle_without_releasing(monkeypatch):
     assert wait_for_single_object.calls[0][1] == 5_000
     assert close_handle.calls == [(1234,)]
     assert release_mutex.calls == []
+
+
+@pytest.mark.parametrize(
+    "method_name,ace_result",
+    [
+        ("_verify_directory", NotImplementedError),
+        ("_verify_file_security", NotImplementedError),
+        ("_verify_directory", (("allow", 0), 1, "sid", "object-ace-extra")),
+        ("_verify_file_security", (("allow", 0), 1, "sid", "object-ace-extra")),
+    ],
+)
+def test_windows_verification_rejects_unsupported_ace_shapes(
+    monkeypatch, method_name, ace_result
+):
+    class FakeDacl:
+        @staticmethod
+        def GetAceCount():
+            return 1
+
+        @staticmethod
+        def GetAce(_index):
+            if ace_result is NotImplementedError:
+                raise NotImplementedError("conditional/object ACE")
+            return ace_result
+
+    class FakeDescriptor:
+        @staticmethod
+        def GetSecurityDescriptorOwner():
+            return "sid"
+
+        @staticmethod
+        def GetSecurityDescriptorDacl():
+            return FakeDacl()
+
+        @staticmethod
+        def GetSecurityDescriptorControl():
+            return (0x1000, 0)
+
+    class FakeSecurity:
+        SE_FILE_OBJECT = 1
+        OWNER_SECURITY_INFORMATION = 1
+        DACL_SECURITY_INFORMATION = 2
+        SE_DACL_PROTECTED = 0x1000
+
+        @staticmethod
+        def GetSecurityInfo(*_args):
+            return FakeDescriptor()
+
+    monkeypatch.setattr(
+        WindowsSecureStorage,
+        "_api",
+        staticmethod(lambda: (None, None, None, None, None, FakeSecurity())),
+    )
+
+    verify = getattr(WindowsSecureStorage, method_name)
+    with pytest.raises(PlatformStorageUnavailable, match="unsupported ACE format"):
+        verify(object(), "sid")
