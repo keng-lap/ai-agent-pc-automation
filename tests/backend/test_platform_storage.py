@@ -95,10 +95,26 @@ def test_linux_adapter_rejects_preexisting_sidecar_before_sqlite_connect(tmp_pat
 
 
 
+def _probe_posix_lock_from_child(path, result_queue):
+    import errno
+    import fcntl
+
+    with Path(path).open("r+b") as shm_file:
+        try:
+            fcntl.lockf(shm_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
+        except OSError as exc:
+            if exc.errno in (errno.EACCES, errno.EAGAIN):
+                result_queue.put("blocked")
+            else:
+                raise
+        else:
+            result_queue.put("acquired")
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux POSIX lock regression test")
 def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
     import fcntl
-    import subprocess
+    import multiprocessing
 
     database = tmp_path / "private-state" / "jobs.sqlite3"
     database.parent.mkdir(mode=0o700)
@@ -106,39 +122,28 @@ def test_linux_verification_preserves_active_sqlite_shm_posix_lock(tmp_path):
     shm_path = Path(f"{database}-shm")
     shm_path.touch(mode=0o600)
 
-    shm_file = shm_path.open("r+b")
-    descriptor = shm_file.fileno()
-    try:
+    with shm_path.open("r+b") as shm_file:
+        descriptor = shm_file.fileno()
         fcntl.lockf(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
         _LinuxDatabaseProtectionLease(database).verify()
 
-        probe = """
-import errno
-import fcntl
-import sys
-
-with open(sys.argv[1], "r+b") as shm_file:
-    fd = shm_file.fileno()
-    try:
-        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0, 0)
-    except OSError as exc:
-        if exc.errno in (errno.EACCES, errno.EAGAIN):
-            print("blocked")
-        else:
-            raise
-    else:
-        print("acquired")
-"""
-        result = subprocess.run(
-            [sys.executable, "-c", probe, str(shm_path)],
-            check=True,
-            capture_output=True,
-            text=True,
+        context = multiprocessing.get_context("spawn")
+        result_queue = context.Queue()
+        process = context.Process(
+            target=_probe_posix_lock_from_child,
+            args=(str(shm_path), result_queue),
         )
-        assert result.stdout.strip() == "blocked"
-    finally:
+        process.start()
+        process.join(timeout=10)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+            pytest.fail("POSIX lock probe process did not finish.")
+        assert process.exitcode == 0
+        assert result_queue.get(timeout=2) == "blocked"
+        result_queue.close()
+        result_queue.join_thread()
         fcntl.lockf(descriptor, fcntl.LOCK_UN, 1, 0, 0)
-        shm_file.close()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows native ACL integration test")
