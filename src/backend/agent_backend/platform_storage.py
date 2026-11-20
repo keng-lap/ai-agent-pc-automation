@@ -190,22 +190,11 @@ class WindowsSecureStorage:
         ctypes, _pywintypes, _api, _con, file, _security = cls._api()
         attrs = file.GetFileInformationByHandle(handle)[0]
         if attrs & cls._REPARSE:
-            class TagInfo(ctypes.Structure):
-                _fields_: ClassVar[list[tuple[str, object]]] = [
-                    ("attributes", ctypes.c_uint32),
-                    ("tag", ctypes.c_uint32),
-                ]
-            info = TagInfo()
-            kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
-            fn = kernel.GetFileInformationByHandleEx
-            fn.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
-            fn.restype = ctypes.c_int
-            if not fn(ctypes.c_void_p(int(handle)), 9, ctypes.byref(info), ctypes.sizeof(info)):
-                raise PlatformStorageUnavailable("Windows reparse tag could not be verified.")
-            if info.tag in {0xA000000C, 0xA0000003}:
-                raise PlatformStorageUnavailable(
-                    "Windows path contains a redirection reparse point."
-                )
+            # This adapter has no reviewed allow-list of reparse providers.
+            # Reject every reparse point rather than trying to classify tags.
+            raise PlatformStorageUnavailable(
+                "Windows path contains an unsupported reparse point."
+            )
         if bool(attrs & cls._DIRECTORY) != directory:
             raise PlatformStorageUnavailable("Windows SQLite path has an unsafe file type.")
 
@@ -219,30 +208,89 @@ class WindowsSecureStorage:
             raise PlatformStorageUnavailable("Windows SQLite entry owner SID is not current user.")
 
     @classmethod
-    def _secure_directory(cls, handle, sid):
+    def _verify_directory(cls, handle, sid):
+        """Accept only an already-private, protected application state directory.
+
+        Existing ACLs are never rewritten: an unexpected descriptor is a
+        hard failure, not an invitation to change permissions on a caller path.
+        """
         security = cls._api()[5]
-        cls._verify_owner(handle, sid)
-        acl = security.ACL()
-        acl.AddAccessAllowedAceEx(security.ACL_REVISION, cls._OI | cls._CI, cls._ALL_ACCESS, sid)
-        security.SetSecurityInfo(
-            handle, security.SE_FILE_OBJECT,
-            security.DACL_SECURITY_INFORMATION | security.PROTECTED_DACL_SECURITY_INFORMATION,
-            None, None, acl, None,
-        )
         desc = security.GetSecurityInfo(
             handle, security.SE_FILE_OBJECT,
             security.OWNER_SECURITY_INFORMATION | security.DACL_SECURITY_INFORMATION,
         )
+        if desc.GetSecurityDescriptorOwner() != sid:
+            raise PlatformStorageUnavailable(
+                "Windows SQLite state directory owner SID is not current user."
+            )
         dacl = desc.GetSecurityDescriptorDacl()
-        if desc.GetSecurityDescriptorOwner() != sid or dacl is None or dacl.GetAceCount() != 1:
-            raise PlatformStorageUnavailable("Windows SQLite directory DACL is not private.")
+        if dacl is None or dacl.GetAceCount() != 1:
+            raise PlatformStorageUnavailable(
+                "Windows SQLite state directory DACL is not private."
+            )
         header, mask, ace_sid = dacl.GetAce(0)
-        if (header[0] != security.ACCESS_ALLOWED_ACE_TYPE or header[1] != cls._OI | cls._CI
-                or mask != cls._ALL_ACCESS or ace_sid != sid):
-            raise PlatformStorageUnavailable("Windows SQLite directory DACL inheritance is unsafe.")
+        if (
+            header[0] != security.ACCESS_ALLOWED_ACE_TYPE
+            or header[1] != (cls._OI | cls._CI)
+            or mask != cls._ALL_ACCESS
+            or ace_sid != sid
+        ):
+            raise PlatformStorageUnavailable(
+                "Windows SQLite state directory DACL is not the required owner-only ACL."
+            )
         control, _revision = desc.GetSecurityDescriptorControl()
         if not control & security.SE_DACL_PROTECTED:
-            raise PlatformStorageUnavailable("Windows SQLite directory DACL is not protected.")
+            raise PlatformStorageUnavailable(
+                "Windows SQLite state directory DACL is not protected."
+            )
+
+    @classmethod
+    def _create_private_directory(cls, path: Path, sid) -> bool:
+        """Atomically create the state directory with its final owner-only DACL."""
+        ctypes, _pywintypes, _api, _con, _file, security = cls._api()
+        kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        advapi = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
+
+        sid_text = security.ConvertSidToStringSid(sid)
+        sddl = f"O:{sid_text}D:P(A;OICI;GA;;;{sid_text})"
+        descriptor = ctypes.c_void_p()
+        convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        convert.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_uint32),
+        ]
+        convert.restype = ctypes.c_int
+        if not convert(sddl, 1, ctypes.byref(descriptor), None):
+            raise PlatformStorageUnavailable(
+                "Secure Windows SQLite directory security descriptor could not be created."
+            )
+
+        class SecurityAttributes(ctypes.Structure):
+            _fields_ = [
+                ("nLength", ctypes.c_uint32),
+                ("lpSecurityDescriptor", ctypes.c_void_p),
+                ("bInheritHandle", ctypes.c_int),
+            ]
+
+        attributes = SecurityAttributes(
+            ctypes.sizeof(SecurityAttributes), descriptor, 0
+        )
+        create_directory = kernel.CreateDirectoryW
+        create_directory.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(SecurityAttributes)]
+        create_directory.restype = ctypes.c_int
+        try:
+            if create_directory(str(path), ctypes.byref(attributes)):
+                return True
+            error = ctypes.get_last_error()
+            if error == 183:  # ERROR_ALREADY_EXISTS: verify, never rewrite.
+                return False
+            raise PlatformStorageUnavailable(
+                "Windows SQLite state directory could not be created securely."
+            )
+        finally:
+            kernel.LocalFree.argtypes = [ctypes.c_void_p]
+            kernel.LocalFree.restype = ctypes.c_void_p
+            kernel.LocalFree(descriptor)
 
     @contextmanager
     def protect_database(self, path: Path):
@@ -250,6 +298,16 @@ class WindowsSecureStorage:
             raise PlatformStorageUnavailable("Windows SQLite path is unavailable or not absolute.")
         if not path.drive or path.drive.startswith("\\\\"):
             raise PlatformStorageUnavailable("Windows SQLite path must be on a local drive.")
+        ctypes, pywintypes, _api, _con, file, _security = self._api()
+        kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        get_drive_type = kernel.GetDriveTypeW
+        get_drive_type.argtypes = [ctypes.c_wchar_p]
+        get_drive_type.restype = ctypes.c_uint32
+        drive_root = path.drive + "\\\\"
+        if get_drive_type(drive_root) != 3:  # DRIVE_FIXED only; reject mapped/network/removable.
+            raise PlatformStorageUnavailable(
+                "Windows SQLite path must be on a fixed local drive."
+            )
         ctypes, pywintypes, _api, _con, file, _security = self._api()
         sid = self._sid()
         with ExitStack() as stack:
@@ -275,55 +333,25 @@ class WindowsSecureStorage:
                 stack.callback(file.CloseHandle, handle)
                 self._check_type(handle, True)
 
-            created = False
-            final_access = self._READ_ATTRIBUTES | self._READ_CONTROL | self._WRITE_DAC
+            # Create with the final protected owner-only DACL in the
+            # CreateDirectoryW call itself. Existing directories are never
+            # re-permissioned; they must already satisfy the exact policy.
+            self._create_private_directory(path.parent, sid)
             try:
                 directory_handle = file.CreateFile(
-                    str(path.parent), final_access,
-                    self._SHARE_READ | self._SHARE_WRITE, None, self._OPEN_EXISTING,
+                    str(path.parent),
+                    self._READ_ATTRIBUTES | self._READ_CONTROL,
+                    self._SHARE_READ | self._SHARE_WRITE,
+                    None, self._OPEN_EXISTING,
                     self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
                 )
-            except pywintypes.error as exc:
-                code = getattr(exc, "winerror", None)
-                if code is None and getattr(exc, "args", None):
-                    code = exc.args[0]
-                if code not in (2, 3):
-                    raise PlatformStorageUnavailable(
-                        "Existing Windows SQLite state directory could not be opened safely."
-                    ) from None
-                create_directory = ctypes.WinDLL(
-                    "Kernel32.dll", use_last_error=True
-                ).CreateDirectoryW
-                create_directory.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p]
-                create_directory.restype = ctypes.c_int
-                if not create_directory(str(path.parent), None):
-                    create_error = ctypes.get_last_error()
-                    if create_error != 183:
-                        raise PlatformStorageUnavailable(
-                            "Windows SQLite state directory could not be created safely."
-                        ) from None
-                else:
-                    created = True
-                try:
-                    directory_handle = file.CreateFile(
-                        str(path.parent),
-                        final_access | (self._WRITE_OWNER if created else 0),
-                        self._SHARE_READ | self._SHARE_WRITE, None, self._OPEN_EXISTING,
-                        self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
-                    )
-                except pywintypes.error:
-                    raise PlatformStorageUnavailable(
-                        "Windows SQLite state directory could not be pinned safely."
-                    ) from None
+            except pywintypes.error:
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite state directory could not be pinned safely."
+                ) from None
             stack.callback(file.CloseHandle, directory_handle)
             self._check_type(directory_handle, True)
-            if created:
-                security = self._api()[5]
-                security.SetSecurityInfo(
-                    directory_handle, security.SE_FILE_OBJECT,
-                    security.OWNER_SECURITY_INFORMATION, sid, None, None, None,
-                )
-            self._secure_directory(directory_handle, sid)
+            self._verify_directory(directory_handle, sid)
             lease = _WindowsDatabaseProtectionLease(path, sid)
             lease.verify()
             try:
