@@ -1,12 +1,15 @@
-"""Manual two-logon-session probe for the B2 Windows global mutex.
+"""Manual two-session probe for the B2 Windows global mutex.
 
 This exercises the production WindowsSecureStorage protection lease without
-opening SQLite or performing any installation or machine-changing operation.
-Run "hold" in logon session A and "probe" in session B as the same Windows user.
+opening SQLite or performing installation operations. It is NOT read-only:
+protect_database() creates persistent directories, a database file, and
+sidecar files. Use only the dedicated acceptance directory supplied by the
+PowerShell runner, never the application's live state directory.
 """
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
 import os
@@ -20,10 +23,19 @@ from agent_backend.platform_storage import (
 )
 
 
+def _session_id() -> int:
+    session_id = ctypes.c_ulong()
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    process_id = kernel32.GetCurrentProcessId()
+    if not kernel32.ProcessIdToSessionId(process_id, ctypes.byref(session_id)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return int(session_id.value)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("hold", "probe", "verify"))
-    parser.add_argument("--database", required=True, help="Same absolute local path in both sessions")
+    parser.add_argument("--database", required=True, help="Same absolute acceptance database path in both sessions")
     parser.add_argument("--hold-seconds", type=int, default=90)
     args = parser.parse_args()
 
@@ -42,8 +54,11 @@ def main() -> int:
     adapter = WindowsSecureStorage()
     sid_text = adapter._api()[5].ConvertSidToStringSid(adapter._sid())
     sid_fingerprint = hashlib.sha256(sid_text.encode("utf-8")).hexdigest()[:16]
+    session_id = _session_id()
+
     def timestamp() -> str:
         return datetime.now(timezone.utc).isoformat()
+
     if args.mode == "hold":
         try:
             with adapter.protect_database(database):
@@ -51,16 +66,19 @@ def main() -> int:
                     "result": "LOCK_ACQUIRED",
                     "mode": "hold",
                     "pid": os.getpid(),
+                    "windows_session_id": session_id,
                     "user": os.environ.get("USERNAME", ""),
                     "user_sid_sha256": sid_fingerprint,
                     "timestamp_utc": timestamp(),
                     "database": str(database),
                     "hold_seconds": args.hold_seconds,
+                    "filesystem_effects": "Creates persistent acceptance directory, database, and sidecar files.",
                 }), flush=True)
                 time.sleep(args.hold_seconds)
             print(json.dumps({
                 "result": "LOCK_RELEASED",
                 "pid": os.getpid(),
+                "windows_session_id": session_id,
                 "user_sid_sha256": sid_fingerprint,
                 "timestamp_utc": timestamp(),
             }), flush=True)
@@ -81,6 +99,7 @@ def main() -> int:
                 "result": "PASS_ACQUIRED_AFTER_RELEASE",
                 "mode": "verify",
                 "pid": os.getpid(),
+                "windows_session_id": session_id,
                 "user": os.environ.get("USERNAME", ""),
                 "user_sid_sha256": sid_fingerprint,
                 "timestamp_utc": timestamp(),
@@ -93,6 +112,7 @@ def main() -> int:
                 "result": "PASS_CONTENTION_BLOCKED",
                 "mode": "probe",
                 "pid": os.getpid(),
+                "windows_session_id": session_id,
                 "user": os.environ.get("USERNAME", ""),
                 "user_sid_sha256": sid_fingerprint,
                 "timestamp_utc": timestamp(),
