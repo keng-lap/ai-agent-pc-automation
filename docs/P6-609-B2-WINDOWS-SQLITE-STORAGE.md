@@ -4,7 +4,7 @@
 
 **Status: implementation in progress; Windows SQLite storage remains disabled.**
 
-The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates a new state directory with an explicit protected owner-only DACL in the creation call, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and verifies database/sidecar owner and inherited DACL. These changes are not yet accepted for production: Windows integration coverage, independent review, exact-head CI, and Windows 11 Home acceptance remain required.
+The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates or opens the final state directory relative to a pinned immediate-parent handle with NtCreateFile, receives and retains the exact created/opened directory handle, applies an explicit protected owner-only DACL during creation, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and verifies database/sidecar owner and inherited DACL. These changes are not yet accepted for production: Windows integration coverage, independent review, exact-head CI, and Windows 11 Home acceptance remain required.
 
 This slice enables no worker, approval reservation, installer process, WinGet invocation, or machine-changing behavior. The existing Windows fail-closed behavior remains mandatory until implementation, Windows CI, target-machine acceptance, and independent security review pass.
 
@@ -106,3 +106,14 @@ The first independent review identified four blocking concerns. The current impl
 - **Reparse points:** every reparse point is rejected until a specific provider/tag is separately reviewed and allow-listed.
 
 Windows storage remains disabled in the production factory. The new Windows regression tests cover rejection of arbitrary reparse tags, mapped drive types, and non-private pre-existing state directories without ACL mutation. Additional native Windows acceptance cases in the checklist above remain open.
+
+
+## Parent namespace race remediation attempt (2026-11-20)
+
+The final state-directory operation no longer uses a path-based CreateDirectoryW followed by a separate path-based open. The adapter now:
+
+1. Pins the final directory's immediate parent with child-creation rights and without FILE_SHARE_DELETE.
+2. Creates the child relative to that pinned parent using NtCreateFile, supplying the protected owner-only security descriptor in the same call.
+3. Retains the handle returned by NtCreateFile (or opens the pre-existing child relative to the same parent after a create collision) and verifies that exact handle before SQLite is allowed to open the database.
+
+This is intended to bind creation/open and verification to the same directory object, removing the former create-then-reopen-by-path substitution window. It is **not yet accepted as closed**: the exact-head Windows native workflow must validate the NtCreateFile structure/handle interop and all existing Windows acceptance tests, followed by independent review. Windows storage remains disabled and this PR remains Draft.
