@@ -13,7 +13,7 @@ import stat
 import sys
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 
 class PlatformStorageUnavailable(RuntimeError):
@@ -309,7 +309,7 @@ class WindowsSecureStorage:
         )
         attributes = ObjectAttributes(
             ctypes.sizeof(ObjectAttributes),
-            parent_handle,
+            int(parent_handle),
             ctypes.pointer(object_name),
             cls._OBJ_CASE_INSENSITIVE,
             descriptor,
@@ -359,7 +359,7 @@ class WindowsSecureStorage:
                     raise PlatformStorageUnavailable(
                         "Existing Windows SQLite state directory could not be opened safely."
                     )
-            return result_handle
+            return pywintypes.HANDLE(result_handle.value)
         finally:
             kernel.LocalFree.argtypes = [ctypes.c_void_p]
             kernel.LocalFree.restype = ctypes.c_void_p
@@ -417,13 +417,18 @@ class WindowsSecureStorage:
             # Open and pin the immediate parent with child-creation rights.
             # Its ancestors are already pinned above, so its namespace cannot
             # be renamed while the child is created relative to this handle.
-            parent_handle = file.CreateFile(
-                str(path.parent.parent),
-                self._READ_ATTRIBUTES | self._READ_CONTROL | self._FILE_ADD_SUBDIRECTORY,
-                self._SHARE_READ | self._SHARE_WRITE,
-                None, self._OPEN_EXISTING,
-                self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
-            )
+            try:
+                parent_handle = file.CreateFile(
+                    str(path.parent.parent),
+                    self._READ_ATTRIBUTES | self._READ_CONTROL | self._FILE_ADD_SUBDIRECTORY,
+                    self._SHARE_READ | self._SHARE_WRITE,
+                    None, self._OPEN_EXISTING,
+                    self._BACKUP_SEMANTICS | self._OPEN_REPARSE_POINT, None,
+                )
+            except pywintypes.error:
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite parent directory could not be pinned safely."
+                ) from None
             stack.callback(file.CloseHandle, parent_handle)
             self._check_type(parent_handle, True)
 
