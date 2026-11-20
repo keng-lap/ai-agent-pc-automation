@@ -159,10 +159,21 @@ The Windows concurrent-store integration test must pass on the exact new head. T
 - The Windows workflow path filters now include `src/backend/agent_backend/jobs_api.py` for both pull-request and main-branch push events.
 - The current directory-creation description names `NtCreateFile` as the API receiving the protected security descriptor. The former `CreateDirectoryW` and `FILE_DELETE_CHILD` statements are explicitly identified as superseded attempts.
 - SQLite initialization now checks the returned `PRAGMA journal_mode = WAL` value and fails closed unless SQLite reports `wal`.
-- Linux lease acquisition verifies existing database and sidecar entries before yielding to SQLite. Verification opens each entry once with no-follow semantics and applies ownership/mode checks through the opened descriptor; a sidecar that disappears before open is treated as absent.
+- Linux lease acquisition verifies existing database and sidecar entries before yielding to SQLite. Verification pins each entry with `O_PATH | O_NOFOLLOW`, checks ownership/type/mode through `fstat`, and tightens mode through the pinned `/proc/self/fd/<n>` target when needed. It deliberately avoids opening/closing ordinary descriptors for the database or `-shm`, because Linux POSIX record locks are process-associated and closing another descriptor for the inode can release SQLite locks. A sidecar that disappears before the atomic `O_PATH` open is treated as absent.
 - Windows no longer relies on SQLite's process-token default owner. The adapter pre-creates all four SQLite file-set members with an explicit current-user owner and protected owner-only DACL before SQLite connects. Existing files are only opened and verified; owner or ACL mismatches fail closed without repair. Same-database leases remain serialized by the named mutex.
 - Native pywin32 errors are translated at the Windows adapter boundary to `PlatformStorageUnavailable`, which the job store translates to `JobStoreUnavailable`; exception paths retain ExitStack cleanup.
 - The job store reports `JobStoreCommittedButUnverified` when a progress update or transition has committed but the subsequent storage verification fails. Callers must not blindly retry; after storage is trusted again, they should read the job ID and reconcile its persisted state with the intended update.
 - Regression coverage records the SQLite-open event after lease entry, tracks all directory handles in the forced-failure cleanup test, tests pre-existing Linux sidecar rejection before SQLite connects, and exercises same-database Windows mutex serialization.
 
 These changes do not enable Windows storage. The production factory remains fail-closed. The Windows named-mutex namespace/security descriptor, broader Windows wrong-owner and broad-DACL fixtures, database/sidecar reparse-point fixtures, and independent native interop review remain acceptance gates.
+
+
+## Follow-up CodeRabbit findings (2026-11-20)
+
+The fresh review of head `a73587a` identified additional issues; the PR is not ready for acceptance:
+
+- **Linux POSIX lock preservation:** verification now uses `O_PATH | O_NOFOLLOW` descriptors, not ordinary read descriptors. Type, owner, and mode are checked with `fstat`; mode tightening targets the pinned object through `/proc/self/fd/<n>`. A new second-process regression attempts to prove that verifying an active `-shm` file does not release an existing POSIX lock. This requires Linux CI validation.
+- **Windows ACE decoding:** directory and file DACL verification now rejects unsupported pywin32 ACE tuple shapes and translates `NotImplementedError` / malformed tuples to `PlatformStorageUnavailable`. Unit tests cover conditional/object ACE representations.
+- **Windows mutex key:** key generation now normalizes the absolute path lexically and does not call `Path.resolve()`, avoiding reparse-point traversal or network lookup before namespace validation.
+- **Windows mutex contention test:** a small wait seam lets the integration test signal when the second thread reaches the native wait boundary before asserting that the first lease excludes it.
+- **Still pending:** exact-head CI, fresh CodeRabbit review of the new head, and independent native security review. Windows storage remains disabled and this PR remains Draft.
