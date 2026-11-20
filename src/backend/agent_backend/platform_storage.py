@@ -388,6 +388,125 @@ class WindowsSecureStorage:
             kernel.LocalFree(descriptor)
 
     @classmethod
+    def _verify_file_security(cls, handle, sid) -> None:
+        """Require an explicit protected owner-only DACL and the expected owner."""
+        security = cls._api()[5]
+        desc = security.GetSecurityInfo(
+            handle,
+            security.SE_FILE_OBJECT,
+            security.OWNER_SECURITY_INFORMATION | security.DACL_SECURITY_INFORMATION,
+        )
+        if desc.GetSecurityDescriptorOwner() != sid:
+            raise PlatformStorageUnavailable(
+                "Windows SQLite entry owner SID is not current user."
+            )
+        dacl = desc.GetSecurityDescriptorDacl()
+        if dacl is None or dacl.GetAceCount() != 1:
+            raise PlatformStorageUnavailable(
+                "SQLite database or sidecar DACL is not private."
+            )
+        header, mask, ace_sid = dacl.GetAce(0)
+        if (
+            header[0] != security.ACCESS_ALLOWED_ACE_TYPE
+            or header[1] != 0
+            or mask != cls._ALL_ACCESS
+            or ace_sid != sid
+        ):
+            raise PlatformStorageUnavailable(
+                "SQLite database or sidecar DACL is not the explicit owner-only ACL."
+            )
+        control, _revision = desc.GetSecurityDescriptorControl()
+        if not control & security.SE_DACL_PROTECTED:
+            raise PlatformStorageUnavailable(
+                "SQLite database or sidecar DACL is not protected."
+            )
+
+    @classmethod
+    def _create_or_open_private_file(cls, path: Path, sid) -> None:
+        """Create each SQLite file-set member with an explicit owner/DACL.
+
+        SQLite then opens an already-created file. This avoids relying on the
+        process token's default owner, which can differ from TokenUser.
+        Existing entries are only opened and verified; they are never repaired.
+        """
+        ctypes, pywintypes, _api, _con, file, security = cls._api()
+        sid_text = security.ConvertSidToStringSid(sid)
+        sddl = f"O:{sid_text}D:P(A;;0x001F01FF;;;{sid_text})"
+        descriptor = ctypes.c_void_p()
+        advapi = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
+        kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
+        convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        convert.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+        convert.restype = ctypes.c_int
+        if not convert(sddl, 1, ctypes.byref(descriptor), None):
+            raise PlatformStorageUnavailable(
+                "Secure Windows SQLite file security descriptor could not be created."
+            )
+
+        class SecurityAttributes(ctypes.Structure):
+            _fields_: ClassVar[list[tuple[str, object]]] = [
+                ("nLength", ctypes.c_ulong),
+                ("lpSecurityDescriptor", ctypes.c_void_p),
+                ("bInheritHandle", ctypes.c_int),
+            ]
+
+        attributes = SecurityAttributes(
+            ctypes.sizeof(SecurityAttributes), descriptor, 0
+        )
+        create_file = kernel.CreateFileW
+        create_file.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.POINTER(SecurityAttributes),
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+        ]
+        create_file.restype = ctypes.c_void_p
+        invalid_handle = ctypes.c_void_p(-1).value
+        access = 0x80000000 | 0x40000000 | cls._READ_CONTROL
+        sharing = cls._SHARE_READ | cls._SHARE_WRITE | cls._SHARE_DELETE
+        flags = 0x80 | cls._OPEN_REPARSE_POINT
+        handle_value = create_file(
+            str(path), access, sharing, ctypes.byref(attributes), 1, flags, None
+        )
+        created = handle_value not in (None, 0, invalid_handle)
+        if not created:
+            error = ctypes.get_last_error()
+            if error not in (80, 183):  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
+                kernel.LocalFree.argtypes = [ctypes.c_void_p]
+                kernel.LocalFree.restype = ctypes.c_void_p
+                kernel.LocalFree(descriptor)
+                raise PlatformStorageUnavailable(
+                    "Windows SQLite database or sidecar could not be created securely."
+                )
+            handle_value = create_file(
+                str(path), access, sharing, None, cls._OPEN_EXISTING, flags, None
+            )
+            if handle_value in (None, 0, invalid_handle):
+                kernel.LocalFree.argtypes = [ctypes.c_void_p]
+                kernel.LocalFree.restype = ctypes.c_void_p
+                kernel.LocalFree(descriptor)
+                raise PlatformStorageUnavailable(
+                    "Existing Windows SQLite database or sidecar could not be opened safely."
+                )
+        handle = pywintypes.HANDLE(handle_value)
+        try:
+            cls._check_type(handle, False)
+            cls._verify_file_security(handle, sid)
+        finally:
+            file.CloseHandle(handle)
+            kernel.LocalFree.argtypes = [ctypes.c_void_p]
+            kernel.LocalFree.restype = ctypes.c_void_p
+            kernel.LocalFree(descriptor)
+
+    @classmethod
     def _drive_type(cls, drive_root: str) -> int:
         ctypes = cls._api()[0]
         kernel = ctypes.WinDLL("Kernel32.dll", use_last_error=True)
@@ -540,6 +659,11 @@ class WindowsSecureStorage:
             self._check_type(directory_handle, True)
             self._verify_directory(directory_handle, sid)
             lease = _WindowsDatabaseProtectionLease(path, sid)
+            # Pre-create the complete SQLite file set with an explicit owner
+            # and protected DACL. SQLite never gets to create an entry using
+            # the process token's potentially different default owner.
+            for entry in lease._entries():
+                self._create_or_open_private_file(entry, sid)
             lease.verify()
             try:
                 yield lease
@@ -585,28 +709,9 @@ class _WindowsDatabaseProtectionLease:
                     raise
                 try:
                     adapter._check_type(handle, False)
-                    # Never change the owner of a file based on a pathname
-                    # snapshot. A newly observed name is not proof SQLite
-                    # created that object; require the expected owner as-is.
-                    adapter._verify_owner(handle, self._sid)
-                    desc = security.GetSecurityInfo(
-                        handle, security.SE_FILE_OBJECT, security.DACL_SECURITY_INFORMATION
-                    )
-                    dacl = desc.GetSecurityDescriptorDacl()
-                    if dacl is None or dacl.GetAceCount() != 1:
-                        raise PlatformStorageUnavailable(
-                            "SQLite database or sidecar DACL is not private."
-                        )
-                    header, mask, ace_sid = dacl.GetAce(0)
-                    if (
-                        header[0] != security.ACCESS_ALLOWED_ACE_TYPE
-                        or not header[1] & adapter._INHERITED
-                        or mask != adapter._ALL_ACCESS
-                        or ace_sid != self._sid
-                    ):
-                        raise PlatformStorageUnavailable(
-                            "SQLite database or sidecar DACL is not inherited safely."
-                        )
+                    # Every file-set member was created or opened and
+                    # verified before SQLite was allowed to connect.
+                    adapter._verify_file_security(handle, self._sid)
                 finally:
                     file.CloseHandle(handle)
         except PlatformStorageUnavailable:
