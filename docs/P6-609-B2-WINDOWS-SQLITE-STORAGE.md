@@ -4,7 +4,7 @@
 
 **Status: implementation in progress; Windows SQLite storage remains disabled.**
 
-The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates or opens the final state directory relative to a pinned immediate-parent handle with NtCreateFile, receives and retains the exact created/opened directory handle, applies an explicit protected owner-only DACL during creation, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and verifies database/sidecar owner and inherited DACL. These changes are not yet accepted for production: Windows integration coverage, independent review, exact-head CI, and Windows 11 Home acceptance remain required.
+The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates or opens the final state directory relative to a pinned immediate-parent handle with NtCreateFile, receives and retains the exact created/opened directory handle, applies an explicit protected owner-only DACL during creation, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and pre-creates the database plus WAL/SHM/journal entries with explicit current-user owner and protected owner-only DACLs before SQLite connects. These changes are not yet accepted for production: Windows integration coverage, independent review, exact-head CI, and Windows 11 Home acceptance remain required.
 
 This slice enables no worker, approval reservation, installer process, WinGet invocation, or machine-changing behavior. The existing Windows fail-closed behavior remains mandatory until implementation, Windows CI, target-machine acceptance, and independent security review pass.
 
@@ -23,15 +23,15 @@ Do not simply call `WindowsSecretFile` on the main database file and then pass i
 - Accept only an absolute local-drive path beneath a dedicated application-owned state directory; reject UNC/network paths, device paths, relative paths, and unsupported path forms.
 - Open each ancestor component with `FILE_FLAG_OPEN_REPARSE_POINT`; inspect the opened handle, reject path-redirection reparse tags, verify directory type, and retain handles without `FILE_SHARE_DELETE` for the entire SQLite connection lifetime.
 - Never take ownership of an existing directory. The final application state directory must be owned by the current process token's user SID.
-- Create a new dedicated state directory atomically with an explicit protected DACL granting access only to the current user SID, including intended inheritance for SQLite-created children. For an existing directory, verify the exact owner/DACL and fail closed if it differs; never rewrite an existing directory ACL. Do not alter ACLs on shared ancestors such as the user's profile directory.
+- Create a new dedicated state directory atomically with an explicit protected DACL granting access only to the current user SID. Do not rely on the process token's default owner for SQLite-created files. For an existing directory, verify the exact owner/DACL and fail closed if it differs; never rewrite an existing directory ACL. Do not alter ACLs on shared ancestors such as the user's profile directory.
 - If any ancestor cannot be pinned or verified, fail closed before SQLite opens the database.
 
 ### 2. Database and sidecar protection
 
 - Treat the following as one protected file set: database, `-wal`, `-shm`, and any SQLite journal file used by the configured journal mode.
-- Before connecting, inspect any existing member through a handle opened with `FILE_FLAG_OPEN_REPARSE_POINT`; reject directories, path-redirection reparse points, wrong-owner files, and DACLs that grant access to any other SID.
+- Before connecting, create each missing member (database, `-wal`, `-shm`, and `-journal`) with `CreateFileW(CREATE_NEW)` and a security descriptor that explicitly sets the current-user owner and a protected owner-only DACL. For an existing member, open it with `FILE_FLAG_OPEN_REPARSE_POINT`; reject directories, path-redirection reparse points, wrong-owner files, and any DACL other than the exact protected owner-only ACL. Never repair an existing entry.
 - Configure WAL, foreign keys, `synchronous=FULL`, and busy timeout only after the protected directory lease is active.
-- The directory DACL must ensure newly created WAL/SHM/journal files inherit owner-only access. Verify the actual owner and effective DACL of the database and any sidecar after SQLite has opened/created them. If verification fails, close the SQLite connection and all handles, then fail closed.
+- The adapter pre-creates the complete SQLite file set with explicit security descriptors before SQLite opens the database, avoiding the token-default-owner mismatch observed on Windows Hosted Runner. Verify the owner and protected DACL on the exact creation/open handle and again through the lease after SQLite connects. If verification fails, close the SQLite connection and all handles, then fail closed.
 - Keep the directory lease and its pinned handles alive until the SQLite connection is closed. No adapter method may return after checking a path while releasing the handles before SQLite uses that path.
 - Do not unlink, rename, or repair an unsafe database/sidecar automatically. Preserve evidence and report storage unavailable.
 
@@ -43,7 +43,7 @@ The lease must:
 1. Secure and pin the directory ancestry.
 2. Validate existing database and sidecar entries.
 3. Permit SQLite to open the database only while the lease is held.
-4. Verify database and sidecar owner/DACL state after SQLite opens and after sidecar creation.
+4. Pre-create missing database/sidecar entries with explicit owner and DACL, then verify every entry before SQLite opens and throughout the connection lease.
 5. Keep handles pinned until SQLite connection close.
 6. Close all native handles deterministically on success and every exception path.
 
@@ -65,7 +65,7 @@ The lease must:
 Add a dedicated Windows workflow job (or extend `.github/workflows/windows-process-containment.yml`) to run the following against real NTFS paths:
 
 1. New database directory and database have the expected current-user owner and protected owner-only DACL.
-2. WAL mode creates `-wal` and `-shm` as applicable; every present sidecar has the expected owner and owner-only effective DACL.
+2. SQLite can use the pre-created `-wal`, `-shm`, and `-journal` entries; every present member has the expected owner and protected owner-only DACL.
 3. Reopen a second store instance and prove persisted jobs/events survive close/reopen.
 4. Keep a store connection open and prove ancestor directory rename/replacement is denied while its protection lease is held.
 5. Reject a symlink/junction/mount-point ancestor and a database or sidecar reparse point.
@@ -149,7 +149,7 @@ Added a Windows-native integration test that opens two independent `SQLiteJobSto
 
 **Historical failure:** an earlier implementation attempted to correct the owner SID of newly observed SQLite entries. A concurrent lease could classify an entry before that correction completed. That owner-correction approach has been removed: the current implementation never changes a database or sidecar owner and rejects any entry whose owner SID is not already the current user.
 
-The adapter continues to acquire a per-user, per-canonical-database-path Windows named mutex before pinning the directory and taking the database/sidecar snapshot. The mutex remains held for the complete protection-lease and SQLite-connection lifetime, including post-open owner/DACL verification and connection close. This deliberately serializes access to the same protected database across independent store instances/processes; it favors deterministic security initialization over parallel connections. Different database paths remain independent. The mutex uses the Windows local-session namespace and the OS-created default security descriptor; its namespace ACL and cross-session assumptions still require independent security review. A Windows-native integration test now holds one lease while a second store instance attempts to acquire the same database lease, proving that the second cannot enter until the first releases it.
+The adapter continues to acquire a per-user, per-canonical-database-path Windows named mutex before pinning the directory and creating/opening the database/sidecar set. The mutex remains held for the complete protection-lease and SQLite-connection lifetime, including post-open owner/DACL verification and connection close. This deliberately serializes access to the same protected database across independent store instances/processes; it favors deterministic security initialization over parallel connections. Different database paths remain independent. The mutex uses the Windows local-session namespace and the OS-created default security descriptor; its namespace ACL and cross-session assumptions still require independent security review. A Windows-native integration test now holds one lease while a second store instance attempts to acquire the same database lease, proving that the second cannot enter until the first releases it.
 
 The Windows concurrent-store integration test must pass on the exact new head. This is a race-remediation attempt, not security approval; Windows storage remains disabled and the PR remains Draft.
 
@@ -160,7 +160,7 @@ The Windows concurrent-store integration test must pass on the exact new head. T
 - The current directory-creation description names `NtCreateFile` as the API receiving the protected security descriptor. The former `CreateDirectoryW` and `FILE_DELETE_CHILD` statements are explicitly identified as superseded attempts.
 - SQLite initialization now checks the returned `PRAGMA journal_mode = WAL` value and fails closed unless SQLite reports `wal`.
 - Linux lease acquisition verifies existing database and sidecar entries before yielding to SQLite. Verification opens each entry once with no-follow semantics and applies ownership/mode checks through the opened descriptor; a sidecar that disappears before open is treated as absent.
-- Windows file verification no longer changes an entry's owner based on absence from a pathname snapshot. It requires the current-user SID as found and rejects mismatches without modifying the entry. Same-database leases remain serialized by the named mutex.
+- Windows no longer relies on SQLite's process-token default owner. The adapter pre-creates all four SQLite file-set members with an explicit current-user owner and protected owner-only DACL before SQLite connects. Existing files are only opened and verified; owner or ACL mismatches fail closed without repair. Same-database leases remain serialized by the named mutex.
 - Native pywin32 errors are translated at the Windows adapter boundary to `PlatformStorageUnavailable`, which the job store translates to `JobStoreUnavailable`; exception paths retain ExitStack cleanup.
 - The job store reports `JobStoreCommittedButUnverified` when a progress update or transition has committed but the subsequent storage verification fails. Callers must not blindly retry; after storage is trusted again, they should read the job ID and reconcile its persisted state with the intended update.
 - Regression coverage records the SQLite-open event after lease entry, tracks all directory handles in the forced-failure cleanup test, tests pre-existing Linux sidecar rejection before SQLite connects, and exercises same-database Windows mutex serialization.
