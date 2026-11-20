@@ -21,7 +21,7 @@ from agent_backend.platform_storage import (
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("hold", "probe"))
+    parser.add_argument("mode", choices=("hold", "probe", "verify"))
     parser.add_argument("--database", required=True, help="Same absolute local path in both sessions")
     parser.add_argument("--hold-seconds", type=int, default=90)
     args = parser.parse_args()
@@ -59,13 +59,22 @@ def main() -> int:
 
     try:
         with adapter.protect_database(database):
-            print(
-                "FAIL: second logon session acquired the lease while session A should hold it.",
-                flush=True,
-            )
-            return 3
+            if args.mode == "probe":
+                print(
+                    "FAIL: second logon session acquired the lease while session A should hold it.",
+                    flush=True,
+                )
+                return 3
+            print(json.dumps({
+                "result": "PASS_ACQUIRED_AFTER_RELEASE",
+                "mode": "verify",
+                "pid": os.getpid(),
+                "user": os.environ.get("USERNAME", ""),
+                "database": str(database),
+            }), flush=True)
+            return 0
     except PlatformStorageUnavailable as exc:
-        if "mutex acquisition timed out" in str(exc).lower():
+        if args.mode == "probe" and "mutex acquisition timed out" in str(exc).lower():
             print(json.dumps({
                 "result": "PASS_CONTENTION_BLOCKED",
                 "mode": "probe",
@@ -75,7 +84,7 @@ def main() -> int:
                 "detail": str(exc),
             }), flush=True)
             return 0
-        print(f"FAIL: probe failed for a reason other than mutex timeout: {exc}", flush=True)
+        print(f"FAIL: {args.mode} did not meet its expected mutex result: {exc}", flush=True)
         return 2
 
 
