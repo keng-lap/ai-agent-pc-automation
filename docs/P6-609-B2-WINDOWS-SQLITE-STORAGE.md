@@ -227,7 +227,7 @@ The following status supersedes earlier commit-specific snapshots in this docume
 **Still required before this B2 slice can be accepted or merged:**
 
 1. Independent native Windows security review of the ctypes/NT API ABI and structures, handle lifetime/cleanup, file and mutex DACLs, access masks, global mutex namespace, and ancestor rename exclusion.
-2. A completed B2-specific threat-model review.
+2. Independent review and approval of the B2-specific threat-model draft at `docs/threat-models/P6-609-B2-WINDOWS-SQLITE-STORAGE.md`.
 3. A real Windows 11 Home target-machine acceptance run.
 4. A two-logon-session test proving the same user's sessions coordinate on the same global mutex.
 5. Completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL and database/sidecar reparse-point cases.
