@@ -371,7 +371,7 @@ describe('App chat UI (T-202)', () => {
       tool_result: null,
       approved: false,
       questions: [],
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      notice: 'PLAN_REVIEW_ONLY_NO_EXECUTION',
     });
 
     send('Prepare installation of Google Chrome');
@@ -1175,7 +1175,7 @@ describe('Structured Agent response (T-404)', () => {
     fixture.destroy();
   });
 
-  it('renders a Java install plan but blocks the legacy dry-run approval path', async () => {
+  it('does not render a Dry Run plan for multi-package Java setup', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -1187,31 +1187,11 @@ describe('Structured Agent response (T-404)', () => {
         steps: [{ order: 1, kind: 'present_plan', title: 'แสดงแผน', detail: 'ตรวจสอบรายการก่อน' }],
         prerequisites: [{ id: 'runtime_toolchain', order: 1, title: 'เลือก JDK', reason: 'ต้องระบุเวอร์ชัน', status: 'user_confirmation_needed' }],
       },
-      dry_run_plan: {
-        tool_id: 'software.install',
-        plan_id: 'a'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1,
-          program: 'JDK',
-          version: 'ยังไม่ได้ระบุ',
-          purpose: 'ชุดพัฒนา Java',
-          reason: 'จำเป็นสำหรับคอมไพล์และรัน Java',
-          source: 'ยังไม่ได้ตรวจสอบ',
-          source_verification: 'NOT_CHECKED',
-          dependencies: [],
-          dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null,
-          impact: 'ยังไม่ได้ตรวจสอบ',
-          status: 'NEEDS_CLARIFICATION',
-        }],
-      },
-      tool_result: { status: 'dry_run', summary: 'would install JDK; no changes were made' },
+      dry_run_plan: null,
+      tool_result: null,
       questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
       approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      notice: 'PLAN_REVIEW_ONLY_NO_EXECUTION',
     });
     await TestBed.configureTestingModule({
       imports: [App],
@@ -1228,12 +1208,9 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
 
     const view = fixture.nativeElement as HTMLElement;
-    expect(view.textContent).toContain('คำขอที่ได้รับ');
-    expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
-    expect(view.textContent).toContain('JDK');
-    expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
-    expect(view.textContent).toContain('ติดตั้งจริงต้องใช้ WinGet Approval');
-    expect(view.textContent).not.toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
+    expect(view.textContent).toContain('ควรเริ่มจาก JDK และเลือก IDE ที่ต้องการ');
+    expect(view.textContent).not.toContain('DRY RUN ONLY');
+    expect(view.textContent).not.toContain('ผลการจำลอง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
