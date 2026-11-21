@@ -609,36 +609,7 @@ export class App implements AfterViewChecked {
           discovery: { query: softwareQuery, status: 'searching' },
         },
       ]);
-      this.planning.set(true);
-      defer(() => this.chatApi.searchSoftwareCatalog(softwareQuery))
-        .pipe(
-          timeout({ first: REQUEST_TIMEOUT_MS }),
-          take(1),
-          finalize(() => this.planning.set(false)),
-        )
-        .subscribe({
-          next: (result: unknown) => {
-            this.entries.update((entries) => entries.map((entry) => {
-              if (entry.id !== discoveryEntryId || !entry.discovery) return entry;
-              if (!isSoftwareCatalogSearchResponse(result)) {
-                return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Catalog ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid catalog response.' } };
-              }
-              return {
-                ...entry,
-                discovery: {
-                  ...entry.discovery,
-                  status: result.candidates.length ? 'matches' : 'not_found',
-                  catalog: result,
-                },
-              };
-            }));
-          },
-          error: () => this.entries.update((entries) => entries.map((entry) => (
-            entry.id === discoveryEntryId && entry.discovery
-              ? { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'ค้นหา Microsoft Catalog ไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend แล้วลองใหม่' : 'Microsoft Catalog search failed. Check the backend connection and try again.' } }
-              : entry
-          ))),
-        });
+      this.beginSoftwareCatalogSearch(discoveryEntryId, softwareQuery);
       return;
     }
 
@@ -658,20 +629,40 @@ export class App implements AfterViewChecked {
               { id: entryId, kind: 'agent', text: '', response: this.isStructuredAgentResponse(response) ? response : undefined },
             ]);
             this.planning.set(true);
+            let delegatedToSoftwareDiscovery = false;
             defer(() => this.chatApi.createPlan(message, languageAtSend))
               .pipe(
                 timeout({ first: REQUEST_TIMEOUT_MS }),
                 take(1),
-                finalize(() => this.planning.set(false)),
+                finalize(() => {
+                  if (!delegatedToSoftwareDiscovery) this.planning.set(false);
+                }),
               )
               .subscribe({
-                next: (review: PlanReviewResponse) => this.entries.update((entries) =>
-                  entries.map((entry) => entry.id === entryId
+                next: (review: PlanReviewResponse) => {
+                  if (
+                    isPlanReviewResponse(review)
+                    && review.interpretation.category === 'software_install'
+                    && review.interpretation.target
+                  ) {
+                    delegatedToSoftwareDiscovery = true;
+                    this.entries.update((entries) => entries.map((entry) => entry.id === entryId
+                      ? {
+                        ...entry,
+                        text: '',
+                        review: undefined,
+                        discovery: { query: review.interpretation.target as string, status: 'searching' },
+                      }
+                      : entry));
+                    this.beginSoftwareCatalogSearch(entryId, review.interpretation.target);
+                    return;
+                  }
+                  this.entries.update((entries) => entries.map((entry) => entry.id === entryId
                     ? (isPlanReviewResponse(review)
                       ? { ...entry, text: review.dry_run_plan ? '' : response.reply, review }
                       : { ...entry, text: response.reply, planError: true })
-                    : entry),
-                ),
+                    : entry));
+                },
                 error: () => this.entries.update((entries) =>
                   entries.map((entry) => entry.id === entryId
                     ? { ...entry, text: response.reply, planError: true }
@@ -692,6 +683,37 @@ export class App implements AfterViewChecked {
       });
   }
 
+
+  private beginSoftwareCatalogSearch(entryId: number, query: string): void {
+    this.planning.set(true);
+    defer(() => this.chatApi.searchSoftwareCatalog(query))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result: unknown) => this.entries.update((entries) => entries.map((entry) => {
+          if (entry.id !== entryId || !entry.discovery) return entry;
+          if (!isSoftwareCatalogSearchResponse(result)) {
+            return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Catalog ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid catalog response.' } };
+          }
+          return {
+            ...entry,
+            discovery: {
+              ...entry.discovery,
+              status: result.candidates.length ? 'matches' : 'not_found',
+              catalog: result,
+            },
+          };
+        })),
+        error: () => this.entries.update((entries) => entries.map((entry) => (
+          entry.id === entryId && entry.discovery
+            ? { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'ค้นหา Microsoft Catalog ไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend แล้วลองใหม่' : 'Microsoft Catalog search failed. Check the backend connection and try again.' } }
+            : entry
+        ))),
+      });
+  }
 
   protected selectSoftwarePackage(entryId: number, packageId: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
