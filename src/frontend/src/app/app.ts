@@ -245,7 +245,7 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
     ))
     || !Array.isArray(value['questions'])
     || !value['questions'].every((question) => typeof question === 'string')
-    || value['notice'] !== 'DRY_RUN_ONLY_NO_CHANGES_MADE'
+    || !['DRY_RUN_ONLY_NO_CHANGES_MADE', 'PLAN_REVIEW_ONLY_NO_EXECUTION'].includes(String(value['notice']))
     || typeof value['approved'] !== 'boolean'
   ) return false;
 
