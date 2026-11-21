@@ -43,7 +43,7 @@ class SoftwareEvidenceRegistry:
         clock: Callable[[], datetime] | None = None,
         capacity: int = MAX_EVIDENCE,
         signer_sha256_verifier: Callable[[InstallerCandidate, str], bool] | None = None,
-        trust_anchor_configured: bool | None = None,
+        trust_anchor_configured: bool | Callable[[], bool] | None = None,
     ) -> None:
         if type(capacity) is not int or not 1 <= capacity <= MAX_EVIDENCE:
             raise ValueError("evidence capacity must be between 1 and 128")
@@ -64,7 +64,8 @@ class SoftwareEvidenceRegistry:
     @property
     def trust_anchor_configured(self) -> bool:
         """Whether a backend-owned publisher certificate pin is configured."""
-        return self._trust_anchor_configured
+        configured = self._trust_anchor_configured
+        return configured() if callable(configured) else configured
 
     def register_staged_candidate(
         self,
@@ -217,8 +218,13 @@ def _dbeaver_signer_sha256_matches(candidate: InstallerCandidate, fingerprint: s
     )
 
 
-_DBEAVER_SIGNER_PIN = os.environ.get("AI_AGENT_DBEAVER_SIGNER_SHA256", "").strip().lower()
 software_evidence_registry = SoftwareEvidenceRegistry(
     signer_sha256_verifier=_dbeaver_signer_sha256_matches,
-    trust_anchor_configured=bool(re.fullmatch(r"[0-9a-f]{64}", _DBEAVER_SIGNER_PIN)),
+    # Evaluate after load_settings has loaded the repository-root .env file.
+    trust_anchor_configured=lambda: bool(
+        re.fullmatch(
+            r"[0-9a-f]{64}",
+            os.environ.get("AI_AGENT_DBEAVER_SIGNER_SHA256", "").strip().lower(),
+        )
+    ),
 )
