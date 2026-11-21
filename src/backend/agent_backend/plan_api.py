@@ -243,6 +243,12 @@ def create_plan_step_up_challenge(
     except PlanNotFoundError:
         raise HTTPException(status_code=404, detail="Plan not found.") from None
 
+    if plan.tool_id == "software.install":
+        raise HTTPException(
+            status_code=409,
+            detail="Software installs require verified package evidence and the dedicated exact-action approval route.",
+        )
+
     if (
         plan.risk_class != "R1"
         or plan.required_permission != "P1"
@@ -308,6 +314,14 @@ def approve_plan_review(
         # Do not return a cached approval result before authenticating this request.
         # A plan ID is an opaque reference, not a bearer authorization token.
         # A retry must prove a fresh owner/session-bound TOTP challenge first.
+
+        # Real installs must never fall through the legacy mock/dry-run approval path.
+        # They require verified package evidence, exact-action TOTP, and the durable queue.
+        if plan.tool_id == "software.install":
+            raise HTTPException(
+                status_code=409,
+                detail="Software installs require verified package evidence and the dedicated exact-action approval route.",
+            )
 
         # These fields are server-generated and digest-bound; never accept them from a client.
         if plan.risk_class != "R1" or plan.required_permission != "P1" or plan.mode != "dry_run":
