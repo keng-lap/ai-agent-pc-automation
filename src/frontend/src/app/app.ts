@@ -861,7 +861,7 @@ export class App implements AfterViewChecked {
   protected requestSoftwareApproval(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const proposal = discovery?.proposal;
-    if (!discovery || !proposal || !this.authenticated() || !this.authenticatorEnrolled() || this.planning()) return;
+    if (!discovery || !proposal || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
