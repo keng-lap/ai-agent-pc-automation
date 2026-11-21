@@ -925,18 +925,23 @@ export class App implements AfterViewChecked {
         finalize(() => this.planning.set(false)),
       )
       .subscribe({
-        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
-          if (item.id !== entryId || !item.discovery) return item;
-          if (
-            !isSoftwareApprovalResult(value)
-            || value.plan_id !== proposal.plan_id
-            || value.package_id !== proposal.package_id
-            || value.version !== proposal.version
-          ) {
-            return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ผลอนุมัติไม่ตรงกับ Package ที่เลือก จึงไม่แสดงว่าสำเร็จ' : 'Approval result did not match the selected package.' } };
-          }
-          return { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, totpCode: '', proposalError: undefined, jobStatusChecking: true } };
-        })),
+        next: (value: unknown) => {
+          let reservationId: string | undefined;
+          this.entries.update((entries) => entries.map((item) => {
+            if (item.id !== entryId || !item.discovery) return item;
+            if (
+              !isSoftwareApprovalResult(value)
+              || value.plan_id !== proposal.plan_id
+              || value.package_id !== proposal.package_id
+              || value.version !== proposal.version
+            ) {
+              return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ผลอนุมัติไม่ตรงกับ Package ที่เลือก จึงไม่แสดงว่าสำเร็จ' : 'Approval result did not match the selected package.' } };
+            }
+            reservationId = value.reservation_id;
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, totpCode: '', proposalError: undefined, jobStatusChecking: true } };
+          }));
+          if (reservationId) this.loadSoftwareInstallJobStatus(entryId, reservationId);
+        },
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
             ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้ กรุณาขอรหัสใหม่' : 'TOTP was invalid, expired, or the install could not be queued. Request a new code.' } }
