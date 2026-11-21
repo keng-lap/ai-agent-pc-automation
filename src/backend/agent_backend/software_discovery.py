@@ -66,6 +66,7 @@ class InstallerCandidate(BaseModel):
     official_version: str | None = None
     official_release_url: str | None = None
     official_asset_sha256: str | None = None
+    official_asset_id: int | None = None
     status: Literal["CONDITIONAL"] = "CONDITIONAL"
     limitations: tuple[str, ...] = (
         "publisher_official_source_not_yet_cross_checked",
@@ -82,6 +83,7 @@ class PublisherVerification(BaseModel):
     official_version: str | None = None
     official_release_url: str | None = None
     official_asset_sha256: str | None = None
+    official_asset_id: int | None = None
 
 
 class DBeaverGitHubReleaseVerifier:
@@ -167,6 +169,8 @@ class DBeaverGitHubReleaseVerifier:
                 and isinstance(asset.get("browser_download_url"), str)
                 and asset.get("browser_download_url")
                 == self.ASSET_PREFIX + official_version + "/" + expected_asset_name
+                and type(asset.get("id")) is int
+                and asset.get("id") > 0
             ]
             if len(matching_assets) != 1:
                 return PublisherVerification(
@@ -179,6 +183,7 @@ class DBeaverGitHubReleaseVerifier:
                 return PublisherVerification(status="UNAVAILABLE")
             official_sha256 = digest.split(":", 1)[1].lower()
             asset_url = matching_assets[0]["browser_download_url"]
+            asset_id = matching_assets[0]["id"]
             if (
                 version != official_version
                 or installer_url != asset_url
@@ -189,12 +194,14 @@ class DBeaverGitHubReleaseVerifier:
                     official_version=official_version,
                     official_release_url=release_url,
                     official_asset_sha256=official_sha256,
+                    official_asset_id=asset_id,
                 )
             return PublisherVerification(
                 status="VERIFIED",
                 official_version=official_version,
                 official_release_url=release_url,
                 official_asset_sha256=official_sha256,
+                official_asset_id=asset_id,
             )
         except (requests.RequestException, ValueError, TypeError, KeyError):
             return PublisherVerification(status="UNAVAILABLE")
@@ -477,6 +484,7 @@ class WinGetManifestRepository:
             official_version=publisher_check.official_version,
             official_release_url=publisher_check.official_release_url,
             official_asset_sha256=publisher_check.official_asset_sha256,
+            official_asset_id=publisher_check.official_asset_id,
             limitations=tuple(limitations),
         )
         response_status = {
