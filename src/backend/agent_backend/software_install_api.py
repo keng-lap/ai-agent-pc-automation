@@ -123,6 +123,7 @@ def create_software_install_proposal(
     staging_root = Path(store_path).expanduser().absolute().parent / "winget-evidence"
 
     staged = None
+    evidence = None
     try:
         staged = _stager.stage(candidate, staging_root=staging_root)
         evidence = software_evidence_registry.register_staged_candidate(
@@ -141,7 +142,7 @@ def create_software_install_proposal(
             detail="Publisher certificate is not present in the backend-owned trust policy.",
         ) from None
     except InstallPlanCapacityError:
-        if "evidence" in locals():
+        if evidence is not None:
             software_evidence_registry.revoke(evidence.evidence_id)
         raise HTTPException(status_code=503, detail="Active install proposal capacity reached.") from None
     finally:
