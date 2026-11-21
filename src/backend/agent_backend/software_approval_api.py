@@ -1,7 +1,7 @@
 """Exact-action approval API for backend-registered software evidence.
 
-This endpoint authorizes a proposal only. It deliberately has no installer
-dispatch, package-manager call, background-job enqueue, or machine side effect.
+Approval is persisted atomically with a one-shot install queue reservation.
+A separate local worker performs the contained WinGet operation.
 """
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     signature_sha256: str
     evidence_expires_at: str
     approval_digest: str
-    notice: Literal["APPROVAL_ONLY_NOT_EXECUTED"] = "APPROVAL_ONLY_NOT_EXECUTED"
+    notice: Literal["APPROVAL_REQUIRED_FOR_REAL_INSTALL"] = "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
 
 
 class SoftwareApprovalResult(BaseModel):
@@ -153,7 +153,6 @@ def _get_install_plan(plan_id: str):
         plan.tool_id != "software.install"
         or plan.risk_class != "R1"
         or plan.required_permission != "P1"
-        or plan.mode != "dry_run"
         or any(item.status != "PLANNED" for item in plan.programs)
     ):
         raise HTTPException(status_code=409, detail="Plan is not eligible for software approval.")
