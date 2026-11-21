@@ -39,6 +39,8 @@ flows remain unchanged.
   challenge for the evidence ID bound to that proposal.
 - `POST /api/plans/{plan_id}/software-approval/confirm` — consume TOTP and
   persist the queue reservation.
+- `GET /api/software/install/jobs/{reservation_id}` — return an owner-scoped
+  lifecycle summary without exposing the approved binding or worker lease.
 
 Explicit `software_install` requests do not receive a legacy `DryRunPlan`
 from `POST /api/plans`; the frontend routes the interpreted target into the
@@ -63,9 +65,10 @@ the pin from the Windows inspection script:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/acceptance/P6-609-C/inspect_dbeaver_signer.ps1
 ```
 
-The script downloads the latest official DBeaver Community Windows x64 release
-asset, compares the file hash with the digest published in the official GitHub
-release metadata, checks Windows Authenticode status, and prints the signer
+The script resolves the latest official DBeaver Community Windows x64 release
+asset ID and downloads it through GitHub's binary asset API. It compares the
+file hash with the digest published in the official GitHub release metadata,
+checks Windows Authenticode status, and prints the signer
 certificate subject and DER SHA-256 fingerprint. It does **not** execute or
 install DBeaver. Use `-ConfigureUserEnvironment` only after reviewing the
 printed signer identity; the script asks before persisting the pin for the
