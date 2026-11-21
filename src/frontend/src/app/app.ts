@@ -877,7 +877,7 @@ export class App implements AfterViewChecked {
     const proposal = discovery?.proposal;
     const challenge = discovery?.approvalChallenge;
     const code = discovery?.totpCode ?? '';
-    if (!discovery || !proposal || !challenge || !/^\\d{6}$/.test(code) || this.planning()) return;
+    if (!discovery || !proposal || !challenge || !/^\d{6}$/.test(code) || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
