@@ -733,11 +733,14 @@ export class App implements AfterViewChecked {
   }
 
   private updateSoftwareDiscovery(entryId: number, value: unknown): void {
+    let loadReadiness = false;
     this.entries.update((entries) => entries.map((entry) => {
       if (entry.id !== entryId || !entry.discovery) return entry;
       if (!isSoftwareDiscoveryResponse(value)) {
         return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
       }
+      loadReadiness = value.status === 'CONDITIONAL'
+        && value.candidate?.publisher_verification === 'VERIFIED';
       return {
         ...entry,
         discovery: {
@@ -751,9 +754,157 @@ export class App implements AfterViewChecked {
                 : 'conditional',
           result: value,
           packageId: value.package_id,
+          readiness: undefined,
+          readinessChecking: loadReadiness,
+          readinessError: undefined,
+          proposal: undefined,
+          proposalStatus: undefined,
+          proposalError: undefined,
+          approvalChallenge: undefined,
+          totpCode: '',
+          reservationId: undefined,
         },
       };
     }));
+    if (loadReadiness) this.loadSoftwareInstallReadiness(entryId);
+  }
+
+  private loadSoftwareInstallReadiness(entryId: number): void {
+    defer(() => this.chatApi.getSoftwareInstallReadiness())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((entry) => (
+          entry.id === entryId && entry.discovery
+            ? isSoftwareInstallReadiness(value)
+              ? { ...entry, discovery: { ...entry.discovery, readiness: value, readinessChecking: false, readinessError: undefined } }
+              : { ...entry, discovery: { ...entry.discovery, readinessChecking: false, readinessError: 'Invalid install readiness response.' } }
+            : entry
+        ))),
+        error: () => this.entries.update((entries) => entries.map((entry) => (
+          entry.id === entryId && entry.discovery
+            ? { ...entry, discovery: { ...entry.discovery, readinessChecking: false, readinessError: this.language() === 'th' ? 'ตรวจสอบความพร้อมติดตั้งจริงไม่ได้' : 'Could not check real-install readiness.' } }
+            : entry
+        ))),
+      });
+  }
+
+  protected prepareSoftwareInstall(entryId: number): void {
+    const entry = this.entries().find((item) => item.id === entryId);
+    const discovery = entry?.discovery;
+    const candidate = discovery?.result?.candidate;
+    if (
+      !discovery
+      || !candidate
+      || discovery.readiness?.platform_supported !== true
+      || discovery.readiness.publisher_trust_configured !== true
+      || candidate.publisher_verification !== 'VERIFIED'
+      || this.planning()
+    ) return;
+
+    this.planning.set(true);
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, proposalStatus: 'preparing', proposalError: undefined } }
+      : item));
+    defer(() => this.chatApi.createSoftwareInstallProposal(
+      candidate.package_id,
+      candidate.version,
+      candidate.architecture,
+    ))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (
+            !isSoftwareInstallProposalResponse(value)
+            || value.package_id !== candidate.package_id
+            || value.version !== candidate.version
+          ) {
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'Backend ส่งข้อมูลข้อเสนอการติดตั้งไม่ตรงกับ Package ที่เลือก' : 'The install proposal did not match the selected package.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, proposal: value, proposalStatus: 'ready', proposalError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ตรวจสอบไฟล์ติดตั้งหรือลายเซ็น Publisher ไม่ผ่าน ระบบจึงไม่อนุญาตให้อนุมัติ' : 'Installer verification or publisher trust failed. Approval remains blocked.' } }
+            : item
+        ))),
+      });
+  }
+
+  protected requestSoftwareApproval(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const proposal = discovery?.proposal;
+    if (!discovery || !proposal || !this.authenticated() || !this.authenticatorEnrolled() || this.planning()) return;
+
+    this.planning.set(true);
+    defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (!isSoftwareApprovalChallenge(value) || value.plan_id !== proposal.plan_id || value.package_id !== proposal.package_id || value.version !== proposal.version) {
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ข้อมูล Approval ไม่ตรงกับข้อเสนอที่ตรวจสอบไว้' : 'Approval challenge did not match the verified proposal.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, approvalChallenge: value, proposalStatus: 'challenge', proposalError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, proposalError: this.language() === 'th' ? 'สร้างคำขอ TOTP ไม่สำเร็จ กรุณาตรวจสอบการเข้าสู่ระบบและ Authenticator' : 'Could not create the TOTP challenge. Check sign-in and authenticator enrollment.' } }
+            : item
+        ))),
+      });
+  }
+
+  protected onSoftwareProposalTotpInput(entryId: number, event: Event): void {
+    const value = (event.target as HTMLInputElement).value.replace(/[^0-9]/g, '').slice(0, 6);
+    this.entries.update((entries) => entries.map((entry) => (
+      entry.id === entryId && entry.discovery
+        ? { ...entry, discovery: { ...entry.discovery, totpCode: value, proposalError: undefined } }
+        : entry
+    )));
+  }
+
+  protected confirmSoftwareInstall(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const proposal = discovery?.proposal;
+    const challenge = discovery?.approvalChallenge;
+    const code = discovery?.totpCode ?? '';
+    if (!discovery || !proposal || !challenge || !/^\\d{6}$/.test(code) || this.planning()) return;
+
+    this.planning.set(true);
+    defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (
+            !isSoftwareApprovalResult(value)
+            || value.plan_id !== proposal.plan_id
+            || value.package_id !== proposal.package_id
+            || value.version !== proposal.version
+          ) {
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ผลอนุมัติไม่ตรงกับ Package ที่เลือก จึงไม่แสดงว่าสำเร็จ' : 'Approval result did not match the selected package.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, totpCode: '', proposalError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, totpCode: '', proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้' : 'TOTP was invalid, expired, or the install could not be queued.' } }
+            : item
+        ))),
+      });
   }
 
   private setSoftwareDiscoveryError(entryId: number): void {
