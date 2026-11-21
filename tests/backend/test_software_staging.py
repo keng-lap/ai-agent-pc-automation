@@ -139,7 +139,7 @@ def test_invalid_authenticode_signature_removes_downloaded_file(tmp_path):
 def test_redirect_is_not_followed_and_partial_file_is_removed(tmp_path):
     response = FakeResponse(status_code=302, headers={"Location": "https://attacker.example/file.exe"})
 
-    with pytest.raises(InstallerStageError, match="unsuccessful"):
+    with pytest.raises(InstallerStageError, match="redirect target was not trusted"):
         InstallerStager(
             http_get=lambda *args, **kwargs: response,
             signature_verifier=AcceptSignature(),
@@ -147,6 +147,34 @@ def test_redirect_is_not_followed_and_partial_file_is_removed(tmp_path):
 
     assert response.closed is True
     assert list(tmp_path.iterdir()) == []
+
+
+def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(tmp_path):
+    body = b"verified-installer-bytes"
+    redirect = FakeResponse(
+        status_code=302,
+        headers={"Location": "https://release-assets.githubusercontent.com/github-production-release-asset/asset?token=temporary"},
+    )
+    final = FakeResponse(body)
+    responses = iter([redirect, final])
+    calls = []
+
+    def http_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return next(responses)
+
+    staged = InstallerStager(
+        http_get=http_get,
+        signature_verifier=AcceptSignature(),
+    ).stage(make_candidate(body), staging_root=tmp_path)
+
+    assert Path(staged.file_path).read_bytes() == body
+    assert redirect.closed is True
+    assert final.closed is True
+    assert calls[0][0] == make_candidate(body).installer_url
+    assert calls[1][0].startswith("https://release-assets.githubusercontent.com/")
+    assert all("Authorization" not in call[1]["headers"] for call in calls)
+    assert all(call[1]["allow_redirects"] is False for call in calls)
 
 
 def test_oversized_content_length_is_rejected(tmp_path, monkeypatch):
