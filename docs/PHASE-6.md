@@ -75,7 +75,9 @@ No capability may inherit approval from another tool, a prior phase, a successfu
 
 ## Initial task — P6-601: Phase 6 capability and execution architecture baseline
 
-**Status: Planning authorized; documentation/review only.**
+**Historical status as of 2026-11-09: Planning authorized; documentation/review only.**
+
+The P6-601 initial-task statements below describe the original Phase 6 planning baseline. They are superseded only for the bounded `software.install` implementation scope by the Product Owner's P6-609-C authorization dated 2026-11-21. They remain applicable to every other capability.
 
 Deliverables:
 1. Read-only source map of current tool catalog, policy decision point, approval API, authenticator step-up, handler registry, audit events, and task result flow. See `docs/P6-601-SOURCE-MAP.md` for the initial source map and A4 review gaps.
