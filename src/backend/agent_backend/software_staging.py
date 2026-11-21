@@ -281,7 +281,7 @@ class InstallerStager:
         parsed_url = urlsplit(candidate.installer_url)
         if (
             parsed_url.scheme != "https"
-            or parsed_url.hostname != candidate.installer_domain
+            or parsed_url.hostname.casefold() != candidate.installer_domain.casefold()
             or parsed_url.username
             or parsed_url.password
             or parsed_url.fragment
