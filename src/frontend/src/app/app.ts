@@ -797,6 +797,7 @@ export class App implements AfterViewChecked {
       || !candidate
       || discovery.readiness?.platform_supported !== true
       || discovery.readiness.publisher_trust_configured !== true
+      || !discovery.readiness.supported_package_ids.includes(candidate.package_id)
       || candidate.publisher_verification !== 'VERIFIED'
       || this.planning()
     ) return;
@@ -901,7 +902,7 @@ export class App implements AfterViewChecked {
         })),
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, totpCode: '', proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้' : 'TOTP was invalid, expired, or the install could not be queued.' } }
+            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้ กรุณาขอรหัสใหม่' : 'TOTP was invalid, expired, or the install could not be queued. Request a new code.' } }
             : item
         ))),
       });
