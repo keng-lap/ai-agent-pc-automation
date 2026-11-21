@@ -1,7 +1,8 @@
-"""Durable, non-dispatching approval and job-reservation boundary (P6-609-B2).
+"""Durable approval, reservation, and one-shot install queue (P6-609-C).
 
-This store records a one-use authorization and a reservation receipt only. It
-has no worker, queue consumer, process launcher, package-manager, or OS action.
+The store persists exact approved payloads and worker leases. It does not itself
+launch processes or invoke a package manager; those actions belong to the
+separately contained Windows worker.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
@@ -586,7 +587,7 @@ class SQLiteApprovalReservationStore:
             raise ValueError("lease_seconds must be between 1 and 300")
         current = now or self._clock()
         timestamp = _timestamp(current)
-        expires = _timestamp(current + __import__("datetime").timedelta(seconds=lease_seconds))
+        expires = _timestamp(current + timedelta(seconds=lease_seconds))
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
