@@ -526,7 +526,20 @@
                             <div role="status">
                               <strong>{{ language() === 'th' ? 'อนุมัติแล้วและเข้าคิวติดตั้งจริง' : 'Approved and queued for real installation' }}</strong>
                               <span>Reservation: {{ discovery.reservationId }}</span>
-                              <small>{{ language() === 'th' ? 'Worker จะดำเนินการต่อบนเครื่อง Windows นี้ สถานะสุดท้ายต้องรอผลตรวจหลังติดตั้ง' : 'The local Windows worker will continue. Final success requires post-install verification.' }}</small>
+                              @if (discovery.jobStatusChecking) {
+                                <small role="status">{{ language() === 'th' ? 'กำลังอ่านสถานะ Worker…' : 'Reading worker status…' }}</small>
+                              }
+                              @if (discovery.jobStatus; as jobStatus) {
+                                <strong>{{ jobStatus.state === 'SUCCEEDED' ? (language() === 'th' ? 'ติดตั้งและตรวจสอบ Package ผ่านแล้ว' : 'Installed and exact package verification passed') : jobStatus.state === 'FAILED' ? (language() === 'th' ? 'การติดตั้งล้มเหลว' : 'Installation failed') : jobStatus.state === 'UNKNOWN' ? (language() === 'th' ? 'ผลติดตั้งยังไม่แน่ชัด ต้องตรวจสอบก่อนดำเนินการต่อ' : 'Install outcome is unknown and requires inspection') : jobStatus.state === 'REBOOT_REQUIRED' ? (language() === 'th' ? 'ต้องรีสตาร์ต Windows ก่อนตรวจสอบต่อ' : 'Windows restart is required before verification') : ('Worker: ' + jobStatus.state) }}</strong>
+                                <small>{{ language() === 'th' ? 'จำนวนครั้งที่ Worker เริ่มทำงาน' : 'Worker attempts' }}: {{ jobStatus.attempts }} · {{ language() === 'th' ? 'รหัสผลลัพธ์' : 'Result code' }}: {{ jobStatus.result_code ?? '—' }}</small>
+                              }
+                              @if (discovery.jobStatusError) {
+                                <span class="installer-error" role="alert">{{ discovery.jobStatusError }}</span>
+                              }
+                              <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="refreshSoftwareInstallStatus(entry.id)">
+                                {{ language() === 'th' ? 'รีเฟรชสถานะติดตั้ง' : 'Refresh install status' }}
+                              </button>
+                              <small>{{ language() === 'th' ? 'Worker ทำงานบนเครื่อง Windows นี้ ความสำเร็จจะรายงานเมื่อยืนยัน Package ID และ Version หลังติดตั้งได้เท่านั้น' : 'The worker runs on this Windows machine. Success is reported only after exact Package ID and Version verification.' }}</small>
                             </div>
                           } @else if (discovery.approvalChallenge) {
                             <label [for]="'install-totp-' + entry.id">{{ language() === 'th' ? 'รหัส Authenticator 6 หลัก' : 'Six-digit authenticator code' }}</label>
