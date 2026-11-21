@@ -231,7 +231,11 @@ def test_explicit_software_install_does_not_create_a_legacy_dry_run_plan(monkeyp
 
 
 def test_stale_software_install_plan_is_rejected_by_legacy_approval_route():
-    from agent_backend.plan_api import _plan_store
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from agent_backend.plan_api import PlanApprovalRequest, _plan_store, approve_plan_review
     from agent_backend.plans import ProgramPlan
 
     legacy_plan = _plan_store.create(
@@ -249,11 +253,17 @@ def test_stale_software_install_plan_is_rejected_by_legacy_approval_route():
             ),
         ),
     )
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace()),
+        state=SimpleNamespace(),
+    )
 
-    response = client.post(f"/api/plans/{legacy_plan.plan_id}/approve", json={})
+    with pytest.raises(HTTPException) as error:
+        approve_plan_review(legacy_plan.plan_id, PlanApprovalRequest(), request)
 
-    assert response.status_code == 409
-    assert "dedicated exact-action approval route" in response.json()["detail"]
+    assert error.value.status_code == 409
+    assert "dedicated exact-action approval route" in error.value.detail
+
 
 
 def test_java_development_clarification_does_not_mint_install_preview(monkeypatch):
