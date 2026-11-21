@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from pydantic import BaseModel, ConfigDict
@@ -21,6 +21,12 @@ MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 CHUNK_SIZE = 65536
 ALLOWED_INSTALLER_SUFFIXES = frozenset({".exe", ".msi", ".msix", ".appx"})
 USER_AGENT = "ai-agent-pc-automation/0.1"
+MAX_RELEASE_REDIRECTS = 3
+ALLOWED_RELEASE_REDIRECT_HOSTS = frozenset({
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "github-releases.githubusercontent.com",
+})
 
 
 class InstallerStageError(RuntimeError):
@@ -132,18 +138,7 @@ class InstallerStager:
             total = 0
             declared_length: int | None = None
             with staged_file:
-                response = self._http_get(
-                    candidate.installer_url,
-                    headers={
-                        "Accept": "application/octet-stream",
-                        "User-Agent": USER_AGENT,
-                    },
-                    timeout=(3.05, 30),
-                    allow_redirects=False,
-                    stream=True,
-                )
-                if response.status_code != 200:
-                    raise InstallerStageError("official installer source returned an unsuccessful response")
+                response = self._get_safe_release_response(candidate.installer_url)
 
                 headers = getattr(response, "headers", {})
                 encoding = str(headers.get("Content-Encoding", "identity")).strip().lower()
@@ -229,6 +224,48 @@ class InstallerStager:
                 except OSError:
                     pass
 
+    def _get_safe_release_response(self, initial_url: str):
+        current_url = initial_url
+        for redirect_count in range(MAX_RELEASE_REDIRECTS + 1):
+            response = self._http_get(
+                current_url,
+                headers={
+                    "Accept": "application/octet-stream",
+                    "User-Agent": USER_AGENT,
+                },
+                timeout=(3.05, 30),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code == 200:
+                return response
+            if response.status_code not in {301, 302, 303, 307, 308}:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+                raise InstallerStageError(
+                    "official installer source returned an unsuccessful response"
+                )
+            location = str(getattr(response, "headers", {}).get("Location", "")).strip()
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+            if not location or redirect_count >= MAX_RELEASE_REDIRECTS:
+                raise InstallerStageError("official installer redirect chain was invalid")
+            target_url = urljoin(current_url, location)
+            parsed_target = urlsplit(target_url)
+            if (
+                parsed_target.scheme != "https"
+                or not parsed_target.hostname
+                or parsed_target.hostname.casefold() not in ALLOWED_RELEASE_REDIRECT_HOSTS
+                or parsed_target.username
+                or parsed_target.password
+                or parsed_target.fragment
+            ):
+                raise InstallerStageError("official installer redirect target was not trusted")
+            current_url = target_url
+        raise InstallerStageError("official installer redirect limit was exceeded")
+
     @staticmethod
     def _require_official_release_match(candidate: InstallerCandidate) -> None:
         if not isinstance(candidate, InstallerCandidate):
@@ -244,7 +281,7 @@ class InstallerStager:
         parsed_url = urlsplit(candidate.installer_url)
         if (
             parsed_url.scheme != "https"
-            or not parsed_url.hostname
+            or parsed_url.hostname != candidate.installer_domain
             or parsed_url.username
             or parsed_url.password
             or parsed_url.fragment
