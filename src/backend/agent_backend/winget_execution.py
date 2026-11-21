@@ -161,6 +161,9 @@ def execute_approved_winget_install(
             get_exit_code = kernel32.GetExitCodeProcess
             get_exit_code.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
             get_exit_code.restype = wintypes.BOOL
+            terminate_process = kernel32.TerminateProcess
+            terminate_process.argtypes = [wintypes.HANDLE, wintypes.UINT]
+            terminate_process.restype = wintypes.BOOL
             close_handle = kernel32.CloseHandle
             close_handle.argtypes = [wintypes.HANDLE]
             close_handle.restype = wintypes.BOOL
@@ -184,6 +187,7 @@ def execute_approved_winget_install(
                 )
 
             job = None
+            process_completed = False
             try:
                 job = WindowsJobObject()
                 job.assign_suspended_process(int(process_info.hProcess))
@@ -214,6 +218,7 @@ def execute_approved_winget_install(
                     )
                 if wait_result != _WAIT_OBJECT_0:
                     raise WinGetExecutionError("WinGet returned an unexpected wait status")
+                process_completed = True
 
                 exit_code = wintypes.DWORD()
                 if not get_exit_code(process_info.hProcess, ctypes.byref(exit_code)):
@@ -230,17 +235,28 @@ def execute_approved_winget_install(
                     exit_code=int(exit_code.value),
                     timed_out=False,
                 )
-            except (ProcessContainmentError, OSError) as exc:
-                if job is not None and job.is_open:
-                    try:
-                        job.terminate(1)
-                    except ProcessContainmentError:
-                        pass
-                raise WinGetExecutionError("WinGet process containment failed; install was stopped") from exc
+            except BaseException as exc:
+                # If Job Object creation/assignment failed, the process may still
+                # be suspended outside the job. Terminate the process handle too.
+                if not process_completed:
+                    if job is not None and job.is_open:
+                        try:
+                            job.terminate(1)
+                        except ProcessContainmentError:
+                            pass
+                    terminate_process(process_info.hProcess, 1)
+                    wait_for_single_object(process_info.hProcess, 5000)
+                if isinstance(exc, (ProcessContainmentError, OSError)):
+                    raise WinGetExecutionError(
+                        "WinGet process containment failed; install was stopped"
+                    ) from exc
+                raise
             finally:
-                if job is not None:
-                    job.close()
-                close_handle(process_info.hThread)
-                close_handle(process_info.hProcess)
+                try:
+                    if job is not None:
+                        job.close()
+                finally:
+                    close_handle(process_info.hThread)
+                    close_handle(process_info.hProcess)
     except WinGetAdapterError as exc:
         raise WinGetExecutionError("approved WinGet manifest could not be verified") from exc
