@@ -300,7 +300,7 @@ def test_plan_approval_requires_fresh_totp_bound_to_exact_plan(tmp_path, monkeyp
     monkeypatch.setattr(plan_api, "execute_tool", dry_run)
     plan_response = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     )
     assert plan_response.status_code == 200
     plan_id = plan_response.json()["dry_run_plan"]["plan_id"]
