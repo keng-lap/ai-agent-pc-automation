@@ -87,6 +87,9 @@ def create_software_install_proposal(
             status_code=503,
             detail="Installer Authenticode verification is available only on Windows.",
         )
+    principal = getattr(request.state, "principal", None)
+    if principal is None or not isinstance(getattr(principal, "owner_sub", None), str):
+        raise HTTPException(status_code=401, detail="Authentication required.")
 
     try:
         discovery = _repository.discover(
@@ -130,7 +133,7 @@ def create_software_install_proposal(
             candidate=candidate,
             staged=staged,
         )
-        plan = software_install_plan_store.create(evidence)
+        plan = software_install_plan_store.create(evidence, owner_id=principal.owner_sub)
     except InstallerStageError:
         raise HTTPException(
             status_code=409,
