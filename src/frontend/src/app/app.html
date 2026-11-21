@@ -505,9 +505,9 @@
                           <span class="installer-error" role="alert">{{ discovery.readinessError }}</span>
                         } @else if (discovery.readiness && !discovery.readiness.platform_supported) {
                           <span>{{ language() === 'th' ? 'การตรวจสอบ Authenticode และการติดตั้งจริงรองรับเฉพาะ Windows' : 'Authenticode verification and real installation require Windows.' }}</span>
-                        } @else if (discovery.readiness && !discovery.readiness.publisher_trust_configured) {
-                          <span>{{ language() === 'th' ? 'ยังไม่ได้ตั้งค่า Publisher Certificate Fingerprint ที่เชื่อถือได้ จึงยังไม่อนุญาตให้ดาวน์โหลดเพื่ออนุมัติหรือติดตั้ง' : 'No backend-pinned publisher certificate fingerprint is configured. Staging and installation remain blocked.' }}</span>
-                        } @else if (discovery.readiness?.publisher_trust_configured && !discovery.proposal) {
+                        } @else if (discovery.readiness && (!discovery.readiness.publisher_trust_configured || !discovery.readiness.supported_package_ids.includes(installCandidate.package_id))) {
+                          <span>{{ language() === 'th' ? 'ยังไม่มี Publisher Certificate Fingerprint ที่อนุมัติสำหรับ Package นี้ จึงยังไม่อนุญาตให้ดาวน์โหลดเพื่ออนุมัติหรือติดตั้ง' : 'No backend-pinned publisher certificate fingerprint is configured for this package. Staging and installation remain blocked.' }}</span>
+                        } @else if (discovery.readiness?.publisher_trust_configured && discovery.readiness.supported_package_ids.includes(installCandidate.package_id) && !discovery.proposal) {
                           <span>{{ language() === 'th' ? 'ระบบจะดาวน์โหลดไฟล์ชั่วคราว ตรวจ SHA-256 และ Authenticode แล้วลบไฟล์ชั่วคราวหลังสร้างข้อเสนอ' : 'The installer will be temporarily downloaded, SHA-256 and Authenticode checked, then the temporary file removed.' }}</span>
                           <button class="send-button" type="button" [disabled]="planning()" (click)="prepareSoftwareInstall(entry.id)">
                             {{ discovery.proposalStatus === 'preparing' ? (language() === 'th' ? 'กำลังตรวจสอบไฟล์…' : 'Verifying installer…') : (language() === 'th' ? 'ตรวจสอบไฟล์และเตรียม Approval' : 'Verify installer and prepare approval') }}
