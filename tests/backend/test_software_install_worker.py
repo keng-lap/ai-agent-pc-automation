@@ -88,9 +88,7 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         work_root=tmp_path / "work",
         worker_id="worker-1",
         executor=executor,
-        verifier=lambda package_id, version: (
-            package_id == binding.evidence.package_id and version == binding.evidence.version
-        ),
+        verifier=iter([False, True]).__next__,
         heartbeat_seconds=5,
     )
     result = worker.run_once()
@@ -111,7 +109,7 @@ def test_worker_records_unknown_after_execution_timeout(monkeypatch, tmp_path):
         work_root=tmp_path / "work",
         worker_id="worker-1",
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=True, exit_code=None),
-        verifier=lambda *_a: True,
+        verifier=lambda *_a: False,
         heartbeat_seconds=5,
     )
 
@@ -134,3 +132,51 @@ def test_verifier_requires_exact_package_and_version(monkeypatch):
 
     assert worker_module.verify_exact_user_install("DBeaver.DBeaver.Community", "26.2.4") is True
     assert worker_module.verify_exact_user_install("DBeaver.DBeaver.Community", "26.2.5") is False
+
+
+
+def test_worker_does_not_reinstall_an_exact_package_already_present(monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    executor_calls = []
+    monkeypatch.setattr(
+        worker_module,
+        "prepare_approved_install",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("must not prepare installer")),
+    )
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: executor_calls.append(True),
+        verifier=lambda *_a: True,
+        heartbeat_seconds=5,
+    )
+
+    result = worker.run_once()
+
+    assert result.state == "SUCCEEDED"
+    assert result.result_code == "PACKAGE_ALREADY_PRESENT"
+    assert executor_calls == []
+    assert [item[1] for item in store.transitions] == ["RUNNING", "VERIFYING", "SUCCEEDED"]
+
+
+def test_worker_never_marks_success_when_winget_exits_nonzero(monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=1),
+        verifier=lambda *_a: False,
+        heartbeat_seconds=5,
+    )
+
+    result = worker.run_once()
+
+    assert result.state == "UNKNOWN"
+    assert result.result_code == "WINGET_NONZERO_EXIT"
+    assert [item[1] for item in store.transitions] == ["RUNNING", "UNKNOWN"]
