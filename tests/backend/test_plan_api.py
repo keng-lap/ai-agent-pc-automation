@@ -249,19 +249,11 @@ def test_approval_fails_closed_without_google_and_authenticator_configuration(mo
         )
 
     monkeypatch.setattr(plan_api, "execute_tool", dry_run)
-    initial = client.post(
+    created = client.post(
         "/api/plans",
-        json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     ).json()
-    refined = client.post(
-        f"/api/plans/{initial['dry_run_plan']['plan_id']}/refine",
-        json={
-            "request": "เตรียมเครื่องพัฒนา Java",
-            "clarification": "JDK 21 LTS และ IntelliJ IDEA",
-            "language": "th",
-        },
-    ).json()
-    plan_id = refined["dry_run_plan"]["plan_id"]
+    plan_id = created["dry_run_plan"]["plan_id"]
 
     first = client.post(f"/api/plans/{plan_id}/approve", json={})
     second = client.post(f"/api/plans/{plan_id}/approve", json={})
