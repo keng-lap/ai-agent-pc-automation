@@ -56,6 +56,7 @@ def make_candidate(body=b"verified-installer-bytes"):
         official_version="26.2.4",
         official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         official_asset_sha256=digest,
+        official_asset_id=12345,
         limitations=("installer_authenticode_signature_not_yet_verified",),
     )
 
@@ -84,7 +85,7 @@ def test_stage_downloads_hashes_and_verifies_without_executing(tmp_path):
     assert staged.authenticode_valid is True
     assert response.closed is True
     assert signature.paths == [path] or signature.paths[0].suffix == ".exe"
-    assert calls[0][0] == make_candidate(body).installer_url
+    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
     assert calls[0][1]["allow_redirects"] is False
     assert calls[0][1]["stream"] is True
     assert list(tmp_path.glob("*.part.exe")) == []
@@ -171,7 +172,7 @@ def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(
     assert Path(staged.file_path).read_bytes() == body
     assert redirect.closed is True
     assert final.closed is True
-    assert calls[0][0] == make_candidate(body).installer_url
+    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
     assert calls[1][0].startswith("https://release-assets.githubusercontent.com/")
     assert all("Authorization" not in call[1]["headers"] for call in calls)
     assert all(call[1]["allow_redirects"] is False for call in calls)
