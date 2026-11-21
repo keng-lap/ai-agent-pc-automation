@@ -120,7 +120,7 @@ def create_software_install_proposal(
     store_path = getattr(request.app.state, "job_store_path", None)
     if store_path is None:
         raise HTTPException(status_code=503, detail="Local installer staging storage is unavailable.")
-    staging_root = Path(store_path).parent / "winget-evidence"
+    staging_root = Path(store_path).expanduser().absolute().parent / "winget-evidence"
 
     staged = None
     try:
@@ -141,6 +141,8 @@ def create_software_install_proposal(
             detail="Publisher certificate is not present in the backend-owned trust policy.",
         ) from None
     except InstallPlanCapacityError:
+        if "evidence" in locals():
+            software_evidence_registry.revoke(evidence.evidence_id)
         raise HTTPException(status_code=503, detail="Active install proposal capacity reached.") from None
     finally:
         if staged is not None:
