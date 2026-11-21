@@ -335,7 +335,8 @@ def test_explicit_software_target_cannot_be_approved_without_totp(monkeypatch):
 
     plan_id = body["dry_run_plan"]["plan_id"]
     approved = client.post(f"/api/plans/{plan_id}/approve", json={})
-    assert approved.status_code == 503
+    assert approved.status_code == 409
+    assert "verified package evidence" in approved.json()["detail"]
     assert calls == []
 
 
@@ -398,3 +399,20 @@ def test_plan_creation_records_minimal_in_memory_audit_event():
     assert events[0].tool_id == "software.install"
     assert events[0].outcome == "allowed"
     assert "Google Chrome" not in str(events[0].model_dump())
+
+
+
+def test_software_install_cannot_use_legacy_step_up_route():
+    created = client.post(
+        "/api/plans",
+        json={"request": "Install Google Chrome", "language": "en"},
+    )
+    assert created.status_code == 200
+    plan_id = created.json()["dry_run_plan"]["plan_id"]
+
+    response = client.post(f"/api/plans/{plan_id}/step-up")
+
+    # The legacy route is not an authorization path for real installs.
+    assert response.status_code == 401 or response.status_code == 409
+    if response.status_code == 409:
+        assert "verified package evidence" in response.json()["detail"]
