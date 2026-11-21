@@ -1,0 +1,38 @@
+name: Windows Real Install Frontend
+
+on:
+  pull_request:
+    paths:
+      - "src/frontend/src/app/app.ts"
+      - "src/frontend/src/app/app.html"
+      - "src/frontend/src/app/chat/chat-api.ts"
+      - "src/frontend/src/app/app.spec.ts"
+      - "src/frontend/package.json"
+      - "src/frontend/package-lock.json"
+      - ".github/workflows/windows-real-install-frontend.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-real-install-frontend:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Run frontend unit tests
+        working-directory: src/frontend
+        run: npm test -- --watch=false
+      - name: Build frontend
+        working-directory: src/frontend
+        run: npm run build
