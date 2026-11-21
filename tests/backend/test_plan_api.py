@@ -39,7 +39,7 @@ def test_java_development_request_returns_plan_without_running_dry_run():
 def test_plan_can_be_read_by_opaque_id_from_process_store():
     created = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     )
     assert created.status_code == 200
     plan_id = created.json()["dry_run_plan"]["plan_id"]
@@ -74,7 +74,7 @@ def test_plan_request_rejects_invalid_language():
 def test_plan_endpoint_does_not_expose_acknowledgement_or_execution_routes():
     plan = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     ).json()["dry_run_plan"]
     plan_id = plan["plan_id"]
 
@@ -226,7 +226,7 @@ def test_plan_creation_never_calls_dry_run_tool(monkeypatch):
     monkeypatch.setattr(plan_api, "execute_tool", forbidden)
     response = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     )
     assert response.status_code == 200
     assert response.json()["tool_result"] is None
@@ -304,39 +304,27 @@ def test_approval_rejects_client_supplied_authority_or_action_fields(monkeypatch
     assert calls == []
 
 
-def test_explicit_software_target_cannot_be_approved_without_totp(monkeypatch):
+def test_explicit_software_install_does_not_create_a_legacy_dry_run_plan(monkeypatch):
     from agent_backend import plan_api
-    from agent_backend.tools import ToolResult
 
     calls = []
 
-    def dry_run(request):
+    def forbidden(request):
         calls.append(request)
-        return ToolResult(
-            tool_id=request.tool_id,
-            target=request.target,
-            status="dry_run",
-            summary="Mock dry run",
-        )
+        raise AssertionError("software.install must use the real WinGet proposal path")
 
-    monkeypatch.setattr(plan_api, "execute_tool", dry_run)
+    monkeypatch.setattr(plan_api, "execute_tool", forbidden)
     created = client.post(
         "/api/plans",
         json={"request": "Install Google Chrome", "language": "en"},
     )
+
     assert created.status_code == 200
     body = created.json()
-    assert body["questions"] == []
-    assert body["dry_run_plan"]["programs"][0]["program"] == "Google Chrome"
-    assert body["dry_run_plan"]["programs"][0]["status"] == "PLANNED"
+    assert body["interpretation"]["category"] == "software_install"
+    assert body["dry_run_plan"] is None
     assert body["tool_result"] is None
     assert body["approved"] is False
-    assert calls == []
-
-    plan_id = body["dry_run_plan"]["plan_id"]
-    approved = client.post(f"/api/plans/{plan_id}/approve", json={})
-    assert approved.status_code == 409
-    assert "verified package evidence" in approved.json()["detail"]
     assert calls == []
 
 
@@ -375,8 +363,7 @@ def test_plan_creation_does_not_depend_on_a_second_gemini_call(monkeypatch):
     body = response.json()
     assert body["interpretation"]["category"] == "software_install"
     assert body["interpretation"]["target"] == "Google Chrome"
-    assert body["dry_run_plan"]["programs"][0]["program"] == "Google Chrome"
-    assert body["dry_run_plan"]["programs"][0]["status"] == "PLANNED"
+    assert body["dry_run_plan"] is None
     assert body["tool_result"] is None
     assert body["approved"] is False
     assert body["questions"] == []
@@ -389,14 +376,14 @@ def test_plan_creation_records_minimal_in_memory_audit_event():
     AUDIT_SINK.clear()
     response = client.post(
         "/api/plans",
-        json={"request": "Install Google Chrome", "language": "en"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     )
 
     assert response.status_code == 200
     events = AUDIT_SINK.snapshot()
     assert len(events) == 1
     assert events[0].event_type == "plan.created"
-    assert events[0].tool_id == "software.install"
+    assert events[0].tool_id == "software.remove"
     assert events[0].outcome == "allowed"
     assert "Google Chrome" not in str(events[0].model_dump())
 
