@@ -12,8 +12,8 @@
     <section class="rail-safety" aria-label="ขอบเขตความปลอดภัย">
       <span class="safety-symbol" aria-hidden="true">◇</span>
       <strong>ระบบป้องกันทำงานอยู่</strong>
-      <p>ทุกคำสั่งต้องผ่านการตรวจสอบและอนุมัติก่อนจำลองการทำงาน</p>
-      <span class="safety-mode">DRY RUN ONLY</span>
+      <p>การติดตั้งจริงต้องตรวจสอบแหล่งที่มาและ Publisher พร้อมยืนยัน TOTP ก่อน Worker ทำงานบนเครื่องนี้</p>
+      <span class="safety-mode">APPROVAL GATED</span>
     </section>
     <div class="rail-bottom"><span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span></div>
   </aside>
@@ -54,7 +54,7 @@
   } @else {
     @if (!authEnabled()) {
       <section class="chat-card auth-card" role="status">
-        {{ language() === 'th' ? 'Google Login ยังไม่ได้ตั้งค่า · โหมดดูแผนเท่านั้น ไม่สามารถอนุมัติ Dry Run ได้' : 'Google sign-in is not configured. Preview only; Dry Run approval is disabled.' }}
+        {{ language() === 'th' ? 'Google Login ยังไม่ได้ตั้งค่า · ดูข้อมูลได้ แต่ยังไม่สามารถอนุมัติหรือติดตั้งจริงได้' : 'Google sign-in is not configured. You can browse, but approvals and real installs are disabled.' }}
       </section>
     }
     @if (authEnabled()) {
