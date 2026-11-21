@@ -35,6 +35,11 @@ try {
     if ($assetUrl -cne "https://github.com/dbeaver/dbeaver/releases/download/$version/$assetName") {
         throw 'Official release asset URL did not match the expected DBeaver GitHub release path.'
     }
+    $assetId = [long]$asset.id
+    if ($assetId -lt 1) {
+        throw 'Official release metadata did not provide a valid asset ID.'
+    }
+    $assetApiUrl = "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/$assetId"
     $officialDigest = [string]$asset.digest
     if ($officialDigest -notmatch '^sha256:([0-9a-fA-F]{64})$') {
         throw 'GitHub release metadata did not provide a SHA-256 asset digest. Refusing to continue.'
@@ -43,7 +48,11 @@ try {
 
     $installerPath = Join-Path $tempRoot $assetName
     Write-Host "Downloading official installer for inspection only: $version"
-    Invoke-WebRequest -Uri $assetUrl -Headers @{ 'User-Agent' = $headers['User-Agent'] } -OutFile $installerPath -UseBasicParsing
+    Invoke-WebRequest -Uri $assetApiUrl -Headers @{
+        Accept = 'application/octet-stream'
+        'X-GitHub-Api-Version' = '2022-11-28'
+        'User-Agent' = $headers['User-Agent']
+    } -OutFile $installerPath -UseBasicParsing
 
     $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actualHash -cne $expectedHash) {
