@@ -4,15 +4,18 @@
 
 **Phase 6 planning AUTHORIZED by the Product Owner on 2026-11-09.**
 
-This is phase-level authorization to begin architecture, requirements, threat analysis, capability decomposition, and test planning. It is **not** blanket authorization to implement or execute any real PC-changing action.
+This phase-level authorization originally covered planning only. On 2026-11-21, the Product Owner separately authorized bounded implementation of one real local capability: `software.install` through WinGet, with exact Package ID/version binding, backend-pinned Publisher Trust, exact-action TOTP, a durable queue, a contained Windows worker, and post-install verification (P6-609-C / PR #170).
 
-No individual Phase 6 capability is currently authorized. Each capability requires:
-1. A bounded task with exact tool ID, parameters, risk classification, permission level, and supported/unsupported behavior.
-2. Explicit Product Owner authorization for that capability's runtime implementation.
-3. Independent A4 review of the design, threat model, tests, and implementation.
-4. Backend-enforced exact-action authorization and user-presence proof, fail-closed behavior, replay/expiry protection, and audit/privacy controls.
-5. CI evidence and Product Owner local verification where required.
-6. Separate explicit Product Owner approval before merging its runtime PR and before enabling the capability for real execution.
+This is **not** blanket authorization for other machine-changing capabilities, and it does not authorize a live package installation on the user's Windows machine. PR #170 remains Draft and unmerged. The DBeaver publisher pin and target-Windows acceptance are still outstanding; a package-specific approval is required before any live installation.
+
+For this capability, the Product Owner explicitly decided that no separate Independent A4 Security Review task is to be introduced. The accepted F-516-01 residual remains disclosed and is not represented as an A4 pass. The bounded P6-609-C implementation must still satisfy:
+1. Exact tool ID, package ID/version, architecture, user scope, and explicit exclusions.
+2. Backend-enforced exact-action TOTP, fail-closed behavior, replay/expiry protection, and durable queue reservation.
+3. Publisher Trust anchored to an independently inspected Authenticode certificate fingerprint; no client- or manifest-supplied trust.
+4. CI evidence and target-Windows acceptance, including exact post-install verification and safe handling of ambiguous outcomes.
+5. Separate explicit Product Owner approval before merging its runtime PR and before any live package installation.
+
+All other capabilities remain separately gated and must not inherit this authorization.
 
 ## Objective
 
@@ -26,11 +29,11 @@ Introduce real Windows automation only through narrowly scoped, backend-owned ca
 - Never execute raw Gemini/model output, arbitrary shell, PowerShell, CMD, scripts, dynamic imports, command strings, or model-supplied handler names.
 - No general-purpose terminal, arbitrary command runner, unrestricted filesystem browser/editor, process manager, registry editor, or unrestricted administrator capability.
 - Unknown tools, malformed/extra parameters, policy uncertainty, missing authentication, missing user presence, stale/mismatched/replayed approval, handler drift, and audit/policy failure must fail closed.
-- Existing `software.install` and `software.remove` handlers remain mock/dry-run until their own capability-specific gates are passed. Phase 6 approval does not switch them to real execution.
+- `software.install` is being migrated to the bounded real WinGet path in P6-609-C. The legacy generic Dry Run approval path is blocked for `software.install`; the new path remains fail-closed until Publisher Trust and target-Windows acceptance pass. `software.remove` and all other machine-changing tools remain preview-only.
 - No new provider, provider tool/function calling, external data flow, credential type, or network destination without a separate approved decision.
 - Do not persist chat messages, chat history, Gemini prompts/responses, or unrestricted task transcripts. The Product Owner has explicitly approved persistence of minimal operational Job Definitions, Job Runs, lifecycle state, and bounded redacted logs for the Background Job System, subject to `docs/P6-601-BACKGROUND-JOB-ARCHITECTURE.md`, A4 review, local ACL/integrity, and retention controls. This is not permission for general task-history or conversation persistence.
 - Do not inspect or mutate the user's live PC during planning or tests. Use synthetic fixtures, isolated temporary test directories, mocks, and spy handlers.
-- The accepted F-516-01 Phase 5 closeout residual is not a waiver for Phase 6: targeted independent A4 review of the post-implementation Google OIDC + TOTP path and proof of backend-enforced exact-action user presence are prerequisites before any side-effecting capability can be enabled.
+- The accepted F-516-01 Phase 5 closeout residual remains a disclosed verification gap; do not call it an A4 pass. The Product Owner explicitly excluded a separate A4 review task from P6-609-C. The new install path must still prove exact-action TOTP binding, replay/expiry protection, durable reservation, and fail-closed behavior through tests and target-Windows acceptance. Any future capability requires its own explicit review decision.
 - P5-515 Q30 and Q35 remain Partial; do not claim physical-device/screen-reader coverage or runtime sandboxing.
 - Branch convention: `<type>/<task-id>-<short-name>`. Thai is the default UI language.
 
