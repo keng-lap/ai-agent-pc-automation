@@ -10,6 +10,7 @@ import {
   SoftwareApprovalResult,
   SoftwareCatalogSearchResponse,
   SoftwareDiscoveryResponse,
+  SoftwareInstallJobStatus,
   SoftwareInstallProposalResponse,
   SoftwareInstallReadiness,
   UiLanguage,
@@ -49,6 +50,9 @@ interface SoftwareDiscoveryUiState {
   approvalChallenge?: SoftwareApprovalChallenge;
   totpCode?: string;
   reservationId?: string;
+  jobStatus?: SoftwareInstallJobStatus;
+  jobStatusChecking?: boolean;
+  jobStatusError?: string;
   error?: string;
 }
 
@@ -188,6 +192,17 @@ function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalC
     && typeof value['approval_digest'] === 'string'
     && /^[0-9a-f]{64}$/.test(value['approval_digest'])
     && value['notice'] === 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
+}
+
+function isSoftwareInstallJobStatus(value: unknown): value is SoftwareInstallJobStatus {
+  return isRecord(value)
+    && typeof value['reservation_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['reservation_id'])
+    && ['QUEUED', 'CLAIMED', 'RUNNING', 'VERIFYING', 'SUCCEEDED', 'FAILED', 'REBOOT_REQUIRED', 'UNKNOWN'].includes(String(value['state']))
+    && Number.isInteger(value['attempts'])
+    && Number.isInteger(value['version'])
+    && (value['result_code'] === null || typeof value['result_code'] === 'string')
+    && (value['lease_expires_at'] === null || typeof value['lease_expires_at'] === 'string');
 }
 
 function isSoftwareApprovalResult(value: unknown): value is SoftwareApprovalResult {
@@ -920,11 +935,39 @@ export class App implements AfterViewChecked {
           ) {
             return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ผลอนุมัติไม่ตรงกับ Package ที่เลือก จึงไม่แสดงว่าสำเร็จ' : 'Approval result did not match the selected package.' } };
           }
-          return { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, totpCode: '', proposalError: undefined } };
+          return { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, totpCode: '', proposalError: undefined, jobStatusChecking: true } };
         })),
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
             ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้ กรุณาขอรหัสใหม่' : 'TOTP was invalid, expired, or the install could not be queued. Request a new code.' } }
+            : item
+        ))),
+      });
+  }
+
+  protected refreshSoftwareInstallStatus(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    if (!discovery?.reservationId || discovery.jobStatusChecking) return;
+    this.loadSoftwareInstallJobStatus(entryId, discovery.reservationId);
+  }
+
+  private loadSoftwareInstallJobStatus(entryId: number, reservationId: string): void {
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, jobStatusChecking: true, jobStatusError: undefined } }
+      : item));
+    defer(() => this.chatApi.getSoftwareInstallJobStatus(reservationId))
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (!isSoftwareInstallJobStatus(value) || value.reservation_id !== reservationId) {
+            return { ...item, discovery: { ...item.discovery, jobStatusChecking: false, jobStatusError: this.language() === 'th' ? 'สถานะงานติดตั้งไม่ถูกต้อง' : 'Install job status response was invalid.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, jobStatus: value, jobStatusChecking: false, jobStatusError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, jobStatusChecking: false, jobStatusError: this.language() === 'th' ? 'อ่านสถานะงานติดตั้งไม่ได้' : 'Could not read install job status.' } }
             : item
         ))),
       });
