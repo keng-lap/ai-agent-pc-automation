@@ -57,6 +57,22 @@ class SoftwareInstallProposalResponse(BaseModel):
     )
 
 
+@router.get("/api/software/install/readiness")
+def get_software_install_readiness() -> dict:
+    """Expose non-secret readiness flags for the real-install workflow."""
+    return {
+        "platform_supported": sys.platform == "win32",
+        "authenticode_verification_available": sys.platform == "win32",
+        "publisher_trust_configured": software_evidence_registry.trust_anchor_configured,
+        "supported_package_ids": (
+            ["DBeaver.DBeaver.Community"]
+            if software_evidence_registry.trust_anchor_configured
+            else []
+        ),
+        "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
+    }
+
+
 @router.post(
     "/api/software/install/proposals",
     response_model=SoftwareInstallProposalResponse,
