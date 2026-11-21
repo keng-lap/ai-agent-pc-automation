@@ -236,13 +236,15 @@ class InstallerStager:
     def _get_safe_release_response(self, initial_url: str):
         current_url = initial_url
         for redirect_count in range(MAX_RELEASE_REDIRECTS + 1):
+            request_headers = {
+                "Accept": "application/octet-stream",
+                "User-Agent": USER_AGENT,
+            }
+            if urlsplit(current_url).hostname == "api.github.com":
+                request_headers["X-GitHub-Api-Version"] = "2022-11-28"
             response = self._http_get(
                 current_url,
-                headers={
-                    "Accept": "application/octet-stream",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": USER_AGENT,
-                },
+                headers=request_headers,
                 timeout=(3.05, 30),
                 allow_redirects=False,
                 stream=True,
