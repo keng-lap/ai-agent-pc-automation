@@ -67,7 +67,10 @@ def make_evidence():
 
 
 def make_request(tmp_path):
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(job_store_path=tmp_path / "jobs.sqlite")))
+    return SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(job_store_path=tmp_path / "jobs.sqlite")),
+        state=SimpleNamespace(principal=SimpleNamespace(owner_sub="owner-1")),
+    )
 
 
 def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file(monkeypatch, tmp_path):
@@ -102,13 +105,15 @@ def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file
         request=make_request(tmp_path),
     )
 
-    plan = api.software_install_plan_store.get(response.plan_id)
+    plan = api.software_install_plan_store.get(response.plan_id, owner_id="owner-1")
     assert response.evidence_id == evidence.evidence_id
     assert response.package_id == evidence.package_id
     assert response.version == evidence.version
     assert response.notice == "VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP"
     assert plan.evidence_id == evidence.evidence_id
     assert plan.plan_digest
+    with pytest.raises(api.InstallPlanNotFound):
+        api.software_install_plan_store.get(response.plan_id, owner_id="different-owner")
     assert not staged_path.exists()
 
 
