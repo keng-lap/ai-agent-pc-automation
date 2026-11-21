@@ -25,6 +25,7 @@ on:
       - "tests/backend/test_software_install_api.py"
       - "tests/backend/test_software_evidence.py"
       - "tests/backend/test_software_staging.py"
+      - "tests/backend/test_software_discovery.py"
       - "tests/backend/test_software_install_worker.py"
       - "tests/backend/test_plan_api.py"
       - "src/backend/agent_backend/winget_execution.py"
@@ -118,4 +119,4 @@ jobs:
           python -m py_compile scripts/acceptance/P6-609-B2/windows_b2_mutex_probe.py
           if ($LASTEXITCODE -ne 0) { throw "Python compilation failed with exit code $LASTEXITCODE." }
       - name: Test job lifecycle, Windows storage gate, and containment API
-        run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py tests/backend/test_platform_storage.py tests/backend/test_job_store.py tests/backend/test_jobs_api.py tests/backend/test_approval_reservation_store.py tests/backend/test_approval_reservation_worker_queue.py tests/backend/test_winget_execution.py tests/backend/test_software_approval_api.py tests/backend/test_software_install_api.py tests/backend/test_software_evidence.py tests/backend/test_software_staging.py tests/backend/test_software_install_worker.py tests/backend/test_plan_api.py -q
+        run: python -m pytest tests/backend/test_job_lifecycle.py tests/backend/test_process_containment.py tests/backend/test_platform_storage.py tests/backend/test_job_store.py tests/backend/test_jobs_api.py tests/backend/test_approval_reservation_store.py tests/backend/test_approval_reservation_worker_queue.py tests/backend/test_winget_execution.py tests/backend/test_software_approval_api.py tests/backend/test_software_install_api.py tests/backend/test_software_evidence.py tests/backend/test_software_staging.py tests/backend/test_software_discovery.py tests/backend/test_software_install_worker.py tests/backend/test_plan_api.py -q
