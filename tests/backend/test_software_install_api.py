@@ -112,7 +112,9 @@ def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file
     assert response.notice == "VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP"
     assert plan.evidence_id == evidence.evidence_id
     assert plan.plan_digest
-    with pytest.raises(api.InstallPlanNotFound):
+    from agent_backend.software_install_plans import InstallPlanNotFound
+
+    with pytest.raises(InstallPlanNotFound):
         api.software_install_plan_store.get(response.plan_id, owner_id="different-owner")
     assert not staged_path.exists()
 
