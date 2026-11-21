@@ -7,7 +7,6 @@ separately contained Windows worker.
 
 from __future__ import annotations
 
-import json
 import secrets
 import sqlite3
 import threading
