@@ -380,7 +380,7 @@ describe('App chat UI (T-202)', () => {
 
     expect(api.calls.map((item) => item.message)).toEqual(['Prepare installation of Google Chrome']);
     expect(api.catalogCalls).toEqual(['Google Chrome']);
-    expect(fixture.nativeElement.textContent).toContain('Microsoft Catalog');
+    expect(fixture.nativeElement.textContent).toContain('ค้นหาจาก Microsoft WinGet Catalog');
     expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
     expect(api.stepUpCalls).toEqual([]);
@@ -1175,7 +1175,7 @@ describe('Structured Agent response (T-404)', () => {
     fixture.destroy();
   });
 
-  it('renders a Java dry-run plan, clarification questions, and no execution action', async () => {
+  it('renders a Java install plan but blocks the legacy dry-run approval path', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -1232,7 +1232,7 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
     expect(view.textContent).toContain('JDK');
     expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
-    expect(view.textContent).toContain('ยังไม่พร้อมอนุมัติ');
+    expect(view.textContent).toContain('ติดตั้งจริงต้องใช้ WinGet Approval');
     expect(view.textContent).not.toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
