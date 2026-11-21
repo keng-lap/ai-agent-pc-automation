@@ -155,11 +155,11 @@ def _reservation_store(request: Request) -> SQLiteApprovalReservationStore:
     return store
 
 
-def _get_install_plan(plan_id: str):
+def _get_install_plan(plan_id: str, *, owner_id: str):
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
         raise HTTPException(status_code=404, detail="Install proposal not found.")
     try:
-        return software_install_plan_store.get(plan_id)
+        return software_install_plan_store.get(plan_id, owner_id=owner_id)
     except InstallPlanNotFound:
         raise HTTPException(status_code=404, detail="Install proposal not found or expired.") from None
 
@@ -175,7 +175,7 @@ def create_software_approval_challenge(
 ) -> SoftwareApprovalChallengeResponse:
     """Bind registry evidence to the plan, then create an exact-digest TOTP challenge."""
     services, principal, _secret = _authenticated_context(request)
-    plan = _get_install_plan(plan_id)
+    plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
     try:
         binding = software_evidence_registry.bind_to_plan(
             evidence_id=payload.evidence_id,
