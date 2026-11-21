@@ -1,7 +1,19 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
+import {
+  AuthSession,
+  ChatApi,
+  ConversationHistory,
+  PlanReviewResponse,
+  SoftwareApprovalChallenge,
+  SoftwareApprovalResult,
+  SoftwareCatalogSearchResponse,
+  SoftwareDiscoveryResponse,
+  SoftwareInstallProposalResponse,
+  SoftwareInstallReadiness,
+  UiLanguage,
+} from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 import { JobMonitorComponent } from './job-monitor/job-monitor';
@@ -28,6 +40,15 @@ interface SoftwareDiscoveryUiState {
   catalog?: SoftwareCatalogSearchResponse;
   packageId?: string;
   result?: SoftwareDiscoveryResponse;
+  readiness?: SoftwareInstallReadiness;
+  readinessChecking?: boolean;
+  readinessError?: string;
+  proposal?: SoftwareInstallProposalResponse;
+  proposalStatus?: 'preparing' | 'ready' | 'challenge' | 'queued' | 'error';
+  proposalError?: string;
+  approvalChallenge?: SoftwareApprovalChallenge;
+  totpCode?: string;
+  reservationId?: string;
   error?: string;
 }
 
@@ -128,6 +149,57 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && (candidate['official_asset_sha256'] === null || /^[0-9a-f]{64}$/i.test(candidate['official_asset_sha256']))
     && Array.isArray(candidate['limitations'])
     && candidate['limitations'].every((item) => typeof item === 'string');
+}
+
+function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallReadiness {
+  return isRecord(value)
+    && typeof value['platform_supported'] === 'boolean'
+    && typeof value['authenticode_verification_available'] === 'boolean'
+    && typeof value['publisher_trust_configured'] === 'boolean'
+    && Array.isArray(value['supported_package_ids'])
+    && value['supported_package_ids'].every((item) => typeof item === 'string')
+    && value['notice'] === 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+}
+
+function isSoftwareInstallProposalResponse(value: unknown): value is SoftwareInstallProposalResponse {
+  return isRecord(value)
+    && typeof value['plan_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['plan_id'])
+    && typeof value['evidence_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['evidence_id'])
+    && typeof value['package_id'] === 'string'
+    && typeof value['package_name'] === 'string'
+    && typeof value['publisher'] === 'string'
+    && typeof value['version'] === 'string'
+    && ['x86', 'x64', 'arm64'].includes(String(value['architecture']))
+    && value['scope'] === 'user'
+    && typeof value['expires_at'] === 'string'
+    && value['notice'] === 'VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP';
+}
+
+function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalChallenge {
+  return isRecord(value)
+    && typeof value['plan_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['plan_id'])
+    && typeof value['challenge_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['challenge_id'])
+    && typeof value['package_id'] === 'string'
+    && typeof value['version'] === 'string'
+    && typeof value['approval_digest'] === 'string'
+    && /^[0-9a-f]{64}$/.test(value['approval_digest'])
+    && value['notice'] === 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
+}
+
+function isSoftwareApprovalResult(value: unknown): value is SoftwareApprovalResult {
+  return isRecord(value)
+    && value['approved'] === true
+    && typeof value['plan_id'] === 'string'
+    && typeof value['approval_digest'] === 'string'
+    && typeof value['package_id'] === 'string'
+    && typeof value['version'] === 'string'
+    && typeof value['reservation_id'] === 'string'
+    && value['execution_state'] === 'QUEUED'
+    && value['notice'] === 'APPROVED_QUEUED_NOT_YET_EXECUTED';
 }
 
 function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
