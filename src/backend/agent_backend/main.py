@@ -82,6 +82,8 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
     application.state.job_store_lock = threading.Lock()
+    application.state.approval_reservation_store = None
+    application.state.approval_reservation_store_lock = threading.Lock()
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
