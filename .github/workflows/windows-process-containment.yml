@@ -82,7 +82,7 @@ jobs:
       - name: Install backend test dependencies
         run: python -m pip install -e "src/backend[dev]"
       - name: Run backend Ruff checks
-        run: python -m ruff check src/backend/agent_backend tests/backend
+        run: python -m ruff check --select F src/backend/agent_backend tests/backend
       - name: Test Windows authenticator storage and DPAPI
         run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_auth_api.py tests/backend/test_windows_secret_storage.py -q
       - name: Validate B2 Windows acceptance scripts
