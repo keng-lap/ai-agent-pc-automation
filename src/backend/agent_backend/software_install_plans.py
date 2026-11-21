@@ -20,6 +20,7 @@ MAX_ACTIVE_INSTALL_PLANS = 128
 def _canonical_payload(
     *,
     evidence_id: str,
+    owner_digest: str,
     package_id: str,
     package_name: str,
     publisher: str,
@@ -34,6 +35,7 @@ def _canonical_payload(
             "schema_version": "p6-609-install-plan-v1",
             "action": "software.install",
             "evidence_id": evidence_id,
+            "owner_digest": owner_digest,
             "package_id": package_id,
             "package_name": package_name,
             "publisher": publisher,
@@ -63,6 +65,7 @@ class SoftwareInstallPlan(BaseModel):
     plan_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     action: Literal["software.install"] = "software.install"
     evidence_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    owner_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     package_id: str = Field(min_length=1, max_length=160)
     package_name: str = Field(min_length=1, max_length=200)
     publisher: str = Field(min_length=1, max_length=200)
@@ -88,6 +91,7 @@ class SoftwareInstallPlan(BaseModel):
             raise ValueError("install plan expiry must be exactly ten minutes after creation")
         expected = _digest(
             evidence_id=self.evidence_id,
+            owner_digest=self.owner_digest,
             package_id=self.package_id,
             package_name=self.package_name,
             publisher=self.publisher,
@@ -121,14 +125,18 @@ class SoftwareInstallPlanStore:
         self._plans: dict[str, SoftwareInstallPlan] = {}
         self._lock = threading.RLock()
 
-    def create(self, evidence: VerifiedPackageEvidence) -> SoftwareInstallPlan:
+    def create(self, evidence: VerifiedPackageEvidence, *, owner_id: str) -> SoftwareInstallPlan:
         if not isinstance(evidence, VerifiedPackageEvidence):
             raise TypeError("install plan requires backend-verified package evidence")
+        if not isinstance(owner_id, str) or not owner_id.strip():
+            raise ValueError("install plan requires an authenticated owner")
+        owner_digest = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()
         now = self._now()
         evidence.ensure_fresh(now=now)
         expires_at = now + INSTALL_PLAN_TTL
         values = {
             "evidence_id": evidence.evidence_id,
+            "owner_digest": owner_digest,
             "package_id": evidence.package_id,
             "package_name": evidence.package_name,
             "publisher": evidence.publisher,
@@ -150,13 +158,16 @@ class SoftwareInstallPlanStore:
             self._plans[plan.plan_id] = plan
         return plan
 
-    def get(self, plan_id: str) -> SoftwareInstallPlan:
+    def get(self, plan_id: str, *, owner_id: str) -> SoftwareInstallPlan:
         if not isinstance(plan_id, str) or len(plan_id) != 32:
             raise InstallPlanNotFound("install plan not found")
+        if not isinstance(owner_id, str) or not owner_id.strip():
+            raise InstallPlanNotFound("install plan not found")
+        owner_digest = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()
         now = self._now()
         with self._lock:
             plan = self._plans.get(plan_id)
-            if plan is None:
+            if plan is None or plan.owner_digest != owner_digest:
                 raise InstallPlanNotFound("install plan not found")
             if now >= plan.expires_at:
                 self._plans.pop(plan_id, None)
