@@ -35,6 +35,7 @@ on:
       - "tests/backend/test_winget_execution.py"
       - "tests/backend/test_process_containment.py"
       - "scripts/acceptance/P6-609-B2/**"
+      - "scripts/acceptance/P6-609-C/**"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-process-containment.yml"
   push:
@@ -86,6 +87,17 @@ jobs:
           $files = Get-ChildItem 'scripts/acceptance/P6-609-B2' -Filter '*.ps1' | Sort-Object FullName
           if (-not $files) { throw 'No B2 PowerShell acceptance scripts were found.' }
           foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName, [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+            }
+          }
+          $cFiles = Get-ChildItem 'scripts/acceptance/P6-609-C' -Filter '*.ps1' | Sort-Object FullName
+          foreach ($file in $cFiles) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
