@@ -5,7 +5,9 @@ on:
     paths:
       - "src/backend/agent_backend/winget_adapter.py"
       - "src/backend/agent_backend/software_approval.py"
+      - "src/backend/agent_backend/winget_execution.py"
       - "tests/backend/test_winget_adapter.py"
+      - "tests/backend/test_winget_execution.py"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-winget-adapter.yml"
   push:
@@ -14,7 +16,9 @@ on:
     paths:
       - "src/backend/agent_backend/winget_adapter.py"
       - "src/backend/agent_backend/software_approval.py"
+      - "src/backend/agent_backend/winget_execution.py"
       - "tests/backend/test_winget_adapter.py"
+      - "tests/backend/test_winget_execution.py"
       - "src/backend/pyproject.toml"
       - ".github/workflows/windows-winget-adapter.yml"
 
@@ -35,4 +39,4 @@ jobs:
       - name: Install backend test dependencies
         run: python -m pip install -e "src/backend[dev]"
       - name: Test exact-artifact WinGet adapter and Windows manifest locks
-        run: python -m pytest tests/backend/test_winget_adapter.py -q
+        run: python -m pytest tests/backend/test_winget_adapter.py tests/backend/test_winget_execution.py -q
