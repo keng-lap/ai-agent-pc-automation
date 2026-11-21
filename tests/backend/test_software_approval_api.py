@@ -127,7 +127,7 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.installer_type == binding.evidence.installer_type
     assert response.signature_subject == binding.evidence.signature_subject
     assert response.signature_sha256 == binding.evidence.signature_sha256
-    assert response.notice == "APPROVAL_ONLY_NOT_EXECUTED"
+    assert response.notice == "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
     assert reservation_store.created[0]["approval_id"] == "f" * 32
     assert reservation_store.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["action_digest"] == binding.approval_digest
