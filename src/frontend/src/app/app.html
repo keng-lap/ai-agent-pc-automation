@@ -188,6 +188,7 @@
                     }
                   </div>
 
+                  @if (review.dry_run_plan) {
                   <section class="execution-flow" [attr.aria-label]="language() === 'th' ? 'ลำดับการทำงาน Dry Run' : 'Dry Run workflow'">
                     <div class="execution-flow-heading">
                       <div>
@@ -273,6 +274,7 @@
                     <p class="installer-empty">{{ language() === 'th' ? 'ยังไม่มีรายการซอฟต์แวร์ที่พร้อมจำลอง' : 'No software item is ready to simulate.' }}</p>
                   }
 
+                  }
                   @if (review.questions.length) {
                     <div class="tool-preview installer-questions">
                       <strong>{{ language() === 'th' ? 'ต้องการข้อมูลเพิ่ม' : 'More information needed' }}</strong>
