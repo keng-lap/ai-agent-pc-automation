@@ -180,6 +180,22 @@ def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
         )
 
 
+def test_discovery_rejects_package_dependencies_not_in_exact_approval():
+    source = FakeSource()
+    source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Dependencies"] = {
+        "PackageDependencies": [{
+            "PackageIdentifier": "Microsoft.VCRedist.2015+.x64",
+        }]
+    }
+
+    with pytest.raises(DiscoveryUnavailable, match="package dependencies"):
+        WinGetManifestRepository(http_get=source.get).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+
 def test_manifest_schema_version_with_long_digit_run_is_rejected():
     source = FakeSource()
     original_get = source.get
