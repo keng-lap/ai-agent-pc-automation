@@ -36,6 +36,7 @@ def make_candidate(**changes):
         "official_version": "26.2.5",
         "official_release_url": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.5",
         "official_asset_sha256": "a" * 64,
+        "official_asset_id": 12345,
         "limitations": (),
     }
     values.update(changes)
