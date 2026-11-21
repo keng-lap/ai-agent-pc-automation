@@ -138,7 +138,7 @@ class InstallerStager:
             total = 0
             declared_length: int | None = None
             with staged_file:
-                response = self._get_safe_release_response(candidate.installer_url)
+                response = self._get_safe_release_response(self._download_url(candidate))
 
                 headers = getattr(response, "headers", {})
                 encoding = str(headers.get("Content-Encoding", "identity")).strip().lower()
@@ -224,6 +224,15 @@ class InstallerStager:
                 except OSError:
                     pass
 
+    @staticmethod
+    def _download_url(candidate: InstallerCandidate) -> str:
+        if candidate.package_id == "DBeaver.DBeaver.Community":
+            asset_id = candidate.official_asset_id
+            if type(asset_id) is not int or asset_id < 1:
+                raise InstallerStageError("official DBeaver release asset identity is missing")
+            return f"https://api.github.com/repos/dbeaver/dbeaver/releases/assets/{asset_id}"
+        return candidate.installer_url
+
     def _get_safe_release_response(self, initial_url: str):
         current_url = initial_url
         for redirect_count in range(MAX_RELEASE_REDIRECTS + 1):
@@ -231,6 +240,7 @@ class InstallerStager:
                 current_url,
                 headers={
                     "Accept": "application/octet-stream",
+                    "X-GitHub-Api-Version": "2022-11-28",
                     "User-Agent": USER_AGENT,
                 },
                 timeout=(3.05, 30),
@@ -276,6 +286,10 @@ class InstallerStager:
             or not candidate.official_release_url
             or not candidate.official_asset_sha256
             or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
+            or (
+                candidate.package_id == "DBeaver.DBeaver.Community"
+                and (type(candidate.official_asset_id) is not int or candidate.official_asset_id < 1)
+            )
         ):
             raise InstallerStageError("installer is not matched to a verified official release")
         parsed_url = urlsplit(candidate.installer_url)
