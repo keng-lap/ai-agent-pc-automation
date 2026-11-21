@@ -224,3 +224,26 @@ def test_worker_cannot_transition_with_stale_lease(tmp_path):
             target="RUNNING",
             now=NOW + timedelta(seconds=1),
         )
+
+
+def test_worker_can_renew_live_lease_with_version_cas(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+    claimed = store.claim_next_install(worker_id="worker-1", now=NOW, lease_seconds=30)
+    assert claimed is not None
+
+    renewed = store.renew_install_lease(
+        receipt.reservation_id,
+        worker_id="worker-1",
+        lease_token=claimed.lease_token,
+        expected_version=claimed.version,
+        lease_seconds=90,
+        now=NOW + timedelta(seconds=10),
+    )
+
+    assert renewed.version == claimed.version + 1
+    assert renewed.lease_expires_at == (NOW + timedelta(seconds=100)).isoformat(
+        timespec="milliseconds"
+    ).replace("+00:00", "Z")
+    assert renewed.attempts == 1
