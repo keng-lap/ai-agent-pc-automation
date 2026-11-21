@@ -324,6 +324,13 @@ class WinGetManifestRepository:
                 raise DiscoveryUnavailable("manifest document must be a YAML mapping")
             documents.append((item["name"], raw, document))
 
+        # This exact-action proposal approves one Package ID/version only.
+        # Do not allow WinGet to add undeclared-by-the-approval dependency installs.
+        if any(document.get("Dependencies") for _, _, document in documents):
+            raise DiscoveryUnavailable(
+                "package manifests with additional package dependencies are not eligible for exact single-package approval"
+            )
+
         package_docs = [
             document
             for _, _, document in documents
