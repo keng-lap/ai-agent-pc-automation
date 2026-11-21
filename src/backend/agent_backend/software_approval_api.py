@@ -15,8 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_backend.auth_audit import record_auth_audit_event
 from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
-from agent_backend.plan_api import _plan_store
-from agent_backend.plans import PlanExpiredError, PlanNotFoundError
+from agent_backend.software_install_plans import (
+    InstallPlanNotFound,
+    software_install_plan_store,
+)
 from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
     ApprovalReservationError,
@@ -142,23 +144,11 @@ def _reservation_store(request: Request) -> SQLiteApprovalReservationStore:
 
 def _get_install_plan(plan_id: str):
     if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
-        raise HTTPException(status_code=404, detail="Plan not found.")
+        raise HTTPException(status_code=404, detail="Install proposal not found.")
     try:
-        plan = _plan_store.get(plan_id)
-    except PlanExpiredError:
-        raise HTTPException(status_code=410, detail="Plan expired.") from None
-    except PlanNotFoundError:
-        raise HTTPException(status_code=404, detail="Plan not found.") from None
-    if (
-        plan.tool_id != "software.install"
-        or plan.risk_class != "R1"
-        or plan.required_permission != "P1"
-        or any(item.status != "PLANNED" for item in plan.programs)
-    ):
-        raise HTTPException(status_code=409, detail="Plan is not eligible for software approval.")
-    if len(plan.programs) != 1:
-        raise HTTPException(status_code=409, detail="Software evidence must bind to one exact package.")
-    return plan
+        return software_install_plan_store.get(plan_id)
+    except InstallPlanNotFound:
+        raise HTTPException(status_code=404, detail="Install proposal not found or expired.") from None
 
 
 @router.post(
@@ -184,9 +174,16 @@ def create_software_approval_challenge(
         raise HTTPException(status_code=409, detail="Verified software evidence cannot be bound to this plan.") from None
 
     evidence = binding.evidence
-    requested_target = plan.programs[0].program.casefold()
-    if requested_target not in {evidence.package_id.casefold(), evidence.package_name.casefold()}:
-        raise HTTPException(status_code=409, detail="Verified package does not match the requested plan target.")
+    if payload.evidence_id != plan.evidence_id:
+        raise HTTPException(status_code=409, detail="Evidence does not match this exact install proposal.")
+    if (
+        plan.package_id.casefold() != evidence.package_id.casefold()
+        or plan.package_name.casefold() != evidence.package_name.casefold()
+        or plan.version != evidence.version
+        or plan.architecture != evidence.architecture
+        or plan.publisher.casefold() != evidence.publisher.casefold()
+    ):
+        raise HTTPException(status_code=409, detail="Verified package does not match the exact install proposal.")
 
     with _lock:
         _prune_bindings()
