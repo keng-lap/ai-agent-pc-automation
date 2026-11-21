@@ -80,6 +80,7 @@ class FakeSource:
                 "tag_name": self.official_version,
                 "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{self.official_version}",
                 "assets": [{
+                    "id": 12345,
                     "name": official_asset,
                     "browser_download_url": f"https://github.com/dbeaver/dbeaver/releases/download/{self.official_version}/{official_asset}",
                     "digest": "sha256:" + ("b" * 64 if self.official_version == VERSION else "c" * 64),
@@ -120,6 +121,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert result.candidate.installer_sha256 == "b" * 64
     assert result.candidate.publisher_verification == "VERIFIED"
     assert result.candidate.official_version == VERSION
+    assert result.candidate.official_asset_id == 12345
     assert "publisher_official_source_not_yet_cross_checked" not in result.candidate.limitations
     assert "installer_authenticode_signature_not_yet_verified" in result.candidate.limitations
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
