@@ -11,6 +11,7 @@ import re
 import subprocess
 import threading
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -164,12 +165,29 @@ class SoftwareInstallWorker:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "APPROVAL_BINDING_MISMATCH"
                 )
-            binding.ensure_fresh(now=__import__("datetime").datetime.now(__import__("datetime").UTC))
+            binding.ensure_fresh(now=datetime.now(UTC))
             running = self._transition(
                 job, token, version, version_lock, "RUNNING", None
             )
             if running is None:
                 return job
+            # Establish the pre-install state first. An already-present exact
+            # package satisfies the requested state without launching an installer.
+            before = self._verifier(binding.evidence.package_id, binding.evidence.version)
+            if before is None:
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "PRE_INSTALL_STATE_AMBIGUOUS"
+                ) or job
+            if before is True:
+                verifying = self._transition(
+                    job, token, version, version_lock, "VERIFYING", None
+                )
+                if verifying is None:
+                    return job
+                return self._transition(
+                    job, token, version, version_lock, "SUCCEEDED", "PACKAGE_ALREADY_PRESENT"
+                ) or job
+
             prepared = prepare_approved_install(binding, work_root=self._work_root)
             if lease_lost.is_set():
                 return job
@@ -184,6 +202,10 @@ class SoftwareInstallWorker:
             if result.timed_out:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WINGET_TIMEOUT"
+                ) or job
+            if result.exit_code != 0:
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "WINGET_NONZERO_EXIT"
                 ) or job
             verifying = self._transition(
                 job, token, version, version_lock, "VERIFYING", None
