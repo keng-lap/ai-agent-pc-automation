@@ -202,7 +202,7 @@ class FakeChatApi {
       approval_digest: 'a'.repeat(64),
       package_id: 'DBeaver.DBeaver.Community',
       version: '25.3.0',
-      reservation_id: 'reservation-123',
+      reservation_id: 'a'.repeat(32),
       execution_state: 'QUEUED',
       notice: 'APPROVED_QUEUED_NOT_YET_EXECUTED',
     });
@@ -504,8 +504,8 @@ describe('App chat UI (T-202)', () => {
       code: '123456',
     }]);
     expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
-    expect(fixture.nativeElement.textContent).toContain('reservation-123');
-    expect(api.jobStatusCalls).toEqual(['reservation-123']);
+    expect(fixture.nativeElement.textContent).toContain('a'.repeat(32));
+    expect(api.jobStatusCalls).toEqual(['a'.repeat(32)]);
     expect(fixture.nativeElement.textContent).toContain('ติดตั้งและตรวจสอบ Package ผ่านแล้ว');
   });
 
