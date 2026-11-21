@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 import subprocess
 import threading
-import time
 import uuid
 from pathlib import Path
 from typing import Callable
@@ -21,7 +20,11 @@ from agent_backend.approval_reservation_store import (
     SQLiteApprovalReservationStore,
 )
 from agent_backend.software_approval import InstallApprovalBinding
-from agent_backend.winget_adapter import prepare_approved_install, cleanup_prepared_install
+from agent_backend.winget_adapter import (
+    WinGetAdapterError,
+    cleanup_prepared_install,
+    prepare_approved_install,
+)
 from agent_backend.winget_execution import (
     WinGetExecutionError,
     _winget_alias_path,
@@ -200,7 +203,7 @@ class SoftwareInstallWorker:
                 "UNKNOWN",
                 "POST_INSTALL_VERIFICATION_AMBIGUOUS" if verified is None else "PACKAGE_VERSION_NOT_CONFIRMED",
             ) or job
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, WinGetAdapterError):
             return self._transition(
                 job, token, version, version_lock, "FAILED", "INVALID_APPROVED_PAYLOAD"
             ) or job
@@ -214,7 +217,7 @@ class SoftwareInstallWorker:
             if prepared is not None:
                 try:
                     cleanup_prepared_install(prepared, work_root=self._work_root)
-                except (OSError, ValueError):
+                except (OSError, ValueError, WinGetAdapterError):
                     # The manifest contains only public package metadata; a
                     # cleanup failure is not permission to retry the install.
                     pass
