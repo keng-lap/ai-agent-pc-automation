@@ -40,10 +40,12 @@ flows remain unchanged.
 - `POST /api/plans/{plan_id}/software-approval/confirm` — consume TOTP and
   persist the queue reservation.
 
-The generic `/api/plans/{plan_id}/step-up` and `/approve` routes explicitly
-reject `software.install`. They remain available only for the legacy preview
-use cases such as software removal. This prevents an install request from
-falling back to a mock Dry Run.
+Explicit `software_install` requests do not receive a legacy `DryRunPlan`
+from `POST /api/plans`; the frontend routes the interpreted target into the
+WinGet catalog flow. The generic `/api/plans/{plan_id}/step-up` and
+`/approve` routes also explicitly reject stale `software.install` plans.
+They remain available only for legacy preview use cases such as software
+removal. This prevents an install request from falling back to a mock Dry Run.
 
 ## DBeaver publisher pin
 
