@@ -304,7 +304,7 @@ describe('App chat UI (T-202)', () => {
       questions: [],
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
-    send('Could you install Google Chrome');
+    send('Prepare installation of Google Chrome');
     await fixture.whenStable();
     fixture.detectChanges();
 
