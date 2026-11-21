@@ -156,7 +156,7 @@ export interface PlanReviewResponse {
   tool_result: { status: 'dry_run'; summary: string } | null;
   approved: boolean;
   questions: string[];
-  notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE';
+  notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' | 'PLAN_REVIEW_ONLY_NO_EXECUTION';
   refined_from_plan_id?: string | null;
   clarification?: string | null;
 }
