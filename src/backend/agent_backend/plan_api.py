@@ -117,25 +117,9 @@ def _programs_for_review(
         return tool_id, (item,)
 
     if intent.category == "development_task" and intent.target == "Java":
-        item = ProgramPlan(
-            order=1,
-            program="JDK",
-            version="ยังไม่ได้ระบุ" if language == "th" else "Not specified",
-            purpose=(
-                "ชุดพัฒนาและคอมไพเลอร์สำหรับภาษา Java"
-                if language == "th"
-                else "Java development kit and compiler"
-            ),
-            reason=(
-                "JDK เป็นเครื่องมือหลักที่จำเป็นสำหรับคอมไพล์และรันโปรแกรม Java"
-                if language == "th"
-                else "A JDK is the core tool required to compile and run Java applications"
-            ),
-            source="ยังไม่ได้ตรวจสอบ" if language == "th" else "Not checked",
-            impact="ยังไม่ได้ตรวจสอบ" if language == "th" else "Unknown / not checked",
-            status="NEEDS_CLARIFICATION",
-        )
-        return "software.install", (item,)
+        # Multi-package development environments are not a single exact install
+        # action. Keep clarification in the conversational/task plan, not DryRunPlan.
+        return None
 
     return None
 
