@@ -17,6 +17,12 @@ from agent_backend.auth_audit import record_auth_audit_event
 from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
 from agent_backend.plan_api import _plan_store
 from agent_backend.plans import PlanExpiredError, PlanNotFoundError
+from agent_backend.approval_reservation_store import (
+    ApprovalReservationConflict,
+    ApprovalReservationError,
+    ApprovalReservationExpired,
+    SQLiteApprovalReservationStore,
+)
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.software_evidence import (
     EvidenceNotFound,
@@ -91,7 +97,9 @@ class SoftwareApprovalResult(BaseModel):
     approval_digest: str
     package_id: str
     version: str
-    notice: Literal["APPROVED_NOT_EXECUTED"] = "APPROVED_NOT_EXECUTED"
+    reservation_id: str
+    execution_state: Literal["QUEUED"] = "QUEUED"
+    notice: Literal["APPROVED_QUEUED_NOT_YET_EXECUTED"] = "APPROVED_QUEUED_NOT_YET_EXECUTED"
 
 
 def _authenticated_context(request: Request, *, require_enrolled: bool = True):
@@ -108,6 +116,28 @@ def _authenticated_context(request: Request, *, require_enrolled: bool = True):
     if secret is None:
         raise HTTPException(status_code=403, detail="Authenticator enrollment required.")
     return services, principal, secret
+
+
+def _reservation_store(request: Request) -> SQLiteApprovalReservationStore:
+    """Return the app-scoped durable approval/queue store."""
+    store = getattr(request.app.state, "approval_reservation_store", None)
+    if store is not None:
+        return store
+    lock = getattr(request.app.state, "approval_reservation_store_lock", None)
+    if lock is None:
+        raise HTTPException(status_code=503, detail="Durable approval storage is unavailable.")
+    with lock:
+        store = getattr(request.app.state, "approval_reservation_store", None)
+        if store is None:
+            path = getattr(request.app.state, "job_store_path", None)
+            if path is None:
+                raise HTTPException(status_code=503, detail="Durable approval storage is unavailable.")
+            try:
+                store = SQLiteApprovalReservationStore(path)
+            except ApprovalReservationError:
+                raise HTTPException(status_code=503, detail="Durable approval storage is unavailable.") from None
+            request.app.state.approval_reservation_store = store
+    return store
 
 
 def _get_install_plan(plan_id: str):
@@ -181,6 +211,20 @@ def create_software_approval_challenge(
         action_digest=binding.approval_digest,
         risk_class="high",
     )
+    try:
+        _reservation_store(request).create_approval(
+            approval_id=challenge.challenge_id,
+            owner_id=principal.owner_sub,
+            session_id=principal.session_id,
+            plan_id=plan.plan_id,
+            plan_digest=plan.plan_digest,
+            action_digest=binding.approval_digest,
+            evidence_expires_at=binding.evidence.expires_at,
+        )
+    except ApprovalReservationError:
+        with _lock:
+            _bindings.pop(plan_id, None)
+        raise HTTPException(status_code=503, detail="Could not persist the install approval.") from None
     return SoftwareApprovalChallengeResponse(
         plan_id=plan_id,
         challenge_id=challenge.challenge_id,
@@ -277,6 +321,23 @@ def confirm_software_approval(
                 detail="Authenticator storage unavailable.",
             ) from None
         if accepted:
+            try:
+                receipt = _reservation_store(request).reserve(
+                    approval_id=payload.challenge_id,
+                    owner_id=principal.owner_sub,
+                    session_id=principal.session_id,
+                    plan_id=plan.plan_id,
+                    plan_digest=plan.plan_digest,
+                    action_digest=binding.approval_digest,
+                    idempotency_key=plan.plan_id,
+                    binding_json=binding.model_dump_json(),
+                )
+            except ApprovalReservationExpired:
+                raise HTTPException(status_code=410, detail="Install approval expired before it could be queued.") from None
+            except ApprovalReservationConflict:
+                raise HTTPException(status_code=409, detail="Install approval was already consumed or conflicts with an existing job.") from None
+            except ApprovalReservationError:
+                raise HTTPException(status_code=503, detail="Install job could not be durably queued.") from None
             _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:
         record_auth_audit_event(
@@ -291,4 +352,5 @@ def confirm_software_approval(
         approval_digest=binding.approval_digest,
         package_id=binding.evidence.package_id,
         version=binding.evidence.version,
+        reservation_id=receipt.reservation_id,
     )
