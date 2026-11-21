@@ -184,3 +184,17 @@ def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
         )
 
     assert getattr(error.value, "status_code", None) == 503
+
+
+
+def test_readiness_exposes_only_non_secret_publisher_pin_state(monkeypatch):
+    monkeypatch.delenv("AI_AGENT_DBEAVER_SIGNER_SHA256", raising=False)
+    blocked = api.get_software_install_readiness()
+    assert blocked["publisher_trust_configured"] is False
+    assert blocked["supported_package_ids"] == []
+
+    monkeypatch.setenv("AI_AGENT_DBEAVER_SIGNER_SHA256", "d" * 64)
+    ready = api.get_software_install_readiness()
+    assert ready["publisher_trust_configured"] is True
+    assert ready["supported_package_ids"] == ["DBeaver.DBeaver.Community"]
+    assert "d" * 64 not in str(ready)
