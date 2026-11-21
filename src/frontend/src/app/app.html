@@ -495,6 +495,60 @@
                       }
                     </div>
                   }
+                  @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
+                    @if (installCandidate.publisher_verification === 'VERIFIED') {
+                      <section class="tool-preview installer-actions" aria-label="Real WinGet install">
+                        <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
+                        @if (discovery.readinessChecking) {
+                          <span role="status">{{ language() === 'th' ? 'กำลังตรวจสอบความพร้อมของเครื่องและ Publisher Trust…' : 'Checking Windows and publisher trust readiness…' }}</span>
+                        } @else if (discovery.readinessError) {
+                          <span class="installer-error" role="alert">{{ discovery.readinessError }}</span>
+                        } @else if (discovery.readiness && !discovery.readiness.platform_supported) {
+                          <span>{{ language() === 'th' ? 'การตรวจสอบ Authenticode และการติดตั้งจริงรองรับเฉพาะ Windows' : 'Authenticode verification and real installation require Windows.' }}</span>
+                        } @else if (discovery.readiness && !discovery.readiness.publisher_trust_configured) {
+                          <span>{{ language() === 'th' ? 'ยังไม่ได้ตั้งค่า Publisher Certificate Fingerprint ที่เชื่อถือได้ จึงยังไม่อนุญาตให้ดาวน์โหลดเพื่ออนุมัติหรือติดตั้ง' : 'No backend-pinned publisher certificate fingerprint is configured. Staging and installation remain blocked.' }}</span>
+                        } @else if (discovery.readiness?.publisher_trust_configured && !discovery.proposal) {
+                          <span>{{ language() === 'th' ? 'ระบบจะดาวน์โหลดไฟล์ชั่วคราว ตรวจ SHA-256 และ Authenticode แล้วลบไฟล์ชั่วคราวหลังสร้างข้อเสนอ' : 'The installer will be temporarily downloaded, SHA-256 and Authenticode checked, then the temporary file removed.' }}</span>
+                          <button class="send-button" type="button" [disabled]="planning()" (click)="prepareSoftwareInstall(entry.id)">
+                            {{ discovery.proposalStatus === 'preparing' ? (language() === 'th' ? 'กำลังตรวจสอบไฟล์…' : 'Verifying installer…') : (language() === 'th' ? 'ตรวจสอบไฟล์และเตรียม Approval' : 'Verify installer and prepare approval') }}
+                          </button>
+                        }
+                        @if (discovery.proposal) {
+                          <div class="program-review">
+                            <strong>{{ discovery.proposal.package_name }}</strong>
+                            <span>Package ID: {{ discovery.proposal.package_id }}</span>
+                            <span>Publisher: {{ discovery.proposal.publisher }}</span>
+                            <span>Version: {{ discovery.proposal.version }}</span>
+                            <span>{{ language() === 'th' ? 'ขอบเขต' : 'Scope' }}: {{ discovery.proposal.scope }}</span>
+                            <span>{{ language() === 'th' ? 'ข้อเสนอหมดอายุ' : 'Proposal expires' }}: {{ discovery.proposal.expires_at }}</span>
+                          </div>
+                          @if (discovery.proposalStatus === 'queued') {
+                            <div role="status">
+                              <strong>{{ language() === 'th' ? 'อนุมัติแล้วและเข้าคิวติดตั้งจริง' : 'Approved and queued for real installation' }}</strong>
+                              <span>Reservation: {{ discovery.reservationId }}</span>
+                              <small>{{ language() === 'th' ? 'Worker จะดำเนินการต่อบนเครื่อง Windows นี้ สถานะสุดท้ายต้องรอผลตรวจหลังติดตั้ง' : 'The local Windows worker will continue. Final success requires post-install verification.' }}</small>
+                            </div>
+                          } @else if (discovery.approvalChallenge) {
+                            <label [for]="'install-totp-' + entry.id">{{ language() === 'th' ? 'รหัส Authenticator 6 หลัก' : 'Six-digit authenticator code' }}</label>
+                            <input [id]="'install-totp-' + entry.id" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="discovery.totpCode ?? ''" (input)="onSoftwareProposalTotpInput(entry.id, $event)" />
+                            <button class="send-button" type="button" [disabled]="planning() || (discovery.totpCode ?? '').length !== 6" (click)="confirmSoftwareInstall(entry.id)">
+                              {{ language() === 'th' ? 'อนุมัติและเข้าคิวติดตั้งจริง' : 'Approve and queue real install' }}
+                            </button>
+                          } @else {
+                            <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled()" (click)="requestSoftwareApproval(entry.id)">
+                              {{ language() === 'th' ? 'ยืนยันตัวตนและขออนุมัติ' : 'Verify identity and request approval' }}
+                            </button>
+                            @if (!authenticatorEnrolled()) {
+                              <small>{{ language() === 'th' ? 'ต้องลงทะเบียน Authenticator ก่อนอนุมัติ' : 'Authenticator enrollment is required before approval.' }}</small>
+                            }
+                          }
+                        }
+                        @if (discovery.proposalError) {
+                          <span class="installer-error" role="alert">{{ discovery.proposalError }}</span>
+                        }
+                      </section>
+                    }
+                  }
                   @if (discovery.status === 'error' && discovery.error) {
                     <p class="installer-error" role="alert">{{ discovery.error }}</p>
                   }
