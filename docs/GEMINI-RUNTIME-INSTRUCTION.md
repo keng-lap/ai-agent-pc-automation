@@ -9,7 +9,7 @@ Authorized by the Product Owner on 2026-11-07. Scope is limited to supplying a b
 - `src/backend/agent_backend/providers/gemini.py` defines `CHAT_SYSTEM_INSTRUCTION` in backend-owned code.
 - `generate_reply()` constructs a `GenerateContentConfig` with that instruction and passes it to every chat generation request.
 - The instruction asks Gemini to use supplied conversation history, avoid repeated/optional clarification questions, make safe reversible assumptions, consolidate genuinely essential questions, answer concisely, and avoid inventing access or actions.
-- It explicitly preserves the adviser/planner role and the existing backend validation, user approval, and DRY RUN boundary.
+- It explicitly preserves the adviser/planner role and backend-owned validation and capability-specific approval. The instruction itself does not invoke tools or authorize machine changes. The separately authorized P6-609-C WinGet path is entered only through its dedicated backend discovery, evidence, TOTP, and durable-queue APIs; a Gemini reply cannot trigger it by itself.
 - Structured plan generation remains separate and does not inherit the chat instruction.
 
 ## Important limitations
