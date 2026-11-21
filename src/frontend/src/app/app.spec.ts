@@ -278,31 +278,25 @@ describe('App chat UI (T-202)', () => {
 
 
 
-  it('shows dry-run approval only for a fully specified plan and renders the result after approval', async () => {
+  it('does not expose legacy dry-run approval for software.install', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     await render();
     api.planResponder = (request) => of({
       request,
-      interpretation: { category: 'development_task', goal: request, target: 'Java' },
+      interpretation: { category: 'software_install', goal: request, target: 'Google Chrome' },
       task_plan: { steps: [], prerequisites: [] },
       dry_run_plan: {
         plan_id: 'a'.repeat(32),
+        tool_id: 'software.install',
         mode: 'dry_run',
         live_checks_performed: false,
         expires_at: '2026-11-07T15:00:00Z',
         programs: [{
-          order: 1,
-          program: 'JDK',
-          version: '21 LTS',
-          purpose: 'Java development kit',
-          reason: 'Explicit user choice',
-          source: 'Not checked',
-          source_verification: 'NOT_CHECKED',
-          dependencies: [],
-          dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null,
-          impact: 'Not checked',
-          status: 'PLANNED',
+          order: 1, program: 'Google Chrome', version: 'Not specified',
+          purpose: 'Requested browser', reason: 'Explicit user choice',
+          source: 'Not checked', source_verification: 'NOT_CHECKED',
+          dependencies: [], dependencies_verification: 'NOT_CHECKED',
+          disk_space_estimate: null, impact: 'Not checked', status: 'PLANNED',
         }],
       },
       tool_result: null,
@@ -310,53 +304,14 @@ describe('App chat UI (T-202)', () => {
       questions: [],
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
-    send('Prepare Java development');
+    send('Could you install Google Chrome');
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('ยืนยันตัวตนเพื่ออนุมัติ');
-    expect(fixture.nativeElement.textContent).not.toContain('Mock reply');
-    expect(fixture.nativeElement.querySelector('.installer-card')).not.toBeNull();
-    const flow = fixture.nativeElement.querySelector('.execution-flow') as HTMLElement;
-    expect(flow).not.toBeNull();
-    expect(flow.querySelectorAll('.flow-node').length).toBe(5);
-    expect(flow.textContent).toContain('ขั้นตอนการทำงาน');
-    expect(flow.textContent).toContain('รอผู้ใช้ยืนยัน');
-    expect(flow.querySelectorAll('.flow-node--done').length).toBe(2);
-    expect(flow.querySelectorAll('.flow-node--ready').length).toBe(3);
-    expect((fixture.nativeElement.querySelector('.installer-details') as HTMLDetailsElement).open).toBe(false);
-    expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
-
-    const approveButtons = Array.from(
-      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
-    );
-    const approve = approveButtons.find((button) => button.textContent?.includes('ยืนยันตัวตนเพื่ออนุมัติ'));
-    if (!approve) throw new Error('Step-up button was not rendered');
-    approve.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.stepUpCalls).toEqual(['a'.repeat(32)]);
-    expect(flow.textContent).toContain('รอรหัส Authenticator');
-    expect(flow.querySelector('.flow-node--waiting')).not.toBeNull();
-    const codeInput = fixture.nativeElement.querySelector('input[id^="totp-"]') as HTMLInputElement;
-    expect(codeInput).not.toBeNull();
-    codeInput.value = '123456';
-    codeInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    const confirm = Array.from(
-      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.includes('ยืนยันและจำลอง'));
-    if (!confirm) throw new Error('TOTP confirmation button was not rendered');
-    confirm.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.approvalCalls).toEqual(['a'.repeat(32)]);
-    expect(flow.querySelectorAll('.flow-node--done').length).toBe(5);
-    expect(flow.textContent).toContain('เสร็จสมบูรณ์');
-    expect(fixture.nativeElement.textContent).toContain('ผลการจำลอง');
-    expect(fixture.nativeElement.textContent).toContain('Dry run only; no changes made.');
+    expect(fixture.nativeElement.textContent).toContain('ติดตั้งจริงต้องใช้ WinGet Approval');
+    expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
+    expect(api.stepUpCalls).toEqual([]);
+    expect(api.approvalCalls).toEqual([]);
   });
 
   it('routes install requests through Microsoft discovery without asking AI to choose a Package ID', async () => {
@@ -987,6 +942,7 @@ describe('Structured Agent response (T-404)', () => {
       interpretation: { category: 'development_task', goal: message, target: 'Java' },
       task_plan: { steps: [], prerequisites: [] },
       dry_run_plan: {
+        tool_id: 'software.install',
         plan_id: originalPlanId,
         mode: 'dry_run',
         live_checks_performed: false,
@@ -1010,6 +966,7 @@ describe('Structured Agent response (T-404)', () => {
       interpretation: { category: 'development_task', goal: request, target: 'Java' },
       task_plan: { steps: [], prerequisites: [] },
       dry_run_plan: {
+        tool_id: 'software.install',
         plan_id: 'b'.repeat(32),
         mode: 'dry_run',
         live_checks_performed: false,
@@ -1084,6 +1041,7 @@ describe('Structured Agent response (T-404)', () => {
         prerequisites: [{ id: 'runtime_toolchain', order: 1, title: 'เลือก JDK', reason: 'ต้องระบุเวอร์ชัน', status: 'user_confirmation_needed' }],
       },
       dry_run_plan: {
+        tool_id: 'software.install',
         plan_id: 'a'.repeat(32),
         mode: 'dry_run',
         live_checks_performed: false,
@@ -1143,6 +1101,7 @@ describe('Structured Agent response (T-404)', () => {
       interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
       task_plan: { steps: [], prerequisites: [] },
       dry_run_plan: {
+        tool_id: 'software.install',
         plan_id: 'c'.repeat(32),
         mode: 'dry_run',
         live_checks_performed: false,
@@ -1190,6 +1149,7 @@ describe('Structured Agent response (T-404)', () => {
       interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
       task_plan: { steps: [], prerequisites: [] },
       dry_run_plan: {
+        tool_id: 'software.install',
         plan_id: 'd'.repeat(32),
         mode: 'dry_run',
         live_checks_performed: false,
@@ -1304,6 +1264,7 @@ describe('Structured Agent response (T-404)', () => {
       interpretation: { category: 'development_task', goal: message, target: 'Java' },
       task_plan: { steps: [], prerequisites: [] },
       dry_run_plan: {
+        tool_id: 'software.install',
         plan_id: 'e'.repeat(32), mode: 'dry_run', live_checks_performed: false,
         expires_at: '2026-11-07T03:00:00Z',
         programs: [{
