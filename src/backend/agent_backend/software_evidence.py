@@ -56,7 +56,7 @@ class SoftwareEvidenceRegistry:
         self._trust_anchor_configured = (
             signer_sha256_verifier is not None
             if trust_anchor_configured is None
-            else trust_anchor_configured is True
+            else trust_anchor_configured
         )
         self._entries: dict[str, VerifiedPackageEvidence] = {}
         self._lock = threading.RLock()
