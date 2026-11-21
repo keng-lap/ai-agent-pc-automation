@@ -83,12 +83,13 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         executor_calls.append((actual_binding, actual_prepared, kwargs))
         return SimpleNamespace(timed_out=False, exit_code=0)
 
+    verification_results = iter([False, True])
     worker = worker_module.SoftwareInstallWorker(
         store,
         work_root=tmp_path / "work",
         worker_id="worker-1",
         executor=executor,
-        verifier=iter([False, True]).__next__,
+        verifier=lambda *_args: next(verification_results),
         heartbeat_seconds=5,
     )
     result = worker.run_once()
