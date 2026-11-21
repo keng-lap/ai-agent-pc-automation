@@ -88,7 +88,11 @@ def create_software_install_proposal(
             detail="Installer Authenticode verification is available only on Windows.",
         )
     principal = getattr(request.state, "principal", None)
-    if principal is None or not isinstance(getattr(principal, "owner_sub", None), str):
+    if (
+        principal is None
+        or not isinstance(getattr(principal, "owner_sub", None), str)
+        or not principal.owner_sub.strip()
+    ):
         raise HTTPException(status_code=401, detail="Authentication required.")
 
     try:
