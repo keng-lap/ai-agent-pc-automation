@@ -82,6 +82,7 @@ export interface PlanReviewResponse {
   };
   dry_run_plan: {
     plan_id: string;
+    tool_id: 'software.install' | 'software.remove';
     mode: 'dry_run';
     live_checks_performed: false;
     expires_at: string;
