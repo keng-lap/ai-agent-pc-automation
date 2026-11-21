@@ -6,6 +6,7 @@ has no worker, queue consumer, process launcher, package-manager, or OS action.
 
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 import threading
@@ -17,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .platform_storage import PlatformStorageUnavailable, create_platform_secure_storage
+from .software_approval import InstallApprovalBinding
 
 _DIGEST_LENGTH = 64
 _PLAN_ID_LENGTH = 32
@@ -52,6 +54,22 @@ class ReservationReceipt:
     action_digest: str
     state: str
     created_at: str
+
+@dataclass(frozen=True, slots=True)
+class InstallExecutionJob:
+    """Durable one-shot worker claim and exact approval payload."""
+
+    reservation_id: str
+    owner_id: str
+    action_digest: str
+    binding_json: str
+    state: str
+    worker_id: str | None
+    lease_token: str | None
+    lease_expires_at: str | None
+    attempts: int
+    version: int
+    result_code: str | None
 
 
 def _timestamp(value: datetime) -> str:
@@ -179,6 +197,53 @@ class SQLiteApprovalReservationStore:
                     );
                     CREATE INDEX IF NOT EXISTS idx_reservation_owner_created
                         ON job_reservations(owner_id, created_at DESC);
+                    CREATE TABLE IF NOT EXISTS install_execution_jobs (
+                        reservation_id TEXT PRIMARY KEY
+                            REFERENCES job_reservations(reservation_id),
+                        owner_id TEXT NOT NULL,
+                        action_digest TEXT NOT NULL CHECK(length(action_digest) = 64),
+                        binding_json TEXT NOT NULL CHECK(length(binding_json) BETWEEN 2 AND 65536),
+                        state TEXT NOT NULL CHECK(state IN (
+                            'QUEUED', 'CLAIMED', 'RUNNING', 'VERIFYING',
+                            'SUCCEEDED', 'FAILED', 'REBOOT_REQUIRED', 'UNKNOWN'
+                        )),
+                        worker_id TEXT,
+                        lease_token TEXT,
+                        lease_expires_at TEXT,
+                        attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 1),
+                        version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0),
+                        result_code TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_install_jobs_queue
+                        ON install_execution_jobs(state, created_at);
+                    CREATE TABLE IF NOT EXISTS install_execution_events (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                        reservation_id TEXT NOT NULL
+                            REFERENCES install_execution_jobs(reservation_id),
+                        state TEXT NOT NULL,
+                        occurred_at TEXT NOT NULL,
+                        outcome TEXT NOT NULL CHECK(outcome IN ('success', 'denied')),
+                        result_code TEXT
+                    );
+                    CREATE TRIGGER IF NOT EXISTS install_execution_payload_immutable
+                    BEFORE UPDATE OF reservation_id, owner_id, action_digest,
+                        binding_json, created_at
+                    ON install_execution_jobs
+                    BEGIN
+                        SELECT RAISE(ABORT, 'install execution payload is immutable');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS install_execution_events_no_update
+                    BEFORE UPDATE ON install_execution_events
+                    BEGIN
+                        SELECT RAISE(ABORT, 'install execution events are append-only');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS install_execution_events_no_delete
+                    BEFORE DELETE ON install_execution_events
+                    BEGIN
+                        SELECT RAISE(ABORT, 'install execution events are append-only');
+                    END;
                     CREATE TABLE IF NOT EXISTS approval_audit_events (
                         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                         approval_id TEXT NOT NULL
@@ -300,6 +365,7 @@ class SQLiteApprovalReservationStore:
         plan_digest: str,
         action_digest: str,
         idempotency_key: str,
+        binding_json: str | None = None,
         now: datetime | None = None,
     ) -> ReservationReceipt:
         """Consume an active approval and persist one inert reservation atomically."""
@@ -310,6 +376,15 @@ class SQLiteApprovalReservationStore:
         _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
         _hex(plan_digest, _DIGEST_LENGTH, "plan_digest")
         _hex(action_digest, _DIGEST_LENGTH, "action_digest")
+        if binding_json is not None:
+            if not isinstance(binding_json, str) or len(binding_json) > 65536:
+                raise ValueError("binding_json is invalid or too large")
+            try:
+                binding = InstallApprovalBinding.model_validate_json(binding_json)
+            except ValueError:
+                raise ValueError("binding_json is not a valid install approval") from None
+            if binding.approval_digest != action_digest or binding.plan_digest != plan_digest:
+                raise ApprovalReservationConflict("serialized install binding does not match reservation")
         timestamp_value = now or self._clock()
         timestamp = _timestamp(timestamp_value)
         expired = False
@@ -401,6 +476,24 @@ class SQLiteApprovalReservationStore:
                         """,
                         (approval_id,),
                     )
+                    if binding_json is not None:
+                        connection.execute(
+                            """
+                            INSERT INTO install_execution_jobs (
+                                reservation_id, owner_id, action_digest, binding_json,
+                                state, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?)
+                            """,
+                            (reservation_id, owner_id, action_digest, binding_json, timestamp, timestamp),
+                        )
+                        connection.execute(
+                            """
+                            INSERT INTO install_execution_events (
+                                reservation_id, state, occurred_at, outcome
+                            ) VALUES (?, 'QUEUED', ?, 'success')
+                            """,
+                            (reservation_id, timestamp),
+                        )
                     connection.execute(
                         """
                         INSERT INTO approval_audit_events (
@@ -482,6 +575,187 @@ class SQLiteApprovalReservationStore:
             raise
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Reservation could not be read.") from None
+
+
+    def claim_next_install(
+        self, *, worker_id: str, now: datetime | None = None, lease_seconds: int = 60
+    ) -> InstallExecutionJob | None:
+        """Atomically claim one queued install. A lost lease becomes UNKNOWN, never retried."""
+        _identity(worker_id, "worker_id")
+        if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
+            raise ValueError("lease_seconds must be between 1 and 300")
+        current = now or self._clock()
+        timestamp = _timestamp(current)
+        expires = _timestamp(current + __import__("datetime").timedelta(seconds=lease_seconds))
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                expired = connection.execute(
+                    """
+                    SELECT reservation_id FROM install_execution_jobs
+                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING')
+                      AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+                    """,
+                    (timestamp,),
+                ).fetchall()
+                for row in expired:
+                    connection.execute(
+                        """
+                        UPDATE install_execution_jobs
+                        SET state='UNKNOWN', worker_id=NULL, lease_token=NULL,
+                            lease_expires_at=NULL, version=version+1,
+                            result_code='WORKER_LEASE_EXPIRED', updated_at=?
+                        WHERE reservation_id=?
+                        """,
+                        (timestamp, row["reservation_id"]),
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO install_execution_events
+                            (reservation_id, state, occurred_at, outcome, result_code)
+                        VALUES (?, 'UNKNOWN', ?, 'denied', 'WORKER_LEASE_EXPIRED')
+                        """,
+                        (row["reservation_id"], timestamp),
+                    )
+                row = connection.execute(
+                    """
+                    SELECT * FROM install_execution_jobs
+                    WHERE state='QUEUED' AND attempts=0
+                    ORDER BY created_at, reservation_id LIMIT 1
+                    """
+                ).fetchone()
+                if row is None:
+                    connection.commit()
+                    return None
+                token = secrets.token_urlsafe(32)
+                connection.execute(
+                    """
+                    UPDATE install_execution_jobs
+                    SET state='CLAIMED', worker_id=?, lease_token=?,
+                        lease_expires_at=?, attempts=1, version=version+1, updated_at=?
+                    WHERE reservation_id=? AND state='QUEUED' AND attempts=0
+                    """,
+                    (worker_id, token, expires, timestamp, row["reservation_id"]),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO install_execution_events
+                        (reservation_id, state, occurred_at, outcome)
+                    VALUES (?, 'CLAIMED', ?, 'success')
+                    """,
+                    (row["reservation_id"], timestamp),
+                )
+                claimed = connection.execute(
+                    "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
+                    (row["reservation_id"],),
+                ).fetchone()
+                connection.commit()
+                return self._execution_job(claimed)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job could not be claimed.") from None
+
+    def transition_install(
+        self, reservation_id: str, *, worker_id: str, lease_token: str,
+        expected_version: int, target: str, result_code: str | None = None,
+        now: datetime | None = None,
+    ) -> InstallExecutionJob:
+        allowed = {
+            "CLAIMED": {"RUNNING", "FAILED", "UNKNOWN"},
+            "RUNNING": {"VERIFYING", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"},
+            "VERIFYING": {"SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"},
+            "REBOOT_REQUIRED": {"VERIFYING", "UNKNOWN"},
+        }
+        if target not in {"RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"}:
+            raise ValueError("invalid install job state")
+        if result_code is not None and (
+            not isinstance(result_code, str) or not 1 <= len(result_code) <= 64
+            or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in result_code)
+        ):
+            raise ValueError("invalid result code")
+        timestamp = _timestamp(now or self._clock())
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
+                    (reservation_id,),
+                ).fetchone()
+                if row is None:
+                    raise ApprovalReservationNotFound("install job not found")
+                if (
+                    row["worker_id"] != worker_id
+                    or not secrets.compare_digest(row["lease_token"] or "", lease_token)
+                    or row["version"] != expected_version
+                    or row["lease_expires_at"] is None
+                    or row["lease_expires_at"] <= timestamp
+                ):
+                    raise ApprovalReservationConflict("install worker lease is stale or expired")
+                if target not in allowed.get(row["state"], set()):
+                    raise ApprovalReservationConflict("install job transition is not allowed")
+                terminal = target in {"SUCCEEDED", "FAILED", "UNKNOWN"}
+                connection.execute(
+                    """
+                    UPDATE install_execution_jobs
+                    SET state=?, result_code=?, worker_id=?, lease_token=?,
+                        lease_expires_at=?, version=version+1, updated_at=?
+                    WHERE reservation_id=? AND version=?
+                    """,
+                    (
+                        target, result_code, None if terminal else worker_id,
+                        None if terminal else lease_token,
+                        None if terminal else row["lease_expires_at"],
+                        timestamp, reservation_id, expected_version,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO install_execution_events
+                        (reservation_id, state, occurred_at, outcome, result_code)
+                    VALUES (?, ?, ?, 'success', ?)
+                    """,
+                    (reservation_id, target, timestamp, result_code),
+                )
+                updated = connection.execute(
+                    "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
+                    (reservation_id,),
+                ).fetchone()
+                connection.commit()
+                return self._execution_job(updated)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job transition could not be persisted.") from None
+
+    def get_install_job(self, *, reservation_id: str, owner_id: str) -> InstallExecutionJob:
+        _identity(owner_id, "owner_id")
+        try:
+            with self._connection() as connection:
+                row = connection.execute(
+                    """
+                    SELECT * FROM install_execution_jobs
+                    WHERE reservation_id=? AND owner_id=?
+                    """,
+                    (reservation_id, owner_id),
+                ).fetchone()
+                if row is None:
+                    raise ApprovalReservationNotFound("install job not found")
+                return self._execution_job(row)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job could not be read.") from None
+
+    @staticmethod
+    def _execution_job(row: sqlite3.Row) -> InstallExecutionJob:
+        return InstallExecutionJob(
+            reservation_id=row["reservation_id"], owner_id=row["owner_id"],
+            action_digest=row["action_digest"], binding_json=row["binding_json"],
+            state=row["state"], worker_id=row["worker_id"],
+            lease_token=row["lease_token"], lease_expires_at=row["lease_expires_at"],
+            attempts=row["attempts"], version=row["version"], result_code=row["result_code"],
+        )
 
     @staticmethod
     def _receipt(row: sqlite3.Row) -> ReservationReceipt:
