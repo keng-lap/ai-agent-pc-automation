@@ -47,6 +47,7 @@ def candidate() -> InstallerCandidate:
         official_version="26.2.4",
         official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         official_asset_sha256="a" * 64,
+        official_asset_id=12345,
         limitations=("installer_authenticode_signature_not_yet_verified",),
     )
 
