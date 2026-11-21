@@ -270,6 +270,7 @@ class InstallerStager:
                 parsed_target.scheme != "https"
                 or not parsed_target.hostname
                 or parsed_target.hostname.casefold() not in ALLOWED_RELEASE_REDIRECT_HOSTS
+                or parsed_target.port not in (None, 443)
                 or parsed_target.username
                 or parsed_target.password
                 or parsed_target.fragment
