@@ -349,37 +349,27 @@ describe('App chat UI (T-202)', () => {
 
 
 
-  it('does not expose legacy dry-run approval for software.install', async () => {
-    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+  it('routes AI-interpreted install intents to WinGet discovery instead of legacy Dry Run', async () => {
     await render();
     api.planResponder = (request) => of({
       request,
       interpretation: { category: 'software_install', goal: request, target: 'Google Chrome' },
       task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: 'a'.repeat(32),
-        tool_id: 'software.install',
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T15:00:00Z',
-        programs: [{
-          order: 1, program: 'Google Chrome', version: 'Not specified',
-          purpose: 'Requested browser', reason: 'Explicit user choice',
-          source: 'Not checked', source_verification: 'NOT_CHECKED',
-          dependencies: [], dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null, impact: 'Not checked', status: 'PLANNED',
-        }],
-      },
+      dry_run_plan: null,
       tool_result: null,
       approved: false,
       questions: [],
       notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
     });
+
     send('Prepare installation of Google Chrome');
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('ติดตั้งจริงต้องใช้ WinGet Approval');
+    expect(api.calls.map((item) => item.message)).toEqual(['Prepare installation of Google Chrome']);
+    expect(api.catalogCalls).toEqual(['Google Chrome']);
+    expect(fixture.nativeElement.textContent).toContain('Microsoft Catalog');
+    expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
     expect(api.stepUpCalls).toEqual([]);
     expect(api.approvalCalls).toEqual([]);
