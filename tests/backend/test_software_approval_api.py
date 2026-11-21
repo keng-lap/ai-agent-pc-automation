@@ -58,6 +58,21 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
 
     step_up = StepUp()
     principal = SimpleNamespace(owner_sub=owner, session_id=session)
+
+    class ReservationStore:
+        def __init__(self):
+            self.created = []
+            self.reserved = []
+
+        def create_approval(self, **kwargs):
+            self.created.append(kwargs)
+
+        def reserve(self, **kwargs):
+            self.reserved.append(kwargs)
+            return SimpleNamespace(reservation_id="reservation-123", state="RESERVED")
+
+    reservation_store = ReservationStore()
+    monkeypatch.setattr(api, "_reservation_store", lambda _request: reservation_store)
     services = SimpleNamespace(
         step_up=step_up,
         secret_store=SimpleNamespace(load=lambda owner_sub: "test-secret"),
@@ -82,12 +97,12 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
     )
     api._bindings.clear()
     api._consumed_bindings.clear()
-    return step_up, principal
+    return step_up, principal, reservation_store
 
 
 def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypatch):
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch)
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
     monkeypatch.setattr(
         api.software_evidence_registry,
         "bind_to_plan",
@@ -113,13 +128,15 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.signature_subject == binding.evidence.signature_subject
     assert response.signature_sha256 == binding.evidence.signature_sha256
     assert response.notice == "APPROVAL_ONLY_NOT_EXECUTED"
+    assert reservation_store.created[0]["approval_id"] == "f" * 32
+    assert reservation_store.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["plan_id"] == PLAN_ID
 
 
-def test_confirm_consumes_exact_digest_and_returns_approved_not_executed(monkeypatch):
+def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch)
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
     monkeypatch.setattr(
         api.software_evidence_registry,
         "bind_to_plan",
@@ -134,7 +151,11 @@ def test_confirm_consumes_exact_digest_and_returns_approved_not_executed(monkeyp
     )
 
     assert response.approved is True
-    assert response.notice == "APPROVED_NOT_EXECUTED"
+    assert response.notice == "APPROVED_QUEUED_NOT_YET_EXECUTED"
+    assert response.execution_state == "QUEUED"
+    assert response.reservation_id == "reservation-123"
+    assert reservation_store.reserved[0]["approval_id"] == "f" * 32
+    assert reservation_store.reserved[0]["binding_json"] == binding.model_dump_json()
     assert response.approval_digest == binding.approval_digest
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
     assert step_up.verified[0]["code"] == "123456"
@@ -177,7 +198,7 @@ def test_confirm_rejects_expired_or_revoked_evidence(monkeypatch):
 def test_invalid_totp_never_returns_approval(monkeypatch):
     AUTH_AUDIT_SINK.clear()
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch, accepted=False)
+    step_up, _principal, reservation_store = setup_context(monkeypatch, accepted=False)
     monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
 
@@ -193,17 +214,19 @@ def test_invalid_totp_never_returns_approval(monkeypatch):
     assert len(events) == 1
     assert events[0].reason == "invalid_software_approval"
     assert events[0].outcome == "denied"
+    assert reservation_store.reserved == []
 
 
 def test_successful_confirmation_consumes_plan_binding_and_rejects_replay(monkeypatch):
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch)
+    step_up, _principal, _store = setup_context(monkeypatch)
     monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
     payload = api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456")
 
     first = api.confirm_software_approval(PLAN_ID, payload, request=object())
     assert first.approved is True
+    assert first.execution_state == "QUEUED"
     assert api._consumed_bindings[PLAN_ID] == binding.evidence.expires_at
 
     with pytest.raises(Exception) as error:
