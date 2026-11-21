@@ -535,7 +535,7 @@
                               {{ language() === 'th' ? 'อนุมัติและเข้าคิวติดตั้งจริง' : 'Approve and queue real install' }}
                             </button>
                           } @else {
-                            <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled()" (click)="requestSoftwareApproval(entry.id)">
+                            <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">
                               {{ language() === 'th' ? 'ยืนยันตัวตนและขออนุมัติ' : 'Verify identity and request approval' }}
                             </button>
                             @if (!authenticatorEnrolled()) {
