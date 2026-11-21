@@ -23,6 +23,8 @@ from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
     ApprovalReservationError,
     ApprovalReservationExpired,
+    ApprovalReservationNotFound,
+    ApprovalReservationUnavailable,
     SQLiteApprovalReservationStore,
 )
 from agent_backend.software_approval import InstallApprovalBinding
@@ -102,6 +104,17 @@ class SoftwareApprovalResult(BaseModel):
     reservation_id: str
     execution_state: Literal["QUEUED"] = "QUEUED"
     notice: Literal["APPROVED_QUEUED_NOT_YET_EXECUTED"] = "APPROVED_QUEUED_NOT_YET_EXECUTED"
+
+
+class SoftwareInstallJobStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    reservation_id: str
+    state: Literal["QUEUED", "CLAIMED", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"]
+    attempts: int
+    version: int
+    result_code: str | None
+    lease_expires_at: str | None
 
 
 def _authenticated_context(request: Request, *, require_enrolled: bool = True):
@@ -349,4 +362,36 @@ def confirm_software_approval(
         package_id=binding.evidence.package_id,
         version=binding.evidence.version,
         reservation_id=receipt.reservation_id,
+    )
+
+
+
+@router.get(
+    "/api/software/install/jobs/{reservation_id}",
+    response_model=SoftwareInstallJobStatusResponse,
+)
+def get_software_install_job_status(
+    reservation_id: str,
+    request: Request,
+) -> SoftwareInstallJobStatusResponse:
+    """Read an owner-scoped status summary without exposing the approved binding."""
+    if len(reservation_id) != 32 or any(char not in "0123456789abcdef" for char in reservation_id):
+        raise HTTPException(status_code=404, detail="Install job not found.")
+    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    try:
+        job = _reservation_store(request).get_install_job(
+            reservation_id=reservation_id,
+            owner_id=principal.owner_sub,
+        )
+    except ApprovalReservationNotFound:
+        raise HTTPException(status_code=404, detail="Install job not found.") from None
+    except ApprovalReservationUnavailable:
+        raise HTTPException(status_code=503, detail="Install job status is unavailable.") from None
+    return SoftwareInstallJobStatusResponse(
+        reservation_id=job.reservation_id,
+        state=job.state,
+        attempts=job.attempts,
+        version=job.version,
+        result_code=job.result_code,
+        lease_expires_at=job.lease_expires_at,
     )
