@@ -656,6 +656,62 @@ class SQLiteApprovalReservationStore:
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Install job could not be claimed.") from None
 
+    def renew_install_lease(
+        self, reservation_id: str, *, worker_id: str, lease_token: str,
+        expected_version: int, lease_seconds: int = 60, now: datetime | None = None,
+    ) -> InstallExecutionJob:
+        """Renew a live worker lease without changing the one-shot attempt count."""
+        _identity(worker_id, "worker_id")
+        if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
+            raise ValueError("lease_seconds must be between 1 and 300")
+        current = now or self._clock()
+        timestamp = _timestamp(current)
+        expires = _timestamp(current + __import__("datetime").timedelta(seconds=lease_seconds))
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
+                    (reservation_id,),
+                ).fetchone()
+                if row is None:
+                    raise ApprovalReservationNotFound("install job not found")
+                if (
+                    row["worker_id"] != worker_id
+                    or not secrets.compare_digest(row["lease_token"] or "", lease_token)
+                    or row["version"] != expected_version
+                    or row["lease_expires_at"] is None
+                    or row["lease_expires_at"] <= timestamp
+                    or row["state"] not in {"CLAIMED", "RUNNING", "VERIFYING", "REBOOT_REQUIRED"}
+                ):
+                    raise ApprovalReservationConflict("install worker lease is stale or expired")
+                connection.execute(
+                    """
+                    UPDATE install_execution_jobs
+                    SET lease_expires_at=?, version=version+1, updated_at=?
+                    WHERE reservation_id=? AND version=?
+                    """,
+                    (expires, timestamp, reservation_id, expected_version),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO install_execution_events
+                        (reservation_id, state, occurred_at, outcome)
+                    VALUES (?, ?, ?, 'success')
+                    """,
+                    (reservation_id, row["state"], timestamp),
+                )
+                updated = connection.execute(
+                    "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
+                    (reservation_id,),
+                ).fetchone()
+                connection.commit()
+                return self._execution_job(updated)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install worker lease could not be renewed.") from None
+
     def transition_install(
         self, reservation_id: str, *, worker_id: str, lease_token: str,
         expected_version: int, target: str, result_code: str | None = None,
