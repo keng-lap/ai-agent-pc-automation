@@ -338,8 +338,8 @@
                     </div>
                   } @else {
                     <div class="tool-preview installer-actions installer-actions--blocked">
-                      <strong>{{ language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready to simulate' }}</strong>
-                      <span>{{ language() === 'th' ? 'กรุณาระบุข้อมูลที่จำเป็นก่อน' : 'Provide the required information first.' }}</span>
+                      <strong>{{ review.dry_run_plan?.tool_id === 'software.install' ? (language() === 'th' ? 'ติดตั้งจริงต้องใช้ WinGet Approval' : 'Real installs require WinGet approval') : (language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready to simulate') }}</strong>
+                      <span>{{ review.dry_run_plan?.tool_id === 'software.install' ? (language() === 'th' ? 'เส้นทาง Dry Run เดิมถูกปิดสำหรับ software.install แล้ว ต้องผ่านการตรวจสอบ Package, Publisher Trust และ TOTP ก่อนเข้าคิวติดตั้งจริง' : 'The legacy dry-run path is disabled for software.install. Package evidence, publisher trust, and TOTP are required before queuing a real install.') : (language() === 'th' ? 'กรุณาระบุข้อมูลที่จำเป็นก่อน' : 'Provide the required information first.') }}</span>
                     </div>
                   }
 
