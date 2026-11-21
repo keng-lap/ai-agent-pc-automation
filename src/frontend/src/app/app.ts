@@ -167,6 +167,7 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
     if (
       !isRecord(dryRunPlan)
       || typeof dryRunPlan['plan_id'] !== 'string'
+      || !['software.install', 'software.remove'].includes(String(dryRunPlan['tool_id']))
       || dryRunPlan['mode'] !== 'dry_run'
       || dryRunPlan['live_checks_performed'] !== false
       || typeof dryRunPlan['expires_at'] !== 'string'
@@ -698,6 +699,7 @@ export class App implements AfterViewChecked {
       && this.authenticatorEnrolled()
       && this.authenticatorStorageAvailable()
       && review.dry_run_plan
+      && review.dry_run_plan.tool_id !== 'software.install'
       && !review.approved
       && review.questions.length === 0
       && review.dry_run_plan.programs.length > 0
