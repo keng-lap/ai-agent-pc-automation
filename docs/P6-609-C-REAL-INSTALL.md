@@ -58,7 +58,7 @@ Do not copy a value from a third-party site, package manifest, or chat. Obtain
 the pin from the Windows inspection script:
 
 ```powershell
-pwsh -NoProfile -File scripts/acceptance/P6-609-C/inspect_dbeaver_signer.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/acceptance/P6-609-C/inspect_dbeaver_signer.ps1
 ```
 
 The script downloads the latest official DBeaver Community Windows x64 release
@@ -67,7 +67,8 @@ release metadata, checks Windows Authenticode status, and prints the signer
 certificate subject and DER SHA-256 fingerprint. It does **not** execute or
 install DBeaver. Use `-ConfigureUserEnvironment` only after reviewing the
 printed signer identity; the script asks before persisting the pin for the
-current Windows user. Restart the backend after configuring the pin.
+current Windows user. PowerShell 5.1 can run the script; for the optional
+persistence step use the same command with `-ConfigureUserEnvironment`. Restart the backend after configuring the pin.
 
 ## Current limitations / acceptance gates
 
