@@ -100,6 +100,15 @@ export interface SoftwareApprovalChallenge {
   notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
 }
 
+export interface SoftwareInstallJobStatus {
+  reservation_id: string;
+  state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
+  attempts: number;
+  version: number;
+  result_code: string | null;
+  lease_expires_at: string | null;
+}
+
 export interface SoftwareApprovalResult {
   plan_id: string;
   approved: true;
@@ -255,6 +264,12 @@ export class ChatApi {
     return this.http.post<SoftwareApprovalResult>(
       `/api/plans/${encodeURIComponent(planId)}/software-approval/confirm`,
       { challenge_id: challengeId, totp_code: totpCode },
+    );
+  }
+
+  getSoftwareInstallJobStatus(reservationId: string): Observable<SoftwareInstallJobStatus> {
+    return this.http.get<SoftwareInstallJobStatus>(
+      `/api/software/install/jobs/${encodeURIComponent(reservationId)}`,
     );
   }
 
