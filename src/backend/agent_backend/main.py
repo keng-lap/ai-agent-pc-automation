@@ -24,6 +24,7 @@ from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
+from .software_install_api import router as software_install_router
 from .approval_reservation_store import SQLiteApprovalReservationStore
 from .software_install_worker import SoftwareInstallWorker
 
@@ -92,6 +93,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
+    application.include_router(software_install_router, dependencies=[Depends(require_session)])
     application.include_router(software_approval_router, dependencies=[Depends(require_session)])
     application.include_router(jobs_router)
 
