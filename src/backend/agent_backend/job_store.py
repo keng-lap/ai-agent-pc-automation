@@ -75,10 +75,10 @@ def _safe_text(value: str | None, *, maximum: int) -> str | None:
 class SQLiteJobStore:
     """SQLite-backed, transactionally updated job history for one local owner.
 
-    Filesystem protection is delegated to a platform adapter. Linux is the
-    only enabled platform; Windows and macOS remain fail-closed until their
-    native security adapters are implemented and independently reviewed.
-    Every SQLite connection is enclosed by a platform protection lease.
+    Filesystem protection is delegated to a platform adapter. Linux and Windows
+    are enabled through their dedicated native adapters; macOS remains
+    fail-closed. Every SQLite connection is enclosed by a platform protection
+    lease.
     """
 
     def __init__(self, path: Path | str, *, clock=None, secure_storage=None) -> None:
