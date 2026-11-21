@@ -1,7 +1,6 @@
 """Tests for Windows-local verified install proposal creation."""
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
