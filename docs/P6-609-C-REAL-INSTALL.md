@@ -42,9 +42,10 @@ flows remain unchanged.
 - `GET /api/software/install/jobs/{reservation_id}` — return an owner-scoped
   lifecycle summary without exposing the approved binding or worker lease.
 
-Explicit `software_install` requests do not receive a legacy `DryRunPlan`
-from `POST /api/plans`; the frontend routes the interpreted target into the
-WinGet catalog flow. The generic `/api/plans/{plan_id}/step-up` and
+No `software.install` action receives a legacy `DryRunPlan` from
+`POST /api/plans`. Interpreted single-package install targets are routed into
+the WinGet catalog flow; multi-package development-environment planning stays
+non-executable and does not mint an install preview. The generic `/api/plans/{plan_id}/step-up` and
 `/approve` routes also explicitly reject stale `software.install` plans.
 They remain available only for legacy preview use cases such as software
 removal. This prevents an install request from falling back to a mock Dry Run.
