@@ -82,7 +82,7 @@ def verify_exact_user_install(
     # WinGet's table uses two-or-more spaces between columns. The package ID
     # and version are exact fields; localized column headings are irrelevant.
     for line in (result.stdout or "").splitlines():
-        columns = re.split(r"\\s{2,}", line.strip())
+        columns = re.split(r"\s{2,}", line.strip())
         if len(columns) >= 3 and columns[1].casefold() == package_id.casefold():
             return columns[2] == version
     return False
