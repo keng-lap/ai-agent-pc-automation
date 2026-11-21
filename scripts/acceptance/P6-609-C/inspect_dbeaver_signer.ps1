@@ -89,7 +89,19 @@ try {
 
     if ($ConfigureUserEnvironment) {
         $answer = Read-Host 'Persist this verified certificate fingerprint for the current Windows user? (y/N)'
-        if ($answer -match '^(?i)y(es)?$') {
+        if ($answer -match '(?i)^y(es)?) {
+            [Environment]::SetEnvironmentVariable('AI_AGENT_DBEAVER_SIGNER_SHA256', $fingerprint, 'User')
+            $env:AI_AGENT_DBEAVER_SIGNER_SHA256 = $fingerprint
+            Write-Host 'User environment variable saved. Restart the backend process before using the install workflow.'
+        }
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $tempRoot) {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
+}
+) {
             [Environment]::SetEnvironmentVariable('AI_AGENT_DBEAVER_SIGNER_SHA256', $fingerprint, 'User')
             $env:AI_AGENT_DBEAVER_SIGNER_SHA256 = $fingerprint
             Write-Host 'User environment variable saved. Restart the backend process before using the install workflow.'
