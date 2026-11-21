@@ -250,3 +250,75 @@ def test_consumed_binding_cannot_create_another_challenge(monkeypatch):
             request=object(),
         )
     assert getattr(error.value, "status_code", None) == 409
+
+
+
+def test_install_job_status_is_owner_scoped_and_exposes_only_safe_fields(monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_backend import software_approval_api as api
+
+    requested = []
+    job = SimpleNamespace(
+        reservation_id="a" * 32,
+        state="RUNNING",
+        attempts=1,
+        version=4,
+        result_code=None,
+        lease_expires_at="2026-11-22T00:10:00Z",
+        owner_id="owner-1",
+        action_digest="f" * 64,
+        binding_json="private-binding",
+        worker_id="worker-1",
+        lease_token="lease-value",
+    )
+
+    class Store:
+        def get_install_job(self, *, reservation_id, owner_id):
+            requested.append((reservation_id, owner_id))
+            return job
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.get_software_install_job_status("a" * 32, request)
+
+    assert requested == [("a" * 32, "owner-1")]
+    assert response.state == "RUNNING"
+    assert response.attempts == 1
+    assert not hasattr(response, "binding_json")
+    assert not hasattr(response, "lease_token")
+    assert not hasattr(response, "action_digest")
+
+
+def test_install_job_status_hides_other_owners_jobs(monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from agent_backend import software_approval_api as api
+    from agent_backend.approval_reservation_store import ApprovalReservationNotFound
+
+    class Store:
+        def get_install_job(self, **_kwargs):
+            raise ApprovalReservationNotFound("not found")
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    with pytest.raises(HTTPException) as error:
+        api.get_software_install_job_status("b" * 32, request)
+
+    assert error.value.status_code == 404
