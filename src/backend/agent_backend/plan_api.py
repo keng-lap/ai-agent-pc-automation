@@ -60,7 +60,7 @@ class PlanReviewResponse(BaseModel):
     tool_result: ToolResult | None = None
     approved: bool = False
     questions: tuple[str, ...]
-    notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
+    notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE", "PLAN_REVIEW_ONLY_NO_EXECUTION"] = "PLAN_REVIEW_ONLY_NO_EXECUTION"
     refined_from_plan_id: str | None = None
     clarification: str | None = None
 
@@ -180,6 +180,11 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
         tool_result=None,
         approved=False,
         questions=_questions_for_review(intent, payload.language),
+        notice=(
+            "DRY_RUN_ONLY_NO_CHANGES_MADE"
+            if dry_run_plan is not None
+            else "PLAN_REVIEW_ONLY_NO_EXECUTION"
+        ),
     )
 
 
