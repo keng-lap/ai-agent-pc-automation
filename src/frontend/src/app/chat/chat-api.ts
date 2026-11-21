@@ -55,6 +55,62 @@ export interface SoftwareDiscoveryResponse {
   source: 'winget-community-repository';
 }
 
+export interface SoftwareInstallReadiness {
+  platform_supported: boolean;
+  authenticode_verification_available: boolean;
+  publisher_trust_configured: boolean;
+  supported_package_ids: string[];
+  notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+}
+
+export interface SoftwareInstallProposalResponse {
+  plan_id: string;
+  evidence_id: string;
+  package_id: string;
+  package_name: string;
+  publisher: string;
+  version: string;
+  architecture: 'x86' | 'x64' | 'arm64';
+  scope: 'user';
+  expires_at: string;
+  notice: 'VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP';
+}
+
+export interface SoftwareApprovalChallenge {
+  plan_id: string;
+  challenge_id: string;
+  expires_at: number;
+  package_id: string;
+  package_name: string;
+  publisher: string;
+  version: string;
+  architecture: 'x86' | 'x64' | 'arm64';
+  scope: 'user';
+  installer_type: 'exe' | 'msi' | 'msix' | 'appx';
+  installer_url: string;
+  official_release_url: string;
+  manifest_source_url: string;
+  repository_commit: string;
+  installer_sha256: string;
+  manifest_sha256: string;
+  signature_subject: string;
+  signature_sha256: string;
+  evidence_expires_at: string;
+  approval_digest: string;
+  notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
+}
+
+export interface SoftwareApprovalResult {
+  plan_id: string;
+  approved: true;
+  approval_digest: string;
+  package_id: string;
+  version: string;
+  reservation_id: string;
+  execution_state: 'QUEUED';
+  notice: 'APPROVED_QUEUED_NOT_YET_EXECUTED';
+}
+
 export interface PlanReviewProgram {
   order: number;
   program: string;
@@ -163,6 +219,43 @@ export class ChatApi {
       version,
       architecture,
     });
+  }
+
+  getSoftwareInstallReadiness(): Observable<SoftwareInstallReadiness> {
+    return this.http.get<SoftwareInstallReadiness>('/api/software/install/readiness');
+  }
+
+  createSoftwareInstallProposal(
+    packageId: string,
+    version: string,
+    architecture: 'x86' | 'x64' | 'arm64',
+  ): Observable<SoftwareInstallProposalResponse> {
+    return this.http.post<SoftwareInstallProposalResponse>('/api/software/install/proposals', {
+      package_id: packageId,
+      version,
+      architecture,
+    });
+  }
+
+  createSoftwareApprovalChallenge(
+    planId: string,
+    evidenceId: string,
+  ): Observable<SoftwareApprovalChallenge> {
+    return this.http.post<SoftwareApprovalChallenge>(
+      `/api/plans/${encodeURIComponent(planId)}/software-approval`,
+      { evidence_id: evidenceId },
+    );
+  }
+
+  confirmSoftwareApproval(
+    planId: string,
+    challengeId: string,
+    totpCode: string,
+  ): Observable<SoftwareApprovalResult> {
+    return this.http.post<SoftwareApprovalResult>(
+      `/api/plans/${encodeURIComponent(planId)}/software-approval/confirm`,
+      { challenge_id: challengeId, totp_code: totpCode },
+    );
   }
 
   createPlan(request: string, language: UiLanguage): Observable<PlanReviewResponse> {
