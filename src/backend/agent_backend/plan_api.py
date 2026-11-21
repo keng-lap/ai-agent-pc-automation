@@ -87,10 +87,15 @@ def _programs_for_review(
     intent: TaskIntent, language: Literal["th", "en"]
 ) -> tuple[str, tuple[ProgramPlan, ...]] | None:
     """Return only a clearly requested/safely implied core program, never optional tools."""
-    if intent.category in ("software_install", "software_remove"):
+    if intent.category == "software_install":
+        # Real installs use the WinGet discovery/evidence/TOTP queue path.
+        # Never mint a legacy preview plan for a software.install request.
+        return None
+
+    if intent.category == "software_remove":
         if intent.target is None:
             return None
-        tool_id = "software.install" if intent.category == "software_install" else "software.remove"
+        tool_id = "software.remove"
         purpose = "ซอฟต์แวร์ตามคำขอ" if language == "th" else "Software requested by the user"
         reason = (
             "ระบุไว้ในคำขอของผู้ใช้"
