@@ -7,6 +7,8 @@ has a verified Authenticode certificate fingerprint matching the expected publis
 
 from __future__ import annotations
 
+import os
+import re
 import secrets
 import threading
 from collections.abc import Callable
@@ -41,16 +43,28 @@ class SoftwareEvidenceRegistry:
         clock: Callable[[], datetime] | None = None,
         capacity: int = MAX_EVIDENCE,
         signer_sha256_verifier: Callable[[InstallerCandidate, str], bool] | None = None,
+        trust_anchor_configured: bool | None = None,
     ) -> None:
         if type(capacity) is not int or not 1 <= capacity <= MAX_EVIDENCE:
             raise ValueError("evidence capacity must be between 1 and 128")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._capacity = capacity
         # No publisher signer trust anchors are configured by default.
-        # Until an independently reviewed anchor is supplied, registration denies.
+        # The application-level DBeaver anchor is loaded only from local process
+        # configuration, never from a client request or repository manifest.
         self._signer_sha256_verifier = signer_sha256_verifier or (lambda _candidate, _fingerprint: False)
+        self._trust_anchor_configured = (
+            signer_sha256_verifier is not None
+            if trust_anchor_configured is None
+            else trust_anchor_configured is True
+        )
         self._entries: dict[str, VerifiedPackageEvidence] = {}
         self._lock = threading.RLock()
+
+    @property
+    def trust_anchor_configured(self) -> bool:
+        """Whether a backend-owned publisher certificate pin is configured."""
+        return self._trust_anchor_configured
 
     def register_staged_candidate(
         self,
@@ -193,4 +207,18 @@ class SoftwareEvidenceRegistry:
             self._entries.pop(key, None)
 
 
-software_evidence_registry = SoftwareEvidenceRegistry()
+def _dbeaver_signer_sha256_matches(candidate: InstallerCandidate, fingerprint: str) -> bool:
+    expected = os.environ.get("AI_AGENT_DBEAVER_SIGNER_SHA256", "").strip().lower()
+    return (
+        candidate.package_id == "DBeaver.DBeaver.Community"
+        and candidate.publisher.strip().casefold() == "dbeaver corp"
+        and bool(re.fullmatch(r"[0-9a-f]{64}", expected))
+        and fingerprint == expected
+    )
+
+
+_DBEAVER_SIGNER_PIN = os.environ.get("AI_AGENT_DBEAVER_SIGNER_SHA256", "").strip().lower()
+software_evidence_registry = SoftwareEvidenceRegistry(
+    signer_sha256_verifier=_dbeaver_signer_sha256_matches,
+    trust_anchor_configured=bool(re.fullmatch(r"[0-9a-f]{64}", _DBEAVER_SIGNER_PIN)),
+)
