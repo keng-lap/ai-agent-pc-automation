@@ -32,6 +32,7 @@ class FakeChatApi {
   proposalCalls: Array<{ packageId: string; version: string; architecture: string }> = [];
   approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
   softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
+  jobStatusCalls: string[] = [];
   discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
     version === null
       ? {
@@ -204,6 +205,17 @@ class FakeChatApi {
       reservation_id: 'reservation-123',
       execution_state: 'QUEUED',
       notice: 'APPROVED_QUEUED_NOT_YET_EXECUTED',
+    });
+  }
+  getSoftwareInstallJobStatus(reservationId: string): Observable<unknown> {
+    this.jobStatusCalls.push(reservationId);
+    return of({
+      reservation_id: reservationId,
+      state: 'SUCCEEDED',
+      attempts: 1,
+      version: 3,
+      result_code: 'EXACT_PACKAGE_VERIFIED',
+      lease_expires_at: null,
     });
   }
 
@@ -493,6 +505,8 @@ describe('App chat UI (T-202)', () => {
     }]);
     expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
     expect(fixture.nativeElement.textContent).toContain('reservation-123');
+    expect(api.jobStatusCalls).toEqual(['reservation-123']);
+    expect(fixture.nativeElement.textContent).toContain('ติดตั้งและตรวจสอบ Package ผ่านแล้ว');
   });
 
   it('blocks a WinGet manifest version that differs from the vendor official release', async () => {
