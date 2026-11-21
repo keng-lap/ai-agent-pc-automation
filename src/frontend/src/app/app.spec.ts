@@ -136,6 +136,34 @@ class FakeChatApi {
     return this.discoveryResponder(packageId, version);
   }
 
+  getSoftwareInstallReadiness(): Observable<{
+    platform_supported: boolean;
+    authenticode_verification_available: boolean;
+    publisher_trust_configured: boolean;
+    supported_package_ids: string[];
+    notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+  }> {
+    return of({
+      platform_supported: true,
+      authenticode_verification_available: true,
+      publisher_trust_configured: false,
+      supported_package_ids: [],
+      notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT',
+    });
+  }
+
+  createSoftwareInstallProposal(): Observable<unknown> {
+    return of({});
+  }
+
+  createSoftwareApprovalChallenge(): Observable<unknown> {
+    return of({});
+  }
+
+  confirmSoftwareApproval(): Observable<unknown> {
+    return of({});
+  }
+
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
     this.calls.push({ message, language, conversationId });
     return this.responder(message, language);
