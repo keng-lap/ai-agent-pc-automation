@@ -85,7 +85,7 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
     monkeypatch.setattr(
         api,
         "_get_install_plan",
-        lambda _plan_id: SimpleNamespace(
+        lambda _plan_id, **_kwargs: SimpleNamespace(
             plan_id=PLAN_ID,
             plan_digest=PLAN_DIGEST,
             evidence_id="e" * 32,
