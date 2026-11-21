@@ -88,11 +88,13 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         lambda _plan_id: SimpleNamespace(
             plan_id=PLAN_ID,
             plan_digest=PLAN_DIGEST,
-            tool_id="software.install",
-            risk_class="R1",
-            required_permission="P1",
-            mode="dry_run",
-            programs=(SimpleNamespace(program="DBeaver.DBeaver.Community", status="PLANNED"),),
+            evidence_id="e" * 32,
+            package_id="DBeaver.DBeaver.Community",
+            package_name="DBeaver Community Edition",
+            publisher="DBeaver Corp",
+            version="26.2.4",
+            architecture="x64",
+            scope="user",
         ),
     )
     api._bindings.clear()
