@@ -12,7 +12,7 @@ client = TestClient(
 )
 
 
-def test_java_development_request_returns_plan_without_running_dry_run():
+def test_java_development_request_returns_questions_without_install_preview():
     response = client.post(
         "/api/plans",
         json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
@@ -116,7 +116,7 @@ def test_plan_request_rejects_an_arbitrary_unknown_field():
 def test_plan_refinement_request_rejects_an_arbitrary_unknown_field():
     initial = client.post(
         "/api/plans",
-        json={"request": "เตรียมเครื่องพัฒนา Java", "language": "th"},
+        json={"request": "Uninstall Google Chrome", "language": "en"},
     )
     assert initial.status_code == 200
     plan_id = initial.json()["dry_run_plan"]["plan_id"]
@@ -124,9 +124,9 @@ def test_plan_refinement_request_rejects_an_arbitrary_unknown_field():
     response = client.post(
         f"/api/plans/{plan_id}/refine",
         json={
-            "request": "เตรียมเครื่องพัฒนา Java",
-            "clarification": "JDK 21 LTS",
-            "language": "th",
+            "request": "Uninstall Google Chrome",
+            "clarification": "Remove the selected application",
+            "language": "en",
             "client_trace": "untrusted-extra",
         },
     )
@@ -226,6 +226,7 @@ def test_explicit_software_install_does_not_create_a_legacy_dry_run_plan(monkeyp
     assert body["dry_run_plan"] is None
     assert body["tool_result"] is None
     assert body["approved"] is False
+    assert body["notice"] == "PLAN_REVIEW_ONLY_NO_EXECUTION"
     assert calls == []
 
 
@@ -270,6 +271,7 @@ def test_plan_creation_does_not_depend_on_a_second_gemini_call(monkeypatch):
     assert body["tool_result"] is None
     assert body["approved"] is False
     assert body["questions"] == []
+    assert body["notice"] == "PLAN_REVIEW_ONLY_NO_EXECUTION"
 
 
 
