@@ -22,6 +22,16 @@ class FakeChatApi {
       { package_id: 'DBeaverCorp.DBeaverEnterpriseEdition', name: 'DBeaver Enterprise Edition', moniker: null, latest_version: '25.3.0' },
     ],
   });
+  readiness = {
+    platform_supported: true,
+    authenticode_verification_available: true,
+    publisher_trust_configured: false,
+    supported_package_ids: [] as string[],
+    notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
+  };
+  proposalCalls: Array<{ packageId: string; version: string; architecture: string }> = [];
+  approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
+  softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
   discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
     version === null
       ? {
@@ -136,32 +146,65 @@ class FakeChatApi {
     return this.discoveryResponder(packageId, version);
   }
 
-  getSoftwareInstallReadiness(): Observable<{
-    platform_supported: boolean;
-    authenticode_verification_available: boolean;
-    publisher_trust_configured: boolean;
-    supported_package_ids: string[];
-    notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
-  }> {
+  getSoftwareInstallReadiness(): Observable<typeof this.readiness> {
+    return of(this.readiness);
+  }
+
+  createSoftwareInstallProposal(packageId: string, version: string, architecture: string): Observable<unknown> {
+    this.proposalCalls.push({ packageId, version, architecture });
     return of({
-      platform_supported: true,
-      authenticode_verification_available: true,
-      publisher_trust_configured: false,
-      supported_package_ids: [],
-      notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT',
+      plan_id: 'f'.repeat(32),
+      evidence_id: 'e'.repeat(32),
+      package_id: packageId,
+      package_name: 'DBeaver Community Edition',
+      publisher: 'DBeaver Corp',
+      version,
+      architecture,
+      scope: 'user',
+      expires_at: '2026-11-22T00:10:00Z',
+      notice: 'VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP',
     });
   }
 
-  createSoftwareInstallProposal(): Observable<unknown> {
-    return of({});
+  createSoftwareApprovalChallenge(planId: string, evidenceId: string): Observable<unknown> {
+    this.approvalChallengeCalls.push({ planId, evidenceId });
+    return of({
+      plan_id: planId,
+      challenge_id: 'c'.repeat(32),
+      expires_at: 1_800_000_120,
+      package_id: 'DBeaver.DBeaver.Community',
+      package_name: 'DBeaver Community Edition',
+      publisher: 'DBeaver Corp',
+      version: '25.3.0',
+      architecture: 'x64',
+      scope: 'user',
+      installer_type: 'exe',
+      installer_url: 'https://github.com/dbeaver/dbeaver/releases/download/25.3.0/dbeaver.exe',
+      official_release_url: 'https://github.com/dbeaver/dbeaver/releases/tag/25.3.0',
+      manifest_source_url: 'https://github.com/microsoft/winget-pkgs/tree/main',
+      repository_commit: 'd'.repeat(40),
+      installer_sha256: 'b'.repeat(64),
+      manifest_sha256: 'c'.repeat(64),
+      signature_subject: 'CN=DBeaver Corporation',
+      signature_sha256: 'd'.repeat(64),
+      evidence_expires_at: '2026-11-22T00:10:00Z',
+      approval_digest: 'a'.repeat(64),
+      notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL',
+    });
   }
 
-  createSoftwareApprovalChallenge(): Observable<unknown> {
-    return of({});
-  }
-
-  confirmSoftwareApproval(): Observable<unknown> {
-    return of({});
+  confirmSoftwareApproval(planId: string, challengeId: string, code: string): Observable<unknown> {
+    this.softwareApprovalCalls.push({ planId, challengeId, code });
+    return of({
+      plan_id: planId,
+      approved: true,
+      approval_digest: 'a'.repeat(64),
+      package_id: 'DBeaver.DBeaver.Community',
+      version: '25.3.0',
+      reservation_id: 'reservation-123',
+      execution_state: 'QUEUED',
+      notice: 'APPROVED_QUEUED_NOT_YET_EXECUTED',
+    });
   }
 
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
