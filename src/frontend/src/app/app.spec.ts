@@ -234,7 +234,7 @@ class FakeChatApi {
       const isDotNet = /\\.net|dotnet/i.test(message);
       const isEnvironment = /เตรียมเครื่องพัฒนา|prepare.*environment|development environment/i.test(message);
       const isInstall = /install|ติดตั้ง/i.test(message);
-      const intent = isEnvironment
+      const intent: GeminiChatResponse['gemini_response']['intent'] = isEnvironment
         ? 'environment.prepare'
         : isInstall ? 'software.install' : 'conversation.chat';
       const packages = isEnvironment
@@ -249,7 +249,7 @@ class FakeChatApi {
             { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
           ]
         : isInstall
-          ? [{ name: message.replace(/^.*?(?:install|ติดตั้ง)\\s*/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
+          ? [{ name: message.replace(/^.*?(?:install(?:ation)?|ติดตั้ง)\\s*/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
           : [];
       const contract = {
         schema_version: '1.0' as const,
@@ -452,7 +452,7 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
 
     expect(api.catalogCalls).toEqual(['DBeaver Community Edition']);
-    expect(api.calls).toHaveLength(0);
+    expect(api.calls.map((item) => item.message)).toEqual(['ติดตั้ง DBeaver Community Edition']);
     expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition');
     expect(fixture.nativeElement.textContent).toContain('DBeaver.DBeaver.Community');
     expect(fixture.nativeElement.textContent).toContain('DBeaverCorp.DBeaverEnterpriseEdition');
@@ -1079,35 +1079,11 @@ describe('App chat UI (T-202)', () => {
 
 
 describe('Structured Agent response (T-404)', () => {
-  it('renders the plan but never treats a chat response as dry-run approval', async () => {
+  it('shows the Gemini JSON response as escaped text and never treats it as approval', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    api.responder = () => of({
-      reply: 'Local preview',
-      provider: 'chatgpt',
-      provider_connected: false,
-      task_status: 'dry_run_completed',
-      plan: {
-        intent: { category: 'software_install', goal: 'Install Chrome', target: 'Google Chrome' },
-        language: 'th',
-        prerequisites: [
-          { id: 'software_target', order: 1, title: 'ระบุซอฟต์แวร์เป้าหมาย', reason: 'ทราบจากคำขอ', status: 'known' },
-        ],
-        steps: [
-          { order: 1, kind: 'present_plan', title: 'แสดงแผนงาน', detail: 'ตรวจสอบก่อนดำเนินการ' },
-        ],
-        approval_required: true,
-        execution_mode: 'dry_run',
-      },
-      tool_result: {
-        tool_id: 'software.install',
-        target: 'Google Chrome',
-        status: 'dry_run',
-        approval_required: true,
-        summary: 'Dry run only; no changes were made.',
-      },
-    });
+    api.responder = () => of({ reply: 'Hello <script>alert(1)</script>' });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useValue: api }],
@@ -1115,80 +1091,47 @@ describe('Structured Agent response (T-404)', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
-    input.value = 'Prepare a plan for Google Chrome installation';
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'สวัสดี';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     const view = fixture.nativeElement as HTMLElement;
-    expect(view.textContent).toContain('แผนงาน');
-    expect(view.textContent).toContain('Install Chrome');
-    expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
-    expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
-    expect(view.textContent).toContain('รอการตรวจสอบแผนและอนุมัติ');
-    expect(view.textContent).not.toContain('Dry run only; no changes were made.');
-    expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
-    expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    expect(view.textContent).toContain('Hello <script>alert(1)</script>');
+    expect(view.querySelector('script')).toBeNull();
+    expect(view.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
+    expect(view.textContent).toContain('conversation.chat');
+    expect(view.textContent).not.toMatch(/อนุมัติ|ติดตั้งจริง/);
     fixture.destroy();
   });
-
-
-
-  it('submits a clarification and replaces the review with a new immutable plan', async () => {
+  it('renders Gemini clarification using the same universal response envelope', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    const originalPlanId = 'a'.repeat(32);
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'development_task', goal: message, target: 'Java' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        tool_id: 'software.install',
-        plan_id: originalPlanId,
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'JDK', version: 'ยังไม่ได้ระบุ',
-          purpose: 'Java development kit', reason: 'ต้องระบุเวอร์ชัน',
-          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
-          dependencies: [], dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ',
-          status: 'NEEDS_CLARIFICATION',
-        }],
+    const contract = {
+      schema_version: '1.0' as const,
+      message: 'ต้องการทราบว่าจะพัฒนา .NET Web API หรือ Desktop Application?',
+      intent: 'environment.prepare' as const,
+      status: 'needs_clarification' as const,
+      data: {
+        packages: [{ name: '.NET SDK', version: 'LTS', purpose: 'Build .NET apps', suggested_source: 'Microsoft', suggested_method: 'WinGet after backend verification' }],
+        environment: { name: '.NET development', purpose: 'Prepare tools', development_type: 'Unspecified', framework_version: 'LTS' },
+        checks: [],
+        notes: [],
       },
-      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น' },
-      questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
-    api.refineResponder = (_planId, request, clarification) => of({
-      request,
-      interpretation: { category: 'development_task', goal: request, target: 'Java' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        tool_id: 'software.install',
-        plan_id: 'b'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:05:00Z',
-        programs: [{
-          order: 1, program: 'JDK', version: '21 LTS',
-          purpose: 'Java development kit', reason: 'ระบุเวอร์ชันแล้ว',
-          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
-          dependencies: [], dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ', status: 'PLANNED',
-        }],
-      },
-      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลง' },
-      questions: ['ต้องการ IDE ใด?'],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-      refined_from_plan_id: originalPlanId,
-      clarification,
+      needs_clarification: true,
+      clarification: 'ต้องการพัฒนา .NET Web API หรือ Desktop Application?',
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: contract,
+      gemini_raw_json: JSON.stringify(contract),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
     });
     await TestBed.configureTestingModule({
       imports: [App],
@@ -1197,41 +1140,21 @@ describe('Structured Agent response (T-404)', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
-    const composer = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    composer.value = 'เตรียมเครื่องพัฒนา Java';
-    composer.dispatchEvent(new Event('input'));
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'เตรียมเครื่องพัฒนา .NET';
+    input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const clarification = fixture.nativeElement.querySelector('.clarification-form textarea') as HTMLTextAreaElement;
-    expect(clarification).toBeTruthy();
-    clarification.value = 'JDK 21 LTS';
-    clarification.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    const refineButton = (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[])
-      .find((button) => button.textContent?.includes('ส่งคำตอบและปรับแผน'));
-    if (!refineButton) throw new Error('Plan refinement button was not rendered');
-    refineButton.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.refineCalls).toEqual([{
-      planId: originalPlanId,
-      request: 'เตรียมเครื่องพัฒนา Java',
-      clarification: 'JDK 21 LTS',
-      language: 'th',
-    }]);
-    expect(fixture.nativeElement.textContent).toContain('21 LTS');
-    expect(fixture.nativeElement.textContent).toContain('ข้อมูลที่เพิ่มจากคุณ');
-    expect(fixture.nativeElement.textContent).toContain('สร้างแผนฉบับใหม่แล้ว');
-    expect(fixture.nativeElement.querySelector('button[aria-label*="execute"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain(contract.message);
+    expect(fixture.nativeElement.textContent).toContain('.NET SDK');
+    expect(fixture.nativeElement.textContent).toContain('Request ID');
+    expect(fixture.nativeElement.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
+    expect(fixture.nativeElement.textContent).not.toContain('Dry Run');
     fixture.destroy();
   });
-
   it('does not render a Dry Run plan for multi-package Java setup', async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -1273,33 +1196,27 @@ describe('Structured Agent response (T-404)', () => {
     fixture.destroy();
   });
 
-  it('Q28: unknown plan status is rejected and shown as a safe neutral plan error', async () => {
+  it('rejects an invalid Gemini status before displaying a model response', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        tool_id: 'software.install',
-        plan_id: 'c'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'Chrome', version: 'Stable',
-          purpose: 'Browser', reason: 'User request', source: 'Not checked',
-          source_verification: 'NOT_CHECKED', dependencies: [],
-          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
-          impact: 'Not checked', status: 'UNRECOGNIZED_STATUS',
-        }],
-      },
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    } as unknown as PlanReviewResponse);
+    const invalid = {
+      schema_version: '1.0',
+      message: 'Install Chrome',
+      intent: 'software.install',
+      status: 'UNRECOGNIZED_STATUS',
+      data: { packages: [], environment: null, checks: [], notes: [] },
+      needs_clarification: false,
+      clarification: null,
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: invalid,
+      gemini_raw_json: JSON.stringify(invalid),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
+    });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useValue: api }],
@@ -1308,46 +1225,39 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    input.value = 'Prepare a plan for Chrome deployment';
+    input.value = 'ติดตั้ง Chrome';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Backend สร้างแผนตรวจสอบไม่ได้');
+    expect(fixture.nativeElement.querySelector('.gemini-json-details')).toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain('UNRECOGNIZED_STATUS');
-    expect(fixture.nativeElement.querySelector('.plan-review')).toBeNull();
+    expect(api.catalogCalls).toEqual([]);
     fixture.destroy();
   });
-
-  it('Q28: missing required program fields are rejected without breaking the chat UI', async () => {
+  it('rejects a Gemini package item missing required contract fields', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        tool_id: 'software.install',
-        plan_id: 'd'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'Chrome', version: 'Stable',
-          purpose: 'Browser', reason: 'User request', source: 'Not checked',
-          source_verification: 'NOT_CHECKED',
-          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
-          impact: 'Not checked', status: 'PLANNED',
-        }],
-      },
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    } as unknown as PlanReviewResponse);
+    const invalid = {
+      schema_version: '1.0',
+      message: 'Install Chrome',
+      intent: 'software.install',
+      status: 'ready',
+      data: { packages: [{ name: 'Chrome' }], environment: null, checks: [], notes: [] },
+      needs_clarification: false,
+      clarification: null,
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: invalid,
+      gemini_raw_json: JSON.stringify(invalid),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
+    });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useValue: api }],
@@ -1356,19 +1266,18 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    input.value = 'Prepare a plan for Chrome deployment';
+    input.value = 'ติดตั้ง Chrome';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Backend สร้างแผนตรวจสอบไม่ได้');
-    expect(fixture.nativeElement.querySelector('.plan-review')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.gemini-json-details')).toBeNull();
     expect(fixture.nativeElement.querySelector('textarea')).not.toBeNull();
+    expect(api.catalogCalls).toEqual([]);
     fixture.destroy();
   });
-
   it('Q30: controls have accessible names, labels, and non-positive tab order', async () => {
     localStorage.clear();
     sessionStorage.clear();
