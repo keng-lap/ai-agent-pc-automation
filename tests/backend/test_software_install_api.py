@@ -11,7 +11,6 @@ from agent_backend.software_discovery import InstallerCandidate
 from agent_backend.software_evidence import EvidenceRejected
 from agent_backend.software_staging import StagedInstaller
 
-
 NOW = datetime.now(UTC)
 
 
