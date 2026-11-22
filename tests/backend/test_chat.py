@@ -168,6 +168,35 @@ def test_structured_plan_uses_gemini_json_schema(monkeypatch):
     assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
 
 
+def test_universal_response_generation_uses_json_schema_and_backend_instruction(monkeypatch):
+    calls = []
+
+    class Response:
+        text = _response_json("Hello")
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    class Schema:
+        @classmethod
+        def model_json_schema(cls):
+            return {"type": "OBJECT", "properties": {"message": {"type": "STRING"}}}
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+    assert gemini.generate_universal_response("hello", Schema) == Response.text
+    assert calls[0]["model"] == "gemini-3.1-flash-lite"
+    assert calls[0]["config"].system_instruction == gemini.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION
+    assert calls[0]["config"].response_mime_type == "application/json"
+    assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
+    assert "Return ONLY one JSON object" in calls[0]["config"].system_instruction
+
+
 def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
     calls = []
 
