@@ -1,8 +1,8 @@
 import asyncio
 import json
 import tomllib
-from dataclasses import replace
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
