@@ -249,7 +249,7 @@ class FakeChatApi {
             { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
           ]
         : isInstall
-          ? [{ name: message.replace(/^.*?(?:install(?:ation)?|ติดตั้ง)\s*/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
+          ? [{ name: message.replace(/^.*?(?:install(?:ation)?|ติดตั้ง)\s*(?:of\s+)?/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
           : [];
       const contract = {
         schema_version: '1.0' as const,
