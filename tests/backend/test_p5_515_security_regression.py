@@ -19,21 +19,22 @@ GOOD_HEADERS = {
     "x-local-agent-token": GOOD_TOKEN,
 }
 PLAN_PAYLOAD = {"request": "Install Google Chrome", "language": "en"}
+REMOVE_PAYLOAD = {"request": "Remove Google Chrome", "language": "en"}
 client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
 
 def create_eligible_plan_id():
     initial = client.post(
         "/api/plans",
-        json={"request": "Prepare Java development", "language": "en"},
+        json=REMOVE_PAYLOAD,
     )
     assert initial.status_code == 200
     initial_id = initial.json()["dry_run_plan"]["plan_id"]
     refined = client.post(
         f"/api/plans/{initial_id}/refine",
         json={
-            "request": "Prepare Java development",
-            "clarification": "JDK 21 LTS and IntelliJ IDEA",
+            "request": "Remove Google Chrome",
+            "clarification": "Google Chrome",
             "language": "en",
         },
     )
@@ -115,7 +116,7 @@ def test_p1_plan_requires_approval_and_has_no_execute_route(monkeypatch):
         return original_dry_run(request)
 
     monkeypatch.setattr(plan_api, "execute_tool", spy_dry_run)
-    created = client.post("/api/plans", json=PLAN_PAYLOAD)
+    created = client.post("/api/plans", json=REMOVE_PAYLOAD)
     assert created.status_code == 200
     plan_id = created.json()["dry_run_plan"]["plan_id"]
     assert created.json()["approved"] is False
@@ -227,7 +228,7 @@ def test_planner_exception_returns_only_a_generic_server_error(monkeypatch):
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
     )
-    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
+    response = safe_client.post("/api/plans", json=REMOVE_PAYLOAD)
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error."}
@@ -241,7 +242,7 @@ def test_missing_totp_prevents_tool_handler_exception_path(monkeypatch):
         calls.append(request)
         raise RuntimeError("synthetic handler failure with sensitive detail")
 
-    monkeypatch.setattr(tools, "_HANDLERS", {"software.install": fail_handler})
+    monkeypatch.setattr(tools, "_HANDLERS", {"software.remove": fail_handler})
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
     )
@@ -263,7 +264,7 @@ def test_policy_configuration_exception_returns_safe_error_before_handler(monkey
     def fail_policy(_tool_id):
         raise policy.PolicyConfigurationError("synthetic policy configuration failure")
 
-    monkeypatch.setattr(tools, "_HANDLERS", {"software.install": spy_handler})
+    monkeypatch.setattr(tools, "_HANDLERS", {"software.remove": spy_handler})
     monkeypatch.setattr(policy, "require_tool_allowed", fail_policy)
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
@@ -283,7 +284,7 @@ def test_missing_totp_prevents_malformed_tool_handler_path(monkeypatch):
         handler_calls.append(request)
         return object()
 
-    monkeypatch.setattr(tools, "_HANDLERS", {"software.install": malformed_handler})
+    monkeypatch.setattr(tools, "_HANDLERS", {"software.remove": malformed_handler})
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
     )
