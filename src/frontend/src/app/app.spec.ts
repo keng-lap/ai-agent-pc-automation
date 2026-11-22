@@ -1113,7 +1113,8 @@ describe('Structured Agent response (T-404)', () => {
     expect(view.querySelector('script')).toBeNull();
     expect(view.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
     expect(view.textContent).toContain('conversation.chat');
-    expect(view.textContent).not.toMatch(/อนุมัติ|ติดตั้งจริง/);
+    const log = view.querySelector('[role="log"]') as HTMLElement;
+    expect(log.textContent).not.toMatch(/อนุมัติ|ติดตั้งจริง/);
     fixture.destroy();
   });
   it('renders Gemini clarification using the same universal response envelope', async () => {
@@ -1353,7 +1354,7 @@ describe('Structured Agent response (T-404)', () => {
     fixture.destroy();
   });
 
-  it('Q31: no machine-changing control appears in empty, loading, error, or plan states', async () => {
+  it('Q31: no machine-changing control appears in empty, loading, error, or Gemini clarification states', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -1375,7 +1376,6 @@ describe('Structured Agent response (T-404)', () => {
     };
 
     assertNoMachineAction();
-
     const pending = new Subject<unknown>();
     api.responder = () => pending;
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
@@ -1389,36 +1389,38 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     assertNoMachineAction();
 
-    api.responder = () => of({ reply: 'safe reply' });
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'development_task', goal: message, target: 'Java' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        tool_id: 'software.install',
-        plan_id: 'e'.repeat(32), mode: 'dry_run', live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'JDK', version: 'Not specified', purpose: 'Java',
-          reason: 'Clarification needed', source: 'Not checked',
-          source_verification: 'NOT_CHECKED', dependencies: [],
-          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
-          impact: 'Not checked', status: 'NEEDS_CLARIFICATION',
-        }],
+    const contract: GeminiChatResponse['gemini_response'] = {
+      schema_version: '1.0',
+      message: 'ต้องระบุเวอร์ชัน .NET ก่อนจัดทำแผน',
+      intent: 'environment.prepare',
+      status: 'needs_clarification',
+      data: {
+        packages: [{ name: '.NET SDK', version: 'LTS', purpose: 'Build .NET applications', suggested_source: 'Microsoft', suggested_method: 'WinGet after backend verification' }],
+        environment: { name: '.NET development', purpose: 'Prepare tools', development_type: 'Unspecified', framework_version: 'LTS' },
+        checks: [],
+        notes: [],
       },
-      tool_result: { status: 'dry_run', summary: 'Dry run only.' },
-      questions: ['Which JDK version?'],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      needs_clarification: true,
+      clarification: 'ต้องการ .NET Web API หรือ Desktop Application?',
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: contract,
+      gemini_raw_json: JSON.stringify(contract),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
     });
-    input.value = 'Prepare Java';
+    input.value = 'เตรียมเครื่องพัฒนา .NET';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
     assertNoMachineAction();
-    expect(fixture.nativeElement.querySelector('.clarification-form')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('ต้องการ .NET Web API หรือ Desktop Application?');
+    expect(fixture.nativeElement.querySelector('.gemini-json-details')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.clarification-form')).toBeNull();
     fixture.destroy();
   });
 
