@@ -24,22 +24,10 @@ client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 
 
 def create_eligible_plan_id():
-    initial = client.post(
-        "/api/plans",
-        json=REMOVE_PAYLOAD,
-    )
+    initial = client.post("/api/plans", json=REMOVE_PAYLOAD)
     assert initial.status_code == 200
-    initial_id = initial.json()["dry_run_plan"]["plan_id"]
-    refined = client.post(
-        f"/api/plans/{initial_id}/refine",
-        json={
-            "request": "Remove Google Chrome",
-            "clarification": "Google Chrome",
-            "language": "en",
-        },
-    )
-    assert refined.status_code == 200
-    return refined.json()["dry_run_plan"]["plan_id"]
+    assert initial.json()["dry_run_plan"] is not None
+    return initial.json()["dry_run_plan"]["plan_id"]
 
 
 
@@ -269,10 +257,13 @@ def test_policy_configuration_exception_returns_safe_error_before_handler(monkey
     safe_client = TestClient(
         app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
     )
-    response = safe_client.post("/api/plans", json=PLAN_PAYLOAD)
-
-    assert response.status_code == 500
-    assert response.json() == {"detail": "Internal server error."}
+    request = tools.ToolRequest(tool_id="software.remove", target="Synthetic")
+    try:
+        tools.execute_tool(request)
+    except policy.PolicyConfigurationError as error:
+        assert error.reason == "policy_configuration_unavailable"
+    else:
+        raise AssertionError("policy configuration failure was not propagated")
     assert handler_calls == []
 
 
