@@ -11,9 +11,9 @@ import re
 import subprocess
 import threading
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 
 from agent_backend.approval_reservation_store import (
     ApprovalReservationError,
