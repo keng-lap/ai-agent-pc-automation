@@ -223,13 +223,14 @@ class FakeChatApi {
   sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<GeminiChatResponse> {
     this.calls.push({ message, language, conversationId });
     return this.responder(message, language).pipe(map((value) => {
-      if (typeof value === 'object' && value !== null && 'gemini_response' in value) {
+      if (typeof value !== 'object' || value === null) {
         return value as GeminiChatResponse;
       }
-      const reply = typeof value === 'object' && value !== null && 'reply' in value
-        && typeof (value as { reply: unknown }).reply === 'string'
-        ? (value as { reply: string }).reply
-        : 'Mock reply';
+      if ('gemini_response' in value) return value as GeminiChatResponse;
+      if (!('reply' in value) || typeof (value as { reply: unknown }).reply !== 'string') {
+        return value as GeminiChatResponse;
+      }
+      const reply = (value as { reply: string }).reply;
       const isJava = /java/i.test(message);
       const isDotNet = /\.net|dotnet/i.test(message);
       const isEnvironment = /เตรียมเครื่องพัฒนา|prepare.*environment|development environment/i.test(message);
