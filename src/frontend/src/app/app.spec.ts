@@ -352,6 +352,26 @@ describe('App baseline', () => {
   });
 });
 
+function validChatResponse(message: string): GeminiChatResponse {
+  const contract: GeminiChatResponse['gemini_response'] = {
+    schema_version: '1.0',
+    message,
+    intent: 'conversation.chat',
+    status: 'completed',
+    data: { packages: [], environment: null, checks: [], notes: [] },
+    needs_clarification: false,
+    clarification: null,
+  };
+  return {
+    request_id: '123e4567-e89b-42d3-a456-426614174000',
+    gemini_response: contract,
+    gemini_raw_json: JSON.stringify(contract),
+    provider: 'gemini',
+    model: 'test-model',
+    provider_connected: true,
+  };
+}
+
 describe('App chat UI (T-202)', () => {
   let fixture!: ComponentFixture<App>;
   let api: FakeChatApi;
@@ -895,21 +915,10 @@ describe('App chat UI (T-202)', () => {
       message: 'hello',
       language: 'en',
     });
-    request.flush({ reply: 'Mock reply' });
-    const planRequest = httpTestingController.expectOne('/api/plans');
-    expect(planRequest.request.method).toBe('POST');
-    expect(planRequest.request.body).toEqual({ request: 'hello', language: 'en' });
-    planRequest.flush({
-      request: 'hello',
-      interpretation: { category: 'general_task', goal: 'hello', target: null },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: null,
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
+    request.flush(validChatResponse('Mock reply'));
     fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Mock reply');
+    httpTestingController.expectNone('/api/plans');
     expect(fixture.nativeElement.textContent).toContain('Mock reply');
 
     const conversationId = sessionStorage.getItem('ai-agent-pc-automation.conversation-id')!;
@@ -939,36 +948,15 @@ describe('App chat UI (T-202)', () => {
     expect(thaiRequest.request.body).toMatchObject({ message: 'Thai request', language: 'th' });
     languageButton('EN').click();
     fixture.detectChanges();
-    thaiRequest.flush({ reply: 'Thai reply' });
-    const thaiPlanRequest = httpTestingController.expectOne('/api/plans');
-    expect(thaiPlanRequest.request.body).toEqual({ request: 'Thai request', language: 'th' });
-    thaiPlanRequest.flush({
-      request: 'Thai request',
-      interpretation: { category: 'general_task', goal: 'Thai request', target: null },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: null,
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
+    thaiRequest.flush(validChatResponse('Thai reply'));
     fixture.detectChanges();
+    httpTestingController.expectNone('/api/plans');
     send('English request');
     const englishRequest = httpTestingController.expectOne('/api/chat');
     expect(englishRequest.request.body).toMatchObject({ message: 'English request', language: 'en' });
-    englishRequest.flush({ reply: 'English reply' });
-    const englishPlanRequest = httpTestingController.expectOne('/api/plans');
-    expect(englishPlanRequest.request.body).toEqual({ request: 'English request', language: 'en' });
-    englishPlanRequest.flush({
-      request: 'English request',
-      interpretation: { category: 'general_task', goal: 'English request', target: null },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: null,
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
+    englishRequest.flush(validChatResponse('English reply'));
+    fixture.detectChanges();
+    httpTestingController.expectNone('/api/plans');
   });
 
   it('F-17/F-18: language switch updates the UI and document language', async () => {
