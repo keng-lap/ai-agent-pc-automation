@@ -182,6 +182,8 @@ def chat(payload: ChatRequest) -> dict[str, object]:
                 contents,
                 UniversalConversationResponse,
             )
+            if len(raw_response) > 16000:
+                raise gemini.GeminiProviderError("invalid_response")
             try:
                 structured = UniversalConversationResponse.model_validate_json(raw_response)
             except Exception:
@@ -205,6 +207,8 @@ def chat(payload: ChatRequest) -> dict[str, object]:
                     repair_contents,
                     UniversalConversationResponse,
                 )
+                if len(raw_response) > 16000:
+                    raise gemini.GeminiProviderError("invalid_response")
                 try:
                     structured = UniversalConversationResponse.model_validate_json(raw_response)
                 except Exception:
