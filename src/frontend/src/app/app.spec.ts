@@ -2,10 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, Subject, of, throwError } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { TimeoutError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
-import { ChatApi, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
+import { ChatApi, GeminiChatResponse, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
@@ -219,9 +220,65 @@ class FakeChatApi {
     });
   }
 
-  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
+  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<GeminiChatResponse> {
     this.calls.push({ message, language, conversationId });
-    return this.responder(message, language);
+    return this.responder(message, language).pipe(map((value) => {
+      if (typeof value === 'object' && value !== null && 'gemini_response' in value) {
+        return value as GeminiChatResponse;
+      }
+      const reply = typeof value === 'object' && value !== null && 'reply' in value
+        && typeof (value as { reply: unknown }).reply === 'string'
+        ? (value as { reply: string }).reply
+        : 'Mock reply';
+      const isJava = /java/i.test(message);
+      const isDotNet = /\\.net|dotnet/i.test(message);
+      const isEnvironment = /เตรียมเครื่องพัฒนา|prepare.*environment|development environment/i.test(message);
+      const isInstall = /install|ติดตั้ง/i.test(message);
+      const intent = isEnvironment
+        ? 'environment.prepare'
+        : isInstall ? 'software.install' : 'conversation.chat';
+      const packages = isEnvironment
+        ? isDotNet
+          ? [
+            { name: '.NET SDK', version: 'latest LTS', purpose: 'Build .NET applications', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
+            { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
+            { name: 'C# Dev Kit', version: 'latest', purpose: 'C# development extension', suggested_source: 'VS Code Marketplace', suggested_method: 'Marketplace extension install after verification' },
+          ]
+          : [
+            { name: 'JDK', version: '21 LTS', purpose: 'Java compiler and runtime', suggested_source: 'OpenJDK vendor', suggested_method: 'WinGet if verified' },
+            { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
+          ]
+        : isInstall
+          ? [{ name: message.replace(/^.*?(?:install|ติดตั้ง)\\s*/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
+          : [];
+      const contract = {
+        schema_version: '1.0' as const,
+        message: reply,
+        intent,
+        status: intent === 'conversation.chat' ? 'completed' as const : 'ready' as const,
+        data: {
+          packages,
+          environment: isEnvironment ? {
+            name: isDotNet ? '.NET development' : isJava ? 'Java development' : 'Development environment',
+            purpose: 'Prepare tools to build and test applications',
+            development_type: isDotNet ? ' .NET' : isJava ? 'Java' : 'General',
+            framework_version: 'LTS',
+          } : null,
+          checks: [],
+          notes: [],
+        },
+        needs_clarification: false,
+        clarification: null,
+      };
+      return {
+        request_id: '123e4567-e89b-42d3-a456-426614174000',
+        gemini_response: contract,
+        gemini_raw_json: JSON.stringify(contract),
+        provider: 'gemini' as const,
+        model: 'test-model',
+        provider_connected: true as const,
+      };
+    }));
   }
 
   createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
