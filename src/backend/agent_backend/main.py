@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .approval_reservation_store import SQLiteApprovalReservationStore
 from .auth_api import build_auth_services, require_session
 from .auth_api import router as auth_router
 from .chat import router as chat_router
@@ -25,7 +26,6 @@ from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
 from .software_install_api import router as software_install_router
-from .approval_reservation_store import SQLiteApprovalReservationStore
 from .software_install_worker import SoftwareInstallWorker
 
 
