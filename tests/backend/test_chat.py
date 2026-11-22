@@ -515,7 +515,7 @@ def test_delete_clears_conversation_and_is_idempotent(monkeypatch):
 def test_chat_sessions_are_capped(monkeypatch):
     monkeypatch.setattr(chat_module, "MAX_CONVERSATIONS", 2)
     gemini.save_api_key("test-gemini-api-key-123456789")
-    monkeypatch.setattr(gemini, "generate_reply", lambda _contents: "answer")
+    monkeypatch.setattr(gemini, "generate_universal_response", lambda _contents, _schema: _response_json("answer"))
     ids = [
         "123e4567-e89b-42d3-a456-426614174001",
         "123e4567-e89b-42d3-a456-426614174002",
