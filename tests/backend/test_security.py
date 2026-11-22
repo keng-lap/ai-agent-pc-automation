@@ -2,6 +2,7 @@ import asyncio
 import json
 import tomllib
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,19 @@ client = TestClient(app, base_url=BASE_URL, headers=GOOD_HEADERS)
 @pytest.fixture(autouse=True)
 def configure_mock_gemini(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", "mock-gemini-key-123456789")
-    monkeypatch.setattr(gemini, "generate_reply", lambda _message: "mock Gemini reply")
+    monkeypatch.setattr(
+        gemini,
+        "generate_universal_response",
+        lambda _contents, _schema: json.dumps({
+            "schema_version": "1.0",
+            "message": "mock Gemini reply",
+            "intent": "conversation.chat",
+            "status": "completed",
+            "data": {"packages": [], "environment": None, "checks": [], "notes": []},
+            "needs_clarification": False,
+            "clarification": None,
+        }),
+    )
     monkeypatch.setattr(gemini, "test_connection", lambda: None)
     chat_module._conversation_store.clear()
 
@@ -239,6 +252,8 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/plans/{plan_id}",
         "/api/jobs",
         "/api/jobs/{job_id}",
+        "/api/software/install/readiness",
+        "/api/software/install/jobs/{reservation_id}",
         "/api/auth/session",
         "/api/auth/google/start",
         "/api/authenticator/status",
