@@ -1,24 +1,51 @@
-# Gemini Runtime Working Rules — T-602 Implementation
+# Gemini Runtime Instructions and Universal Response Contract
 
 ## Product Owner authorization
 
-Authorized by the Product Owner on 2026-11-07. Scope is limited to supplying a backend-owned system instruction on every Gemini Chat generation request and adding regression tests. This does not authorize PC automation, function/tool calling, real machine-changing actions, new data flows, or changes to chat retention.
+- 2026-11-07: backend-owned runtime instruction for natural-language chat.
+- 2026-11-23: universal schema-constrained response contract, raw response visibility, and request correlation as part of PR #170.
+- These changes do not authorize a merge, live software installation, multi-package execution, environment inspection, new provider, or durable chat/prompt retention.
 
-## Implementation
+## Runtime behavior
 
-- `src/backend/agent_backend/providers/gemini.py` defines `CHAT_SYSTEM_INSTRUCTION` in backend-owned code.
-- `generate_reply()` constructs a `GenerateContentConfig` with that instruction and passes it to every chat generation request.
-- The instruction asks Gemini to use supplied conversation history, avoid repeated/optional clarification questions, make safe reversible assumptions, consolidate genuinely essential questions, answer concisely, and avoid inventing access or actions.
-- It explicitly preserves the adviser/planner role and backend-owned validation and capability-specific approval. The instruction itself does not invoke tools or authorize machine changes. The separately authorized P6-609-C WinGet path is entered only through its dedicated backend discovery, evidence, TOTP, and durable-queue APIs; a Gemini reply cannot trigger it by itself.
-- Structured plan generation remains separate and does not inherit the chat instruction.
+- `src/backend/agent_backend/providers/gemini.py` supplies a backend-owned system instruction on every Gemini chat generation request.
+- Chat generation uses `generate_universal_response()` with the backend-owned `UniversalConversationResponse` Pydantic JSON schema.
+- Users continue to communicate naturally in Thai or English. They never need to type JSON or follow fixed command syntax.
+- Every chat turn uses the same versioned envelope: `schema_version`, `message`, `intent`, `status`, `data`, `needs_clarification`, and `clarification`.
+- Supported intents include ordinary conversation/help, one or multiple software requests, software removal, environment preparation, and environment inspection.
+- Intent-specific package/environment/check data is validated by the same backend model. Unknown fields are rejected.
+- The backend allows one bounded correction attempt for invalid model output. A second invalid response fails closed and is not saved to conversation history.
+- The backend adds its own request ID and returns the exact Gemini JSON text separately from the parsed/validated response. The system instruction and API key are never returned.
+- The frontend displays the natural-language message, a collapsible raw JSON view, and a backend-generated Request ID. Gemini proposals are labeled unverified. Backend discovery/evidence is shown separately.
 
-## Important limitations
+## Trust and execution boundaries
 
-- This is behavioral guidance, not a security control. Backend validation, allowlists, risk controls, and approval checks remain authoritative.
-- The instruction does not grant Gemini access to `GEMINI.md`, GitHub, local files, PC state, or previous conversations. Only the current request and conversation history already supplied by the application are available.
-- Conversation history remains in process memory, capped at 128 conversations and one hour of inactivity; it is not durable cross-session memory.
-- The instruction can reduce unnecessary questions but cannot guarantee that Gemini will never ask when a detail is genuinely essential.
+- Gemini may propose package names, requested versions, rationale, source hints, and installation-method hints. Those values are not trust evidence.
+- Gemini must not provide trusted Package IDs, installer URLs, hashes, certificate fingerprints, executable paths, shell commands, permissions, handlers, or approval results.
+- Backend independently resolves package identity and source, verifies manifest/artifact evidence, and enforces exact-action approval.
+- A single-package install intent may enter the existing backend WinGet discovery path only after contract validation. The discovery/evidence/TOTP/queue gates remain authoritative.
+- Multi-package installation and environment preparation are currently proposals only. They do not start package discovery for every package, create an approval, or execute installation.
+- Environment inspection is descriptive only; Gemini cannot inspect the PC and the current contract does not grant a machine-inspection capability.
+- Ordinary chat/help never invokes software discovery, approval, or execution.
+- This system instruction and JSON schema are behavioral/format controls, not security controls. Backend validation and capability-specific gates remain authoritative.
+
+## Privacy and retention
+
+- No new durable storage is introduced.
+- Existing in-memory conversation history remains capped at 128 conversations, 10 successful user/assistant pairs per conversation, and one hour of inactivity.
+- History stores only user text and the validated natural-language `message`; raw JSON and system instructions are not persisted in conversation history or logs.
+- Raw JSON is included only in the immediate API response for UI inspection. It is not an authorization artifact.
 
 ## Verification
 
-Regression tests verify that the same system instruction is included in each chat generation call and that structured plan generation does not inherit the chat instruction. Existing chat history, retention, error-sanitization, and approval boundaries remain unchanged.
+Tests must cover:
+- Same envelope for greeting/chat, help, single/multiple install, environment preparation, and inspection intents.
+- Strict rejection of extra fields and mismatched intent/data combinations.
+- One correction attempt followed by fail-closed behavior if still invalid.
+- Conversation history stores only validated natural-language messages.
+- Raw JSON, request ID, parsed response, and backend verification remain distinct.
+- API responses never expose system instructions or provider credentials.
+- UI renders raw JSON as escaped text, not executable HTML.
+- Gemini package suggestions cannot bypass backend package discovery and exact-action approval.
+
+Provider schema compatibility and live Gemini behavior remain NOT VERIFIED until the relevant tests and Windows/user acceptance are completed.
