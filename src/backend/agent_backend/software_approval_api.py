@@ -13,12 +13,6 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_backend.auth_audit import record_auth_audit_event
-from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
-from agent_backend.software_install_plans import (
-    InstallPlanNotFound,
-    software_install_plan_store,
-)
 from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
     ApprovalReservationError,
@@ -27,11 +21,17 @@ from agent_backend.approval_reservation_store import (
     ApprovalReservationUnavailable,
     SQLiteApprovalReservationStore,
 )
+from agent_backend.auth_audit import record_auth_audit_event
+from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.software_evidence import (
     EvidenceNotFound,
     EvidenceRejected,
     software_evidence_registry,
+)
+from agent_backend.software_install_plans import (
+    InstallPlanNotFound,
+    software_install_plan_store,
 )
 
 router = APIRouter()
