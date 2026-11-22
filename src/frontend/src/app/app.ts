@@ -1139,13 +1139,6 @@ export class App implements AfterViewChecked {
       });
   }
 
-  protected taskStatusLabel(status: StructuredAgentResponse['task_status']): string {
-    if (this.language() === 'th') {
-      return status === 'dry_run_completed' ? 'จำลองเสร็จแล้ว' : 'วางแผนแล้ว';
-    }
-    return status === 'dry_run_completed' ? 'Dry run completed' : 'Planned';
-  }
-
   protected programStatusLabel(status: string): string {
     const labels: Record<UiLanguage, Record<string, string>> = {
       th: {
