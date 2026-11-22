@@ -142,6 +142,10 @@
               @if (entry.geminiResponse; as geminiResponse) {
                 <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'ข้อเสนอจาก Gemini' : 'Gemini proposal'">
                   <div class="detail-heading">{{ language() === 'th' ? 'ข้อเสนอจาก Gemini (ยังไม่ผ่านการตรวจสอบ)' : 'Gemini proposal (not yet verified)' }}</div>
+                  <p class="detail-meta">{{ geminiResponse.intent }} · {{ geminiResponse.status }}</p>
+                  @if (geminiResponse.needs_clarification && geminiResponse.clarification) {
+                    <p class="detail-meta"><strong>{{ language() === 'th' ? 'คำถามจาก Gemini' : 'Gemini clarification' }}:</strong> {{ geminiResponse.clarification }}</p>
+                  }
                   @if (geminiResponse.data.environment; as environment) {
                     <p class="detail-meta"><strong>{{ environment.name }}</strong> · {{ environment.purpose }}</p>
                     @if (environment.development_type) { <p class="detail-meta">{{ environment.development_type }} · {{ environment.framework_version }}</p> }
