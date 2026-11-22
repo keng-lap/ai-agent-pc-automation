@@ -664,6 +664,7 @@ export class App implements AfterViewChecked {
           this.getProviderDiagnostic(error, 'trace'),
         ),
       });
+  }
 
   private beginSoftwareCatalogSearch(entryId: number, query: string): void {
     this.planning.set(true);
