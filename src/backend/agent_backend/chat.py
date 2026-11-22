@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException
 from google.genai import types
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from agent_backend.conversation_contract import UniversalConversationResponse
 from agent_backend.providers import gemini
@@ -186,7 +186,7 @@ def chat(payload: ChatRequest) -> dict[str, object]:
                 raise gemini.GeminiProviderError("invalid_response")
             try:
                 structured = UniversalConversationResponse.model_validate_json(raw_response)
-            except Exception:
+            except ValidationError:
                 # One bounded correction attempt. The malformed output remains untrusted
                 # and is never returned as a valid plan or saved into conversation history.
                 repair_contents = [
