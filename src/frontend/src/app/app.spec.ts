@@ -8,26 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 import { ChatApi, GeminiChatResponse, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 
-function geminiResponse(message: string): GeminiChatResponse {
-  const contract: GeminiChatResponse['gemini_response'] = {
-    schema_version: '1.0',
-    message,
-    intent: 'conversation.chat',
-    status: 'completed',
-    data: { packages: [], environment: null, checks: [], notes: [] },
-    needs_clarification: false,
-    clarification: null,
-  };
-  return {
-    request_id: '123e4567-e89b-42d3-a456-426614174000',
-    gemini_response: contract,
-    gemini_raw_json: JSON.stringify(contract),
-    provider: 'gemini',
-    model: 'test-model',
-    provider_connected: true,
-  };
-}
-
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
   catalogCalls: string[] = [];
