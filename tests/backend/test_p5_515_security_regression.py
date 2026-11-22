@@ -254,9 +254,6 @@ def test_policy_configuration_exception_returns_safe_error_before_handler(monkey
 
     monkeypatch.setattr(tools, "_HANDLERS", {"software.remove": spy_handler})
     monkeypatch.setattr(policy, "require_tool_allowed", fail_policy)
-    safe_client = TestClient(
-        app, base_url=BASE_URL, headers=GOOD_HEADERS, raise_server_exceptions=False
-    )
     request = tools.ToolRequest(tool_id="software.remove", target="Synthetic")
     try:
         tools.execute_tool(request)
