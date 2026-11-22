@@ -56,7 +56,7 @@ class UniversalConversationResponse(BaseModel):
     clarification: str | None
 
     @model_validator(mode="after")
-    def validate_intent_data(self) -> "UniversalConversationResponse":
+    def validate_intent_data(self) -> UniversalConversationResponse:
         package_count = len(self.data.packages)
         if self.needs_clarification:
             if self.status != "needs_clarification" or not self.clarification:
