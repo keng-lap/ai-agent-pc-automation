@@ -8,6 +8,41 @@ export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
 
+export interface GeminiConversationResponse {
+  schema_version: '1.0';
+  message: string;
+  intent: 'conversation.chat' | 'system.help' | 'software.install' | 'software.install_multiple' | 'software.remove' | 'environment.prepare' | 'environment.inspect';
+  status: 'completed' | 'ready' | 'needs_clarification' | 'unsupported';
+  data: {
+    packages: Array<{
+      name: string;
+      version: string;
+      purpose: string;
+      suggested_source: string;
+      suggested_method: string;
+    }>;
+    environment: {
+      name: string;
+      purpose: string;
+      development_type: string;
+      framework_version: string;
+    } | null;
+    checks: string[];
+    notes: string[];
+  };
+  needs_clarification: boolean;
+  clarification: string | null;
+}
+
+export interface GeminiChatResponse {
+  request_id: string;
+  gemini_response: GeminiConversationResponse;
+  gemini_raw_json: string;
+  provider: 'gemini';
+  model: string;
+  provider_connected: true;
+}
+
 export interface SoftwareCatalogCandidate {
   package_id: string;
   name: string;
@@ -203,8 +238,8 @@ export interface JobListResponse {
 export class ChatApi {
   private readonly http = inject(HttpClient);
 
-  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
-    return this.http.post<unknown>('/api/chat', {
+  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<GeminiChatResponse> {
+    return this.http.post<GeminiChatResponse>('/api/chat', {
       conversation_id: conversationId,
       message,
       language,
