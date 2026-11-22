@@ -9,8 +9,8 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_backend.software_discovery_api import _repository
 from agent_backend.software_discovery import DiscoveryNotFound, DiscoveryUnavailable
+from agent_backend.software_discovery_api import _repository
 from agent_backend.software_evidence import EvidenceRejected, software_evidence_registry
 from agent_backend.software_install_plans import (
     InstallPlanCapacityError,
