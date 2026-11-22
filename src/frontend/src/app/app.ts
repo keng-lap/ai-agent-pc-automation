@@ -5,6 +5,7 @@ import {
   AuthSession,
   ChatApi,
   ConversationHistory,
+  GeminiChatResponse,
   PlanReviewResponse,
   SoftwareApprovalChallenge,
   SoftwareApprovalResult,
@@ -21,19 +22,6 @@ import { JobMonitorComponent } from './job-monitor/job-monitor';
 
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11' | 'MSG-12' | 'MSG-13' | 'MSG-14' | 'MSG-15' | 'MSG-16' | 'MSG-17' | 'MSG-18' | 'MSG-19' | 'MSG-20' | 'MSG-21' | 'MSG-22' | 'MSG-23';
-
-interface StructuredAgentResponse {
-  task_status: 'planned' | 'dry_run_completed';
-  provider_connected: false;
-  plan: {
-    intent: { category: string; goal: string; target: string | null };
-    prerequisites: Array<{ id: string; order: number; title: string; reason: string; status: string }>;
-    steps: Array<{ order: number; title: string; detail: string }>;
-    execution_mode: 'dry_run';
-    approval_required: true;
-  };
-  tool_result: { tool_id: string; target: string; status: 'dry_run'; approval_required: true; summary: string } | null;
-}
 
 interface SoftwareDiscoveryUiState {
   query: string;
@@ -60,6 +48,9 @@ interface ChatEntry {
   id: number;
   kind: EntryKind;
   text: string;
+  requestId?: string;
+  geminiRawJson?: string;
+  geminiResponse?: GeminiChatResponse['gemini_response'];
   discovery?: SoftwareDiscoveryUiState;
   errorCode?: ErrorCode;
   diagnosticType?: string;
@@ -82,12 +73,6 @@ const CONVERSATION_STORAGE_KEY = 'ai-agent-pc-automation.conversation-id';
 const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function extractSoftwareInstallQuery(message: string): string | null {
-  const match = message.match(/^\s*(?:(?:ช่วย\s*)?ติดตั้ง|(?:(?:please|can you|could you|would you)\s+)?install)\s+(.+?)\s*$/i);
-  const query = match?.[1]?.trim();
-  return query && query.length >= 2 ? query : null;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -612,22 +597,6 @@ export class App implements AfterViewChecked {
     ]);
     this.draft.set('');
 
-    const softwareQuery = extractSoftwareInstallQuery(message);
-    if (softwareQuery) {
-      const discoveryEntryId = ++this.nextEntryId;
-      this.entries.update((entries) => [
-        ...entries,
-        {
-          id: discoveryEntryId,
-          kind: 'agent',
-          text: '',
-          discovery: { query: softwareQuery, status: 'searching' },
-        },
-      ]);
-      this.beginSoftwareCatalogSearch(discoveryEntryId, softwareQuery);
-      return;
-    }
-
     this.pending.set(true);
     defer(() => this.chatApi.sendMessage(message, languageAtSend, conversationId))
       .pipe(
@@ -636,56 +605,56 @@ export class App implements AfterViewChecked {
         finalize(() => this.pending.set(false)),
       )
       .subscribe({
-        next: (response: unknown) => {
-          if (this.isReply(response)) {
-            const entryId = ++this.nextEntryId;
-            this.entries.update((entries) => [
-              ...entries,
-              { id: entryId, kind: 'agent', text: '', response: this.isStructuredAgentResponse(response) ? response : undefined },
-            ]);
+        next: (value: unknown) => {
+          if (!this.isGeminiChatResponse(value)) {
+            this.appendError('MSG-08');
+            return;
+          }
+          const contract = value.gemini_response;
+          const entryId = ++this.nextEntryId;
+          this.entries.update((entries) => [
+            ...entries,
+            {
+              id: entryId,
+              kind: 'agent',
+              text: contract.message,
+              requestId: value.request_id,
+              geminiRawJson: value.gemini_raw_json,
+              geminiResponse: contract,
+            },
+          ]);
+
+          // Gemini suggestions are untrusted. Only the backend catalog and
+          // evidence pipeline may resolve and verify a software artifact.
+          if (contract.intent === 'software.install' && contract.status === 'ready'
+            && contract.data.packages.length === 1) {
+            const query = contract.data.packages[0].name;
+            this.entries.update((entries) => entries.map((entry) => entry.id === entryId
+              ? { ...entry, discovery: { query, status: 'searching' } }
+              : entry));
+            this.beginSoftwareCatalogSearch(entryId, query);
+            return;
+          }
+
+          // Removal remains on its existing preview-only backend path.
+          if (contract.intent === 'software.remove' && contract.status === 'ready') {
             this.planning.set(true);
-            let delegatedToSoftwareDiscovery = false;
             defer(() => this.chatApi.createPlan(message, languageAtSend))
               .pipe(
                 timeout({ first: REQUEST_TIMEOUT_MS }),
                 take(1),
-                finalize(() => {
-                  if (!delegatedToSoftwareDiscovery) this.planning.set(false);
-                }),
+                finalize(() => this.planning.set(false)),
               )
               .subscribe({
-                next: (review: PlanReviewResponse) => {
-                  if (
-                    isPlanReviewResponse(review)
-                    && review.interpretation.category === 'software_install'
-                    && review.interpretation.target
-                  ) {
-                    delegatedToSoftwareDiscovery = true;
-                    this.entries.update((entries) => entries.map((entry) => entry.id === entryId
-                      ? {
-                        ...entry,
-                        text: '',
-                        review: undefined,
-                        discovery: { query: review.interpretation.target as string, status: 'searching' },
-                      }
-                      : entry));
-                    this.beginSoftwareCatalogSearch(entryId, review.interpretation.target);
-                    return;
-                  }
-                  this.entries.update((entries) => entries.map((entry) => entry.id === entryId
-                    ? (isPlanReviewResponse(review)
-                      ? { ...entry, text: review.dry_run_plan ? '' : response.reply, review }
-                      : { ...entry, text: response.reply, planError: true })
-                    : entry));
-                },
-                error: () => this.entries.update((entries) =>
+                next: (review: PlanReviewResponse) => this.entries.update((entries) =>
                   entries.map((entry) => entry.id === entryId
-                    ? { ...entry, text: response.reply, planError: true }
+                    ? isPlanReviewResponse(review) ? { ...entry, review } : { ...entry, planError: true }
                     : entry),
                 ),
+                error: () => this.entries.update((entries) => entries.map((entry) =>
+                  entry.id === entryId ? { ...entry, planError: true } : entry,
+                )),
               });
-          } else {
-            this.appendError('MSG-08');
           }
         },
         error: (error: unknown) => this.appendError(
@@ -696,8 +665,6 @@ export class App implements AfterViewChecked {
           this.getProviderDiagnostic(error, 'trace'),
         ),
       });
-  }
-
 
   private beginSoftwareCatalogSearch(entryId: number, query: string): void {
     this.planning.set(true);
@@ -1342,18 +1309,54 @@ export class App implements AfterViewChecked {
     );
   }
 
-  private isStructuredAgentResponse(value: unknown): value is { reply: string } & StructuredAgentResponse {
-    if (typeof value !== 'object' || value === null) return false;
-    const item = value as Record<string, unknown>;
-    return typeof item['task_status'] === 'string'
-      && typeof item['plan'] === 'object' && item['plan'] !== null
-      && Array.isArray((item['plan'] as Record<string, unknown>)['steps'])
-      && Array.isArray((item['plan'] as Record<string, unknown>)['prerequisites']);
-  }
+  private isGeminiChatResponse(value: unknown): value is GeminiChatResponse {
+    if (!isRecord(value)
+      || typeof value['request_id'] !== 'string'
+      || !UUID_PATTERN.test(value['request_id'])
+      || typeof value['gemini_raw_json'] !== 'string'
+      || value['gemini_raw_json'].length > 16000
+      || value['provider'] !== 'gemini'
+      || typeof value['model'] !== 'string'
+      || value['provider_connected'] !== true
+      || !isRecord(value['gemini_response'])) return false;
 
-  private isReply(value: unknown): value is { reply: string } {
-    return typeof value === 'object' && value !== null && 'reply' in value
-      && typeof (value as { reply: unknown }).reply === 'string';
+    const response = value['gemini_response'];
+    const intents = [
+      'conversation.chat', 'system.help', 'software.install',
+      'software.install_multiple', 'software.remove',
+      'environment.prepare', 'environment.inspect',
+    ];
+    const statuses = ['completed', 'ready', 'needs_clarification', 'unsupported'];
+    if (response['schema_version'] !== '1.0'
+      || typeof response['message'] !== 'string'
+      || !intents.includes(String(response['intent']))
+      || !statuses.includes(String(response['status']))
+      || typeof response['needs_clarification'] !== 'boolean'
+      || !(typeof response['clarification'] === 'string' || response['clarification'] === null)
+      || !isRecord(response['data'])) return false;
+
+    const data = response['data'];
+    if (!Array.isArray(data['packages']) || !Array.isArray(data['checks'])
+      || !Array.isArray(data['notes'])
+      || !(isRecord(data['environment']) || data['environment'] === null)) return false;
+    if (!data['packages'].every((item) => isRecord(item)
+      && typeof item['name'] === 'string'
+      && typeof item['version'] === 'string'
+      && typeof item['purpose'] === 'string'
+      && typeof item['suggested_source'] === 'string'
+      && typeof item['suggested_method'] === 'string')) return false;
+    if (!data['checks'].every((item) => typeof item === 'string')
+      || !data['notes'].every((item) => typeof item === 'string')) return false;
+
+    try {
+      const raw = JSON.parse(value['gemini_raw_json']) as unknown;
+      return isRecord(raw)
+        && raw['schema_version'] === response['schema_version']
+        && raw['message'] === response['message']
+        && raw['intent'] === response['intent'];
+    } catch {
+      return false;
+    }
   }
 
   private getStatus(error: unknown): number | undefined {
