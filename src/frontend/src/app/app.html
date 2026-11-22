@@ -136,7 +136,7 @@
             }
             <div class="message-bubble">
               <span class="message-label">{{ labelFor(entry.kind) }}</span>
-              @if (entry.kind === 'error' || entry.kind === 'agent') {
+              @if (entry.kind === 'user' || entry.kind === 'error' || entry.kind === 'agent') {
                 <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
               }
               @if (entry.geminiResponse; as geminiResponse) {
