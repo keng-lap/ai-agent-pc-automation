@@ -231,7 +231,7 @@ class FakeChatApi {
         ? (value as { reply: string }).reply
         : 'Mock reply';
       const isJava = /java/i.test(message);
-      const isDotNet = /\\.net|dotnet/i.test(message);
+      const isDotNet = /\.net|dotnet/i.test(message);
       const isEnvironment = /เตรียมเครื่องพัฒนา|prepare.*environment|development environment/i.test(message);
       const isInstall = /install|ติดตั้ง/i.test(message);
       const intent: GeminiChatResponse['gemini_response']['intent'] = isEnvironment
@@ -444,7 +444,7 @@ describe('App chat UI (T-202)', () => {
     expect(api.approvalCalls).toEqual([]);
   });
 
-  it('routes install requests through Microsoft discovery without asking AI to choose a Package ID', async () => {
+  it('uses Gemini to understand install requests while Backend independently resolves Package IDs', async () => {
     await render();
 
     send('ติดตั้ง DBeaver Community Edition');
