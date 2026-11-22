@@ -1346,6 +1346,26 @@ export class App implements AfterViewChecked {
       && typeof item['suggested_method'] === 'string')) return false;
     if (!data['checks'].every((item) => typeof item === 'string')
       || !data['notes'].every((item) => typeof item === 'string')) return false;
+    if (data['environment'] !== null) {
+      const environment = data['environment'] as Record<string, unknown>;
+      if (typeof environment['name'] !== 'string'
+        || typeof environment['purpose'] !== 'string'
+        || typeof environment['development_type'] !== 'string'
+        || typeof environment['framework_version'] !== 'string') return false;
+    }
+    const packageCount = data['packages'].length;
+    const intent = String(response['intent']);
+    if (intent === 'software.install' && packageCount !== 1) return false;
+    if (intent === 'software.install_multiple' && packageCount < 2) return false;
+    if (intent === 'environment.prepare' && data['environment'] === null) return false;
+    if (intent === 'environment.inspect' && data['checks'].length < 1) return false;
+    if (intent === 'software.remove' && packageCount !== 1) return false;
+    if (['conversation.chat', 'system.help'].includes(intent)
+      && (packageCount !== 0 || data['environment'] !== null || data['checks'].length !== 0)) return false;
+    if (response['needs_clarification'] === true
+      && (response['status'] !== 'needs_clarification' || !response['clarification'])) return false;
+    if (response['needs_clarification'] === false
+      && (response['status'] === 'needs_clarification' || response['clarification'] !== null)) return false;
 
     try {
       const raw = JSON.parse(value['gemini_raw_json']) as unknown;
