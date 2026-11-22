@@ -56,7 +56,6 @@ interface ChatEntry {
   diagnosticType?: string;
   diagnosticStage?: string;
   diagnosticTrace?: string;
-  response?: StructuredAgentResponse;
   review?: PlanReviewResponse;
   planError?: boolean;
   clarificationDraft?: string;
