@@ -249,7 +249,7 @@ class FakeChatApi {
             { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
           ]
         : isInstall
-          ? [{ name: message.replace(/^.*?(?:install(?:ation)?|ติดตั้ง)\\s*/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
+          ? [{ name: message.replace(/^.*?(?:install(?:ation)?|ติดตั้ง)\s*/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
           : [];
       const contract = {
         schema_version: '1.0' as const,
@@ -1155,6 +1155,38 @@ describe('Structured Agent response (T-404)', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Dry Run');
     fixture.destroy();
   });
+  it('shows a multi-package .NET environment proposal without starting installation', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'เตรียมเครื่องพัฒนาด้วย .NET';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain('.NET SDK');
+    expect(view.textContent).toContain('Visual Studio Code');
+    expect(view.textContent).toContain('C# Dev Kit');
+    expect(view.textContent).toContain('VS Code Marketplace');
+    expect(view.textContent).toContain('WinGet if verified');
+    expect(view.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
+    expect(api.catalogCalls).toEqual([]);
+    expect(api.proposalCalls).toEqual([]);
+    expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
+    fixture.destroy();
+  });
+
   it('does not render a Dry Run plan for multi-package Java setup', async () => {
     localStorage.clear();
     sessionStorage.clear();
