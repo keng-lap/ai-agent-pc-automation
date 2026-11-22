@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import ctypes
 import os
+import subprocess
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 
 from agent_backend.process_containment import (
     ProcessContainmentError,
