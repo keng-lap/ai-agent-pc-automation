@@ -295,10 +295,9 @@ def test_readiness_exposes_generic_authenticode_publisher_policy_without_package
 
 def test_readiness_reports_real_install_release_gate(monkeypatch):
     monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.delenv("AI_AGENT_ENABLE_REAL_INSTALL", raising=False)
+    for name in ("AI_AGENT_ENABLE_REAL_INSTALL", "AI_AGENT_REAL_INSTALL_RELEASE_TASK", "AI_AGENT_REAL_INSTALL_PACKAGE_ID", "AI_AGENT_REAL_INSTALL_VERSION", "AI_AGENT_REAL_INSTALL_EXPIRES_AT", "AI_AGENT_REAL_INSTALL_NONCE"):
+        monkeypatch.delenv(name, raising=False)
     assert api.get_software_install_readiness()["real_install_enabled"] is False
-    from datetime import UTC, datetime, timedelta
-
     monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
     monkeypatch.setenv("AI_AGENT_REAL_INSTALL_RELEASE_TASK", "P6-609-C")
     monkeypatch.setenv("AI_AGENT_REAL_INSTALL_PACKAGE_ID", "Contoso.Editor")
