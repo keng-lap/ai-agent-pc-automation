@@ -230,7 +230,7 @@ class SQLiteApprovalReservationStore:
                     CREATE TRIGGER IF NOT EXISTS real_install_release_no_update
                     BEFORE UPDATE ON real_install_release_consumptions
                     BEGIN
-                        SELECT RAISE(ABORT, "release authorizations are append-only");
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
                     END;
                     CREATE TRIGGER IF NOT EXISTS real_install_release_no_delete
                     BEFORE DELETE ON real_install_release_consumptions
