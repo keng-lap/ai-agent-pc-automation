@@ -1,6 +1,8 @@
 """Tests for the one-shot local WinGet install worker."""
 
 from dataclasses import replace
+
+import pytest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -209,3 +211,37 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
     assert cancel_events and cancel_events[0].is_set() is True
     assert result.state == "UNKNOWN"
     assert result.result_code == "WORKER_LEASE_LOST_PROCESS_TERMINATED"
+
+
+@pytest.mark.parametrize("returncode", [0x8A150014, -1978331116])
+def test_verifier_treats_winget_no_applications_result_as_absent(monkeypatch, returncode):
+    monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
+    monkeypatch.setattr(
+        worker_module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(returncode=returncode, stdout=""),
+    )
+    assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is False
+
+
+def test_verifier_parses_exact_id_with_single_space_column_boundaries(monkeypatch):
+    monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
+    monkeypatch.setattr(
+        worker_module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(
+            returncode=0,
+            stdout="Name Id Version Available Source\nAcme Editor Acme.Editor 1.2.3 1.2.4 winget\n",
+        ),
+    )
+    assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is True
+
+
+def test_verifier_returns_ambiguous_for_unparseable_success_output(monkeypatch):
+    monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
+    monkeypatch.setattr(
+        worker_module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(returncode=0, stdout="unexpected output"),
+    )
+    assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is None
