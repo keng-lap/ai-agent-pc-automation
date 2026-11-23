@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_backend.config import ConfigError, real_install_release_authorization_from_env
 from agent_backend.software_discovery import DiscoveryNotFound, DiscoveryUnavailable
 from agent_backend.software_discovery_api import _repository
 from agent_backend.software_evidence import EvidenceRejected, software_evidence_registry
@@ -59,15 +59,20 @@ class SoftwareInstallProposalResponse(BaseModel):
 
 
 @router.get("/api/software/install/readiness")
-def get_software_install_readiness() -> dict:
-    """Expose non-secret readiness flags for the real-install workflow."""
-    try:
-        release_authorization = real_install_release_authorization_from_env()
-    except ConfigError:
+def get_software_install_readiness(request: Request) -> dict:
+    """Expose readiness from the exact configuration used to start the worker."""
+    app_state = request.app.state
+    release_authorization = getattr(app_state, "real_install_release_authorization", None)
+    authorization_is_current = (
+        bool(getattr(app_state, "real_install_enabled", False))
+        and release_authorization is not None
+        and release_authorization.expires_at > datetime.now(UTC)
+    )
+    if not authorization_is_current:
         release_authorization = None
     return {
         "platform_supported": sys.platform == "win32",
-        "real_install_enabled": sys.platform == "win32" and release_authorization is not None,
+        "real_install_enabled": sys.platform == "win32" and authorization_is_current,
         "real_install_release_package_id": release_authorization.package_id if release_authorization else None,
         "real_install_release_version": release_authorization.version if release_authorization else None,
         "real_install_release_expires_at": release_authorization.expires_at.isoformat() if release_authorization else None,
