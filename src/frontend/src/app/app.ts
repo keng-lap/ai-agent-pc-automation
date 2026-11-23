@@ -38,6 +38,7 @@ interface SoftwareDiscoveryUiState {
   approvalChallenge?: SoftwareApprovalChallenge;
   totpCode?: string;
   reservationId?: string;
+  reservationRecoveryPending?: boolean;
   jobStatus?: SoftwareInstallJobStatus;
   jobStatusChecking?: boolean;
   jobStatusError?: string;
@@ -146,6 +147,10 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
     && typeof value['publisher_identity_policy_available'] === 'boolean'
     && typeof value['publisher_trust_configured'] === 'boolean'
     && value['publisher_trust_mode'] === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+    && typeof value['real_install_enabled'] === 'boolean'
+    && (value['real_install_release_package_id'] === null || typeof value['real_install_release_package_id'] === 'string')
+    && (value['real_install_release_version'] === null || typeof value['real_install_release_version'] === 'string')
+    && (value['real_install_release_expires_at'] === null || typeof value['real_install_release_expires_at'] === 'string')
     && typeof value['package_allowlist_enabled'] === 'boolean'
     && Array.isArray(value['supported_package_ids'])
     && value['supported_package_ids'].every((item) => typeof item === 'string')
@@ -176,6 +181,12 @@ function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalC
     && /^[0-9a-f]{32}$/.test(value['challenge_id'])
     && typeof value['package_id'] === 'string'
     && typeof value['version'] === 'string'
+    && (value['installer_silent_switch'] === null || typeof value['installer_silent_switch'] === 'string')
+    && typeof value['installer_url'] === 'string'
+    && typeof value['installer_sha256'] === 'string'
+    && typeof value['signature_subject'] === 'string'
+    && typeof value['signature_sha256'] === 'string'
+    && typeof value['manifest_source_url'] === 'string'
     && typeof value['approval_digest'] === 'string'
     && /^[0-9a-f]{64}$/.test(value['approval_digest'])
     && value['notice'] === 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
@@ -184,7 +195,7 @@ function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalC
 function isSoftwareInstallJobStatus(value: unknown): value is SoftwareInstallJobStatus {
   return isRecord(value)
     && typeof value['reservation_id'] === 'string'
-    && /^[0-9a-f]{32}$/.test(value['reservation_id'])
+    && (/^[0-9a-f]{32}$/.test(value['reservation_id']) || UUID_PATTERN.test(value['reservation_id']))
     && ['QUEUED', 'CLAIMED', 'RUNNING', 'VERIFYING', 'SUCCEEDED', 'FAILED', 'REBOOT_REQUIRED', 'UNKNOWN'].includes(String(value['state']))
     && Number.isInteger(value['attempts'])
     && Number.isInteger(value['version'])
@@ -747,7 +758,7 @@ export class App implements AfterViewChecked {
         return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
       }
       loadReadiness = value.status === 'CONDITIONAL'
-        && value.candidate?.publisher_verification === 'VERIFIED';
+        && ['VERIFIED', 'NOT_CHECKED'].includes(value.candidate?.publisher_verification ?? '');
       return {
         ...entry,
         discovery: {
@@ -774,6 +785,15 @@ export class App implements AfterViewChecked {
       };
     }));
     if (loadReadiness) this.loadSoftwareInstallReadiness(entryId);
+  }
+
+  protected refreshSoftwareInstallReadiness(entryId: number): void {
+    this.entries.update((entries) => entries.map((entry) => (
+      entry.id === entryId && entry.discovery
+        ? { ...entry, discovery: { ...entry.discovery, proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: "", reservationId: undefined } }
+        : entry
+    )));
+    this.loadSoftwareInstallReadiness(entryId);
   }
 
   private loadSoftwareInstallReadiness(entryId: number): void {
@@ -806,7 +826,7 @@ export class App implements AfterViewChecked {
       || discovery.readiness.authenticode_verification_available !== true
       || discovery.readiness.publisher_identity_policy_available !== true
       || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
-      || candidate.publisher_verification !== 'VERIFIED'
+      || !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
       || this.planning()
     ) return;
 
@@ -847,7 +867,7 @@ export class App implements AfterViewChecked {
   protected requestSoftwareApproval(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const proposal = discovery?.proposal;
-    if (!discovery || !proposal || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
+    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== proposal.package_id || discovery.readiness.real_install_release_version !== proposal.version || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
@@ -886,7 +906,7 @@ export class App implements AfterViewChecked {
     const proposal = discovery?.proposal;
     const challenge = discovery?.approvalChallenge;
     const code = discovery?.totpCode ?? '';
-    if (!discovery || !proposal || !challenge || !/^\d{6}$/.test(code) || this.planning()) return;
+    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
@@ -913,14 +933,144 @@ export class App implements AfterViewChecked {
           }));
           if (reservationId) this.loadSoftwareInstallJobStatus(entryId, reservationId);
         },
-        error: () => this.entries.update((entries) => entries.map((item) => (
-          item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้ กรุณาขอรหัสใหม่' : 'TOTP was invalid, expired, or the install could not be queued. Request a new code.' } }
-            : item
-        ))),
+        error: (error: unknown) => {
+          if (isRecord(error) && error['status'] === 410) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'รหัสอนุมัติหมดอายุแล้ว กรุณาสร้างคำขออนุมัติใหม่'
+                      : 'The approval challenge expired. Create a new approval challenge and try again.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          if (isRecord(error) && error['status'] === 404) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    proposal: undefined,
+                    proposalStatus: undefined,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'ไม่พบแผนติดตั้งที่ยังใช้งานได้แล้ว กรุณาตรวจสอบไฟล์และเตรียม Approval ใหม่'
+                      : 'The install proposal is no longer available. Verify the installer and prepare a new approval.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          const releaseAuthorizationRejected = isRecord(error)
+            && error['status'] === 409
+            && isRecord(error['error'])
+            && typeof error['error']['detail'] === 'string'
+            && error['error']['detail'].toLowerCase().includes('release authorization');
+          if (releaseAuthorizationRejected) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'Release Authorization หมดอายุหรือไม่ตรงกับ Package/Version กรุณาตั้งค่าใหม่แล้วรีเฟรช'
+                      : 'The release authorization expired or does not match this package/version. Refresh authorization and try again.',
+                  },
+                }
+                : item
+            )));
+            this.loadSoftwareInstallReadiness(entryId);
+            return;
+          }
+          if (isRecord(error) && error['status'] === 403) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'รหัส Authenticator ไม่ถูกต้องหรือหมดอายุ กรุณากรอกรหัสใหม่แล้วลองอนุมัติอีกครั้ง'
+                      : 'The authenticator code was rejected or expired. Enter a new code and try approval again.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          this.recoverSoftwareInstallReservation(entryId, proposal.plan_id);
+        },
       });
   }
 
+  protected retrySoftwareInstallReservation(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const planId = discovery?.proposal?.plan_id;
+    if (!planId || discovery?.jobStatusChecking) return;
+    this.recoverSoftwareInstallReservation(entryId, planId);
+  }
+
+  private recoverSoftwareInstallReservation(entryId: number, planId: string): void {
+    this.entries.update((entries) => entries.map((item) => (
+      item.id === entryId && item.discovery
+        ? { ...item, discovery: { ...item.discovery, reservationRecoveryPending: true, jobStatusChecking: true, totpCode: '' } }
+        : item
+    )));
+    defer(() => this.chatApi.getSoftwareInstallJobForPlan(planId))
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => {
+          if (!isSoftwareInstallJobStatus(value)) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาลองตรวจสอบซ้ำก่อนอนุมัติใหม่'  : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
+                : item
+            )));
+            return;
+          }
+          this.entries.update((entries) => entries.map((item) => (
+            item.id === entryId && item.discovery
+              ? { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, jobStatus: value, jobStatusChecking: false, reservationRecoveryPending: false, totpCode: '', approvalChallenge: undefined, proposalError: undefined } }
+              : item
+          )));
+          this.loadSoftwareInstallJobStatus(entryId, value.reservation_id);
+        },
+        error: (error: unknown) => {
+          const notFound = typeof error === 'object' && error !== null
+            && 'status' in error && (error as { status?: number }).status === 404;
+          this.entries.update((entries) => entries.map((item) => (
+            item.id === entryId && item.discovery
+              ? notFound
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: false, approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'ไม่พบ Reservation ที่บันทึกไว้ กรุณาขอการอนุมัติใหม่' : 'No reservation was found. Request a new approval to continue.' } }
+                : { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
+              : item
+          )));
+        },
+      });
+  }
   protected refreshSoftwareInstallStatus(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     if (!discovery?.reservationId || discovery.jobStatusChecking) return;

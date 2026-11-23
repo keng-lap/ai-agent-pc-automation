@@ -502,7 +502,7 @@
                     </div>
                   }
                   @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
-                    @if (installCandidate.publisher_verification === 'VERIFIED') {
+                    @if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
                       <section class="tool-preview installer-actions" aria-label="Real WinGet install">
                         <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
                         @if (discovery.readinessChecking) {
@@ -547,11 +547,37 @@
                               </button>
                               <small>{{ language() === 'th' ? 'Worker ทำงานบนเครื่อง Windows นี้ ความสำเร็จจะรายงานเมื่อยืนยัน Package ID และ Version หลังติดตั้งได้เท่านั้น' : 'The worker runs on this Windows machine. Success is reported only after exact Package ID and Version verification.' }}</small>
                             </div>
-                          } @else if (discovery.approvalChallenge) {
+                          } @else if (discovery.reservationRecoveryPending) {
+                            <small role="alert">{{ language() === 'th' ? 'ยังยืนยันไม่ได้ว่าคิวติดตั้งถูกบันทึกหรือไม่ ห้ามอนุมัติซ้ำจนกว่าจะตรวจสอบ Reservation สำเร็จ' : 'The committed install reservation is unresolved. Do not approve again until recovery succeeds.' }}</small>
+                            <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
+                              {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
+                            </button>
+                          } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true && discovery.readiness?.real_install_release_package_id === discovery.proposal?.package_id && discovery.readiness?.real_install_release_version === discovery.proposal?.version) {
+                            <div class="program-review" aria-label="Verified installer approval evidence">
+                              <strong>{{ language() === "th" ? "หลักฐานไฟล์ติดตั้งที่ตรวจสอบแล้ว" : "Verified installer evidence" }}</strong>
+                              <span>Package ID: {{ discovery.approvalChallenge.package_id }}</span>
+                              <span>Publisher: {{ discovery.approvalChallenge.publisher }}</span>
+                              <span>Version: {{ discovery.approvalChallenge.version }} · {{ discovery.approvalChallenge.architecture }}</span>
+                              <span>{{ language() === "th" ? "ขอบเขต" : "Scope" }}: {{ discovery.approvalChallenge.scope }} · {{ discovery.approvalChallenge.installer_type }}</span>
+                              <span>{{ language() === "th" ? "แหล่งไฟล์" : "Installer source" }}: {{ discovery.approvalChallenge.installer_url }}</span>
+                              <span>SHA-256: {{ discovery.approvalChallenge.installer_sha256 }}</span>
+                              <span>{{ language() === "th" ? "แหล่ง Manifest" : "Manifest source" }}: {{ discovery.approvalChallenge.manifest_source_url }}</span>
+                              <span>{{ language() === "th" ? "Fingerprint ผู้ลงนาม" : "Signer certificate SHA-256" }}: {{ discovery.approvalChallenge.signature_sha256 }}</span>
+                              <span>{{ language() === "th" ? "ผู้ลงนามที่ตรวจสอบแล้ว" : "Verified signer" }}: {{ discovery.approvalChallenge.signature_subject }}</span>
+                              @if (discovery.approvalChallenge.installer_silent_switch) {
+                                <span>{{ language() === "th" ? "คำสั่ง Silent จาก Manifest" : "Manifest silent switch" }}: {{ discovery.approvalChallenge.installer_silent_switch }}</span>
+                              }
+                            </div>
                             <label [for]="'install-totp-' + entry.id">{{ language() === 'th' ? 'รหัส Authenticator 6 หลัก' : 'Six-digit authenticator code' }}</label>
                             <input [id]="'install-totp-' + entry.id" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="discovery.totpCode ?? ''" (input)="onSoftwareProposalTotpInput(entry.id, $event)" />
                             <button class="send-button" type="button" [disabled]="planning() || (discovery.totpCode ?? '').length !== 6" (click)="confirmSoftwareInstall(entry.id)">
                               {{ language() === 'th' ? 'อนุมัติและเข้าคิวติดตั้งจริง' : 'Approve and queue real install' }}
+                            </button>
+                          } @else if (!discovery.readiness?.real_install_enabled || discovery.readiness?.real_install_release_package_id !== discovery.proposal?.package_id || discovery.readiness?.real_install_release_version !== discovery.proposal?.version) {
+                            <small role="status">{{ language() === 'th' ? 'ยังไม่มี Release Authorization สำหรับ Package/Version นี้ ให้รัน scripts/authorize-real-install.ps1 จาก PowerShell แล้ว Restart Backend จากหน้าต่างเดียวกัน จากนั้นรีเฟรชสถานะ' : 'No active release authorization for this exact package/version. Run scripts/authorize-real-install.ps1 in PowerShell, restart the backend from that same window, then refresh readiness.' }}</small>
+                            <small>{{ language() === 'th' ? 'เป้าหมายที่อนุญาตอยู่ในระบบ: ' : 'Currently authorized target: ' }}{{ discovery.readiness?.real_install_release_package_id ?? '—' }} {{ discovery.readiness?.real_install_release_version ?? '' }}</small>
+                            <button class="send-button" type="button" [disabled]="discovery.readinessChecking" (click)="refreshSoftwareInstallReadiness(entry.id)">
+                              {{ language() === 'th' ? 'รีเฟรช Release Authorization' : 'Refresh release authorization' }}
                             </button>
                           } @else {
                             <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">

@@ -85,6 +85,8 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.auth_services = auth_services
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
+    application.state.real_install_enabled = settings.real_install_enabled
+    application.state.real_install_release_authorization = settings.real_install_release_authorization
     application.state.job_store_lock = threading.Lock()
     application.state.approval_reservation_store = None
     application.state.approval_reservation_store_lock = threading.Lock()
@@ -102,8 +104,8 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
 
     @application.on_event("startup")
     def start_local_install_worker() -> None:
-        # Real WinGet execution is a Windows-local capability only. Other
-        # platforms keep the durable queue inert and fail closed.
+        # Reconcile stale jobs on Windows even while live execution is disabled.
+        # This path never claims queued work or starts WinGet.
         if os.name != "nt":
             return
         try:
@@ -114,9 +116,14 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
                     if store is None:
                         store = SQLiteApprovalReservationStore(settings.job_store_path)
                         application.state.approval_reservation_store = store
+            store.reconcile_expired_install_leases()
+            if not settings.real_install_enabled:
+                return
             worker = SoftwareInstallWorker(
                 store,
                 work_root=Path(settings.job_store_path).parent / "winget-work",
+                stop_event=application.state.install_worker_stop,
+                release_authorization=settings.real_install_release_authorization,
             )
         except Exception:
             logging.getLogger(__name__).exception("Local software install worker could not start.")
@@ -149,7 +156,9 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
         application.state.install_worker_stop.set()
         thread = application.state.install_worker_thread
         if thread is not None:
-            thread.join(timeout=5)
+            # Shutdown is not complete until the worker has observed the stop
+            # signal and the contained WinGet process has exited.
+            thread.join()
 
     return application
 

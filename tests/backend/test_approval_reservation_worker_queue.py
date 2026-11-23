@@ -5,6 +5,7 @@ import pytest
 
 from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
+    ApprovalReservationNotFound,
     SQLiteApprovalReservationStore,
 )
 from agent_backend.software_approval import (
@@ -42,6 +43,7 @@ def make_binding():
         version="26.2.5",
         source="winget",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url=(
             "https://github.com/dbeaver/dbeaver/releases/download/26.2.5/"
             "dbeaver-ce-26.2.5-windows-x86_64.exe"
@@ -180,6 +182,23 @@ def test_expired_worker_lease_becomes_unknown_and_is_never_requeued(tmp_path):
     assert recovered.result_code == "WORKER_LEASE_EXPIRED"
 
 
+def test_passive_reconciliation_expires_leases_without_claiming_queued_jobs(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+    claimed = store.claim_next_install(worker_id="worker-1", now=NOW, lease_seconds=1)
+    assert claimed is not None
+
+    reconciled = store.reconcile_expired_install_leases(now=NOW + timedelta(seconds=2))
+
+    assert reconciled == 1
+    recovered = store.get_install_job(reservation_id=receipt.reservation_id, owner_id=OWNER)
+    assert recovered.state == "UNKNOWN"
+    assert recovered.attempts == 1
+    assert recovered.result_code == "WORKER_LEASE_EXPIRED"
+    assert store.claim_next_install(worker_id="worker-2", now=NOW + timedelta(seconds=3)) is None
+
+
 def test_invalid_payload_cannot_be_queued(tmp_path):
     binding = make_binding()
     store = make_store(tmp_path)
@@ -247,3 +266,84 @@ def test_worker_can_renew_live_lease_with_version_cas(tmp_path):
         timespec="milliseconds"
     ).replace("+00:00", "Z")
     assert renewed.attempts == 1
+
+
+def test_existing_install_reservation_can_be_recovered_by_owner_and_plan(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+
+    recovered = store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id=OWNER)
+
+    assert recovered.reservation_id == receipt.reservation_id
+    assert recovered.state == "QUEUED"
+    assert recovered.binding_json == binding.model_dump_json()
+    with pytest.raises(ApprovalReservationNotFound):
+        store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id="another-owner")
+
+
+def test_expired_reboot_required_lease_becomes_unknown_without_retry(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+    claimed = store.claim_next_install(worker_id="worker-1", now=NOW, lease_seconds=1)
+    running = store.transition_install(
+        receipt.reservation_id,
+        worker_id="worker-1",
+        lease_token=claimed.lease_token,
+        expected_version=claimed.version,
+        target="RUNNING",
+        now=NOW,
+    )
+    reboot = store.transition_install(
+        receipt.reservation_id,
+        worker_id="worker-1",
+        lease_token=claimed.lease_token,
+        expected_version=running.version,
+        target="REBOOT_REQUIRED",
+        result_code="REBOOT_REQUIRED",
+        now=NOW,
+    )
+    assert reboot.state == "REBOOT_REQUIRED"
+
+    assert store.claim_next_install(
+        worker_id="worker-2",
+        now=NOW + timedelta(seconds=2),
+        lease_seconds=60,
+    ) is None
+    recovered = store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id=OWNER)
+    assert recovered.state == "UNKNOWN"
+    assert recovered.attempts == 1
+    assert recovered.result_code == "WORKER_LEASE_EXPIRED"
+
+def test_real_install_release_nonce_is_one_use_and_bound_to_exact_action(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    expiry = NOW + timedelta(minutes=5)
+    args = {
+        "task_id": "P6-609-C",
+        "package_id": binding.evidence.package_id,
+        "version": binding.evidence.version,
+        "action_digest": binding.approval_digest,
+        "nonce": "a" * 64,
+        "expires_at": expiry,
+        "now": NOW,
+    }
+    store.consume_real_install_release_authorization(**args)
+    with pytest.raises(ApprovalReservationConflict, match="already consumed"):
+        store.consume_real_install_release_authorization(**args)
+
+
+def test_expired_real_install_release_authorization_is_rejected(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    with pytest.raises(Exception, match="expired"):
+        store.consume_real_install_release_authorization(
+            task_id="P6-609-C",
+            package_id=binding.evidence.package_id,
+            version=binding.evidence.version,
+            action_digest=binding.approval_digest,
+            nonce="b" * 64,
+            expires_at=NOW,
+            now=NOW,
+        )

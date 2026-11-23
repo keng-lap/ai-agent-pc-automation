@@ -42,3 +42,24 @@ def test_real_execution_is_rejected_off_windows():
         match="available only on Windows",
     ):
         winget_execution.execute_approved_winget_install(None, None, work_root=None)
+
+
+def test_process_termination_waits_until_windows_signals_exit():
+    statuses = iter([winget_execution._WAIT_TIMEOUT, winget_execution._WAIT_OBJECT_0])
+    waits = []
+
+    def wait_for_single_object(handle, timeout):
+        waits.append((handle, timeout))
+        return next(statuses)
+
+    winget_execution._wait_for_process_exit(wait_for_single_object, 1234)
+
+    assert waits == [(1234, 1000), (1234, 1000)]
+
+
+def test_process_termination_wait_fails_closed_on_wait_api_error():
+    with pytest.raises(winget_execution.WinGetExecutionError, match="termination wait failed"):
+        winget_execution._wait_for_process_exit(
+            lambda *_args: winget_execution._WAIT_FAILED,
+            1234,
+        )

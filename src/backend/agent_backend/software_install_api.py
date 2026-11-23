@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -58,17 +59,30 @@ class SoftwareInstallProposalResponse(BaseModel):
 
 
 @router.get("/api/software/install/readiness")
-def get_software_install_readiness() -> dict:
-    """Expose non-secret readiness flags for the real-install workflow."""
+def get_software_install_readiness(request: Request) -> dict:
+    """Expose readiness from the exact configuration used to start the worker."""
+    app_state = request.app.state
+    release_authorization = getattr(app_state, "real_install_release_authorization", None)
+    authorization_is_current = (
+        bool(getattr(app_state, "real_install_enabled", False))
+        and release_authorization is not None
+        and release_authorization.expires_at > datetime.now(UTC)
+    )
+    if not authorization_is_current:
+        release_authorization = None
     return {
         "platform_supported": sys.platform == "win32",
+        "real_install_enabled": sys.platform == "win32" and authorization_is_current,
+        "real_install_release_package_id": release_authorization.package_id if release_authorization else None,
+        "real_install_release_version": release_authorization.version if release_authorization else None,
+        "real_install_release_expires_at": release_authorization.expires_at.isoformat() if release_authorization else None,
         "authenticode_verification_available": sys.platform == "win32",
         "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_mode": "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH",
         "package_allowlist_enabled": False,
         "supported_package_ids": [],
-        "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
+        "notice": "REAL_INSTALL_REQUIRES_WINDOWS_AND_EXPLICIT_AI_AGENT_ENABLE_REAL_INSTALL_1",
     }
 
 
@@ -126,10 +140,17 @@ def create_software_install_proposal(
             candidate.package_id != "DBeaver.DBeaver.Community"
             and candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}
         )
+        or (candidate.installer_type == "exe" and not candidate.installer_silent_switch)
     ):
         raise HTTPException(
             status_code=409,
             detail="The exact package is not eligible for publisher and installer verification.",
+        )
+
+    if candidate.installer_type.casefold() not in {"exe", "msi", "msix", "appx"}:
+        raise HTTPException(
+            status_code=409,
+            detail="The selected installer type is not supported for verified installation.",
         )
 
     store_path = getattr(request.app.state, "job_store_path", None)

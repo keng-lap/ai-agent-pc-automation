@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "src" / "backend"))
 
 from agent_backend.software_discovery import WinGetManifestRepository
-from agent_backend.software_evidence import SoftwareEvidenceRegistry, signer_subject_matches_publisher
+from agent_backend.software_evidence import signer_subject_matches_publisher
 from agent_backend.software_staging import InstallerStager
 
 package_id, version, architecture = sys.argv[1:4]
@@ -61,22 +61,23 @@ with tempfile.TemporaryDirectory(prefix="aiagent-publisher-acceptance-") as temp
                 staged.signature_subject or "", candidate.publisher
             ),
         }, ensure_ascii=False))
-        evidence = SoftwareEvidenceRegistry().register_staged_candidate(
-            candidate=candidate,
-            staged=staged,
+        subject_match = signer_subject_matches_publisher(
+            staged.signature_subject or "", candidate.publisher
         )
+        if not subject_match:
+            raise SystemExit("Authenticode signer did not match the exact WinGet manifest Publisher")
         print(json.dumps({
             "result": "PASS_GENERIC_PUBLISHER",
-            "package_id": evidence.package_id,
-            "version": evidence.version,
-            "architecture": evidence.architecture,
-            "scope": evidence.scope,
-            "manifest_publisher": evidence.publisher,
-            "authenticode_signer_subject": evidence.signature_subject,
-            "certificate_sha256": evidence.signature_sha256,
-            "installer_sha256": evidence.installer_sha256,
-            "manifest_source": evidence.manifest_source_url,
-            "note": "Verification only. No installer was executed and no software was installed.",
+            "package_id": candidate.package_id,
+            "version": candidate.version,
+            "architecture": candidate.architecture,
+            "scope": candidate.scope,
+            "manifest_publisher": candidate.publisher,
+            "authenticode_signer_subject": staged.signature_subject,
+            "certificate_sha256": staged.signature_sha256,
+            "installer_sha256": staged.sha256,
+            "manifest_source": candidate.manifest_source_url,
+            "note": "Publisher verification only. No install evidence was minted, no installer was executed, and no software was installed.",
         }, ensure_ascii=False))
     finally:
         Path(staged.file_path).unlink(missing_ok=True)

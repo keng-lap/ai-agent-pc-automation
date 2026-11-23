@@ -24,6 +24,7 @@ def make_binding():
         version="26.2.4",
         source="winget",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver.exe",
         official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         manifest_source_url="https://github.com/microsoft/winget-pkgs/tree/cccccccccccccccccccccccccccccccccccccccc",
@@ -56,8 +57,21 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
                 self.loaded_secret = kwargs["secret_loader"]()
             return accepted
 
+        def get(self, _challenge_id):
+            return SimpleNamespace(status="active")
+
     step_up = StepUp()
     principal = SimpleNamespace(owner_sub=owner, session_id=session)
+    monkeypatch.setattr(
+        api,
+        "_release_authorization_for_request",
+        lambda _request: SimpleNamespace(
+            task_id="P6-609-C",
+            package_id="DBeaver.DBeaver.Community",
+            version="26.2.4",
+            expires_at=NOW + timedelta(minutes=5),
+        ),
+    )
 
     class ReservationStore:
         def __init__(self):
@@ -187,6 +201,14 @@ def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
         lambda **_kwargs: binding,
     )
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+    requested_plan_owners = []
+    original_get_plan = api._get_install_plan
+
+    def get_plan_for_owner(plan_id, *, owner_id):
+        requested_plan_owners.append((plan_id, owner_id))
+        return original_get_plan(plan_id, owner_id=owner_id)
+
+    monkeypatch.setattr(api, "_get_install_plan", get_plan_for_owner)
 
     response = api.confirm_software_approval(
         PLAN_ID,
@@ -194,6 +216,7 @@ def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
         request=object(),
     )
 
+    assert requested_plan_owners == [(PLAN_ID, "owner-1")]
     assert response.approved is True
     assert response.notice == "APPROVED_QUEUED_NOT_YET_EXECUTED"
     assert response.execution_state == "QUEUED"
@@ -339,6 +362,43 @@ def test_install_job_status_is_owner_scoped_and_exposes_only_safe_fields(monkeyp
     assert not hasattr(response, "action_digest")
 
 
+
+def test_install_job_status_accepts_canonical_uuid_reservation_id(monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_backend import software_approval_api as api
+
+    reservation_id = "12345678-1234-5678-1234-567812345678"
+    requested = []
+
+    class Store:
+        def get_install_job(self, *, reservation_id, owner_id):
+            requested.append((reservation_id, owner_id))
+            return SimpleNamespace(
+                reservation_id=reservation_id,
+                state="QUEUED",
+                attempts=0,
+                version=1,
+                result_code=None,
+                lease_expires_at=None,
+            )
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.get_software_install_job_status(reservation_id, request)
+
+    assert requested == [(reservation_id, "owner-1")]
+    assert response.reservation_id == reservation_id
+    assert response.state == "QUEUED"
+
+
 def test_install_job_status_hides_other_owners_jobs(monkeypatch):
     from types import SimpleNamespace
 
@@ -364,3 +424,55 @@ def test_install_job_status_hides_other_owners_jobs(monkeypatch):
         api.get_software_install_job_status("b" * 32, request)
 
     assert error.value.status_code == 404
+
+
+def test_owner_can_recover_committed_install_job_by_plan_without_new_approval(monkeypatch):
+    from types import SimpleNamespace
+
+    job = SimpleNamespace(
+        reservation_id="12345678-1234-5678-1234-567812345678",
+        state="RUNNING",
+        attempts=1,
+        version=3,
+        result_code=None,
+        lease_expires_at="2026-11-23T13:00:00Z",
+    )
+    requested = []
+
+    class Store:
+        def get_install_job_for_plan(self, *, plan_id, owner_id):
+            requested.append((plan_id, owner_id))
+            return job
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    monkeypatch.setattr(api, "_get_install_plan", lambda plan_id, *, owner_id: SimpleNamespace(plan_id=plan_id))
+    monkeypatch.setattr(api, "_reservation_store", lambda _request: Store())
+
+    response = api.get_software_install_job_for_plan(PLAN_ID, request=object())
+
+    assert requested == [(PLAN_ID, "owner-1")]
+    assert response.reservation_id == job.reservation_id
+    assert response.state == "RUNNING"
+    assert response.attempts == 1
+
+def test_confirm_rejects_missing_exact_release_before_consuming_totp(monkeypatch):
+    binding = make_binding()
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
+    monkeypatch.setattr(api, "_release_authorization_for_request", lambda _request: None)
+    monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
+    api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+
+    with pytest.raises(api.HTTPException) as error:
+        api.confirm_software_approval(
+            PLAN_ID,
+            api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456"),
+            request=object(),
+        )
+
+    assert error.value.status_code == 409
+    assert step_up.verified == []
+    assert reservation_store.reserved == []

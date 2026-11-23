@@ -10,16 +10,20 @@ from __future__ import annotations
 import re
 import subprocess
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from agent_backend.approval_reservation_store import (
+    ApprovalReservationConflict,
     ApprovalReservationError,
+    ApprovalReservationExpired,
     InstallExecutionJob,
     SQLiteApprovalReservationStore,
 )
+from agent_backend.config import RealInstallReleaseAuthorization
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.winget_adapter import (
     WinGetAdapterError,
@@ -36,6 +40,24 @@ _LEASE_SECONDS = 300
 _HEARTBEAT_SECONDS = 30
 _VERIFY_TIMEOUT_SECONDS = 45
 _WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+class _CombinedCancellationSignal:
+    """Expose shutdown and lease loss as one executor cancellation signal."""
+
+    def __init__(self, *events: threading.Event) -> None:
+        self._events = events
+
+    def is_set(self) -> bool:
+        return any(event.is_set() for event in self._events)
+
+    def wait(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        while not self.is_set():
+            if deadline is not None and time.monotonic() >= deadline:
+                return False
+            time.sleep(0.01)
+        return True
 
 
 class SoftwareInstallWorkerError(RuntimeError):
@@ -77,16 +99,36 @@ def verify_exact_user_install(
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
+    # WinGet reports an empty exact search with this HRESULT (which may be
+    # surfaced as either an unsigned DWORD or its signed 32-bit equivalent).
+    if result.returncode in {0x8A150014, -1978335212}:
+        return False
     if result.returncode != 0:
         return None
 
-    # WinGet's table uses two-or-more spaces between columns. The package ID
-    # and version are exact fields; localized column headings are irrelevant.
-    for line in (result.stdout or "").splitlines():
-        columns = re.split(r"\s{2,}", line.strip())
-        if len(columns) >= 3 and columns[1].casefold() == package_id.casefold():
-            return columns[2] == version
-    return False
+    # Names and column widths are localized/variable. Match the exact package
+    # ID token and read the following version token instead of splitting the
+    # display table on a fixed number of spaces.
+    package_pattern = re.compile(
+        rf"(?<!\S){re.escape(package_id)}(?!\S)(?=\s+(\S+))",
+        re.IGNORECASE,
+    )
+    lines = (result.stdout or "").splitlines()
+    # WinGet localizes table headers (for example, "Nom ID Version" on
+    # French systems). Identify data rows by exact package-ID tokens instead
+    # of requiring English column labels.
+    for line in lines:
+        if len(line.split()) < 3:
+            continue
+        matches = list(package_pattern.finditer(line))
+        if matches:
+            # The display name may itself contain the package ID and a version
+            # (for example "Acme.Editor 1.2.3"). The ID column is the final
+            # exact ID occurrence in the row; use its following version value.
+            return matches[-1].group(1) == version
+    # A successful but unparseable/empty table is ambiguous, not proof that
+    # the package is absent. Only the explicit no-applications HRESULT means False.
+    return None
 
 
 class SoftwareInstallWorker:
@@ -102,6 +144,8 @@ class SoftwareInstallWorker:
         verifier: Callable[[str, str], bool | None] = verify_exact_user_install,
         lease_seconds: int = _LEASE_SECONDS,
         heartbeat_seconds: int = _HEARTBEAT_SECONDS,
+        stop_event: threading.Event | None = None,
+        release_authorization: RealInstallReleaseAuthorization | None = None,
     ) -> None:
         self._store = store
         self._work_root = Path(work_root)
@@ -116,9 +160,13 @@ class SoftwareInstallWorker:
         self._verifier = verifier
         self._lease_seconds = lease_seconds
         self._heartbeat_seconds = heartbeat_seconds
+        self._stop_event = stop_event or threading.Event()
+        self._release_authorization = release_authorization
 
     def run_once(self) -> InstallExecutionJob | None:
         """Claim and process one queue item; no item returns None."""
+        if self._stop_event.is_set():
+            return None
         job = self._store.claim_next_install(
             worker_id=self._worker_id,
             lease_seconds=self._lease_seconds,
@@ -137,7 +185,13 @@ class SoftwareInstallWorker:
         lease_lost = threading.Event()
 
         def heartbeat() -> None:
-            while not stop_heartbeat.wait(self._heartbeat_seconds):
+            next_heartbeat = time.monotonic() + self._heartbeat_seconds
+            while not stop_heartbeat.wait(0.2):
+                if self._stop_event.is_set():
+                    lease_lost.set()
+                    return
+                if time.monotonic() < next_heartbeat:
+                    continue
                 try:
                     with version_lock:
                         renewed = self._store.renew_install_lease(
@@ -148,7 +202,11 @@ class SoftwareInstallWorker:
                             lease_seconds=self._lease_seconds,
                         )
                         version["value"] = renewed.version
-                except ApprovalReservationError:
+                    next_heartbeat = time.monotonic() + self._heartbeat_seconds
+                except Exception:  # noqa: BLE001 - any renewal fault invalidates lease ownership
+                    # Any unexpected renewal failure means the worker can no
+                    # longer prove exclusive ownership. Stop the process rather
+                    # than continuing under an unverified lease.
                     lease_lost.set()
                     return
 
@@ -189,16 +247,48 @@ class SoftwareInstallWorker:
                 ) or job
 
             prepared = prepare_approved_install(binding, work_root=self._work_root)
-            if lease_lost.is_set():
-                return job
+            authorization = self._release_authorization
+            if (
+                authorization is None
+                or authorization.task_id != "P6-609-C"
+                or authorization.package_id != binding.evidence.package_id
+                or authorization.version != binding.evidence.version
+            ):
+                return self._transition(
+                    job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
+                ) or job
+            if self._stop_event.is_set() or lease_lost.is_set():
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "WORKER_CANCELLED_BEFORE_EXECUTION"
+                ) or job
+            try:
+                self._store.consume_real_install_release_authorization(
+                    task_id=authorization.task_id,
+                    package_id=authorization.package_id,
+                    version=authorization.version,
+                    action_digest=binding.approval_digest,
+                    nonce=authorization.nonce,
+                    expires_at=authorization.expires_at,
+                )
+            except (ApprovalReservationConflict, ApprovalReservationExpired):
+                return self._transition(
+                    job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
+                ) or job
+            except ApprovalReservationError:
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "RELEASE_AUTHORIZATION_UNAVAILABLE"
+                ) or job
             result = self._executor(
                 binding,
                 prepared,
                 work_root=self._work_root,
                 timeout_seconds=900,
+                cancel_event=_CombinedCancellationSignal(self._stop_event, lease_lost),
             )
-            if lease_lost.is_set():
-                return job
+            if getattr(result, "cancelled", False) or lease_lost.is_set():
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "WORKER_CANCELLED_PROCESS_TERMINATED"
+                ) or job
             if result.timed_out:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WINGET_TIMEOUT"
@@ -235,7 +325,9 @@ class SoftwareInstallWorker:
             ) or job
         finally:
             stop_heartbeat.set()
-            thread.join(timeout=2)
+            # Do not return while a renewal thread can still mutate lease state.
+            # Store operations have bounded SQLite timeouts.
+            thread.join()
             if prepared is not None:
                 try:
                     cleanup_prepared_install(prepared, work_root=self._work_root)

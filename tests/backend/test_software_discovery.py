@@ -38,6 +38,7 @@ class FakeSource:
             "Architecture": "x64",
             "Scope": "user" if not bad_scope else "machine",
             "InstallerType": "exe",
+            "InstallerSwitches": {"Silent": "/S"},
             "InstallerUrl": f"https://github.com/dbeaver/dbeaver/releases/download/{VERSION}/dbeaver-ce-{VERSION}-windows-x86_64.exe",
             "InstallerSha256": "b" * 64,
         }
@@ -211,6 +212,34 @@ def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
         )
 
 
+def test_discovery_inherits_root_level_silent_switch_for_selected_installer():
+    source = FakeSource()
+    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc["InstallerSwitches"] = {"Silent": "/S"}
+    del installer_doc["Installers"][0]["InstallerSwitches"]
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.installer_silent_switch == "/S"
+
+
+def test_discovery_rejects_selected_installer_dependencies_not_in_exact_approval():
+    source = FakeSource()
+    source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Installers"][0]["Dependencies"] = {
+        "PackageDependencies": [{"PackageIdentifier": "Microsoft.VCRedist.2015+.x64"}]
+    }
+
+    with pytest.raises(DiscoveryUnavailable, match="selected installer dependencies"):
+        WinGetManifestRepository(http_get=source.get).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+
 def test_discovery_rejects_package_dependencies_not_in_exact_approval():
     source = FakeSource()
     source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Dependencies"] = {
@@ -301,4 +330,36 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
     assert any(
         call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
         for call in source.calls
+    )
+
+
+
+
+def test_manifest_source_retries_transient_server_errors_and_uses_actions_token(monkeypatch):
+    source = FakeSource()
+    attempts = 0
+
+    def flaky_get(url, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return FakeResponse({}, status_code=503)
+        return source.get(url, **kwargs)
+
+    monkeypatch.setenv("GITHUB_TOKEN", "read-only-actions-token")
+    result = WinGetManifestRepository(http_get=flaky_get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.candidate is not None
+    assert attempts > len(source.calls)
+    manifest_calls = [
+        call for call in source.calls if "/repos/microsoft/winget-pkgs/" in call[0]
+    ]
+    assert manifest_calls
+    assert all(
+        call[1]["headers"]["Authorization"] == "Bearer read-only-actions-token"
+        for call in manifest_calls
     )

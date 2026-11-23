@@ -7,6 +7,7 @@ A separate local worker performs the contained WinGet operation.
 from __future__ import annotations
 
 import threading
+import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -80,6 +81,7 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
+    installer_silent_switch: str | None
     installer_url: str
     official_release_url: str | None
     manifest_source_url: str
@@ -245,6 +247,7 @@ def create_software_approval_challenge(
         architecture=evidence.architecture,
         scope=evidence.scope,
         installer_type=evidence.installer_type,
+        installer_silent_switch=evidence.installer_silent_switch,
         installer_url=evidence.installer_url,
         official_release_url=evidence.official_release_url,
         manifest_source_url=evidence.manifest_source_url,
@@ -256,6 +259,10 @@ def create_software_approval_challenge(
         evidence_expires_at=evidence.expires_at.isoformat(),
         approval_digest=binding.approval_digest,
     )
+
+
+def _release_authorization_for_request(request: Request):
+    return getattr(request.app.state, "real_install_release_authorization", None)
 
 
 @router.post(
@@ -272,7 +279,7 @@ def confirm_software_approval(
         request,
         require_enrolled=False,
     )
-    plan = _get_install_plan(plan_id)
+    plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
     with _lock:
         _prune_bindings()
         if plan_id in _consumed_bindings:
@@ -296,6 +303,19 @@ def confirm_software_approval(
         with _lock:
             _bindings.pop(plan_id, None)
         raise HTTPException(status_code=409, detail="Software approval digest changed; rediscovery is required.")
+
+    release_authorization = _release_authorization_for_request(request)
+    if (
+        release_authorization is None
+        or release_authorization.task_id != "P6-609-C"
+        or release_authorization.package_id != binding.evidence.package_id
+        or release_authorization.version != binding.evidence.version
+        or release_authorization.expires_at <= datetime.now(UTC)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="A current one-use real-install release authorization for this exact package/version is required.",
+        )
 
     # Serialize confirmation per process: distinct one-use TOTP challenges must not
     # authorize the same plan/evidence binding more than once.
@@ -349,6 +369,12 @@ def confirm_software_approval(
                 raise HTTPException(status_code=503, detail="Install job could not be durably queued.") from None
             _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:
+        challenge_state = services.step_up.get(payload.challenge_id)
+        if challenge_state is None or challenge_state.status != "active":
+            raise HTTPException(
+                status_code=410,
+                detail="Authenticator challenge expired or is no longer usable; create a new challenge.",
+            )
         record_auth_audit_event(
             event_type="auth.step_up",
             outcome="denied",
@@ -367,6 +393,36 @@ def confirm_software_approval(
 
 
 @router.get(
+    "/api/plans/{plan_id}/software-approval/reservation",
+    response_model=SoftwareInstallJobStatusResponse,
+)
+def get_software_install_job_for_plan(
+    plan_id: str,
+    request: Request,
+) -> SoftwareInstallJobStatusResponse:
+    """Recover a previously committed install reservation for its authenticated plan owner."""
+    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
+        raise HTTPException(status_code=404, detail="Install job not found.")
+    try:
+        job = _reservation_store(request).get_install_job_for_plan(
+            plan_id=plan_id,
+            owner_id=principal.owner_sub,
+        )
+    except ApprovalReservationNotFound:
+        raise HTTPException(status_code=404, detail="Install job not found.") from None
+    except ApprovalReservationError:
+        raise HTTPException(status_code=503, detail="Install job status is temporarily unavailable.") from None
+    return SoftwareInstallJobStatusResponse(
+        reservation_id=job.reservation_id,
+        state=job.state,
+        attempts=job.attempts,
+        version=job.version,
+        result_code=job.result_code,
+        lease_expires_at=job.lease_expires_at,
+    )
+
+@router.get(
     "/api/software/install/jobs/{reservation_id}",
     response_model=SoftwareInstallJobStatusResponse,
 )
@@ -375,7 +431,13 @@ def get_software_install_job_status(
     request: Request,
 ) -> SoftwareInstallJobStatusResponse:
     """Read an owner-scoped status summary without exposing the approved binding."""
-    if len(reservation_id) != 32 or any(char not in "0123456789abcdef" for char in reservation_id):
+    is_legacy_hex = len(reservation_id) == 32 and all(char in "0123456789abcdef" for char in reservation_id)
+    try:
+        parsed_uuid = uuid.UUID(reservation_id)
+    except (ValueError, AttributeError):
+        parsed_uuid = None
+    is_canonical_uuid = parsed_uuid is not None and str(parsed_uuid) == reservation_id
+    if not (is_legacy_hex or is_canonical_uuid):
         raise HTTPException(status_code=404, detail="Install job not found.")
     _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
     try:

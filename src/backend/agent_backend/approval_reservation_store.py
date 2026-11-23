@@ -218,6 +218,25 @@ class SQLiteApprovalReservationStore:
                     );
                     CREATE INDEX IF NOT EXISTS idx_install_jobs_queue
                         ON install_execution_jobs(state, created_at);
+                    CREATE TABLE IF NOT EXISTS real_install_release_consumptions (
+                        nonce TEXT PRIMARY KEY CHECK(length(nonce) = 64),
+                        task_id TEXT NOT NULL,
+                        package_id TEXT NOT NULL,
+                        package_version TEXT NOT NULL,
+                        action_digest TEXT NOT NULL CHECK(length(action_digest) = 64),
+                        expires_at TEXT NOT NULL,
+                        consumed_at TEXT NOT NULL
+                    );
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_no_update
+                    BEFORE UPDATE ON real_install_release_consumptions
+                    BEGIN
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_no_delete
+                    BEFORE DELETE ON real_install_release_consumptions
+                    BEGIN
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
+                    END;
                     CREATE TABLE IF NOT EXISTS install_execution_events (
                         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                         reservation_id TEXT NOT NULL
@@ -385,12 +404,11 @@ class SQLiteApprovalReservationStore:
                 raise ValueError("binding_json is not a valid install approval") from None
             if binding.approval_digest != action_digest or binding.plan_digest != plan_digest:
                 raise ApprovalReservationConflict("serialized install binding does not match reservation")
-        timestamp_value = now or self._clock()
-        timestamp = _timestamp(timestamp_value)
         expired = False
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
                 prior = connection.execute(
                     """
                     SELECT * FROM job_reservations
@@ -520,10 +538,10 @@ class SQLiteApprovalReservationStore:
         """Revoke an unused approval; reservation and revocation serialize in SQLite."""
         _identity(approval_id, "approval_id")
         _identity(owner_id, "owner_id")
-        timestamp = _timestamp(now or self._clock())
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
                 row = connection.execute(
                     "SELECT state FROM approval_records WHERE approval_id=? AND owner_id=?",
                     (approval_id, owner_id),
@@ -577,6 +595,48 @@ class SQLiteApprovalReservationStore:
             raise ApprovalReservationUnavailable("Reservation could not be read.") from None
 
 
+    def reconcile_expired_install_leases(self, *, now: datetime | None = None) -> int:
+        """Mark expired active leases UNKNOWN without claiming or dispatching queued work."""
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
+                expired = connection.execute(
+                    """
+                    SELECT reservation_id FROM install_execution_jobs
+                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING','REBOOT_REQUIRED')
+                      AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+                    """,
+                    (timestamp,),
+                ).fetchall()
+                for row in expired:
+                    connection.execute(
+                        """
+                        UPDATE install_execution_jobs
+                        SET state='UNKNOWN', worker_id=NULL, lease_token=NULL,
+                            lease_expires_at=NULL, version=version+1,
+                            result_code='WORKER_LEASE_EXPIRED', updated_at=?
+                        WHERE reservation_id=?
+                        """,
+                        (timestamp, row["reservation_id"]),
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO install_execution_events
+                            (reservation_id, state, occurred_at, outcome, result_code)
+                        VALUES (?, 'UNKNOWN', ?, 'denied', 'WORKER_LEASE_EXPIRED')
+                        """,
+                        (row["reservation_id"], timestamp),
+                    )
+                connection.commit()
+                return len(expired)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable(
+                "Expired install leases could not be reconciled."
+            ) from None
+
     def claim_next_install(
         self, *, worker_id: str, now: datetime | None = None, lease_seconds: int = 60
     ) -> InstallExecutionJob | None:
@@ -584,16 +644,16 @@ class SQLiteApprovalReservationStore:
         _identity(worker_id, "worker_id")
         if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
             raise ValueError("lease_seconds must be between 1 and 300")
-        current = now or self._clock()
-        timestamp = _timestamp(current)
-        expires = _timestamp(current + timedelta(seconds=lease_seconds))
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                current = now if now is not None else self._clock()
+                timestamp = _timestamp(current)
+                expires = _timestamp(current + timedelta(seconds=lease_seconds))
                 expired = connection.execute(
                     """
                     SELECT reservation_id FROM install_execution_jobs
-                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING')
+                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING','REBOOT_REQUIRED')
                       AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
                     """,
                     (timestamp,),
@@ -664,12 +724,12 @@ class SQLiteApprovalReservationStore:
         _identity(worker_id, "worker_id")
         if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
             raise ValueError("lease_seconds must be between 1 and 300")
-        current = now or self._clock()
-        timestamp = _timestamp(current)
-        expires = _timestamp(current + __import__("datetime").timedelta(seconds=lease_seconds))
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                current = now if now is not None else self._clock()
+                timestamp = _timestamp(current)
+                expires = _timestamp(current + timedelta(seconds=lease_seconds))
                 row = connection.execute(
                     "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
                     (reservation_id,),
@@ -730,10 +790,10 @@ class SQLiteApprovalReservationStore:
             or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in result_code)
         ):
             raise ValueError("invalid result code")
-        timestamp = _timestamp(now or self._clock())
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
                 row = connection.execute(
                     "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
                     (reservation_id,),
@@ -784,8 +844,69 @@ class SQLiteApprovalReservationStore:
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Install job transition could not be persisted.") from None
 
+    def consume_real_install_release_authorization(
+        self, *, task_id: str, package_id: str, version: str,
+        action_digest: str, nonce: str, expires_at: datetime, now: datetime | None = None,
+    ) -> None:
+        """Atomically consume a one-use release nonce for one exact approved install binding."""
+        if task_id != "P6-609-C":
+            raise ApprovalReservationConflict("release authorization task does not match")
+        _identity(package_id, "package_id")
+        _identity(version, "version")
+        _hex(action_digest, _DIGEST_LENGTH, "action_digest")
+        _hex(nonce, 64, "release_nonce")
+        expiry = _timestamp(expires_at)
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current = now if now is not None else self._clock()
+                timestamp = _timestamp(current)
+                if expiry <= timestamp:
+                    raise ApprovalReservationExpired("release authorization has expired")
+                connection.execute(
+                    """
+                    INSERT INTO real_install_release_consumptions (
+                        nonce, task_id, package_id, package_version,
+                        action_digest, expires_at, consumed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (nonce, task_id, package_id, version, action_digest, expiry, timestamp),
+                )
+                connection.commit()
+        except sqlite3.IntegrityError:
+            raise ApprovalReservationConflict("release authorization nonce was already consumed") from None
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Real-install release authorization could not be consumed.") from None
+    def get_install_job_for_plan(self, *, plan_id: str, owner_id: str) -> InstallExecutionJob:
+        """Recover the existing install job for an owner-scoped plan without dispatching it."""
+        _identity(owner_id, "owner_id")
+        _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
+        self.reconcile_expired_install_leases()
+        try:
+            with self._connection() as connection:
+                row = connection.execute(
+                    """
+                    SELECT jobs.* FROM install_execution_jobs AS jobs
+                    INNER JOIN job_reservations AS reservations
+                        ON reservations.reservation_id = jobs.reservation_id
+                    WHERE reservations.owner_id=? AND reservations.plan_id=?
+                    ORDER BY reservations.created_at DESC LIMIT 1
+                    """,
+                    (owner_id, plan_id),
+                ).fetchone()
+                if row is None:
+                    raise ApprovalReservationNotFound("install job not found")
+                return self._execution_job(row)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job could not be recovered.") from None
+
     def get_install_job(self, *, reservation_id: str, owner_id: str) -> InstallExecutionJob:
         _identity(owner_id, "owner_id")
+        self.reconcile_expired_install_leases()
         try:
             with self._connection() as connection:
                 row = connection.execute(

@@ -11,6 +11,7 @@ from __future__ import annotations
 import ctypes
 import os
 import subprocess
+import time
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,23 @@ _STILL_ACTIVE = 259
 _MAX_TIMEOUT_SECONDS = 1800
 
 
+def _wait_for_process_exit(wait_for_single_object, process_handle, timeout_ms: int = 10_000) -> None:
+    """Wait a bounded interval for the WinGet root process to terminate."""
+    deadline = time.monotonic() + timeout_ms / 1000
+    while True:
+        result = wait_for_single_object(process_handle, 1000)
+        if result == _WAIT_OBJECT_0:
+            return
+        if result == _WAIT_FAILED:
+            raise WinGetExecutionError(
+                f"WinGet termination wait failed (Windows error {getattr(ctypes, 'get_last_error', lambda: 0)()})"
+            )
+        if result != _WAIT_TIMEOUT:
+            raise WinGetExecutionError("WinGet termination returned an unexpected wait status")
+        if time.monotonic() >= deadline:
+            raise WinGetExecutionError("WinGet process did not exit within the termination grace period")
+
+
 class WinGetExecutionError(RuntimeError):
     """The exact approved WinGet operation could not be safely executed."""
 
@@ -49,6 +67,7 @@ class WinGetExecutionResult:
     approval_digest: str
     exit_code: int | None
     timed_out: bool
+    cancelled: bool = False
 
 
 class _StartupInfo(ctypes.Structure):
@@ -107,6 +126,7 @@ def execute_approved_winget_install(
     *,
     work_root: Path,
     timeout_seconds: int = 900,
+    cancel_event=None,
 ) -> WinGetExecutionResult:
     """Invoke WinGet for one exact approved manifest, with suspended containment.
 
@@ -128,6 +148,16 @@ def execute_approved_winget_install(
         raise ValueError("timeout_seconds must be between 1 and 1800")
 
     executable = _winget_alias_path()
+    if cancel_event is not None and cancel_event.is_set():
+        return WinGetExecutionResult(
+            executable=str(executable),
+            package_id=binding.evidence.package_id,
+            version=binding.evidence.version,
+            approval_digest=binding.approval_digest,
+            exit_code=None,
+            timed_out=False,
+            cancelled=True,
+        )
     try:
         with lock_prepared_manifest(binding, prepared, work_root=work_root) as arguments:
             # list2cmdline performs Windows argv quoting; CreateProcess receives
@@ -191,27 +221,63 @@ def execute_approved_winget_install(
             try:
                 job = WindowsJobObject()
                 job.assign_suspended_process(int(process_info.hProcess))
-                resumed = resume_thread(process_info.hThread)
-                if resumed == 0xFFFFFFFF:
-                    raise WinGetExecutionError(
-                        f"WinGet process could not be resumed (Windows error {ctypes.get_last_error()})"
-                    )
-
-                wait_result = wait_for_single_object(
-                    process_info.hProcess,
-                    timeout_seconds * 1000,
-                )
-                if wait_result == _WAIT_TIMEOUT:
+                # A shutdown/lease-loss signal may arrive while CreateProcessW
+                # and Job Object assignment are in progress. Never resume a
+                # suspended installer after cancellation has been requested.
+                if cancel_event is not None and cancel_event.is_set():
                     job.terminate(1)
-                    wait_for_single_object(process_info.hProcess, 5000)
+                    job.wait_for_empty()
+                    _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
+                    process_completed = True
                     return WinGetExecutionResult(
                         executable=str(executable),
                         package_id=binding.evidence.package_id,
                         version=binding.evidence.version,
                         approval_digest=binding.approval_digest,
                         exit_code=None,
-                        timed_out=True,
+                        timed_out=False,
+                        cancelled=True,
                     )
+                resumed = resume_thread(process_info.hThread)
+                if resumed == 0xFFFFFFFF:
+                    raise WinGetExecutionError(
+                        f"WinGet process could not be resumed (Windows error {ctypes.get_last_error()})"
+                    )
+
+                deadline = time.monotonic() + timeout_seconds
+                while True:
+                    if cancel_event is not None and cancel_event.is_set():
+                        job.terminate(1)
+                        job.wait_for_empty()
+                        _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
+                        return WinGetExecutionResult(
+                            executable=str(executable),
+                            package_id=binding.evidence.package_id,
+                            version=binding.evidence.version,
+                            approval_digest=binding.approval_digest,
+                            exit_code=None,
+                            timed_out=False,
+                            cancelled=True,
+                        )
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        job.terminate(1)
+                        job.wait_for_empty()
+                        _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
+                        return WinGetExecutionResult(
+                            executable=str(executable),
+                            package_id=binding.evidence.package_id,
+                            version=binding.evidence.version,
+                            approval_digest=binding.approval_digest,
+                            exit_code=None,
+                            timed_out=True,
+                        )
+                    wait_result = wait_for_single_object(
+                        process_info.hProcess,
+                        min(250, max(1, int(remaining * 1000))),
+                    )
+                    if wait_result != _WAIT_TIMEOUT:
+                        break
                 if wait_result == _WAIT_FAILED:
                     raise WinGetExecutionError(
                         f"WinGet wait failed (Windows error {ctypes.get_last_error()})"
@@ -242,10 +308,11 @@ def execute_approved_winget_install(
                     if job is not None and job.is_open:
                         try:
                             job.terminate(1)
+                            job.wait_for_empty()
                         except ProcessContainmentError:
                             pass
                     terminate_process(process_info.hProcess, 1)
-                    wait_for_single_object(process_info.hProcess, 5000)
+                    _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                 if isinstance(exc, (ProcessContainmentError, OSError)):
                     raise WinGetExecutionError(
                         "WinGet process containment failed; install was stopped"

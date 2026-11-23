@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agent_backend.software_approval import build_install_approval_binding
+from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 from agent_backend.software_discovery import InstallerCandidate
 from agent_backend.software_evidence import (
     EvidenceNotFound,
@@ -31,6 +31,7 @@ def candidate() -> InstallerCandidate:
         architecture="x64",
         scope="user",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver-ce-26.2.4-windows-x86_64.exe",
         installer_domain="github.com",
         installer_sha256="a" * 64,
@@ -80,6 +81,15 @@ def staged(**overrides) -> StagedInstaller:
 )
 def test_signer_subject_publisher_matching_is_exact_and_fail_closed(subject, publisher, expected):
     assert signer_subject_matches_publisher(subject, publisher) is expected
+
+
+def test_verified_evidence_rejects_whitespace_only_silent_switch():
+    registry = make_registry(clock=lambda: NOW)
+    evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
+    payload = evidence.model_dump()
+    payload["installer_silent_switch"] = " "
+    with pytest.raises(ValueError, match="must not be blank"):
+        VerifiedPackageEvidence.model_validate(payload)
 
 
 def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
