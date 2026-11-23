@@ -934,6 +934,26 @@ export class App implements AfterViewChecked {
           if (reservationId) this.loadSoftwareInstallJobStatus(entryId, reservationId);
         },
         error: (error: unknown) => {
+          if (isRecord(error) && error['status'] === 410) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'รหัสอนุมัติหมดอายุแล้ว กรุณาสร้างคำขออนุมัติใหม่'
+                      : 'The approval challenge expired. Create a new approval challenge and try again.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
           if (isRecord(error) && error['status'] === 403) {
             this.entries.update((entries) => entries.map((item) => (
               item.id === entryId && item.discovery
