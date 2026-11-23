@@ -292,6 +292,23 @@ def test_verifier_uses_version_after_package_id_when_display_name_contains_id(mo
     assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is False
 
 
+def test_verifier_parses_version_when_display_name_equals_package_id(monkeypatch):
+    monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
+    monkeypatch.setattr(
+        worker_module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "Name Id Version Available Source\\n"
+                "Acme.Editor  Acme.Editor  9.9.9  10.0.0  winget\\n"
+            ),
+        ),
+    )
+    assert worker_module.verify_exact_user_install("Acme.Editor", "9.9.9") is True
+    assert worker_module.verify_exact_user_install("Acme.Editor", "10.0.0") is False
+
+
 def test_verifier_returns_ambiguous_for_unparseable_success_output(monkeypatch):
     monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
     monkeypatch.setattr(
