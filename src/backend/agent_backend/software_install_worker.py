@@ -42,6 +42,16 @@ _VERIFY_TIMEOUT_SECONDS = 45
 _WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
+class _CombinedCancellationSignal:
+    """Expose shutdown and lease loss as one executor cancellation signal."""
+
+    def __init__(self, *events: threading.Event) -> None:
+        self._events = events
+
+    def is_set(self) -> bool:
+        return any(event.is_set() for event in self._events)
+
+
 class SoftwareInstallWorkerError(RuntimeError):
     """The worker could not safely process an approved install."""
 
@@ -96,17 +106,12 @@ def verify_exact_user_install(
         re.IGNORECASE,
     )
     lines = (result.stdout or "").splitlines()
-    header_index = next(
-        (
-            index
-            for index, line in enumerate(lines)
-            if re.search(r"\bName\s+Id\s+Version\b", line, re.IGNORECASE)
-        ),
-        None,
-    )
-    if header_index is None:
-        return None
-    for line in lines[header_index + 1:]:
+    # WinGet localizes table headers (for example, "Nom ID Version" on
+    # French systems). Identify data rows by exact package-ID tokens instead
+    # of requiring English column labels.
+    for line in lines:
+        if len(line.split()) < 3:
+            continue
         matches = list(package_pattern.finditer(line))
         if matches:
             # The display name may itself contain the package ID and a version
@@ -268,7 +273,7 @@ class SoftwareInstallWorker:
                 prepared,
                 work_root=self._work_root,
                 timeout_seconds=900,
-                cancel_event=lease_lost,
+                cancel_event=_CombinedCancellationSignal(self._stop_event, lease_lost),
             )
             if getattr(result, "cancelled", False) or lease_lost.is_set():
                 return self._transition(
