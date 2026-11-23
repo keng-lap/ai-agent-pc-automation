@@ -7,8 +7,14 @@ $log = Join-Path ([System.IO.Path]::GetTempPath()) ("P6-609-B2-storage-" + [guid
 
 Push-Location $RepoRoot
 try {
-    & (Join-Path $PSScriptRoot "preflight.ps1") -RepoRoot $RepoRoot 2>&1 | Tee-Object -FilePath $log
-    $preflightCode = $LASTEXITCODE
+    $preflightCode = 0
+    try {
+        & (Join-Path $PSScriptRoot "preflight.ps1") -RepoRoot $RepoRoot 2>&1 | Tee-Object -FilePath $log
+    }
+    catch {
+        $_ | Out-String | Tee-Object -FilePath $log -Append
+        $preflightCode = 1
+    }
     if ($preflightCode -ne 0) {
         & (Join-Path $PSScriptRoot "publish-results.ps1") -RepoRoot $RepoRoot -ResultFile $log -SuiteName Storage -ExitCode $preflightCode
         throw "Preflight FAIL. The actual error is shown above; check the uploaded Storage log."
