@@ -28,8 +28,8 @@ flows remain unchanged.
    and the approval digest. The authorization expires within 15 minutes.
 9. The Windows-local worker validates the approved binding and executes the
    approved WinGet manifest through the contained process executor.
-9. The worker verifies the exact package ID and version after execution.
-10. Timeout, nonzero WinGet exit, lease loss, or ambiguous verification never
+10. The worker verifies the exact package ID and version after execution.
+11. Timeout, nonzero WinGet exit, lease loss, or ambiguous verification never
     becomes a false success and is never automatically retried.
 
 ## API surface
