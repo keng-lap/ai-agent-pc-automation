@@ -1,5 +1,5 @@
 from dataclasses import replace
-from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -75,16 +75,21 @@ class FakeOidc:
 
 def build_client(tmp_path, *, identity=None):
     now = [NOW]
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
-    settings = replace(
-        load_settings(load_env_file=False),
-        google_oidc_client_id="test-client-id",
-        google_oidc_client_secret="test-client-secret",
-        google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
-        master_google_sub=OWNER,
-        app_session_ttl_seconds=1800,
-        authenticator_secret_path=tmp_path / "private" / "authenticator.json",
-    )
+    # Keep the test authenticator inside the same per-user state root that
+    # config validation derives from LOCALAPPDATA, without mutating global env.
+    with patch.dict("os.environ", {"LOCALAPPDATA": str(tmp_path / "Local")}):
+        state_directory = default_state_directory()
+        settings = replace(
+            load_settings(load_env_file=False),
+            google_oidc_client_id="test-client-id",
+            google_oidc_client_secret="test-client-secret",
+            google_oidc_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+            master_google_sub=OWNER,
+            app_session_ttl_seconds=1800,
+            authenticator_secret_path=(
+                state_directory / "authenticator" / "authenticator.json"
+            ),
+        )
     replay_guard = TotpReplayGuard(clock=lambda: now[0])
     secret_store = EncryptedTotpSecretFileStore(
         settings.authenticator_secret_path,
