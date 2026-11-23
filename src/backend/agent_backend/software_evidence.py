@@ -7,6 +7,7 @@ has a verified Authenticode certificate fingerprint matching the expected publis
 
 from __future__ import annotations
 
+import csv
 import re
 import secrets
 import threading
@@ -38,10 +39,14 @@ def _normalize_publisher(value: str) -> str:
 def _subject_attributes(subject: str) -> dict[str, list[str]]:
     """Extract organization and common-name attributes from the Windows subject string."""
     attributes: dict[str, list[str]] = {}
-    for component in subject.split(','):
+    try:
+        components = next(csv.reader([subject], escapechar=chr(92), strict=True))
+    except (csv.Error, StopIteration):
+        return attributes
+    for component in components:
         key, separator, value = component.partition('=')
         if separator and key.strip().upper() in {'O', 'CN'} and value.strip():
-            attributes.setdefault(key.strip().upper(), []).append(value.strip().strip('"'))
+            attributes.setdefault(key.strip().upper(), []).append(value.strip().strip(chr(34)))
     return attributes
 
 
