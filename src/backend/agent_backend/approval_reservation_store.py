@@ -218,6 +218,25 @@ class SQLiteApprovalReservationStore:
                     );
                     CREATE INDEX IF NOT EXISTS idx_install_jobs_queue
                         ON install_execution_jobs(state, created_at);
+                    CREATE TABLE IF NOT EXISTS real_install_release_consumptions (
+                        nonce TEXT PRIMARY KEY CHECK(length(nonce) = 64),
+                        task_id TEXT NOT NULL,
+                        package_id TEXT NOT NULL,
+                        package_version TEXT NOT NULL,
+                        action_digest TEXT NOT NULL CHECK(length(action_digest) = 64),
+                        expires_at TEXT NOT NULL,
+                        consumed_at TEXT NOT NULL
+                    );
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_no_update
+                    BEFORE UPDATE ON real_install_release_consumptions
+                    BEGIN
+                        SELECT RAISE(ABORT, "release authorizations are append-only");
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_no_delete
+                    BEFORE DELETE ON real_install_release_consumptions
+                    BEGIN
+                        SELECT RAISE(ABORT, "release authorizations are append-only");
+                    END;
                     CREATE TABLE IF NOT EXISTS install_execution_events (
                         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                         reservation_id TEXT NOT NULL
@@ -783,6 +802,41 @@ class SQLiteApprovalReservationStore:
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Install job transition could not be persisted.") from None
 
+    def consume_real_install_release_authorization(
+        self, *, task_id: str, package_id: str, version: str,
+        action_digest: str, nonce: str, expires_at: datetime, now: datetime | None = None,
+    ) -> None:
+        """Atomically consume a one-use release nonce for one exact approved install binding."""
+        if task_id != "P6-609-C":
+            raise ApprovalReservationConflict("release authorization task does not match")
+        _identity(package_id, "package_id")
+        _identity(version, "version")
+        _hex(action_digest, _DIGEST_LENGTH, "action_digest")
+        _hex(nonce, 64, "release_nonce")
+        expiry = _timestamp(expires_at)
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current = now if now is not None else self._clock()
+                timestamp = _timestamp(current)
+                if expiry <= timestamp:
+                    raise ApprovalReservationExpired("release authorization has expired")
+                connection.execute(
+                    """
+                    INSERT INTO real_install_release_consumptions (
+                        nonce, task_id, package_id, package_version,
+                        action_digest, expires_at, consumed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (nonce, task_id, package_id, version, action_digest, expiry, timestamp),
+                )
+                connection.commit()
+        except sqlite3.IntegrityError:
+            raise ApprovalReservationConflict("release authorization nonce was already consumed") from None
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Real-install release authorization could not be consumed.") from None
     def get_install_job_for_plan(self, *, plan_id: str, owner_id: str) -> InstallExecutionJob:
         """Recover the existing install job for an owner-scoped plan without dispatching it."""
         _identity(owner_id, "owner_id")
