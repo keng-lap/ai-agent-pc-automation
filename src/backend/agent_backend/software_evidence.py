@@ -7,7 +7,6 @@ has a verified Authenticode certificate fingerprint matching the expected publis
 
 from __future__ import annotations
 
-import os
 import re
 import secrets
 import threading
@@ -26,6 +25,37 @@ EVIDENCE_TTL = timedelta(minutes=15)
 MAX_EVIDENCE = 128
 
 
+def _normalize_publisher(value: str) -> str:
+    """Normalize formatting and common equivalent legal suffixes."""
+    normalized = "".join(char for char in value.casefold() if char.isalnum())
+    for long_form, short_form in (("corporation", "corp"), ("incorporated", "inc"), ("limited", "ltd")):
+        if normalized.endswith(long_form):
+            normalized = normalized[: -len(long_form)] + short_form
+            break
+    return normalized
+
+
+def _subject_attributes(subject: str) -> dict[str, list[str]]:
+    """Extract organization and common-name attributes from the Windows subject string."""
+    attributes: dict[str, list[str]] = {}
+    for component in subject.split(','):
+        key, separator, value = component.partition('=')
+        if separator and key.strip().upper() in {'O', 'CN'} and value.strip():
+            attributes.setdefault(key.strip().upper(), []).append(value.strip().strip('"'))
+    return attributes
+
+
+def signer_subject_matches_publisher(subject: str, publisher: str) -> bool:
+    """Require exact organization match; use CN only when no organization is present."""
+    if not isinstance(subject, str) or not subject.strip() or not isinstance(publisher, str) or not publisher.strip():
+        return False
+    attributes = _subject_attributes(subject)
+    organizations = attributes.get('O', [])
+    if organizations:
+        return len(organizations) == 1 and _normalize_publisher(organizations[0]) == _normalize_publisher(publisher)
+    common_names = attributes.get('CN', [])
+    return len(common_names) == 1 and _normalize_publisher(common_names[0]) == _normalize_publisher(publisher)
+
 class EvidenceNotFound(LookupError):
     """Evidence is unknown, expired, or no longer available."""
 
@@ -42,30 +72,29 @@ class SoftwareEvidenceRegistry:
         *,
         clock: Callable[[], datetime] | None = None,
         capacity: int = MAX_EVIDENCE,
-        signer_sha256_verifier: Callable[[InstallerCandidate, str], bool] | None = None,
-        trust_anchor_configured: bool | Callable[[], bool] | None = None,
+        publisher_identity_verifier: Callable[[InstallerCandidate, str, str], bool] | None = None,
     ) -> None:
         if type(capacity) is not int or not 1 <= capacity <= MAX_EVIDENCE:
             raise ValueError("evidence capacity must be between 1 and 128")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._capacity = capacity
-        # No publisher signer trust anchors are configured by default.
-        # The application-level DBeaver anchor is loaded only from local process
-        # configuration, never from a client request or repository manifest.
-        self._signer_sha256_verifier = signer_sha256_verifier or (lambda _candidate, _fingerprint: False)
-        self._trust_anchor_configured = (
-            signer_sha256_verifier is not None
-            if trust_anchor_configured is None
-            else trust_anchor_configured
+        self._publisher_identity_verifier = publisher_identity_verifier or (
+            lambda candidate, subject, _fingerprint: signer_subject_matches_publisher(
+                subject, candidate.publisher
+            )
         )
         self._entries: dict[str, VerifiedPackageEvidence] = {}
         self._lock = threading.RLock()
 
     @property
+    def publisher_identity_policy_available(self) -> bool:
+        """Generic Authenticode-plus-manifest identity matching is implemented."""
+        return True
+
+    @property
     def trust_anchor_configured(self) -> bool:
-        """Whether a backend-owned publisher certificate pin is configured."""
-        configured = self._trust_anchor_configured
-        return configured() if callable(configured) else configured
+        """Compatibility alias; this is not a configured certificate pin."""
+        return self.publisher_identity_policy_available
 
     def register_staged_candidate(
         self,
@@ -76,14 +105,24 @@ class SoftwareEvidenceRegistry:
         """Mint evidence only from matching backend candidate and staged-file proof."""
         if not isinstance(candidate, InstallerCandidate) or not isinstance(staged, StagedInstaller):
             raise EvidenceRejected("candidate and staged proof must be backend model instances")
-        if (
-            candidate.publisher_verification != "VERIFIED"
-            or candidate.status != "CONDITIONAL"
-            or candidate.official_version != candidate.version
-            or not candidate.official_release_url
-            or candidate.official_asset_sha256 != candidate.installer_sha256
+        is_dbeaver = candidate.package_id == "DBeaver.DBeaver.Community"
+        if candidate.status != "CONDITIONAL":
+            raise EvidenceRejected("package discovery candidate is not conditional")
+        if is_dbeaver:
+            if (
+                candidate.publisher_verification != "VERIFIED"
+                or candidate.official_version != candidate.version
+                or not candidate.official_release_url
+                or candidate.official_asset_sha256 != candidate.installer_sha256
+            ):
+                raise EvidenceRejected("DBeaver official release evidence is not verified")
+        elif candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}:
+            raise EvidenceRejected("package publisher source check did not pass")
+        elif (
+            candidate.official_asset_sha256 is not None
+            and candidate.official_asset_sha256 != candidate.installer_sha256
         ):
-            raise EvidenceRejected("publisher release evidence is not verified")
+            raise EvidenceRejected("official release digest does not match the manifest digest")
         if (
             staged.package_id != candidate.package_id
             or staged.version != candidate.version
@@ -99,11 +138,13 @@ class SoftwareEvidenceRegistry:
         if staged.official_release_url != candidate.official_release_url:
             raise EvidenceRejected("staged installer release origin does not match the candidate")
         try:
-            signer_matches = self._signer_sha256_verifier(candidate, staged.signature_sha256)
-        except Exception:  # noqa: BLE001 - any trust-anchor failure must deny evidence minting.
+            signer_matches = self._publisher_identity_verifier(
+                candidate, staged.signature_subject, staged.signature_sha256
+            )
+        except (TypeError, ValueError, RuntimeError):
             signer_matches = False
         if signer_matches is not True:
-            raise EvidenceRejected("Authenticode certificate fingerprint does not match a backend-owned publisher trust anchor")
+            raise EvidenceRejected("Authenticode signer identity does not match the WinGet manifest Publisher")
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
@@ -208,23 +249,5 @@ class SoftwareEvidenceRegistry:
             self._entries.pop(key, None)
 
 
-def _dbeaver_signer_sha256_matches(candidate: InstallerCandidate, fingerprint: str) -> bool:
-    expected = os.environ.get("AI_AGENT_DBEAVER_SIGNER_SHA256", "").strip().lower()
-    return (
-        candidate.package_id == "DBeaver.DBeaver.Community"
-        and candidate.publisher.strip().casefold() == "dbeaver corp"
-        and bool(re.fullmatch(r"[0-9a-f]{64}", expected))
-        and fingerprint == expected
-    )
 
-
-software_evidence_registry = SoftwareEvidenceRegistry(
-    signer_sha256_verifier=_dbeaver_signer_sha256_matches,
-    # Evaluate after load_settings has loaded the repository-root .env file.
-    trust_anchor_configured=lambda: bool(
-        re.fullmatch(
-            r"[0-9a-f]{64}",
-            os.environ.get("AI_AGENT_DBEAVER_SIGNER_SHA256", "").strip().lower(),
-        )
-    ),
-)
+software_evidence_registry = SoftwareEvidenceRegistry()
