@@ -5,6 +5,7 @@ import pytest
 
 from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
+    ApprovalReservationNotFound,
     SQLiteApprovalReservationStore,
 )
 from agent_backend.software_approval import (
