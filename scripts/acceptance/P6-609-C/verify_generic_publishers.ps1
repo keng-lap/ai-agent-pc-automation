@@ -72,11 +72,15 @@ with tempfile.TemporaryDirectory(prefix="aiagent-publisher-acceptance-") as temp
         Path(staged.file_path).unlink(missing_ok=True)
 '@
 
+$pythonScript = Join-Path $env:TEMP ('aiagent-publisher-acceptance-' + [Guid]::NewGuid().ToString('N') + '.py')
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($pythonScript, $pythonCode, $utf8NoBom)
+
 Push-Location $repoRoot
 try {
     foreach ($check in $checks) {
         Write-Host "Verifying $($check.PackageId) $($check.Version) ($($check.Architecture))..."
-        & $python -c $pythonCode $check.PackageId $check.Version $check.Architecture
+        & $python $pythonScript $check.PackageId $check.Version $check.Architecture
         if ($LASTEXITCODE -ne 0) {
             throw "Generic publisher acceptance failed for $($check.PackageId)."
         }
@@ -87,4 +91,7 @@ try {
 }
 finally {
     Pop-Location
+    if (Test-Path -LiteralPath $pythonScript) {
+        Remove-Item -LiteralPath $pythonScript -Force
+    }
 }
