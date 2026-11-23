@@ -66,6 +66,7 @@ class FakeStore:
         )
         self.transitions = []
         self.release_consumptions = []
+        self.release_error = None
 
     def claim_next_install(self, **_kwargs):
         return self.job
@@ -81,6 +82,8 @@ class FakeStore:
         return self.job
 
     def consume_real_install_release_authorization(self, **kwargs):
+        if self.release_error is not None:
+            raise self.release_error
         self.release_consumptions.append(kwargs)
 
     def renew_install_lease(self, *_args, **_kwargs):
@@ -134,6 +137,15 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
     assert [item[1] for item in store.transitions] == ["RUNNING", "VERIFYING", "SUCCEEDED"]
     assert executor_calls[0][0].approval_digest == binding.approval_digest
     assert executor_calls[0][1] is prepared
+    authorization = worker._release_authorization
+    assert store.release_consumptions == [{
+        "task_id": authorization.task_id,
+        "package_id": authorization.package_id,
+        "version": authorization.version,
+        "action_digest": binding.approval_digest,
+        "nonce": authorization.nonce,
+        "expires_at": authorization.expires_at,
+    }]
 
 
 def test_worker_records_unknown_after_execution_timeout(monkeypatch, tmp_path):
@@ -392,5 +404,53 @@ def test_worker_denies_release_for_different_exact_package_without_execution(mon
 
     assert result.state == "FAILED"
     assert result.result_code == "RELEASE_AUTHORIZATION_DENIED"
+    assert executor_calls == []
+    assert store.release_consumptions == []
+
+@pytest.mark.parametrize(
+    ("denial", "expected_state", "expected_code"),
+    [
+        ("missing", "FAILED", "RELEASE_AUTHORIZATION_DENIED"),
+        ("task", "FAILED", "RELEASE_AUTHORIZATION_DENIED"),
+        ("version", "FAILED", "RELEASE_AUTHORIZATION_DENIED"),
+        ("replay", "FAILED", "RELEASE_AUTHORIZATION_DENIED"),
+        ("expired", "FAILED", "RELEASE_AUTHORIZATION_DENIED"),
+        ("unavailable", "UNKNOWN", "RELEASE_AUTHORIZATION_UNAVAILABLE"),
+    ],
+)
+def test_worker_denial_paths_never_reach_executor(monkeypatch, tmp_path, denial, expected_state, expected_code):
+    binding = make_binding()
+    store = FakeStore(binding)
+    executor_calls = []
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    authorization = make_release_authorization(binding)
+    if denial == "missing":
+        authorization = None
+    elif denial == "task":
+        authorization.task_id = "P6-OTHER"
+    elif denial == "version":
+        authorization.version = "99.99.99"
+    elif denial == "replay":
+        store.release_error = worker_module.ApprovalReservationConflict("nonce already consumed")
+    elif denial == "expired":
+        store.release_error = worker_module.ApprovalReservationExpired("authorization expired")
+    elif denial == "unavailable":
+        store.release_error = worker_module.ApprovalReservationError("reservation store unavailable")
+
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: executor_calls.append(True),
+        verifier=lambda *_a: False,
+        heartbeat_seconds=5,
+        release_authorization=authorization,
+    )
+
+    result = worker.run_once()
+
+    assert result.state == expected_state
+    assert result.result_code == expected_code
     assert executor_calls == []
     assert store.release_consumptions == []
