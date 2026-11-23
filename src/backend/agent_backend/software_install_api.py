@@ -68,6 +68,9 @@ def get_software_install_readiness() -> dict:
     return {
         "platform_supported": sys.platform == "win32",
         "real_install_enabled": sys.platform == "win32" and release_authorization is not None,
+        "real_install_release_package_id": release_authorization.package_id if release_authorization else None,
+        "real_install_release_version": release_authorization.version if release_authorization else None,
+        "real_install_release_expires_at": release_authorization.expires_at.isoformat() if release_authorization else None,
         "authenticode_verification_available": sys.platform == "win32",
         "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
