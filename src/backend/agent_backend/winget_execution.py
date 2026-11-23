@@ -11,6 +11,7 @@ from __future__ import annotations
 import ctypes
 import os
 import subprocess
+import time
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,7 @@ class WinGetExecutionResult:
     approval_digest: str
     exit_code: int | None
     timed_out: bool
+    cancelled: bool = False
 
 
 class _StartupInfo(ctypes.Structure):
@@ -107,6 +109,7 @@ def execute_approved_winget_install(
     *,
     work_root: Path,
     timeout_seconds: int = 900,
+    cancel_event=None,
 ) -> WinGetExecutionResult:
     """Invoke WinGet for one exact approved manifest, with suspended containment.
 
@@ -197,21 +200,38 @@ def execute_approved_winget_install(
                         f"WinGet process could not be resumed (Windows error {ctypes.get_last_error()})"
                     )
 
-                wait_result = wait_for_single_object(
-                    process_info.hProcess,
-                    timeout_seconds * 1000,
-                )
-                if wait_result == _WAIT_TIMEOUT:
-                    job.terminate(1)
-                    wait_for_single_object(process_info.hProcess, 5000)
-                    return WinGetExecutionResult(
-                        executable=str(executable),
-                        package_id=binding.evidence.package_id,
-                        version=binding.evidence.version,
-                        approval_digest=binding.approval_digest,
-                        exit_code=None,
-                        timed_out=True,
+                deadline = time.monotonic() + timeout_seconds
+                while True:
+                    if cancel_event is not None and cancel_event.is_set():
+                        job.terminate(1)
+                        wait_for_single_object(process_info.hProcess, 5000)
+                        return WinGetExecutionResult(
+                            executable=str(executable),
+                            package_id=binding.evidence.package_id,
+                            version=binding.evidence.version,
+                            approval_digest=binding.approval_digest,
+                            exit_code=None,
+                            timed_out=False,
+                            cancelled=True,
+                        )
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        job.terminate(1)
+                        wait_for_single_object(process_info.hProcess, 5000)
+                        return WinGetExecutionResult(
+                            executable=str(executable),
+                            package_id=binding.evidence.package_id,
+                            version=binding.evidence.version,
+                            approval_digest=binding.approval_digest,
+                            exit_code=None,
+                            timed_out=True,
+                        )
+                    wait_result = wait_for_single_object(
+                        process_info.hProcess,
+                        min(250, max(1, int(remaining * 1000))),
                     )
+                    if wait_result != _WAIT_TIMEOUT:
+                        break
                 if wait_result == _WAIT_FAILED:
                     raise WinGetExecutionError(
                         f"WinGet wait failed (Windows error {ctypes.get_last_error()})"
