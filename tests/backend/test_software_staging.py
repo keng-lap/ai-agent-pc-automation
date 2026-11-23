@@ -91,6 +91,47 @@ def test_stage_downloads_hashes_and_verifies_without_executing(tmp_path):
     assert list(tmp_path.glob("*.part.exe")) == []
 
 
+
+def test_generic_package_uses_manifest_url_and_hash_without_vendor_release_api(tmp_path):
+    body = b"generic-signed-installer"
+    digest = hashlib.sha256(body).hexdigest()
+    candidate = make_candidate(body).model_copy(update={
+        "package_id": "Acme.Editor",
+        "package_name": "Acme Editor",
+        "publisher": "Acme Inc",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "installer_domain": "downloads.acme.example",
+        "installer_sha256": digest,
+    })
+    calls = []
+    staged = InstallerStager(
+        http_get=lambda url, **kwargs: (calls.append(url) or FakeResponse(body)),
+        signature_verifier=AcceptSignature(),
+        clock=lambda: "2026-11-12T00:00:00Z",
+    ).stage(candidate, staging_root=tmp_path)
+    assert calls == ["https://downloads.acme.example/editor.exe"]
+    assert staged.package_id == "Acme.Editor"
+    assert staged.sha256 == digest
+    assert staged.official_release_url is None
+
+
+def test_generic_package_rejects_unexpected_unverified_vendor_claims(tmp_path):
+    candidate = make_candidate().model_copy(update={
+        "package_id": "Acme.Editor",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": "1.0.0",
+        "official_release_url": "https://vendor.example/releases/1.0.0",
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+    })
+    with pytest.raises(InstallerStageError, match="unexpected vendor release"):
+        InstallerStager(signature_verifier=AcceptSignature()).stage(candidate, staging_root=tmp_path)
+
 def test_unverified_candidate_is_rejected_before_network_or_file_creation(tmp_path):
     candidate = make_candidate().model_copy(update={"publisher_verification": "MISMATCH"})
     calls = []
