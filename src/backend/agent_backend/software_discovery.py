@@ -12,7 +12,9 @@ import base64
 import hashlib
 import ipaddress
 import json
+import os
 import re
+import time
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -521,43 +523,58 @@ class WinGetManifestRepository:
         if not path.startswith("/repos/microsoft/winget-pkgs/"):
             raise DiscoveryUnavailable("request path is outside the approved source")
         url = GITHUB_API_ORIGIN + path
-        response = None
-        try:
-            response = self._http_get(
-                url,
-                params=params,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": USER_AGENT,
-                },
-                timeout=(3.05, 10),
-                allow_redirects=False,
-                stream=True,
-            )
-            if response.status_code == 404:
-                raise DiscoveryNotFound("package or manifest was not found in the approved source")
-            if response.status_code != 200:
-                raise DiscoveryUnavailable("approved package source returned an unsuccessful response")
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in response.iter_content(chunk_size=65536):
-                if not chunk:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": USER_AGENT,
+        }
+        # Actions provides a short-lived, read-only token. Using it avoids
+        # anonymous API rate limits on shared Windows runners.
+        github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if github_token:
+            headers["Authorization"] = f"Bearer {github_token}"
+
+        for attempt in range(3):
+            response = None
+            try:
+                response = self._http_get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=(3.05, 10),
+                    allow_redirects=False,
+                    stream=True,
+                )
+                if response.status_code == 404:
+                    raise DiscoveryNotFound("package or manifest was not found in the approved source")
+                if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                    time.sleep(0.25 * (attempt + 1))
                     continue
-                total += len(chunk)
-                if total > MAX_RESPONSE_BYTES:
-                    raise DiscoveryUnavailable("approved source response exceeded its size limit")
-                chunks.append(chunk)
-            return json.loads(b"".join(chunks))
-        except (DiscoveryNotFound, DiscoveryUnavailable):
-            raise
-        except (requests.RequestException, ValueError, TypeError):
-            raise DiscoveryUnavailable("approved package source could not be read safely") from None
-        finally:
-            if response is not None:
-                close = getattr(response, "close", None)
-                if callable(close):
-                    close()
+                if response.status_code != 200:
+                    raise DiscoveryUnavailable("approved package source returned an unsuccessful response")
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in response.iter_content(chunk_size=65536):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > MAX_RESPONSE_BYTES:
+                        raise DiscoveryUnavailable("approved source response exceeded its size limit")
+                    chunks.append(chunk)
+                return json.loads(b"".join(chunks))
+            except (DiscoveryNotFound, DiscoveryUnavailable):
+                raise
+            except (requests.RequestException, ValueError, TypeError):
+                if attempt < 2:
+                    time.sleep(0.25 * (attempt + 1))
+                    continue
+                raise DiscoveryUnavailable("approved package source could not be read safely") from None
+            finally:
+                if response is not None:
+                    close = getattr(response, "close", None)
+                    if callable(close):
+                        close()
+        raise DiscoveryUnavailable("approved package source could not be read safely")
 
 
 def _manifest_package_path(package_id: str) -> str:
