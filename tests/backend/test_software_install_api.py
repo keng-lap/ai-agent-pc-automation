@@ -289,3 +289,11 @@ def test_readiness_exposes_generic_authenticode_publisher_policy_without_package
     assert ready["supported_package_ids"] == []
     assert "AI_AGENT_DBEAVER_SIGNER_SHA256" not in str(ready)
     assert "d" * 64 not in str(ready)
+
+
+def test_readiness_reports_real_install_release_gate(monkeypatch):
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    monkeypatch.delenv("AI_AGENT_ENABLE_REAL_INSTALL", raising=False)
+    assert api.get_software_install_readiness()["real_install_enabled"] is False
+    monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
+    assert api.get_software_install_readiness()["real_install_enabled"] is True
