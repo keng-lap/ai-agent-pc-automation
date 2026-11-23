@@ -806,6 +806,7 @@ class SQLiteApprovalReservationStore:
             raise
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Install job could not be recovered.") from None
+
     def get_install_job(self, *, reservation_id: str, owner_id: str) -> InstallExecutionJob:
         _identity(owner_id, "owner_id")
         try:
