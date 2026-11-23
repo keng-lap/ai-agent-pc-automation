@@ -223,6 +223,7 @@ def execute_approved_winget_install(
                 # suspended installer after cancellation has been requested.
                 if cancel_event is not None and cancel_event.is_set():
                     job.terminate(1)
+                    job.wait_for_empty()
                     _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                     process_completed = True
                     return WinGetExecutionResult(
@@ -244,6 +245,7 @@ def execute_approved_winget_install(
                 while True:
                     if cancel_event is not None and cancel_event.is_set():
                         job.terminate(1)
+                        job.wait_for_empty()
                         _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                         return WinGetExecutionResult(
                             executable=str(executable),
@@ -257,6 +259,7 @@ def execute_approved_winget_install(
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         job.terminate(1)
+                        job.wait_for_empty()
                         _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                         return WinGetExecutionResult(
                             executable=str(executable),
@@ -302,6 +305,7 @@ def execute_approved_winget_install(
                     if job is not None and job.is_open:
                         try:
                             job.terminate(1)
+                            job.wait_for_empty()
                         except ProcessContainmentError:
                             pass
                     terminate_process(process_info.hProcess, 1)
