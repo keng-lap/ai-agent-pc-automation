@@ -74,13 +74,14 @@ def test_terminating_job_waits_for_contained_parent_and_descendant(tmp_path):
     child_ready_file = tmp_path / "child-ready"
     child_code = "import time; time.sleep(60)"
     parent_code = (
-        "import os, subprocess, sys, time; "
-        f"start = {str(start_file)!r}; ready = {str(child_ready_file)!r}; "
-        "while_not_started = True; "
-        "while while_not_started and not os.path.exists(start): time.sleep(0.01); "
-        f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
-        "open(ready, 'w', encoding='utf-8').write(str(child.pid)); "
-        "time.sleep(60)"
+        "import os, subprocess, sys, time\\n"
+        f"start = {str(start_file)!r}\\n"
+        f"ready = {str(child_ready_file)!r}\\n"
+        "while not os.path.exists(start):\\n"
+        "    time.sleep(0.01)\\n"
+        f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\\n"
+        "open(ready, 'w', encoding='utf-8').write(str(child.pid))\\n"
+        "time.sleep(60)\\n"
     )
     parent = subprocess.Popen([sys.executable, "-c", parent_code])
     job = WindowsJobObject()
