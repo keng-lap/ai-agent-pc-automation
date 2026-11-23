@@ -49,7 +49,7 @@ Real installation is a supported product capability, but the local worker is not
 Prepare the bounded release authorization from the same PowerShell process that will start/restart the backend:
 
 ```powershell
-.\\scripts\\authorize-real-install.ps1 -PackageId "Contoso.Editor" -Version "2.4.1" -ExpiresInMinutes 10
+.\scripts\authorize-real-install.ps1 -PackageId "Contoso.Editor" -Version "2.4.1" -ExpiresInMinutes 10
 ```
 
 Use the exact package ID and version shown in the verified proposal. Then restart the backend from that same PowerShell window. The script does not use `setx` or persist machine-wide environment variables. The nonce is atomically consumed in the protected SQLite store and bound to the exact approval digest; a replay or a different package/version is rejected. Prepare a fresh authorization for each real install. The readiness endpoint reports whether the full authorization is currently valid. To disable live execution, restart the backend without running the authorization script.
