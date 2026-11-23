@@ -235,7 +235,7 @@ class SQLiteApprovalReservationStore:
                     CREATE TRIGGER IF NOT EXISTS real_install_release_no_delete
                     BEFORE DELETE ON real_install_release_consumptions
                     BEGIN
-                        SELECT RAISE(ABORT, "release authorizations are append-only");
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
                     END;
                     CREATE TABLE IF NOT EXISTS install_execution_events (
                         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -748,10 +748,10 @@ class SQLiteApprovalReservationStore:
             or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in result_code)
         ):
             raise ValueError("invalid result code")
-        timestamp = _timestamp(now or self._clock())
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
                 row = connection.execute(
                     "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
                     (reservation_id,),
