@@ -429,8 +429,8 @@ class WinGetManifestRepository:
             for item in installers
             if isinstance(item, dict)
             and item.get("Architecture") == architecture
-            and isinstance(item.get("Scope"), str)
-            and item["Scope"].lower() == "user"
+            and isinstance(item.get("Scope", installer_doc.get("Scope")), str)
+            and item.get("Scope", installer_doc.get("Scope")).lower() == "user"
         ]
         if len(matching) != 1:
             raise DiscoveryUnavailable(
