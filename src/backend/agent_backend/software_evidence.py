@@ -48,6 +48,11 @@ def _subject_attributes(subject: str) -> dict[str, list[str]]:
         if separator and key.strip().upper() in {'O', 'CN'} and value.strip():
             attributes.setdefault(key.strip().upper(), []).append(value.strip().strip(chr(34)))
     return attributes
+    for component in components:
+        key, separator, value = component.partition('=')
+        if separator and key.strip().upper() in {'O', 'CN'} and value.strip():
+            attributes.setdefault(key.strip().upper(), []).append(value.strip().strip(chr(34)))
+    return attributes
 
 
 def signer_subject_matches_publisher(subject: str, publisher: str) -> bool:
