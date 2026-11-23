@@ -954,6 +954,28 @@ export class App implements AfterViewChecked {
             )));
             return;
           }
+          if (isRecord(error) && error['status'] === 404) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    proposal: undefined,
+                    proposalStatus: undefined,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'ไม่พบแผนติดตั้งที่ยังใช้งานได้แล้ว กรุณาตรวจสอบไฟล์และเตรียม Approval ใหม่'
+                      : 'The install proposal is no longer available. Verify the installer and prepare a new approval.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
           const releaseAuthorizationRejected = isRecord(error)
             && error['status'] === 409
             && isRecord(error['error'])
