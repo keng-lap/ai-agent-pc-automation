@@ -1,8 +1,8 @@
 """Backend-only registry for immutable, short-lived installer evidence.
 
-No HTTP endpoint accepts evidence fields. Only the trusted staging path may
-register a candidate, and registration fails closed unless the staged binary
-has a verified Authenticode certificate fingerprint matching the expected publisher.
+Windows Authenticode establishes the code-signing chain. The signer subject is
+compared with the Publisher from the independently resolved WinGet manifest.
+The certificate fingerprint is bound to approval evidence, not used as a pin.
 """
 
 from __future__ import annotations
