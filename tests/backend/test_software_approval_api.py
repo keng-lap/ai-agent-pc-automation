@@ -348,6 +348,43 @@ def test_install_job_status_is_owner_scoped_and_exposes_only_safe_fields(monkeyp
     assert not hasattr(response, "action_digest")
 
 
+
+def test_install_job_status_accepts_canonical_uuid_reservation_id(monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_backend import software_approval_api as api
+
+    reservation_id = "12345678-1234-5678-1234-567812345678"
+    requested = []
+
+    class Store:
+        def get_install_job(self, *, reservation_id, owner_id):
+            requested.append((reservation_id, owner_id))
+            return SimpleNamespace(
+                reservation_id=reservation_id,
+                state="QUEUED",
+                attempts=0,
+                version=1,
+                result_code=None,
+                lease_expires_at=None,
+            )
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.get_software_install_job_status(reservation_id, request)
+
+    assert requested == [(reservation_id, "owner-1")]
+    assert response.reservation_id == reservation_id
+    assert response.state == "QUEUED"
+
+
 def test_install_job_status_hides_other_owners_jobs(monkeypatch):
     from types import SimpleNamespace
 
