@@ -305,3 +305,20 @@ def test_readiness_reports_real_install_release_gate(monkeypatch):
     monkeypatch.setenv("AI_AGENT_REAL_INSTALL_EXPIRES_AT", (datetime.now(UTC) + timedelta(minutes=5)).isoformat())
     monkeypatch.setenv("AI_AGENT_REAL_INSTALL_NONCE", "a" * 64)
     assert api.get_software_install_readiness()["real_install_enabled"] is True
+
+
+def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypatch, tmp_path):
+    candidate = make_candidate(installer_silent_switch=None)
+    stage_calls = []
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
+    monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: stage_calls.append(args))
+
+    with pytest.raises(Exception) as error:
+        api.create_software_install_proposal(
+            api.SoftwareInstallProposalRequest(package_id=candidate.package_id, version=candidate.version),
+            request=make_request(tmp_path),
+        )
+
+    assert getattr(error.value, "status_code", None) == 409
+    assert stage_calls == []
