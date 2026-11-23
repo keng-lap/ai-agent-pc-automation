@@ -46,7 +46,7 @@ def _wait_for_process_exit(wait_for_single_object, process_handle) -> None:
             continue
         if result == _WAIT_FAILED:
             raise WinGetExecutionError(
-                f"WinGet termination wait failed (Windows error {ctypes.get_last_error()})"
+                f"WinGet termination wait failed (Windows error {getattr(ctypes, 'get_last_error', lambda: 0)()})"
             )
         raise WinGetExecutionError("WinGet termination returned an unexpected wait status")
 
