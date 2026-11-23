@@ -108,7 +108,6 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         verifier=lambda *_args: next(verification_results),
         heartbeat_seconds=5,
         release_authorization=make_release_authorization(binding),
-        release_authorization=make_release_authorization(binding),
     )
     result = worker.run_once()
 
