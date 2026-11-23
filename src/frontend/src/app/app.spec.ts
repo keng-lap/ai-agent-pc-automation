@@ -40,6 +40,7 @@ class FakeChatApi {
   proposalCalls: Array<{ packageId: string; version: string; architecture: string }> = [];
   approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
   softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
+  approvalErrorStatus: number | null = null;
   jobStatusCalls: string[] = [];
   discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
     version === null
@@ -205,6 +206,11 @@ class FakeChatApi {
 
   confirmSoftwareApproval(planId: string, challengeId: string, code: string): Observable<unknown> {
     this.softwareApprovalCalls.push({ planId, challengeId, code });
+    if (this.approvalErrorStatus !== null) {
+      const status = this.approvalErrorStatus;
+      this.approvalErrorStatus = null;
+      return throwError(() => ({ status }));
+    }
     return of({
       plan_id: planId,
       approved: true,
@@ -1078,6 +1084,83 @@ describe('App chat UI (T-202)', () => {
 
 
 describe('Structured Agent response (T-404)', () => {
+  it('restores TOTP approval after a definitive 403 rejection', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    api.approvalErrorStatus = 403;
+    codeInput.value = '000000';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.jobStatusCalls).toEqual([]);
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('รหัส Authenticator ไม่ถูกต้องหรือหมดอายุ');
+
+    const retryInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    retryInput.value = '123456';
+    retryInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const retryConfirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!retryConfirm) throw new Error('Approval retry button was not rendered');
+    retryConfirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.softwareApprovalCalls).toHaveLength(2);
+    expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
+  });
+
   it('shows the Gemini JSON response as escaped text and never treats it as approval', async () => {
     localStorage.clear();
     sessionStorage.clear();
