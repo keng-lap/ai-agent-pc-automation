@@ -44,6 +44,7 @@ class FakeChatApi {
   approvalErrorDetail: string | null = null;
   readinessCalls = 0;
   reservationRecoveryCalls: string[] = [];
+  reservationRecoveryResponder: (planId: string) => Observable<unknown> = () => throwError(() => ({ status: 404 }));
   jobStatusCalls: string[] = [];
   discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
     version === null
@@ -166,7 +167,7 @@ class FakeChatApi {
 
   getSoftwareInstallJobForPlan(planId: string): Observable<unknown> {
     this.reservationRecoveryCalls.push(planId);
-    return throwError(() => ({ status: 404 }));
+    return this.reservationRecoveryResponder(planId);
   }
 
   createSoftwareInstallProposal(packageId: string, version: string, architecture: string): Observable<unknown> {
@@ -1161,6 +1162,138 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('รีเฟรช Release Authorization');
     expect(fixture.nativeElement.textContent).toContain('Release Authorization หมดอายุ');
+  });
+
+  it('clears a definitively missing proposal and offers installer preparation again', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = () => Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    prepare()?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.proposalCalls).toHaveLength(1);
+
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    api.approvalErrorStatus = 404;
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.reservationRecoveryCalls).toEqual([]);
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('ไม่พบแผนติดตั้งที่ยังใช้งานได้แล้ว');
+    expect(prepare()).not.toBeUndefined();
+
+    prepare()?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.proposalCalls).toHaveLength(2);
+  });
+
+  it('keeps reservation recovery visible when readiness is revoked mid-recovery', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    const recovery = new Subject<unknown>();
+    api.reservationRecoveryResponder = () => recovery;
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    api.approvalErrorStatus = 500;
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.reservationRecoveryCalls).toHaveLength(1);
+    api.readiness.real_install_enabled = false;
+    api.readiness.real_install_release_package_id = null;
+    api.readiness.real_install_release_version = null;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Retry reservation recovery');
+    expect(fixture.nativeElement.textContent).not.toContain('รีเฟรช Release Authorization');
+    recovery.error({ status: 404 });
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   it('restores TOTP approval after a definitive 403 rejection', async () => {
