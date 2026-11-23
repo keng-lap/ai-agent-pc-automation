@@ -211,7 +211,7 @@ def chat(payload: ChatRequest) -> dict[str, object]:
                     raise gemini.GeminiProviderError("invalid_response")
                 try:
                     structured = UniversalConversationResponse.model_validate_json(raw_response)
-                except Exception:
+                except ValidationError:
                     raise gemini.GeminiProviderError("invalid_response") from None
         except gemini.GeminiProviderError as exc:
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
