@@ -78,16 +78,27 @@ def verify_exact_user_install(
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
+    # WinGet reports an empty exact search with this HRESULT (which may be
+    # surfaced as either an unsigned DWORD or its signed 32-bit equivalent).
+    if result.returncode in {0x8A150014, -1978331116}:
+        return False
     if result.returncode != 0:
         return None
 
-    # WinGet's table uses two-or-more spaces between columns. The package ID
-    # and version are exact fields; localized column headings are irrelevant.
+    # Names and column widths are localized/variable. Match the exact package
+    # ID token and read the following version token instead of splitting the
+    # display table on a fixed number of spaces.
+    package_pattern = re.compile(
+        rf"(?<!\S){re.escape(package_id)}(?!\S)\s+(\S+)",
+        re.IGNORECASE,
+    )
     for line in (result.stdout or "").splitlines():
-        columns = re.split(r"\s{2,}", line.strip())
-        if len(columns) >= 3 and columns[1].casefold() == package_id.casefold():
-            return columns[2] == version
-    return False
+        match = package_pattern.search(line)
+        if match is not None:
+            return match.group(1) == version
+    # A successful but unparseable/empty table is ambiguous, not proof that
+    # the package is absent. Only the explicit no-applications HRESULT means False.
+    return None
 
 
 class SoftwareInstallWorker:
