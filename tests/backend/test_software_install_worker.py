@@ -454,3 +454,34 @@ def test_worker_denial_paths_never_reach_executor(monkeypatch, tmp_path, denial,
     assert result.result_code == expected_code
     assert executor_calls == []
     assert store.release_consumptions == []
+
+
+def test_worker_does_not_consume_release_when_shutdown_arrives_before_execution(monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    stop = threading.Event()
+    executor_calls = []
+
+    def prepare(*_args, **_kwargs):
+        stop.set()
+        return object()
+
+    monkeypatch.setattr(worker_module, "prepare_approved_install", prepare)
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: executor_calls.append(True),
+        verifier=lambda *_a: False,
+        heartbeat_seconds=5,
+        stop_event=stop,
+        release_authorization=make_release_authorization(binding),
+    )
+
+    result = worker.run_once()
+
+    assert result.state == "UNKNOWN"
+    assert result.result_code == "WORKER_CANCELLED_BEFORE_EXECUTION"
+    assert store.release_consumptions == []
+    assert executor_calls == []
