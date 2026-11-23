@@ -37,7 +37,7 @@ This record distinguishes findings already addressed in the current branch from 
 - Existing backend regression: `test_owner_can_recover_committed_install_job_by_plan_without_new_approval`.
 - Added backend regression: `test_committed_install_can_be_recovered_after_post_commit_lease_failure`, which simulates the post-commit lease verification failure and recovers the already-queued job.
 - Added frontend regression: `recovers a committed reservation after an ambiguous confirmation failure`, which checks the recovered reservation ID is used for status lookup.
-- Status: IMPLEMENTED; CI VERIFICATION PENDING.
+- Status: VERIFIED — backend and frontend regression tests passed.
 
 ### 6. EXE silent installer switch
 - Review thread: `PRRT_kwDOU_JsvM662R1-`
@@ -73,7 +73,8 @@ This record distinguishes findings already addressed in the current branch from 
 
 - Branch: `feat/P6-609-C-winget-execution`
 - Head when targeted regressions were added: `f351891b69ae7a150e174d50311756c62bf82de7`
-- GitHub Actions results for that head: pending at time this record was authored.
+- GitHub Actions on test head `f351891b69ae7a150e174d50311756c62bf82de7`: 10/10 checks succeeded, including backend tests + AI reviewer tests + Ruff; frontend unit tests + Playwright desktop/mobile viewport E2E + build; Windows WinGet Adapter, Real Install Frontend, Generic Publisher Trust, Process Containment, and DPAPI.
+- Targeted post-commit recovery backend test and ambiguous-confirmation frontend recovery test passed in the same CI run.
 - No live installation was performed by CI or this change.
 - PR #170 remains Draft and unmerged.
 - No Full Review was initiated.
