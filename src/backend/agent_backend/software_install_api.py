@@ -129,6 +129,7 @@ def create_software_install_proposal(
             candidate.package_id != "DBeaver.DBeaver.Community"
             and candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}
         )
+        or (candidate.installer_type == "exe" and not candidate.installer_silent_switch)
     ):
         raise HTTPException(
             status_code=409,
