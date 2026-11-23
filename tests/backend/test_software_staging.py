@@ -191,6 +191,32 @@ def test_redirect_is_not_followed_and_partial_file_is_removed(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+
+def test_generic_installer_redirect_cannot_escape_manifest_host(tmp_path):
+    candidate = make_candidate().model_copy(update={
+        "package_id": "Acme.Editor",
+        "publisher": "Acme Inc",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "installer_domain": "downloads.acme.example",
+    })
+    response = FakeResponse(
+        status_code=302,
+        headers={"Location": "https://cdn.attacker.example/editor.exe"},
+    )
+    with pytest.raises(InstallerStageError, match="redirect target was not trusted"):
+        InstallerStager(
+            http_get=lambda *args, **kwargs: response,
+            signature_verifier=AcceptSignature(),
+        ).stage(candidate, staging_root=tmp_path)
+    assert response.closed is True
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(tmp_path):
     body = b"verified-installer-bytes"
     redirect = FakeResponse(
