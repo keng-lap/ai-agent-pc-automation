@@ -149,6 +149,21 @@ def test_generic_publisher_approval_challenge_allows_no_vendor_release_url(monke
     binding = build_install_approval_binding(plan_digest=PLAN_DIGEST, evidence=evidence)
     setup_context(monkeypatch)
     monkeypatch.setattr(
+        api,
+        "_get_install_plan",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            plan_id=PLAN_ID,
+            plan_digest=PLAN_DIGEST,
+            evidence_id=evidence.evidence_id,
+            package_id=evidence.package_id,
+            package_name=evidence.package_name,
+            publisher=evidence.publisher,
+            version=evidence.version,
+            architecture=evidence.architecture,
+            scope=evidence.scope,
+        ),
+    )
+    monkeypatch.setattr(
         api.software_evidence_registry,
         "bind_to_plan",
         lambda **_kwargs: binding,
