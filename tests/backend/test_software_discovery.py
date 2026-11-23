@@ -212,6 +212,20 @@ def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
         )
 
 
+def test_discovery_inherits_root_level_silent_switch_for_selected_installer():
+    source = FakeSource()
+    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc["InstallerSwitches"] = {"Silent": "/S"}
+    del installer_doc["Installers"][0]["InstallerSwitches"]
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.installer_silent_switch == "/S"
+
+
 def test_discovery_rejects_selected_installer_dependencies_not_in_exact_approval():
     source = FakeSource()
     source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Installers"][0]["Dependencies"] = {
