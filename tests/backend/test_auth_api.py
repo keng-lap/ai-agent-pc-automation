@@ -12,7 +12,7 @@ from agent_backend.authenticator import (
     AuthenticatorEnrollmentManager,
     EncryptedTotpSecretFileStore,
 )
-from agent_backend.config import load_settings
+from agent_backend.config import default_state_directory, load_settings
 from agent_backend.oidc import (
     ApplicationSessionStore,
     GoogleIdentity,
@@ -75,6 +75,7 @@ class FakeOidc:
 
 def build_client(tmp_path, *, identity=None):
     now = [NOW]
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     settings = replace(
         load_settings(load_env_file=False),
         google_oidc_client_id="test-client-id",
@@ -413,7 +414,7 @@ def test_single_worker_configuration_is_accepted():
 
 
 def test_build_auth_services_keeps_google_dashboard_available_when_secret_load_fails(
-    monkeypatch
+    monkeypatch, tmp_path
 ):
     from agent_backend.auth_api import build_auth_services
     from agent_backend.authenticator import SecretStoreError
@@ -426,8 +427,7 @@ def test_build_auth_services_keeps_google_dashboard_available_when_secret_load_f
         master_google_sub=OWNER,
         app_session_ttl_seconds=1800,
         authenticator_secret_path=(
-            Path(__file__).resolve().parents[2]
-            / ".agent-state" / "authenticator" / "authenticator.json"
+            default_state_directory() / "authenticator" / "authenticator.json"
         ),
     )
 
@@ -453,7 +453,9 @@ def test_build_auth_services_keeps_google_dashboard_available_when_secret_load_f
     assert client.get("/api/auth/google/start").status_code == 200
 
 
-def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_absent(monkeypatch):
+def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_absent(
+    monkeypatch, tmp_path
+):
     from agent_backend.auth_api import build_auth_services
 
     monkeypatch.setattr(
