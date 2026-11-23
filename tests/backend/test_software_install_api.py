@@ -168,6 +168,26 @@ def test_generic_package_proposal_is_not_blocked_by_dbeaver_release_metadata(mon
     assert not staged_path.exists()
 
 
+def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_path):
+    candidate = make_candidate(installer_type="inno")
+    stage_calls = []
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
+    monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: stage_calls.append(args))
+
+    with pytest.raises(Exception) as error:
+        api.create_software_install_proposal(
+            api.SoftwareInstallProposalRequest(
+                package_id=candidate.package_id,
+                version=candidate.version,
+            ),
+            request=make_request(tmp_path),
+        )
+
+    assert getattr(error.value, "status_code", None) == 409
+    assert stage_calls == []
+
+
 def test_unverified_official_release_is_rejected_before_download(monkeypatch, tmp_path):
     candidate = make_candidate(publisher_verification="NOT_CHECKED")
     stage_calls = []
