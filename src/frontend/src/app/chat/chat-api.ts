@@ -306,6 +306,12 @@ export class ChatApi {
     );
   }
 
+  getSoftwareInstallJobForPlan(planId: string): Observable<SoftwareInstallJobStatus> {
+    return this.http.get<SoftwareInstallJobStatus>(
+      `/api/plans/${encodeURIComponent(planId)}/software-approval/reservation`,
+    );
+  }
+
   getSoftwareInstallJobStatus(reservationId: string): Observable<SoftwareInstallJobStatus> {
     return this.http.get<SoftwareInstallJobStatus>(
       `/api/software/install/jobs/${encodeURIComponent(reservationId)}`,
