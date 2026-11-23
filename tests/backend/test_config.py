@@ -22,6 +22,11 @@ ENV_NAMES = [
     "JOB_STORE_PATH",
     "LOCALAPPDATA",
     "AI_AGENT_ENABLE_REAL_INSTALL",
+    "AI_AGENT_REAL_INSTALL_RELEASE_TASK",
+    "AI_AGENT_REAL_INSTALL_PACKAGE_ID",
+    "AI_AGENT_REAL_INSTALL_VERSION",
+    "AI_AGENT_REAL_INSTALL_EXPIRES_AT",
+    "AI_AGENT_REAL_INSTALL_NONCE",
 ]
 
 
@@ -173,6 +178,15 @@ def test_real_install_flag_rejects_ambiguous_values(monkeypatch, value):
         load_settings(load_env_file=False)
 
 
-def test_real_install_requires_explicit_one(monkeypatch):
+def test_real_install_requires_exact_bounded_one_use_release(monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
     monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
-    assert load_settings(load_env_file=False).real_install_enabled is True
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_RELEASE_TASK", "P6-609-C")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_PACKAGE_ID", "Contoso.Editor")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_VERSION", "2.4.1")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_EXPIRES_AT", (datetime.now(UTC) + timedelta(minutes=5)).isoformat())
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_NONCE", "a" * 64)
+    settings = load_settings(load_env_file=False)
+    assert settings.real_install_enabled is True
+    assert settings.real_install_release_authorization.package_id == "Contoso.Editor"
