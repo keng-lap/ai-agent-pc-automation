@@ -38,6 +38,7 @@ def make_binding():
     )
     return build_install_approval_binding(plan_digest="a" * 64, evidence=evidence)
 
+
 def make_release_authorization(binding):
     return SimpleNamespace(
         task_id="P6-609-C",
