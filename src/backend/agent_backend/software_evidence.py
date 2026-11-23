@@ -12,6 +12,8 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from pydantic import ValidationError
+
 from agent_backend.software_approval import (
     InstallApprovalBinding,
     VerifiedPackageEvidence,
@@ -199,28 +201,31 @@ class SoftwareEvidenceRegistry:
         ):
             raise EvidenceRejected("discovery or staged installer proof is not current")
 
-        evidence = VerifiedPackageEvidence(
-            evidence_id=secrets.token_hex(16),
-            package_id=candidate.package_id,
-            package_name=candidate.package_name,
-            publisher=candidate.publisher,
-            version=candidate.version,
-            source="winget",
-            installer_type=candidate.installer_type,
-            installer_silent_switch=candidate.installer_silent_switch,
-            installer_url=candidate.installer_url,
-            official_release_url=candidate.official_release_url,
-            manifest_source_url=candidate.manifest_source_url,
-            repository_commit=candidate.repository_commit,
-            installer_sha256=candidate.installer_sha256,
-            manifest_sha256=candidate.manifest_sha256,
-            architecture=candidate.architecture,
-            scope=candidate.scope,
-            signature_subject=staged.signature_subject,
-            signature_sha256=staged.signature_sha256,
-            verified_at=verified_at,
-            expires_at=min(verified_at + EVIDENCE_TTL, now + EVIDENCE_TTL),
-        )
+        try:
+            evidence = VerifiedPackageEvidence(
+                evidence_id=secrets.token_hex(16),
+                package_id=candidate.package_id,
+                package_name=candidate.package_name,
+                publisher=candidate.publisher,
+                version=candidate.version,
+                source="winget",
+                installer_type=candidate.installer_type,
+                installer_silent_switch=candidate.installer_silent_switch,
+                installer_url=candidate.installer_url,
+                official_release_url=candidate.official_release_url,
+                manifest_source_url=candidate.manifest_source_url,
+                repository_commit=candidate.repository_commit,
+                installer_sha256=candidate.installer_sha256,
+                manifest_sha256=candidate.manifest_sha256,
+                architecture=candidate.architecture,
+                scope=candidate.scope,
+                signature_subject=staged.signature_subject,
+                signature_sha256=staged.signature_sha256,
+                verified_at=verified_at,
+                expires_at=min(verified_at + EVIDENCE_TTL, now + EVIDENCE_TTL),
+            )
+            except ValidationError as exc:
+            raise EvidenceRejected("installer evidence contains invalid fields") from exc
         with self._lock:
             self._prune(now)
             if len(self._entries) >= self._capacity:
