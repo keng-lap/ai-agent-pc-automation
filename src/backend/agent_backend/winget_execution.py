@@ -40,7 +40,7 @@ def _wait_for_process_exit(wait_for_single_object, process_handle, timeout_ms: i
     """Wait a bounded interval for the WinGet root process to terminate."""
     deadline = time.monotonic() + timeout_ms / 1000
     while True:
-        result = wait_for_single_object(process_handle, 250)
+        result = wait_for_single_object(process_handle, 1000)
         if result == _WAIT_OBJECT_0:
             return
         if result == _WAIT_FAILED:
