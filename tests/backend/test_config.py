@@ -5,6 +5,7 @@ from agent_backend.config import (
     ConfigError,
     default_state_directory,
     load_settings,
+    real_install_release_authorization_from_env,
 )
 
 ENV_NAMES = [
@@ -190,3 +191,78 @@ def test_real_install_requires_exact_bounded_one_use_release(monkeypatch):
     settings = load_settings(load_env_file=False)
     assert settings.real_install_enabled is True
     assert settings.real_install_release_authorization.package_id == "Contoso.Editor"
+
+
+@pytest.mark.parametrize(
+    "missing_name",
+    [
+        "AI_AGENT_REAL_INSTALL_RELEASE_TASK",
+        "AI_AGENT_REAL_INSTALL_PACKAGE_ID",
+        "AI_AGENT_REAL_INSTALL_VERSION",
+        "AI_AGENT_REAL_INSTALL_EXPIRES_AT",
+        "AI_AGENT_REAL_INSTALL_NONCE",
+    ],
+)
+def test_real_install_release_rejects_each_missing_required_value(missing_name):
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
+    environ = {
+        "AI_AGENT_ENABLE_REAL_INSTALL": "1",
+        "AI_AGENT_REAL_INSTALL_RELEASE_TASK": "P6-609-C",
+        "AI_AGENT_REAL_INSTALL_PACKAGE_ID": "Contoso.Editor",
+        "AI_AGENT_REAL_INSTALL_VERSION": "2.4.1",
+        "AI_AGENT_REAL_INSTALL_EXPIRES_AT": (now + timedelta(minutes=5)).isoformat(),
+        "AI_AGENT_REAL_INSTALL_NONCE": "a" * 64,
+    }
+    del environ[missing_name]
+
+    with pytest.raises(ConfigError):
+        real_install_release_authorization_from_env(environ=environ, now=now)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"AI_AGENT_REAL_INSTALL_RELEASE_TASK": "P6-OTHER"},
+        {"AI_AGENT_REAL_INSTALL_NONCE": "not-a-valid-nonce"},
+        {"AI_AGENT_REAL_INSTALL_EXPIRES_AT": "2026-11-23T12:05:00"},
+        {"AI_AGENT_REAL_INSTALL_EXPIRES_AT": "2026-11-23T12:00:00+00:00"},
+        {"AI_AGENT_REAL_INSTALL_EXPIRES_AT": "2026-11-23T12:15:01+00:00"},
+    ],
+)
+def test_real_install_release_rejects_invalid_task_nonce_and_expiry(changes):
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
+    environ = {
+        "AI_AGENT_ENABLE_REAL_INSTALL": "1",
+        "AI_AGENT_REAL_INSTALL_RELEASE_TASK": "P6-609-C",
+        "AI_AGENT_REAL_INSTALL_PACKAGE_ID": "Contoso.Editor",
+        "AI_AGENT_REAL_INSTALL_VERSION": "2.4.1",
+        "AI_AGENT_REAL_INSTALL_EXPIRES_AT": (now + timedelta(minutes=5)).isoformat(),
+        "AI_AGENT_REAL_INSTALL_NONCE": "a" * 64,
+    }
+    environ.update(changes)
+
+    with pytest.raises(ConfigError):
+        real_install_release_authorization_from_env(environ=environ, now=now)
+
+
+def test_real_install_release_accepts_exact_fifteen_minute_expiry():
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
+    environ = {
+        "AI_AGENT_ENABLE_REAL_INSTALL": "1",
+        "AI_AGENT_REAL_INSTALL_RELEASE_TASK": "P6-609-C",
+        "AI_AGENT_REAL_INSTALL_PACKAGE_ID": "Contoso.Editor",
+        "AI_AGENT_REAL_INSTALL_VERSION": "2.4.1",
+        "AI_AGENT_REAL_INSTALL_EXPIRES_AT": (now + timedelta(minutes=15)).isoformat(),
+        "AI_AGENT_REAL_INSTALL_NONCE": "a" * 64,
+    }
+
+    authorization = real_install_release_authorization_from_env(environ=environ, now=now)
+
+    assert authorization is not None
+    assert authorization.expires_at == now + timedelta(minutes=15)
