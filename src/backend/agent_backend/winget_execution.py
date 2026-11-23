@@ -145,6 +145,16 @@ def execute_approved_winget_install(
         raise ValueError("timeout_seconds must be between 1 and 1800")
 
     executable = _winget_alias_path()
+    if cancel_event is not None and cancel_event.is_set():
+        return WinGetExecutionResult(
+            executable=str(executable),
+            package_id=binding.evidence.package_id,
+            version=binding.evidence.version,
+            approval_digest=binding.approval_digest,
+            exit_code=None,
+            timed_out=False,
+            cancelled=True,
+        )
     try:
         with lock_prepared_manifest(binding, prepared, work_root=work_root) as arguments:
             # list2cmdline performs Windows argv quoting; CreateProcess receives
@@ -208,6 +218,22 @@ def execute_approved_winget_install(
             try:
                 job = WindowsJobObject()
                 job.assign_suspended_process(int(process_info.hProcess))
+                # A shutdown/lease-loss signal may arrive while CreateProcessW
+                # and Job Object assignment are in progress. Never resume a
+                # suspended installer after cancellation has been requested.
+                if cancel_event is not None and cancel_event.is_set():
+                    job.terminate(1)
+                    _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
+                    process_completed = True
+                    return WinGetExecutionResult(
+                        executable=str(executable),
+                        package_id=binding.evidence.package_id,
+                        version=binding.evidence.version,
+                        approval_digest=binding.approval_digest,
+                        exit_code=None,
+                        timed_out=False,
+                        cancelled=True,
+                    )
                 resumed = resume_thread(process_info.hThread)
                 if resumed == 0xFFFFFFFF:
                     raise WinGetExecutionError(
