@@ -783,6 +783,29 @@ class SQLiteApprovalReservationStore:
         except sqlite3.Error:
             raise ApprovalReservationUnavailable("Install job transition could not be persisted.") from None
 
+    def get_install_job_for_plan(self, *, plan_id: str, owner_id: str) -> InstallExecutionJob:
+        """Recover the existing install job for an owner-scoped plan without dispatching it."""
+        _identity(owner_id, "owner_id")
+        _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
+        try:
+            with self._connection() as connection:
+                row = connection.execute(
+                    """
+                    SELECT jobs.* FROM install_execution_jobs AS jobs
+                    INNER JOIN job_reservations AS reservations
+                        ON reservations.reservation_id = jobs.reservation_id
+                    WHERE reservations.owner_id=? AND reservations.plan_id=?
+                    ORDER BY reservations.created_at DESC LIMIT 1
+                    """,
+                    (owner_id, plan_id),
+                ).fetchone()
+                if row is None:
+                    raise ApprovalReservationNotFound("install job not found")
+                return self._execution_job(row)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job could not be recovered.") from None
     def get_install_job(self, *, reservation_id: str, owner_id: str) -> InstallExecutionJob:
         _identity(owner_id, "owner_id")
         try:
