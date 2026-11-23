@@ -59,6 +59,16 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
 
     step_up = StepUp()
     principal = SimpleNamespace(owner_sub=owner, session_id=session)
+    monkeypatch.setattr(
+        api,
+        "_release_authorization_for_request",
+        lambda _request: SimpleNamespace(
+            task_id="P6-609-C",
+            package_id="DBeaver.DBeaver.Community",
+            version="26.2.4",
+            expires_at=NOW + timedelta(minutes=5),
+        ),
+    )
 
     class ReservationStore:
         def __init__(self):
@@ -445,3 +455,21 @@ def test_owner_can_recover_committed_install_job_by_plan_without_new_approval(mo
     assert response.reservation_id == job.reservation_id
     assert response.state == "RUNNING"
     assert response.attempts == 1
+
+def test_confirm_rejects_missing_exact_release_before_consuming_totp(monkeypatch):
+    binding = make_binding()
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
+    monkeypatch.setattr(api, "_release_authorization_for_request", lambda _request: None)
+    monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
+    api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+
+    with pytest.raises(api.HTTPException) as error:
+        api.confirm_software_approval(
+            PLAN_ID,
+            api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456"),
+            request=object(),
+        )
+
+    assert error.value.status_code == 409
+    assert step_up.verified == []
+    assert reservation_store.reserved == []
