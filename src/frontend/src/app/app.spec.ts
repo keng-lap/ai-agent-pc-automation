@@ -1124,9 +1124,33 @@ describe('App chat UI (T-202)', () => {
 
     const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
     expect(codeInput).not.toBeNull();
-    api.approvalErrorStatus = 403;
+    api.approvalErrorStatus = 410;
     codeInput.value = '000000';
     codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const expiredConfirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!expiredConfirm) throw new Error('Real install approval button was not rendered');
+    expiredConfirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('รหัสอนุมัติหมดอายุแล้ว');
+
+    const newChallenge = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!newChallenge) throw new Error('New approval challenge action was not rendered');
+    newChallenge.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const freshCodeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(freshCodeInput).not.toBeNull();
+
+    api.approvalErrorStatus = 403;
+    freshCodeInput.value = '000000';
+    freshCodeInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     const confirm = Array.from(
