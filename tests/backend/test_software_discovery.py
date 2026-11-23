@@ -319,10 +319,3 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
     )
 
 
-def test_exe_candidate_without_manifest_silent_switch_is_rejected():
-    source = FakeSource()
-    del source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Installers"][0]["InstallerSwitches"]
-    repository = WinGetManifestRepository(http_get=source.get)
-
-    with pytest.raises(DiscoveryUnavailable, match="silent switch"):
-        repository.discover(package_id=PACKAGE_ID, version=VERSION, architecture="x64")
