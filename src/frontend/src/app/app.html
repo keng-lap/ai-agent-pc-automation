@@ -502,7 +502,7 @@
                     </div>
                   }
                   @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
-                    @if (installCandidate.publisher_verification === 'VERIFIED') {
+                    @if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
                       <section class="tool-preview installer-actions" aria-label="Real WinGet install">
                         <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
                         @if (discovery.readinessChecking) {
