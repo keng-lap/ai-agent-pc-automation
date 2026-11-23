@@ -385,12 +385,11 @@ class SQLiteApprovalReservationStore:
                 raise ValueError("binding_json is not a valid install approval") from None
             if binding.approval_digest != action_digest or binding.plan_digest != plan_digest:
                 raise ApprovalReservationConflict("serialized install binding does not match reservation")
-        timestamp_value = now or self._clock()
-        timestamp = _timestamp(timestamp_value)
         expired = False
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
                 prior = connection.execute(
                     """
                     SELECT * FROM job_reservations
@@ -520,10 +519,10 @@ class SQLiteApprovalReservationStore:
         """Revoke an unused approval; reservation and revocation serialize in SQLite."""
         _identity(approval_id, "approval_id")
         _identity(owner_id, "owner_id")
-        timestamp = _timestamp(now or self._clock())
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
                 row = connection.execute(
                     "SELECT state FROM approval_records WHERE approval_id=? AND owner_id=?",
                     (approval_id, owner_id),
@@ -584,16 +583,16 @@ class SQLiteApprovalReservationStore:
         _identity(worker_id, "worker_id")
         if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
             raise ValueError("lease_seconds must be between 1 and 300")
-        current = now or self._clock()
-        timestamp = _timestamp(current)
-        expires = _timestamp(current + timedelta(seconds=lease_seconds))
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                current = now if now is not None else self._clock()
+                timestamp = _timestamp(current)
+                expires = _timestamp(current + timedelta(seconds=lease_seconds))
                 expired = connection.execute(
                     """
                     SELECT reservation_id FROM install_execution_jobs
-                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING')
+                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING','REBOOT_REQUIRED')
                       AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
                     """,
                     (timestamp,),
@@ -664,12 +663,12 @@ class SQLiteApprovalReservationStore:
         _identity(worker_id, "worker_id")
         if type(lease_seconds) is not int or not 1 <= lease_seconds <= 300:
             raise ValueError("lease_seconds must be between 1 and 300")
-        current = now or self._clock()
-        timestamp = _timestamp(current)
-        expires = _timestamp(current + __import__("datetime").timedelta(seconds=lease_seconds))
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                current = now if now is not None else self._clock()
+                timestamp = _timestamp(current)
+                expires = _timestamp(current + timedelta(seconds=lease_seconds))
                 row = connection.execute(
                     "SELECT * FROM install_execution_jobs WHERE reservation_id=?",
                     (reservation_id,),
