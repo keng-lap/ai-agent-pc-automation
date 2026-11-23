@@ -23,7 +23,10 @@ flows remain unchanged.
 6. The user reviews the exact package/version and evidence, then completes a
    one-use TOTP challenge bound to the plan and evidence digests.
 7. Approval is atomically persisted as a durable queue reservation.
-8. The Windows-local worker validates the approved binding and executes the
+8. Immediately before the side-effect boundary, the worker consumes a one-use
+   Product Owner release nonce bound to task P6-609-C, the exact package/version,
+   and the approval digest. The authorization expires within 15 minutes.
+9. The Windows-local worker validates the approved binding and executes the
    approved WinGet manifest through the contained process executor.
 9. The worker verifies the exact package ID and version after execution.
 10. Timeout, nonzero WinGet exit, lease loss, or ambiguous verification never
@@ -31,8 +34,8 @@ flows remain unchanged.
 
 ## API surface
 
-- `GET /api/software/install/readiness` — non-secret platform and publisher
-  verification readiness.
+- `GET /api/software/install/readiness` — non-secret platform, publisher, and
+  bounded real-install release authorization readiness.
 - `POST /api/software/install/proposals` — backend discovery, staging,
   SHA-256/Authenticode/publisher verification, evidence registration, and
   immutable install proposal creation.
@@ -42,6 +45,9 @@ flows remain unchanged.
   persist the queue reservation.
 - `GET /api/software/install/jobs/{reservation_id}` — return an owner-scoped
   lifecycle summary without exposing the approved binding or worker lease.
+- `GET /api/plans/{plan_id}/software-approval/reservation` — recover the
+  owner-scoped committed reservation after a client timeout without creating or
+  dispatching another job.
 
 No `software.install` action receives a legacy `DryRunPlan` from
 `POST /api/plans`. Single-package install requests are routed into the WinGet
@@ -50,6 +56,17 @@ non-executable and does not mint an install preview. The generic
 `/api/plans/{plan_id}/step-up` and `/approve` routes reject stale
 `software.install` plans; they remain for legacy preview use cases such as
 software removal.
+
+## Installer execution policy
+
+- MSI/MSIX/AppX installers use WinGet silent mode.
+- EXE installers are accepted only when the selected WinGet manifest declares a
+  valid `InstallerSwitches.Silent` value. That value is copied into immutable
+  approval evidence and the generated local manifest; Gemini and the frontend
+  cannot provide or override it. EXE candidates without it are rejected.
+- Exact installed-package verification treats WinGet `NO_APPLICATIONS_FOUND`
+  as confirmed absence. Successful but unparseable inventory output remains
+  ambiguous and cannot trigger an install or report success.
 
 ## Publisher trust
 
@@ -105,6 +122,11 @@ Windows runner; it is not a substitute for target-machine end-to-end testing.
   WinGet execution, and exact post-install verification.
 - The first live package is DBeaver Community. It must be reviewed and
   explicitly authorized at the package/version level before execution.
-- No live installation is authorized by CI or by merging this PR.
-- PR #170 remains Draft and unmerged until review and target-Windows acceptance
-  are complete.
+- No live installation is authorized by CI or by merging this PR. A local
+  operator must explicitly run `scripts/authorize-real-install.ps1` for the
+  exact package/version, then approve that exact artifact with TOTP.
+- The Windows secure-storage adapter still requires its documented independent
+  native security review before release; native integration CI alone does not
+  satisfy that review gate.
+- PR #170 and stacked PR #171 remain Draft and unmerged until review, the
+  Windows storage gate, and target-Windows acceptance are complete.
