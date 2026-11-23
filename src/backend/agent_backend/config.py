@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import UTC, datetime, timedelta
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -92,6 +92,7 @@ def real_install_release_authorization_from_env(*, environ=None, now: datetime |
         expires_at=expires_at.astimezone(UTC),
         nonce=nonce,
     )
+
 
 def validate_authenticator_secret_path(path: Path) -> Path:
     """Require the secret file to live in this user's app-owned state directory."""
