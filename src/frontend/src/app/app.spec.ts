@@ -1289,7 +1289,7 @@ describe('App chat UI (T-202)', () => {
     api.readiness.real_install_release_package_id = null;
     api.readiness.real_install_release_version = null;
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Retry reservation recovery');
+    expect(fixture.nativeElement.textContent).toContain('ตรวจสอบ Reservation อีกครั้ง');
     expect(fixture.nativeElement.textContent).not.toContain('รีเฟรช Release Authorization');
     recovery.error({ status: 404 });
     await fixture.whenStable();
