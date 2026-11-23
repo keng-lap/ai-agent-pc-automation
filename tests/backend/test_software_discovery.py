@@ -132,6 +132,21 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     )
 
 
+
+def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():
+    source = FakeSource()
+    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc["Scope"] = "user"
+    del installer_doc["Installers"][0]["Scope"]
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.scope == "user"
+
+
 def test_discovery_blocks_manifest_when_official_release_is_newer():
     source = FakeSource(official_version="26.2.4")
     result = WinGetManifestRepository(http_get=source.get).discover(
