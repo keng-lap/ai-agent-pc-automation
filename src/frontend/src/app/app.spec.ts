@@ -1177,7 +1177,7 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(api.softwareApprovalCalls).toHaveLength(2);
+    expect(api.softwareApprovalCalls).toHaveLength(3);
     expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
   });
 
