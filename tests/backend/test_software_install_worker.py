@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -85,6 +86,24 @@ class FakeStore:
     def renew_install_lease(self, *_args, **_kwargs):
         self.job = replace(self.job, version=self.job.version + 1)
         return self.job
+
+
+def test_worker_does_not_claim_jobs_after_shutdown_requested(tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    stop = threading.Event()
+    stop.set()
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        stop_event=stop,
+        release_authorization=make_release_authorization(binding),
+    )
+
+    assert worker.run_once() is None
+    assert store.job.state == "CLAIMED"
+    assert store.transitions == []
 
 
 def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkeypatch, tmp_path):
