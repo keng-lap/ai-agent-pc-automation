@@ -132,6 +132,12 @@ def create_software_install_proposal(
             detail="The exact package is not eligible for publisher and installer verification.",
         )
 
+    if candidate.installer_type.casefold() not in {"exe", "msi", "msix", "appx"}:
+        raise HTTPException(
+            status_code=409,
+            detail="The selected installer type is not supported for verified installation.",
+        )
+
     store_path = getattr(request.app.state, "job_store_path", None)
     if store_path is None:
         raise HTTPException(status_code=503, detail="Local installer staging storage is unavailable.")
