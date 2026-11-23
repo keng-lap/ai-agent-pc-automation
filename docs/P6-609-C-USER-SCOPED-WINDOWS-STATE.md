@@ -61,7 +61,7 @@ The release flow is intentionally two-pass because the package/version must be k
 The script does not use `setx` or persist machine-wide environment variables. The nonce is atomically consumed in the protected SQLite store and bound to the exact approval digest; a replay or a different package/version is rejected. Prepare a fresh authorization for each real install. To disable live execution, clear the process-scoped variables and restart the backend:
 
 ```powershell
-. .\\scripts\\disable-real-install.ps1
+. .\scripts\disable-real-install.ps1
 ```
 
 EXE candidates are eligible only when the selected Microsoft WinGet manifest declares a bounded `InstallerSwitches.Silent` value. That backend-resolved value is included in immutable approval evidence and the generated local manifest; the client and Gemini cannot supply or override it. EXE installers without a declared silent switch are rejected rather than launched interactively.
