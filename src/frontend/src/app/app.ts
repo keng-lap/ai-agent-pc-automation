@@ -826,7 +826,7 @@ export class App implements AfterViewChecked {
       || discovery.readiness.authenticode_verification_available !== true
       || discovery.readiness.publisher_identity_policy_available !== true
       || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
-      || candidate.publisher_verification !== 'VERIFIED'
+      || !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
       || this.planning()
     ) return;
 
