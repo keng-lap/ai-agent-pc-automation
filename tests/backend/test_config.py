@@ -126,6 +126,24 @@ def test_windows_user_state_defaults_to_local_app_data(monkeypatch, tmp_path):
     assert settings.job_store_path == default_state_directory() / "jobs.sqlite3"
 
 
+def test_two_windows_profiles_resolve_to_separate_state_roots(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "LOCALAPPDATA",
+        str(tmp_path / "profile-a" / "AppData" / "Local"),
+    )
+    profile_a = default_state_directory()
+
+    monkeypatch.setenv(
+        "LOCALAPPDATA",
+        str(tmp_path / "profile-b" / "AppData" / "Local"),
+    )
+    profile_b = default_state_directory()
+
+    assert profile_a != profile_b
+    assert profile_a.name == "AI-Agent-PC-Automation"
+    assert profile_b.name == "AI-Agent-PC-Automation"
+
+
 def test_google_auth_configuration_rejects_secret_path_outside_dedicated_state_directory(
     monkeypatch, tmp_path
 ):
