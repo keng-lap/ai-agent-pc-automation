@@ -14,6 +14,8 @@ ENV_NAMES = [
     "APP_SESSION_TTL_SECONDS",
     "GOOGLE_OIDC_REDIRECT_URI",
     "AUTHENTICATOR_SECRET_PATH",
+    "JOB_STORE_PATH",
+    "LOCALAPPDATA",
 ]
 
 
@@ -29,6 +31,7 @@ def test_defaults_are_loopback_only():
     assert settings.backend_port == 8000
     assert settings.frontend_port == 4200
     assert settings.app_env == "development"
+    assert settings.job_store_path == __import__("agent_backend.config", fromlist=["REPO_ROOT"]).REPO_ROOT / ".agent-state" / "jobs.sqlite3"
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "::", "example.com", ""])
@@ -111,6 +114,15 @@ def test_google_auth_configuration_rejects_non_loopback_redirect(monkeypatch, re
 
 
 
+def test_windows_user_state_defaults_to_local_app_data(monkeypatch, tmp_path):
+    from agent_backend.config import default_state_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    assert default_state_directory() == tmp_path / "Local" / "AI-Agent-PC-Automation"
+    settings = load_settings(load_env_file=False)
+    assert settings.job_store_path == default_state_directory() / "jobs.sqlite3"
+
+
 def test_google_auth_configuration_rejects_secret_path_outside_dedicated_state_directory(
     monkeypatch, tmp_path
 ):
@@ -123,5 +135,5 @@ def test_google_auth_configuration_rejects_secret_path_outside_dedicated_state_d
         str(tmp_path / "shared" / "authenticator.json"),
     )
 
-    with pytest.raises(ConfigError, match="dedicated .agent-state/authenticator"):
+    with pytest.raises(ConfigError, match="per-user authenticator state directory"):
         load_settings(load_env_file=False)
