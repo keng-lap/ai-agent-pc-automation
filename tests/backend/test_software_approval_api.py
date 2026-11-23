@@ -411,3 +411,38 @@ def test_install_job_status_hides_other_owners_jobs(monkeypatch):
         api.get_software_install_job_status("b" * 32, request)
 
     assert error.value.status_code == 404
+
+
+def test_owner_can_recover_committed_install_job_by_plan_without_new_approval(monkeypatch):
+    from types import SimpleNamespace
+
+    binding = make_binding()
+    job = SimpleNamespace(
+        reservation_id="12345678-1234-5678-1234-567812345678",
+        state="RUNNING",
+        attempts=1,
+        version=3,
+        result_code=None,
+        lease_expires_at="2026-11-23T13:00:00Z",
+    )
+    requested = []
+
+    class Store:
+        def get_install_job_for_plan(self, *, plan_id, owner_id):
+            requested.append((plan_id, owner_id))
+            return job
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    monkeypatch.setattr(api, "_get_install_plan", lambda plan_id, *, owner_id: SimpleNamespace(plan_id=plan_id))
+    monkeypatch.setattr(api, "_reservation_store", lambda _request: Store())
+
+    response = api.get_software_install_job_for_plan(PLAN_ID, request=object())
+
+    assert requested == [(PLAN_ID, "owner-1")]
+    assert response.reservation_id == job.reservation_id
+    assert response.state == "RUNNING"
+    assert response.attempts == 1
