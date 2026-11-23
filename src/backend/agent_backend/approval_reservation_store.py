@@ -883,6 +883,7 @@ class SQLiteApprovalReservationStore:
         """Recover the existing install job for an owner-scoped plan without dispatching it."""
         _identity(owner_id, "owner_id")
         _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
+        self.reconcile_expired_install_leases()
         try:
             with self._connection() as connection:
                 row = connection.execute(
@@ -905,6 +906,7 @@ class SQLiteApprovalReservationStore:
 
     def get_install_job(self, *, reservation_id: str, owner_id: str) -> InstallExecutionJob:
         _identity(owner_id, "owner_id")
+        self.reconcile_expired_install_leases()
         try:
             with self._connection() as connection:
                 row = connection.execute(
