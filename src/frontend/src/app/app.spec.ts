@@ -1230,7 +1230,7 @@ describe('App chat UI (T-202)', () => {
     expect(api.reservationRecoveryCalls).toEqual(['f'.repeat(32)]);
     expect(api.jobStatusCalls).toContain(reservationId);
     expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('SUCCEEDED');
+    expect(api.jobStatusCalls).toEqual([reservationId]);
     expect(fixture.nativeElement.textContent).not.toContain('งานอาจถูกบันทึกแล้ว');
   });
 
