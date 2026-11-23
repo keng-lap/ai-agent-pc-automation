@@ -547,6 +547,11 @@
                               </button>
                               <small>{{ language() === 'th' ? 'Worker ทำงานบนเครื่อง Windows นี้ ความสำเร็จจะรายงานเมื่อยืนยัน Package ID และ Version หลังติดตั้งได้เท่านั้น' : 'The worker runs on this Windows machine. Success is reported only after exact Package ID and Version verification.' }}</small>
                             </div>
+                          } @else if (discovery.reservationRecoveryPending) {
+                            <small role="alert">{{ language() === 'th' ? 'ยังยืนยันไม่ได้ว่าคิวติดตั้งถูกบันทึกหรือไม่ ห้ามอนุมัติซ้ำจนกว่าจะตรวจสอบ Reservation สำเร็จ' : 'The committed install reservation is unresolved. Do not approve again until recovery succeeds.' }}</small>
+                            <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
+                              {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
+                            </button>
                           } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true && discovery.readiness?.real_install_release_package_id === discovery.proposal?.package_id && discovery.readiness?.real_install_release_version === discovery.proposal?.version) {
                             <div class="program-review" aria-label="Verified installer approval evidence">
                               <strong>{{ language() === "th" ? "หลักฐานไฟล์ติดตั้งที่ตรวจสอบแล้ว" : "Verified installer evidence" }}</strong>
@@ -573,11 +578,6 @@
                             <small>{{ language() === 'th' ? 'เป้าหมายที่อนุญาตอยู่ในระบบ: ' : 'Currently authorized target: ' }}{{ discovery.readiness?.real_install_release_package_id ?? '—' }} {{ discovery.readiness?.real_install_release_version ?? '' }}</small>
                             <button class="send-button" type="button" [disabled]="discovery.readinessChecking" (click)="refreshSoftwareInstallReadiness(entry.id)">
                               {{ language() === 'th' ? 'รีเฟรช Release Authorization' : 'Refresh release authorization' }}
-                            </button>
-                          } @else if (discovery.reservationRecoveryPending) {
-                            <small role="alert">{{ language() === 'th' ? 'ยังยืนยันไม่ได้ว่าคิวติดตั้งถูกบันทึกหรือไม่ ห้ามอนุมัติซ้ำจนกว่าจะตรวจสอบ Reservation สำเร็จ' : 'The committed install reservation is unresolved. Do not approve again until recovery succeeds.' }}</small>
-                            <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
-                              {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
                             </button>
                           } @else {
                             <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">
