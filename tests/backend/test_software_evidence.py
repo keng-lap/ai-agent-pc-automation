@@ -10,6 +10,7 @@ from agent_backend.software_evidence import (
     EvidenceNotFound,
     EvidenceRejected,
     SoftwareEvidenceRegistry,
+    signer_subject_matches_publisher,
 )
 from agent_backend.software_staging import StagedInstaller
 
@@ -62,6 +63,22 @@ def staged(**overrides) -> StagedInstaller:
     }
     values.update(overrides)
     return StagedInstaller(**values)
+
+
+
+@pytest.mark.parametrize(
+    "subject,publisher,expected",
+    [
+        ("CN=Acme Software, O=Acme Corporation, C=US", "Acme Corp", True),
+        ("CN=Acme, O=Acme\\, Incorporated, C=US", "Acme Inc", True),
+        ("CN=Acme Inc, O=Evil Corp, C=US", "Acme Inc", False),
+        ("CN=Acme Inc, O=Acme Inc, O=Other Inc", "Acme Inc", False),
+        ("CN=Acme Inc, C=US", "Acme Inc", True),
+        ("CN=Acme Inc, O=  , C=US", "Acme Inc", False),
+    ],
+)
+def test_signer_subject_publisher_matching_is_exact_and_fail_closed(subject, publisher, expected):
+    assert signer_subject_matches_publisher(subject, publisher) is expected
 
 
 def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
