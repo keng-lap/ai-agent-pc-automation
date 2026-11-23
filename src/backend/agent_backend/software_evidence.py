@@ -8,7 +8,6 @@ The certificate fingerprint is bound to approval evidence, not used as a pin.
 from __future__ import annotations
 
 import csv
-import re
 import secrets
 import threading
 from collections.abc import Callable
