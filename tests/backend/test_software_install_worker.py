@@ -1,11 +1,11 @@
 """Tests for the one-shot local WinGet install worker."""
 
 from dataclasses import replace
-
-import pytest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from agent_backend import software_install_worker as worker_module
 from agent_backend.approval_reservation_store import InstallExecutionJob
@@ -259,3 +259,28 @@ def test_verifier_returns_ambiguous_for_unparseable_success_output(monkeypatch):
         lambda *_a, **_k: SimpleNamespace(returncode=0, stdout="unexpected output"),
     )
     assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is None
+
+def test_worker_denies_release_for_different_exact_package_without_execution(monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    executor_calls = []
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    authorization = make_release_authorization(binding)
+    authorization.package_id = "Another.Package"
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: executor_calls.append(True),
+        verifier=lambda *_a: False,
+        heartbeat_seconds=5,
+        release_authorization=authorization,
+    )
+
+    result = worker.run_once()
+
+    assert result.state == "FAILED"
+    assert result.result_code == "RELEASE_AUTHORIZATION_DENIED"
+    assert executor_calls == []
+    assert store.release_consumptions == []
