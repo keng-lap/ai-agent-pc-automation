@@ -297,10 +297,23 @@ class InstallerStager:
                 or candidate.official_asset_id < 1
             ):
                 raise InstallerStageError("DBeaver installer is not matched to its verified official release")
-        elif candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}:
+        elif candidate.publisher_verification == "NOT_CHECKED":
+            if any((
+                candidate.official_version is not None,
+                candidate.official_release_url is not None,
+                candidate.official_asset_sha256 is not None,
+                candidate.official_asset_id is not None,
+            )):
+                raise InstallerStageError("unchecked publisher candidate contained unexpected vendor release claims")
+        elif candidate.publisher_verification == "VERIFIED":
+            if (
+                candidate.official_version != candidate.version
+                or not candidate.official_release_url
+                or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
+            ):
+                raise InstallerStageError("verified vendor release did not match the exact manifest candidate")
+        else:
             raise InstallerStageError("installer publisher source check did not pass")
-        elif candidate.official_asset_sha256 is not None and candidate.official_asset_sha256 != candidate.installer_sha256.lower():
-            raise InstallerStageError("official release digest did not match the manifest digest")
         parsed_url = urlsplit(candidate.installer_url)
         if (
             parsed_url.scheme != "https"
