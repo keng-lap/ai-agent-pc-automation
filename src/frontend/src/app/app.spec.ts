@@ -220,6 +220,13 @@ class FakeChatApi {
       const detail = this.approvalErrorDetail;
       this.approvalErrorStatus = null;
       this.approvalErrorDetail = null;
+      if (status === 409 && detail?.toLowerCase().includes('release authorization')) {
+        // The release can be revoked after readiness was loaded but before approval.
+        this.readiness.real_install_enabled = false;
+        this.readiness.real_install_release_package_id = null;
+        this.readiness.real_install_release_version = null;
+        this.readiness.real_install_release_expires_at = null;
+      }
       return throwError(() => ({ status, error: detail ? { detail } : undefined }));
     }
     return of({
@@ -1135,10 +1142,6 @@ describe('App chat UI (T-202)', () => {
 
     const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
     expect(codeInput).not.toBeNull();
-    api.readiness.real_install_enabled = false;
-    api.readiness.real_install_release_package_id = null;
-    api.readiness.real_install_release_version = null;
-    api.readiness.real_install_release_expires_at = null;
     api.approvalErrorStatus = 409;
     api.approvalErrorDetail = 'A current one-use real-install release authorization for this exact package/version is required.';
     codeInput.value = '123456';
