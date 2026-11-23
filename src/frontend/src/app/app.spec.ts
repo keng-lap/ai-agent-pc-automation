@@ -1080,10 +1080,6 @@ describe('App chat UI (T-202)', () => {
   });
 
 
-});
-
-
-describe('Structured Agent response (T-404)', () => {
   it('restores TOTP approval after a definitive 403 rejection', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     api.readiness.publisher_identity_policy_available = true;
@@ -1161,6 +1157,10 @@ describe('Structured Agent response (T-404)', () => {
     expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
   });
 
+});
+
+
+describe('Structured Agent response (T-404)', () => {
   it('shows the Gemini JSON response as escaped text and never treats it as approval', async () => {
     localStorage.clear();
     sessionStorage.clear();
