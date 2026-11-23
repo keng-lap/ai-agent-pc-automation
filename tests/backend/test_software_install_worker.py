@@ -318,6 +318,19 @@ def test_verifier_parses_version_when_display_name_equals_package_id(monkeypatch
     assert worker_module.verify_exact_user_install("Acme.Editor", "10.0.0") is False
 
 
+def test_verifier_parses_localized_winget_inventory_header(monkeypatch):
+    monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
+    monkeypatch.setattr(
+        worker_module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(
+            returncode=0,
+            stdout="Nom ID Version\nAcme Editor Acme.Editor 1.2.3 winget\n",
+        ),
+    )
+    assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is True
+
+
 def test_verifier_returns_ambiguous_for_unparseable_success_output(monkeypatch):
     monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
     monkeypatch.setattr(
@@ -326,6 +339,36 @@ def test_verifier_returns_ambiguous_for_unparseable_success_output(monkeypatch):
         lambda *_a, **_k: SimpleNamespace(returncode=0, stdout="unexpected output"),
     )
     assert worker_module.verify_exact_user_install("Acme.Editor", "1.2.3") is None
+
+def test_worker_executor_observes_shutdown_directly(monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    stop = threading.Event()
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+
+    def executor(*_args, **kwargs):
+        stop.set()
+        cancel_event = kwargs["cancel_event"]
+        assert cancel_event.is_set()
+        return SimpleNamespace(timed_out=False, cancelled=True, exit_code=None)
+
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=executor,
+        verifier=lambda *_a: False,
+        heartbeat_seconds=5,
+        stop_event=stop,
+        release_authorization=make_release_authorization(binding),
+    )
+    # The test calls the claimed-job path directly because run_once correctly
+    # refuses to claim work after shutdown has already been requested.
+    result = worker._process(store.job)
+    assert result.state == "UNKNOWN"
+    assert result.result_code == "WORKER_CANCELLED_PROCESS_TERMINATED"
+
 
 def test_worker_denies_release_for_different_exact_package_without_execution(monkeypatch, tmp_path):
     binding = make_binding()
