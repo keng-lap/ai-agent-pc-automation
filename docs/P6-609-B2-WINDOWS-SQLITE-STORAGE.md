@@ -4,15 +4,15 @@
 
 **Status: implementation in progress; Windows SQLite storage remains disabled.**
 
-The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates or opens the final state directory relative to a pinned immediate-parent handle with NtCreateFile, receives and retains the exact created/opened directory handle, applies an explicit protected owner-only DACL during creation, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and pre-creates the database plus WAL/SHM/journal entries with explicit current-user owner and protected owner-only DACLs before SQLite connects. These changes are not yet accepted for production: Windows integration coverage, independent review, exact-head CI, and Windows 11 Home acceptance remain required.
+The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates or opens the final state directory relative to a pinned immediate-parent handle with NtCreateFile, receives and retains the exact created/opened directory handle, applies an explicit protected owner-only DACL during creation, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and pre-creates the database plus WAL/SHM/journal entries with explicit current-user owner and protected owner-only DACLs before SQLite connects. These changes are not yet accepted for production: remaining Windows integration coverage, exact-head CI, and Windows 11 Home acceptance remain required.
 
-This slice enables no worker, approval reservation, installer process, WinGet invocation, or machine-changing behavior. The existing Windows fail-closed behavior remains mandatory until implementation, Windows CI, target-machine acceptance, and independent security review pass.
+This slice enables no worker, approval reservation, installer process, WinGet invocation, or machine-changing behavior. The existing Windows fail-closed behavior remains mandatory until implementation, Windows CI, target-machine acceptance, and the remaining native acceptance tests pass.
 
 Base reviewed: `main` at branch creation. Work is isolated on `feat/P6-609-b2-windows-sqlite-storage`.
 
 ## Problem statement
 
-`SQLiteJobStore` delegates path protection to `SecureStorageAdapter`. Linux is enabled; Windows has a native adapter implementation but intentionally remains disabled by `create_platform_secure_storage()` pending review and acceptance. The separate `WindowsSecretFile` implementation is useful reference code, but it is not a SQLite adapter: SQLite opens the database and its sidecars by pathname and creates/uses `-wal` and `-shm` files. A secure implementation must protect the complete SQLite file set and the path namespace for the full lifetime of each connection.
+`SQLiteJobStore` delegates path protection to `SecureStorageAdapter`. Linux is enabled; Windows has a native adapter implementation but intentionally remains disabled by `create_platform_secure_storage()` pending implementation validation and acceptance. The separate `WindowsSecretFile` implementation is useful reference code, but it is not a SQLite adapter: SQLite opens the database and its sidecars by pathname and creates/uses `-wal` and `-shm` files. A secure implementation must protect the complete SQLite file set and the path namespace for the full lifetime of each connection.
 
 Do not simply call `WindowsSecretFile` on the main database file and then pass its path to sqlite3. That would leave SQLite sidecar creation and path substitution outside the verified-handle boundary.
 
@@ -51,7 +51,7 @@ The lease must:
 
 ### 4. Failure and compatibility behavior
 
-- Windows remains disabled until the new lease API is implemented and reviewed.
+- Windows remains disabled until the new lease API is implemented and the required Windows acceptance tests pass.
 - Linux behavior and tests remain unchanged unless the shared protocol requires a strictly backward-compatible refactor.
 - macOS remains disabled.
 - Missing pywin32, access denied, unexpected DACL entries, owner mismatch, reparse points, handle acquisition failures, sidecar verification failures, and SQLite errors all fail closed as `JobStoreUnavailable`.
@@ -116,7 +116,7 @@ The final state-directory operation no longer uses a path-based CreateDirectoryW
 2. Creates the child relative to that pinned parent using NtCreateFile, supplying the protected owner-only security descriptor in the same call.
 3. Retains the handle returned by NtCreateFile (or opens the pre-existing child relative to the same parent after a create collision) and verifies that exact handle before SQLite is allowed to open the database.
 
-This is intended to bind creation/open and verification to the same directory object, removing the former create-then-reopen-by-path substitution window. It is **not yet accepted as closed**: the exact-head Windows native workflow must validate the NtCreateFile structure/handle interop and all existing Windows acceptance tests, followed by independent review. Windows storage remains disabled and this PR remains Draft.
+This is intended to bind creation/open and verification to the same directory object, removing the former create-then-reopen-by-path substitution window. It is **not yet accepted as closed**: the exact-head Windows native workflow must validate the NtCreateFile structure/handle interop and all existing Windows acceptance tests, followed by the remaining Windows acceptance tests. Windows storage remains disabled and this PR remains Draft.
 
 
 Additional native Windows tests now attempt to prove that the leased state directory cannot be renamed while its handle is held, and that all directory handles are released after a forced verification failure. These tests must pass on the exact PR head before the parent namespace mitigation can be considered validated.
@@ -138,7 +138,7 @@ Exact PR head: `ed89fe06e7e47f9beb4493406194332fd0748e84`.
 - Windows Process Containment workflow: **passed** — Windows native storage/job lifecycle and containment test job completed successfully.
 - The rename-lease regression and exception-path handle-cleanup regression are included in that exact-head Windows job.
 
-This closes the CI validation requirement for this revision only. It does not grant independent security approval or Windows 11 Home target-machine acceptance. The broader acceptance matrix (including wrong-owner/broad-DACL database and sidecar fixtures, reparse-point database/sidecar fixtures, concurrent store instances, and explicit no-fallback tests) remains to be completed. Windows storage remains fail-closed; this PR remains Draft.
+This closes the CI validation requirement for this revision only. It does not complete Windows 11 Home target-machine acceptance. The broader acceptance matrix (including wrong-owner/broad-DACL database and sidecar fixtures, reparse-point database/sidecar fixtures, concurrent store instances, and explicit no-fallback tests) remains to be completed. Windows storage remains fail-closed; this PR remains Draft.
 
 
 ## Concurrent store-instance regression (2026-11-20)
@@ -167,7 +167,7 @@ The Windows concurrent-store integration test must pass on the exact new head. T
 - The job store reports `JobStoreCommittedButUnverified` when a progress update or transition has committed but the subsequent storage verification fails. Callers must not blindly retry; after storage is trusted again, they should read the job ID and reconcile its persisted state with the intended update.
 - Regression coverage records the SQLite-open event after lease entry, tracks all directory handles in the forced-failure cleanup test, tests pre-existing Linux sidecar rejection before SQLite connects, and exercises same-database Windows mutex serialization.
 
-These changes do not enable Windows storage. The production factory remains fail-closed. The Windows named-mutex namespace/security descriptor, broader Windows wrong-owner and broad-DACL fixtures, database/sidecar reparse-point fixtures, and independent native interop review remain acceptance gates.
+These changes do not enable Windows storage. The production factory remains fail-closed. The Windows named-mutex namespace/security descriptor, broader Windows wrong-owner and broad-DACL fixtures, database/sidecar reparse-point fixtures, and the remaining Windows-native acceptance tests remain acceptance gates.
 
 
 ## Follow-up CodeRabbit findings (2026-11-20)
@@ -178,7 +178,7 @@ The fresh review of head `a73587a` identified additional issues; the PR is not r
 - **Windows ACE decoding:** directory and file DACL verification now rejects unsupported pywin32 ACE tuple shapes and translates `NotImplementedError` / malformed tuples to `PlatformStorageUnavailable`. Unit tests cover conditional/object ACE representations.
 - **Windows mutex key:** key generation now normalizes the absolute path lexically and does not call `Path.resolve()`, avoiding reparse-point traversal or network lookup before namespace validation.
 - **Windows mutex contention test:** a small wait seam lets the integration test signal when the second thread reaches the native wait boundary before asserting that the first lease excludes it.
-- **Still pending:** exact-head CI, fresh CodeRabbit review of the new head, and independent native security review. Windows storage remains disabled and this PR remains Draft.
+- **Still pending:** exact-head CI, fresh CodeRabbit review of the new head, and Windows 11 Home target acceptance. Windows storage remains disabled and this PR remains Draft.
 
 
 ## Exact-head validation after follow-up review (2026-11-20)
@@ -208,7 +208,7 @@ These additions are awaiting exact-head CI and a fresh CodeRabbit review. The PR
 
 ## Directory-identity mutex remediation (2026-11-20)
 
-The previous lexical-path mutex key could be bypassed when the same NTFS directory was addressed through a long path and its 8.3 short-name alias. The mutex now derives its key from the validated directory handle's volume serial number and file index. Directory ancestry and the final state directory are pinned and verified first; only then is the mutex acquired, before the SQLite file set is created or opened. This removes path-spelling aliases from the coordination key without resolving an untrusted path. The conservative lock scope is the complete dedicated state directory, so separate database files in one directory are serialized; distinct directory identities remain independent. A Windows integration regression uses GetShortPathNameW and skips only when the runner has 8.3 aliases disabled. This remediation still requires exact-head Windows CI and fresh independent review; Windows storage remains disabled.
+The previous lexical-path mutex key could be bypassed when the same NTFS directory was addressed through a long path and its 8.3 short-name alias. The mutex now derives its key from the validated directory handle's volume serial number and file index. Directory ancestry and the final state directory are pinned and verified first; only then is the mutex acquired, before the SQLite file set is created or opened. This removes path-spelling aliases from the coordination key without resolving an untrusted path. The conservative lock scope is the complete dedicated state directory, so separate database files in one directory are serialized; distinct directory identities remain independent. A Windows integration regression uses GetShortPathNameW and skips only when the runner has 8.3 aliases disabled. This remediation still requires exact-head Windows CI and the remaining Windows acceptance tests; Windows storage remains disabled.
 
 
 ## Current exact-head status (2026-11-20; supersedes earlier snapshots)
@@ -221,15 +221,25 @@ The following status supersedes earlier commit-specific snapshots in this docume
   - Windows Process Containment — run `44771961347` — success.
   - AI PR Diff Trigger — run `44771961387` — success.
 - The Windows workflow includes the ancestor-rename regression. Its test fixture now creates the existing `outer/middle` ancestors before lease acquisition and leaves the final `private-state` directory for the adapter to create. This correction is in the current head.
-- The latest CodeRabbit request against this head returned **Review finished** at 2026-11-20 16:18 UTC. CodeRabbit also stated that its incremental review system does not re-review already-reviewed commits. Therefore this response is **not** a fresh full review or an independent security approval. The ancestor-rename finding is marked addressed in `f467346`.
+- The latest CodeRabbit request against this head returned **Review finished** at 2026-11-20 16:18 UTC. CodeRabbit also stated that its incremental review system does not re-review already-reviewed commits. Therefore this response is **not** a fresh full review. The ancestor-rename finding is marked addressed in `f467346`.
 - The PR currently has 17 review threads and zero unresolved threads. Resolved/outdated thread status is not equivalent to a CodeRabbit approval or security sign-off.
 
 **Still required before this B2 slice can be accepted or merged:**
 
-1. Independent native Windows security review of the ctypes/NT API ABI and structures, handle lifetime/cleanup, file and mutex DACLs, access masks, global mutex namespace, and ancestor rename exclusion.
-2. Independent review and approval of the B2-specific threat-model draft at `docs/threat-models/P6-609-B2-WINDOWS-SQLITE-STORAGE.md`.
-3. A real Windows 11 Home target-machine acceptance run.
+1. 2. 3. A real Windows 11 Home target-machine acceptance run.
 4. A two-logon-session test proving the same user's sessions coordinate on the same global mutex.
 5. Completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL and database/sidecar reparse-point cases.
 
-GitHub-hosted Windows CI is automated evidence for this exact commit; it is not a substitute for the independent review or target-machine acceptance above. Windows production storage remains disabled. This PR remains Draft, open, and unmerged. No worker execution, installer invocation, or real installation is authorized by this slice.
+GitHub-hosted Windows CI is automated evidence for this exact commit; Windows 11 Home target-machine acceptance and the remaining native acceptance cases above are still required. Windows production storage remains disabled. This PR remains Draft, open, and unmerged. No worker execution, installer invocation, or real installation is authorized by this slice.
+
+## Windows storage release-gate status (Product Owner decision, 2026-11-24)
+
+The Product Owner has confirmed that an Independent Native Security Review is not an available project activity and has instructed that this prerequisite be removed. No separate review task or substitute review process is to be created.
+
+The independent-review prerequisite is therefore removed from the Windows storage release gate. This decision does not waive technical acceptance evidence. The remaining gates are:
+- exact-head Windows CI for the native storage implementation;
+- Windows 11 Home target-machine acceptance;
+- two-logon-session coordination acceptance for the global named mutex;
+- completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL database and sidecar fixtures, database/sidecar reparse-point fixtures, and explicit no-fallback behavior.
+
+The production factory must reflect the actual validated implementation and the remaining acceptance status. Do not reintroduce Independent Native Security Review as a prerequisite in later notes or review comments.
