@@ -260,7 +260,7 @@ def test_existing_install_reservation_can_be_recovered_by_owner_and_plan(tmp_pat
     assert recovered.reservation_id == receipt.reservation_id
     assert recovered.state == "QUEUED"
     assert recovered.binding_json == binding.model_dump_json()
-    with pytest.raises(Exception):
+    with pytest.raises(ApprovalReservationNotFound):
         store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id="another-owner")
 
 
@@ -302,15 +302,15 @@ def test_real_install_release_nonce_is_one_use_and_bound_to_exact_action(tmp_pat
     binding = make_binding()
     store = make_store(tmp_path)
     expiry = NOW + timedelta(minutes=5)
-    args = dict(
-        task_id="P6-609-C",
-        package_id=binding.evidence.package_id,
-        version=binding.evidence.version,
-        action_digest=binding.approval_digest,
-        nonce="a" * 64,
-        expires_at=expiry,
-        now=NOW,
-    )
+    args = {
+        "task_id": "P6-609-C",
+        "package_id": binding.evidence.package_id,
+        "version": binding.evidence.version,
+        "action_digest": binding.approval_digest,
+        "nonce": "a" * 64,
+        "expires_at": expiry,
+        "now": NOW,
+    }
     store.consume_real_install_release_authorization(**args)
     with pytest.raises(ApprovalReservationConflict, match="already consumed"):
         store.consume_real_install_release_authorization(**args)
