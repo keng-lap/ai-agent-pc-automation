@@ -24,7 +24,7 @@ class VerifiedPackageEvidence(BaseModel):
     source: Literal["winget"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
     installer_url: str = Field(min_length=8, max_length=2048)
-    official_release_url: str = Field(min_length=8, max_length=2048)
+    official_release_url: str | None = Field(default=None, min_length=8, max_length=2048)
     manifest_source_url: str = Field(min_length=8, max_length=2048)
     repository_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     installer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -43,7 +43,7 @@ class VerifiedPackageEvidence(BaseModel):
             raise ValueError("value must not be blank")
         return value.strip()
 
-    @field_validator("installer_url", "official_release_url", "manifest_source_url")
+    @field_validator("installer_url", "manifest_source_url")
     @classmethod
     def require_https_source_urls(cls, value: str) -> str:
         parsed = urlsplit(value)
