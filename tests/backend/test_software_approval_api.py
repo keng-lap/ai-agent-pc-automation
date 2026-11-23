@@ -187,6 +187,14 @@ def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
         lambda **_kwargs: binding,
     )
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+    requested_plan_owners = []
+    original_get_plan = api._get_install_plan
+
+    def get_plan_for_owner(plan_id, *, owner_id):
+        requested_plan_owners.append((plan_id, owner_id))
+        return original_get_plan(plan_id, owner_id=owner_id)
+
+    monkeypatch.setattr(api, "_get_install_plan", get_plan_for_owner)
 
     response = api.confirm_software_approval(
         PLAN_ID,
@@ -194,6 +202,7 @@ def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
         request=object(),
     )
 
+    assert requested_plan_owners == [(PLAN_ID, "owner-1")]
     assert response.approved is True
     assert response.notice == "APPROVED_QUEUED_NOT_YET_EXECUTED"
     assert response.execution_state == "QUEUED"
