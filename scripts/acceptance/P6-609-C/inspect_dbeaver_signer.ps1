@@ -1,8 +1,3 @@
-[CmdletBinding()]
-param(
-    [switch]$ConfigureUserEnvironment
-)
-
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -94,17 +89,7 @@ try {
 
     Write-Host ''
     Write-Host 'This command does NOT install or execute DBeaver.'
-    Write-Host 'After independently reviewing the signer details, configure this exact certificate pin:'
-    Write-Host ('$env:AI_AGENT_DBEAVER_SIGNER_SHA256 = "' + $fingerprint + '"')
-
-    if ($ConfigureUserEnvironment) {
-        $answer = Read-Host 'Persist this verified certificate fingerprint for the current Windows user? (y/N)'
-        if ($answer -match '(?i)^y(es)?$') {
-            [Environment]::SetEnvironmentVariable('AI_AGENT_DBEAVER_SIGNER_SHA256', $fingerprint, 'User')
-            $env:AI_AGENT_DBEAVER_SIGNER_SHA256 = $fingerprint
-            Write-Host 'User environment variable saved. Restart the backend process before using the install workflow.'
-        }
-    }
+    Write-Host 'The certificate fingerprint is evidence for review only; no environment variable or per-package pin is required.'
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {
