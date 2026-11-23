@@ -125,6 +125,7 @@ export interface SoftwareApprovalChallenge {
   architecture: 'x86' | 'x64' | 'arm64';
   scope: 'user';
   installer_type: 'exe' | 'msi' | 'msix' | 'appx';
+  installer_silent_switch: string | null;
   installer_url: string;
   official_release_url: string | null;
   manifest_source_url: string;
