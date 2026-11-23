@@ -1010,11 +1010,17 @@ export class App implements AfterViewChecked {
           )));
           this.loadSoftwareInstallJobStatus(entryId, value.reservation_id);
         },
-        error: () => this.entries.update((entries) => entries.map((item) => (
-          item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
-            : item
-        ))),
+        error: (error: unknown) => {
+          const notFound = typeof error === 'object' && error !== null
+            && 'status' in error && (error as { status?: number }).status === 404;
+          this.entries.update((entries) => entries.map((item) => (
+            item.id === entryId && item.discovery
+              ? notFound
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: false, approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'ไม่พบ Reservation ที่บันทึกไว้ กรุณาขอการอนุมัติใหม่' : 'No reservation was found. Request a new approval to continue.' } }
+                : { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
+              : item
+          )));
+        },
       });
   }
   protected refreshSoftwareInstallStatus(entryId: number): void {
