@@ -63,12 +63,9 @@ def get_software_install_readiness() -> dict:
     return {
         "platform_supported": sys.platform == "win32",
         "authenticode_verification_available": sys.platform == "win32",
-        "publisher_trust_configured": software_evidence_registry.trust_anchor_configured,
-        "supported_package_ids": (
-            ["DBeaver.DBeaver.Community"]
-            if software_evidence_registry.trust_anchor_configured
-            else []
-        ),
+        "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
+        "publisher_trust_mode": "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH",
+        "supported_package_ids": [],
         "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
     }
 
@@ -115,13 +112,22 @@ def create_software_install_proposal(
         or candidate.package_id != payload.package_id
         or candidate.version != payload.version
         or candidate.architecture != payload.architecture
-        or candidate.publisher_verification != "VERIFIED"
-        or candidate.official_version != candidate.version
-        or candidate.official_asset_sha256 != candidate.installer_sha256
+        or (
+            candidate.package_id == "DBeaver.DBeaver.Community"
+            and (
+                candidate.publisher_verification != "VERIFIED"
+                or candidate.official_version != candidate.version
+                or candidate.official_asset_sha256 != candidate.installer_sha256
+            )
+        )
+        or (
+            candidate.package_id != "DBeaver.DBeaver.Community"
+            and candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}
+        )
     ):
         raise HTTPException(
             status_code=409,
-            detail="The exact package is not matched to a verified official publisher release.",
+            detail="The exact package is not eligible for publisher and installer verification.",
         )
 
     store_path = getattr(request.app.state, "job_store_path", None)
@@ -146,7 +152,7 @@ def create_software_install_proposal(
     except EvidenceRejected:
         raise HTTPException(
             status_code=409,
-            detail="Publisher certificate is not present in the backend-owned trust policy.",
+            detail="Authenticode signer identity does not match the WinGet manifest Publisher.",
         ) from None
     except InstallPlanCapacityError:
         if evidence is not None:
