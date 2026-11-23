@@ -85,6 +85,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.auth_services = auth_services
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
+    application.state.real_install_enabled = settings.real_install_enabled
     application.state.job_store_lock = threading.Lock()
     application.state.approval_reservation_store = None
     application.state.approval_reservation_store_lock = threading.Lock()
@@ -102,9 +103,9 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
 
     @application.on_event("startup")
     def start_local_install_worker() -> None:
-        # Real WinGet execution is a Windows-local capability only. Other
-        # platforms keep the durable queue inert and fail closed.
-        if os.name != "nt":
+        # Real WinGet execution requires both Windows and explicit local release opt-in.
+        # The default remains disabled; TOTP approval alone never enables the worker.
+        if os.name != "nt" or not settings.real_install_enabled:
             return
         try:
             store = application.state.approval_reservation_store
