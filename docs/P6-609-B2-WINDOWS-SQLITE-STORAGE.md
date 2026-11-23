@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**Status: implementation in progress; Windows SQLite storage remains disabled.**
+**Status: Windows adapter is enabled in the production factory; target-machine and remaining native acceptance are still open.**
 
 The shared storage contract and `SQLiteJobStore` use a connection-scoped protection lease. The Windows adapter now pins ancestor directory handles, creates or opens the final state directory relative to a pinned immediate-parent handle with NtCreateFile, receives and retains the exact created/opened directory handle, applies an explicit protected owner-only DACL during creation, refuses to rewrite ACLs on existing directories, rejects all reparse points, requires a fixed local volume, and pre-creates the database plus WAL/SHM/journal entries with explicit current-user owner and protected owner-only DACLs before SQLite connects. These changes are not yet accepted for production: remaining Windows integration coverage, exact-head CI, and Windows 11 Home acceptance remain required.
 
@@ -226,11 +226,11 @@ The following status supersedes earlier commit-specific snapshots in this docume
 
 **Still required before this B2 slice can be accepted or merged:**
 
-1. 2. 3. A real Windows 11 Home target-machine acceptance run.
+1. A real Windows 11 Home target-machine acceptance run.
 4. A two-logon-session test proving the same user's sessions coordinate on the same global mutex.
 5. Completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL and database/sidecar reparse-point cases.
 
-GitHub-hosted Windows CI is automated evidence for this exact commit; Windows 11 Home target-machine acceptance and the remaining native acceptance cases above are still required. Windows production storage remains disabled. This PR remains Draft, open, and unmerged. No worker execution, installer invocation, or real installation is authorized by this slice.
+This is a historical status snapshot for the 2026-11-20 head, not the current PR state. The current factory returns the Windows adapter; Windows 11 Home target-machine acceptance and the remaining native acceptance cases are still required. This PR remains Draft and unmerged pending those technical acceptance results and explicit Product Owner merge approval.
 
 ## Windows storage release-gate status (Product Owner decision, 2026-11-24)
 
