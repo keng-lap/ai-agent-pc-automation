@@ -92,7 +92,7 @@ def verify_exact_user_install(
     # ID token and read the following version token instead of splitting the
     # display table on a fixed number of spaces.
     package_pattern = re.compile(
-        rf"(?<!\S){re.escape(package_id)}(?!\S)\s+(\S+)",
+        rf"(?<!\S){re.escape(package_id)}(?!\S)(?=\s+(\S+))",
         re.IGNORECASE,
     )
     lines = (result.stdout or "").splitlines()
