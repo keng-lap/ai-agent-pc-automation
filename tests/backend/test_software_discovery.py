@@ -317,3 +317,12 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
         call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
         for call in source.calls
     )
+
+
+def test_exe_candidate_without_manifest_silent_switch_is_rejected():
+    source = FakeSource()
+    del source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Installers"][0]["InstallerSwitches"]
+    repository = make_repository(source)
+
+    with pytest.raises(DiscoveryUnavailable, match="silent switch"):
+        repository.discover(package_id=PACKAGE_ID, version=VERSION, architecture="x64")
