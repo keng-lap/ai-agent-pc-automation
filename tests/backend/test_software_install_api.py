@@ -297,5 +297,12 @@ def test_readiness_reports_real_install_release_gate(monkeypatch):
     monkeypatch.setattr(api.sys, "platform", "win32")
     monkeypatch.delenv("AI_AGENT_ENABLE_REAL_INSTALL", raising=False)
     assert api.get_software_install_readiness()["real_install_enabled"] is False
+    from datetime import UTC, datetime, timedelta
+
     monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_RELEASE_TASK", "P6-609-C")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_PACKAGE_ID", "Contoso.Editor")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_VERSION", "2.4.1")
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_EXPIRES_AT", (datetime.now(UTC) + timedelta(minutes=5)).isoformat())
+    monkeypatch.setenv("AI_AGENT_REAL_INSTALL_NONCE", "a" * 64)
     assert api.get_software_install_readiness()["real_install_enabled"] is True
