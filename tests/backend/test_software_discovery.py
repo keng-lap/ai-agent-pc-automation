@@ -38,6 +38,7 @@ class FakeSource:
             "Architecture": "x64",
             "Scope": "user" if not bad_scope else "machine",
             "InstallerType": "exe",
+            "InstallerSwitches": {"Silent": "/S"},
             "InstallerUrl": f"https://github.com/dbeaver/dbeaver/releases/download/{VERSION}/dbeaver-ce-{VERSION}-windows-x86_64.exe",
             "InstallerSha256": "b" * 64,
         }
