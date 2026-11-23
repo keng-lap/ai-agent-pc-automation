@@ -416,7 +416,6 @@ def test_install_job_status_hides_other_owners_jobs(monkeypatch):
 def test_owner_can_recover_committed_install_job_by_plan_without_new_approval(monkeypatch):
     from types import SimpleNamespace
 
-    binding = make_binding()
     job = SimpleNamespace(
         reservation_id="12345678-1234-5678-1234-567812345678",
         state="RUNNING",
