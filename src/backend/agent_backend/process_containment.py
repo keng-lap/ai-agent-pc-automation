@@ -134,6 +134,24 @@ class WindowsJobObject:
         if not self._kernel32.TerminateJobObject(self._handle, exit_code):
             raise self._last_error("TerminateJobObject failed")
 
+    def wait_for_empty(self, timeout_ms: int = 0xFFFFFFFF) -> None:
+        """Wait until every process assigned to this Job Object has exited."""
+        if not self.is_open:
+            raise ProcessContainmentError("Job Object is closed")
+        if type(timeout_ms) is not int or not 0 <= timeout_ms <= 0xFFFFFFFF:
+            raise ValueError("timeout_ms must be an unsigned 32-bit integer")
+        wait_for_single_object = self._kernel32.WaitForSingleObject
+        wait_for_single_object.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        wait_for_single_object.restype = wintypes.DWORD
+        result = wait_for_single_object(self._handle, timeout_ms)
+        if result == 0x00000000:
+            return
+        if result == 0x00000102:
+            raise ProcessContainmentError("Timed out waiting for contained processes to exit")
+        if result == 0xFFFFFFFF:
+            raise self._last_error("Waiting for contained processes failed")
+        raise ProcessContainmentError("Job Object wait returned an unexpected status")
+
     def close(self) -> None:
         handle = getattr(self, "_handle", None)
         if handle is None:
