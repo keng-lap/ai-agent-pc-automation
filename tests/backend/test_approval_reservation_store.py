@@ -269,3 +269,43 @@ def test_approval_bindings_and_audit_ledger_are_append_only(tmp_path):
                 "DELETE FROM job_reservations WHERE reservation_id=?",
                 (receipt.reservation_id,),
             )
+
+
+@pytest.mark.parametrize("lookup", ["plan", "reservation"])
+def test_status_lookup_reconciles_expired_install_lease(tmp_path, lookup):
+    current = NOW + timedelta(seconds=60)
+    store = make_store(tmp_path, clock=lambda: current)
+    create_approval(store)
+    receipt = reserve(store, now=NOW)
+    lease_expiry = (NOW + timedelta(seconds=30)).isoformat().replace("+00:00", "Z")
+
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            """
+            INSERT INTO install_execution_jobs (
+                reservation_id, owner_id, action_digest, binding_json, state,
+                worker_id, lease_token, lease_expires_at, attempts, version,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'RUNNING', ?, ?, ?, 1, 1, ?, ?)
+            """,
+            (
+                receipt.reservation_id,
+                OWNER,
+                ACTION_DIGEST,
+                "{}",
+                "worker-1",
+                "lease-token",
+                lease_expiry,
+                NOW.isoformat().replace("+00:00", "Z"),
+                NOW.isoformat().replace("+00:00", "Z"),
+            ),
+        )
+
+    if lookup == "plan":
+        job = store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id=OWNER)
+    else:
+        job = store.get_install_job(reservation_id=receipt.reservation_id, owner_id=OWNER)
+
+    assert job.state == "UNKNOWN"
+    assert job.result_code == "WORKER_LEASE_EXPIRED"
+    assert job.lease_expires_at is None
