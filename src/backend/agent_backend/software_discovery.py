@@ -447,9 +447,10 @@ class WinGetManifestRepository:
         installer_hash = installer.get("InstallerSha256")
         installer_type = installer.get("InstallerType") or installer_doc.get("InstallerType")
         switches = installer.get("InstallerSwitches")
-        if not isinstance(switches, dict):
-            switches = installer_doc.get("InstallerSwitches")
         silent_switch = switches.get("Silent") if isinstance(switches, dict) else None
+        if not silent_switch:
+            root_switches = installer_doc.get("InstallerSwitches")
+            silent_switch = root_switches.get("Silent") if isinstance(root_switches, dict) else None
         domain = _validate_installer_url(installer_url)
         if not isinstance(installer_hash, str) or not SHA256_PATTERN.fullmatch(installer_hash):
             raise DiscoveryUnavailable("installer SHA-256 was missing or invalid")
