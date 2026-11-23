@@ -30,9 +30,10 @@ def request_path(url):
 
 
 class FakeSource:
-    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False, official_version=VERSION):
+    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False, official_version=VERSION, wrap_base64=False):
         self.calls = []
         self.official_version = official_version
+        self.wrap_base64 = wrap_base64
         installer = {
             "Architecture": "x64",
             "Scope": "user" if not bad_scope else "machine",
@@ -101,7 +102,7 @@ class FakeSource:
             raw = json.dumps(document).encode()
             payload = {
                 "encoding": "base64",
-                "content": base64.b64encode(raw).decode(),
+                "content": (lambda encoded: "\n".join(encoded[i:i + 60] for i in range(0, len(encoded), 60)) if self.wrap_base64 else encoded)(base64.b64encode(raw).decode()),
             }
         return FakeResponse(payload)
 
@@ -145,6 +146,18 @@ def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():
     )
     assert result.candidate is not None
     assert result.candidate.scope == "user"
+
+
+
+def test_discovery_accepts_whitespace_wrapped_github_base64_manifest_content():
+    source = FakeSource(wrap_base64=True)
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.package_id == PACKAGE_ID
 
 
 def test_discovery_blocks_manifest_when_official_release_is_newer():
