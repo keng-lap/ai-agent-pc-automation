@@ -2,7 +2,7 @@
 
 These scripts cover the remaining target-machine storage acceptance only. A separate test across two Windows logon sessions is explicitly out of scope and is not required.
 
-The scripts do not enable the application worker, invoke WinGet, or install software. They print test results and failures directly in the PowerShell window. No log, ZIP, screenshot, or other artifact needs to be sent back.
+The scripts do not enable the application worker, invoke WinGet, or install software. They print test results and failures directly in the PowerShell window, then publish a sanitized test log and summary to the dedicated Git branch `acceptance-results/P6-609-B2`. No log, ZIP, screenshot, or other artifact needs to be sent in Chat.
 
 ## Preconditions
 
@@ -50,7 +50,7 @@ From the repository root:
 
 ## Report in Chat
 
-Do not send files. Report only the status and, for any failure, the actual failing test and concise error printed by pytest/PowerShell:
+Do not send files. The scripts push each test log to the dedicated results branch. Report only the status and, for any failure, the actual failing test and concise error printed by pytest/PowerShell. The uploaded logs can be opened here: https://github.com/keng-lap/ai-agent-pc-automation/tree/acceptance-results/P6-609-B2/acceptance-results/P6-609-B2
 
 ```text
 Preflight: PASS
@@ -66,5 +66,6 @@ For a passing suite, use `PASS`. For a suite that could not be run, use `BLOCKED
 - Storage/lifecycle suite exits 0.
 - Windows security regression suite exits 0.
 - No required native acceptance case is skipped.
+- Each run's summary records the tested source commit, result, and UTC timestamp; the corresponding sanitized console log is stored beside it.
 
 A successful GitHub-hosted Windows workflow does not replace target-machine acceptance. These scripts do not authorize merge or live installation. PR #170 remains Draft until the remaining acceptance and explicit Product Owner merge approval are satisfied.
