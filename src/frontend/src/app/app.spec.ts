@@ -184,6 +184,7 @@ class FakeChatApi {
       architecture: 'x64',
       scope: 'user',
       installer_type: 'exe',
+      installer_silent_switch: '/S',
       installer_url: 'https://github.com/dbeaver/dbeaver/releases/download/25.3.0/dbeaver.exe',
       official_release_url: 'https://github.com/dbeaver/dbeaver/releases/tag/25.3.0',
       manifest_source_url: 'https://github.com/microsoft/winget-pkgs/tree/main',
