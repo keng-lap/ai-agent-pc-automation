@@ -98,7 +98,7 @@ This slice does not implement durable approval, TOTP integration, execution audi
 
 ## Security review remediation status (2026-11-20)
 
-The first independent review identified four blocking concerns. The current implementation addresses them as follows, but this is not a final approval:
+The initial implementation review identified four blocking concerns. The current implementation addresses them as follows, but this is not a final approval:
 
 - **First-run ACL window:** new directories are created relative to a pinned parent with `NtCreateFile`; the protected owner-only security descriptor is supplied in that same native call, and the returned handle is verified directly.
 - **Existing directory mutation:** existing directories are never re-permissioned. They must already have the exact protected owner-only ACL or initialization fails closed.
@@ -193,7 +193,7 @@ Exact PR head: `83f41a22fefc8976260e57549325da63c650fddd`.
 - Frontend build: **passed**.
 - AI PR Diff Trigger: **passed**.
 
-The Linux second-process POSIX-lock regression passed as part of backend pytest. The Windows ACE-format rejection and mutex wait-boundary regression passed as part of the Windows suite. These results validate the exact commit's automated tests only; they do not replace fresh CodeRabbit review, independent native security review, or Windows 11 Home target acceptance. Windows storage remains disabled and PR #169 remains Draft.
+The Linux second-process POSIX-lock regression passed as part of backend pytest. The Windows ACE-format rejection and mutex wait-boundary regression passed as part of the Windows suite. These results validate the exact commit's automated tests only; they do not replace fresh CodeRabbit review or Windows 11 Home target acceptance. Windows storage remains disabled and PR #169 remains Draft.
 
 
 ## Additional CodeRabbit follow-up (2026-11-20)
