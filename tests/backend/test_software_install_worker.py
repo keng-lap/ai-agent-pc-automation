@@ -280,7 +280,6 @@ def test_worker_denies_release_for_different_exact_package_without_execution(mon
         executor=lambda *_a, **_k: executor_calls.append(True),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
         release_authorization=authorization,
     )
 
