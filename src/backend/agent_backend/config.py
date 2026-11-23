@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LOCAL_AGENT_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+REAL_INSTALL_ENV = "AI_AGENT_ENABLE_REAL_INSTALL"
 
 # src/backend/agent_backend/config.py -> repository root is parents[3]
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -77,6 +78,7 @@ class Settings:
     app_session_ttl_seconds: int | None = None
     authenticator_secret_path: Path | None = None
     job_store_path: Path | None = None
+    real_install_enabled: bool = False
 
     @property
     def auth_enabled(self) -> bool:
@@ -195,6 +197,10 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
             "authenticator_secret_path": secret_path,
         }
 
+    real_install_raw = os.environ.get(REAL_INSTALL_ENV, "0").strip()
+    if real_install_raw not in {"0", "1"}:
+        raise ConfigError(f"{REAL_INSTALL_ENV} must be exactly 0 or 1.")
+
     return Settings(
         app_env=os.environ.get("APP_ENV", "development").strip(),
         backend_host=host,
@@ -202,6 +208,7 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
         frontend_port=frontend_port,
         log_level=os.environ.get("LOG_LEVEL", "info").strip().lower(),
         local_agent_token=token,
+        real_install_enabled=real_install_raw == "1",
         job_store_path=Path(
             os.environ.get("JOB_STORE_PATH", str(default_state_directory() / "jobs.sqlite3"))
         ).expanduser(),
