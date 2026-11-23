@@ -116,13 +116,23 @@ class SoftwareEvidenceRegistry:
                 or candidate.official_asset_sha256 != candidate.installer_sha256
             ):
                 raise EvidenceRejected("DBeaver official release evidence is not verified")
-        elif candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}:
+        elif candidate.publisher_verification == "NOT_CHECKED":
+            if any((
+                candidate.official_version is not None,
+                candidate.official_release_url is not None,
+                candidate.official_asset_sha256 is not None,
+                candidate.official_asset_id is not None,
+            )):
+                raise EvidenceRejected("unchecked publisher candidate contained unexpected vendor release claims")
+        elif candidate.publisher_verification == "VERIFIED":
+            if (
+                candidate.official_version != candidate.version
+                or not candidate.official_release_url
+                or candidate.official_asset_sha256 != candidate.installer_sha256
+            ):
+                raise EvidenceRejected("verified vendor release did not match the exact manifest candidate")
+        else:
             raise EvidenceRejected("package publisher source check did not pass")
-        elif (
-            candidate.official_asset_sha256 is not None
-            and candidate.official_asset_sha256 != candidate.installer_sha256
-        ):
-            raise EvidenceRejected("official release digest does not match the manifest digest")
         if (
             staged.package_id != candidate.package_id
             or staged.version != candidate.version
