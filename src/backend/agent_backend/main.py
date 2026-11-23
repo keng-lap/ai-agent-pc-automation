@@ -153,7 +153,9 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
         application.state.install_worker_stop.set()
         thread = application.state.install_worker_thread
         if thread is not None:
-            thread.join(timeout=5)
+            # Shutdown is not complete until the worker has observed the stop
+            # signal and the contained WinGet process has exited.
+            thread.join()
 
     return application
 
