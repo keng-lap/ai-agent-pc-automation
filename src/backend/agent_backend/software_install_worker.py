@@ -83,7 +83,7 @@ def verify_exact_user_install(
         return None
     # WinGet reports an empty exact search with this HRESULT (which may be
     # surfaced as either an unsigned DWORD or its signed 32-bit equivalent).
-    if result.returncode in {0x8A150014, -1978331116}:
+    if result.returncode in {0x8A150014, -1978335212}:
         return False
     if result.returncode != 0:
         return None
