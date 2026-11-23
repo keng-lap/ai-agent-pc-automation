@@ -248,3 +248,52 @@ def test_worker_can_renew_live_lease_with_version_cas(tmp_path):
         timespec="milliseconds"
     ).replace("+00:00", "Z")
     assert renewed.attempts == 1
+
+
+def test_existing_install_reservation_can_be_recovered_by_owner_and_plan(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+
+    recovered = store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id=OWNER)
+
+    assert recovered.reservation_id == receipt.reservation_id
+    assert recovered.state == "QUEUED"
+    assert recovered.binding_json == binding.model_dump_json()
+    with pytest.raises(Exception):
+        store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id="another-owner")
+
+
+def test_expired_reboot_required_lease_becomes_unknown_without_retry(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+    claimed = store.claim_next_install(worker_id="worker-1", now=NOW, lease_seconds=1)
+    running = store.transition_install(
+        receipt.reservation_id,
+        worker_id="worker-1",
+        lease_token=claimed.lease_token,
+        expected_version=claimed.version,
+        target="RUNNING",
+        now=NOW,
+    )
+    reboot = store.transition_install(
+        receipt.reservation_id,
+        worker_id="worker-1",
+        lease_token=claimed.lease_token,
+        expected_version=running.version,
+        target="REBOOT_REQUIRED",
+        result_code="REBOOT_REQUIRED",
+        now=NOW,
+    )
+    assert reboot.state == "REBOOT_REQUIRED"
+
+    assert store.claim_next_install(
+        worker_id="worker-2",
+        now=NOW + timedelta(seconds=2),
+        lease_seconds=60,
+    ) is None
+    recovered = store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id=OWNER)
+    assert recovered.state == "UNKNOWN"
+    assert recovered.attempts == 1
+    assert recovered.result_code == "WORKER_LEASE_EXPIRED"
