@@ -36,6 +36,20 @@ _STILL_ACTIVE = 259
 _MAX_TIMEOUT_SECONDS = 1800
 
 
+def _wait_for_process_exit(wait_for_single_object, process_handle) -> None:
+    """Do not report cancellation/timeout until Windows signals process exit."""
+    while True:
+        result = wait_for_single_object(process_handle, 1000)
+        if result == _WAIT_OBJECT_0:
+            return
+        if result == _WAIT_TIMEOUT:
+            continue
+        if result == _WAIT_FAILED:
+            raise WinGetExecutionError(
+                f"WinGet termination wait failed (Windows error {ctypes.get_last_error()})"
+            )
+        raise WinGetExecutionError("WinGet termination returned an unexpected wait status")
+
 class WinGetExecutionError(RuntimeError):
     """The exact approved WinGet operation could not be safely executed."""
 
@@ -204,7 +218,7 @@ def execute_approved_winget_install(
                 while True:
                     if cancel_event is not None and cancel_event.is_set():
                         job.terminate(1)
-                        wait_for_single_object(process_info.hProcess, 5000)
+                        _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                         return WinGetExecutionResult(
                             executable=str(executable),
                             package_id=binding.evidence.package_id,
@@ -217,7 +231,7 @@ def execute_approved_winget_install(
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         job.terminate(1)
-                        wait_for_single_object(process_info.hProcess, 5000)
+                        _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                         return WinGetExecutionResult(
                             executable=str(executable),
                             package_id=binding.evidence.package_id,
@@ -265,7 +279,7 @@ def execute_approved_winget_install(
                         except ProcessContainmentError:
                             pass
                     terminate_process(process_info.hProcess, 1)
-                    wait_for_single_object(process_info.hProcess, 5000)
+                    _wait_for_process_exit(wait_for_single_object, process_info.hProcess)
                 if isinstance(exc, (ProcessContainmentError, OSError)):
                     raise WinGetExecutionError(
                         "WinGet process containment failed; install was stopped"
