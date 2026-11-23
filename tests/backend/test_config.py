@@ -1,6 +1,11 @@
 import pytest
 
-from agent_backend.config import ConfigError, load_settings
+from agent_backend.config import (
+    ConfigError,
+    REPO_ROOT,
+    default_state_directory,
+    load_settings,
+)
 
 ENV_NAMES = [
     "APP_ENV",
@@ -31,7 +36,7 @@ def test_defaults_are_loopback_only():
     assert settings.backend_port == 8000
     assert settings.frontend_port == 4200
     assert settings.app_env == "development"
-    assert settings.job_store_path == __import__("agent_backend.config", fromlist=["REPO_ROOT"]).REPO_ROOT / ".agent-state" / "jobs.sqlite3"
+    assert settings.job_store_path == REPO_ROOT / ".agent-state" / "jobs.sqlite3"
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "::", "example.com", ""])
@@ -79,7 +84,7 @@ def test_google_auth_configuration_accepts_complete_loopback_setup(monkeypatch):
     assert settings.google_oidc_redirect_uri == "http://127.0.0.1:8000/auth/google/callback"
     assert settings.app_session_ttl_seconds == 1800
     assert settings.authenticator_secret_path.name == "authenticator.json"
-    assert settings.authenticator_secret_path.parent.name == "authenticator"
+    assert settings.authenticator_secret_path.parent == default_state_directory() / "authenticator"
 
 
 @pytest.mark.parametrize("ttl", ["0", "59", "86401", "invalid"])
@@ -115,8 +120,6 @@ def test_google_auth_configuration_rejects_non_loopback_redirect(monkeypatch, re
 
 
 def test_windows_user_state_defaults_to_local_app_data(monkeypatch, tmp_path):
-    from agent_backend.config import default_state_directory
-
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     assert default_state_directory() == tmp_path / "Local" / "AI-Agent-PC-Automation"
     settings = load_settings(load_env_file=False)
