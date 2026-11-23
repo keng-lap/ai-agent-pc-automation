@@ -224,7 +224,7 @@ class SoftwareEvidenceRegistry:
                 verified_at=verified_at,
                 expires_at=min(verified_at + EVIDENCE_TTL, now + EVIDENCE_TTL),
             )
-            except ValidationError as exc:
+        except ValidationError as exc:
             raise EvidenceRejected("installer evidence contains invalid fields") from exc
         with self._lock:
             self._prune(now)
