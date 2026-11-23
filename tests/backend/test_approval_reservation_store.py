@@ -13,6 +13,8 @@ from agent_backend.approval_reservation_store import (
     ApprovalReservationUnavailable,
     SQLiteApprovalReservationStore,
 )
+from agent_backend.platform_storage import PlatformStorageUnavailable
+from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 
 NOW = datetime(2026, 11, 19, 12, 0, tzinfo=UTC)
 OWNER = "google-owner-sub"
@@ -41,6 +43,56 @@ def make_store(tmp_path, *, clock=lambda: NOW):
         clock=clock,
         secure_storage=_TestSecureStorage(),
     )
+
+
+class _FailPostCommitSecureStorage(_TestSecureStorage):
+    def __init__(self):
+        self.fail_post_commit_once = False
+
+    @contextmanager
+    def protect_database(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        storage = self
+
+        class _Lease:
+            def __init__(self):
+                self.verifications = 0
+
+            def verify(self):
+                self.verifications += 1
+                if storage.fail_post_commit_once and self.verifications == 2:
+                    storage.fail_post_commit_once = False
+                    raise PlatformStorageUnavailable("simulated post-commit lease verification failure")
+
+        yield _Lease()
+
+
+def make_install_binding_json():
+    evidence = VerifiedPackageEvidence(
+        evidence_id="e" * 32,
+        package_id="Contoso.Sample",
+        package_name="Contoso Sample",
+        publisher="Contoso Ltd.",
+        version="2.4.1",
+        source="winget",
+        installer_type="msi",
+        installer_url="https://downloads.contoso.example/sample-2.4.1.msi",
+        official_release_url=None,
+        manifest_source_url="https://github.com/microsoft/winget-pkgs/tree/" + "c" * 40,
+        repository_commit="c" * 40,
+        installer_sha256="b" * 64,
+        manifest_sha256="c" * 64,
+        architecture="x64",
+        scope="user",
+        signature_subject="CN=Contoso Ltd.",
+        signature_sha256="d" * 64,
+        verified_at=NOW,
+        expires_at=NOW + timedelta(minutes=10),
+    )
+    return build_install_approval_binding(
+        plan_digest=PLAN_DIGEST,
+        evidence=evidence,
+    ).model_dump_json()
 
 
 def create_approval(store, *, approval_id="approval-1", expires=None):
@@ -82,6 +134,36 @@ def test_reservation_is_durable_and_exactly_idempotent(tmp_path):
     assert first == repeated == recovered
     assert first.state == "RESERVED"
 
+
+
+def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_path):
+    storage = _FailPostCommitSecureStorage()
+    store = SQLiteApprovalReservationStore(
+        tmp_path / "private-state" / "approval.sqlite3",
+        clock=lambda: NOW,
+        secure_storage=storage,
+    )
+    create_approval(store)
+    storage.fail_post_commit_once = True
+
+    with pytest.raises(ApprovalReservationUnavailable):
+        store.reserve(
+            approval_id="approval-1",
+            owner_id=OWNER,
+            session_id=SESSION,
+            plan_id=PLAN_ID,
+            plan_digest=PLAN_DIGEST,
+            action_digest=ACTION_DIGEST,
+            idempotency_key=PLAN_ID,
+            binding_json=make_install_binding_json(),
+            now=NOW,
+        )
+
+    recovered = store.get_install_job_for_plan(plan_id=PLAN_ID, owner_id=OWNER)
+
+    assert recovered.state == "QUEUED"
+    assert recovered.reservation_id
+    assert recovered.attempts == 0
 
 
 def test_concurrent_same_request_returns_one_stable_receipt(tmp_path):
