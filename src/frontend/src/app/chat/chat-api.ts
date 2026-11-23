@@ -96,6 +96,10 @@ export interface SoftwareInstallReadiness {
   publisher_identity_policy_available: boolean;
   publisher_trust_configured: boolean;
   publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH';
+  real_install_enabled: boolean;
+  real_install_release_package_id: string | null;
+  real_install_release_version: string | null;
+  real_install_release_expires_at: string | null;
   package_allowlist_enabled: boolean;
   supported_package_ids: string[];
   notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
