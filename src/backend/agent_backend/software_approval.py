@@ -40,6 +40,8 @@ class VerifiedPackageEvidence(BaseModel):
     @field_validator("installer_silent_switch")
     @classmethod
     def validate_silent_switch(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("installer silent switch must not be blank")
         if value is not None and any(ord(char) < 0x20 for char in value):
             raise ValueError("installer silent switch contains control characters")
         return value
