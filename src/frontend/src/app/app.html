@@ -574,6 +574,11 @@
                             <button class="send-button" type="button" [disabled]="discovery.readinessChecking" (click)="refreshSoftwareInstallReadiness(entry.id)">
                               {{ language() === 'th' ? 'รีเฟรช Release Authorization' : 'Refresh release authorization' }}
                             </button>
+                          } @else if (discovery.reservationRecoveryPending) {
+                            <small role="alert">{{ language() === 'th' ? 'ยังยืนยันไม่ได้ว่าคิวติดตั้งถูกบันทึกหรือไม่ ห้ามอนุมัติซ้ำจนกว่าจะตรวจสอบ Reservation สำเร็จ' : 'The committed install reservation is unresolved. Do not approve again until recovery succeeds.' }}</small>
+                            <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
+                              {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
+                            </button>
                           } @else {
                             <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">
                               {{ language() === 'th' ? 'ยืนยันตัวตนและขออนุมัติ' : 'Verify identity and request approval' }}
