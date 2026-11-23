@@ -48,7 +48,7 @@ class StagedInstaller(BaseModel):
     # Subject is for display; trust decisions must use the certificate DER fingerprint.
     signature_subject: str | None = None
     signature_sha256: str | None = None
-    official_release_url: str
+    official_release_url: str | None = None
     staged_at: str
 
 
@@ -171,7 +171,10 @@ class InstallerStager:
                 raise InstallerStageError("installer size did not match its declared content length")
             if actual_sha256 != candidate.installer_sha256.lower():
                 raise InstallerStageError("installer SHA-256 did not match the approved release digest")
-            if actual_sha256 != candidate.official_asset_sha256:
+            if (
+                candidate.official_asset_sha256 is not None
+                and actual_sha256 != candidate.official_asset_sha256
+            ):
                 raise InstallerStageError("installer SHA-256 did not match the official release asset")
 
             verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
@@ -201,7 +204,7 @@ class InstallerStager:
                 authenticode_valid=True,
                 signature_subject=signature_subject,
                 signature_sha256=signature_sha256,
-                official_release_url=candidate.official_release_url or "",
+                official_release_url=candidate.official_release_url,
                 staged_at=self._clock(),
             )
         except InstallerStageError:
@@ -283,18 +286,21 @@ class InstallerStager:
     def _require_official_release_match(candidate: InstallerCandidate) -> None:
         if not isinstance(candidate, InstallerCandidate):
             raise InstallerStageError("installer candidate must come from the backend discovery service")
-        if (
-            candidate.publisher_verification != "VERIFIED"
-            or candidate.official_version != candidate.version
-            or not candidate.official_release_url
-            or not candidate.official_asset_sha256
-            or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
-            or (
-                candidate.package_id == "DBeaver.DBeaver.Community"
-                and (type(candidate.official_asset_id) is not int or candidate.official_asset_id < 1)
-            )
-        ):
-            raise InstallerStageError("installer is not matched to a verified official release")
+        if candidate.package_id == "DBeaver.DBeaver.Community":
+            if (
+                candidate.publisher_verification != "VERIFIED"
+                or candidate.official_version != candidate.version
+                or not candidate.official_release_url
+                or not candidate.official_asset_sha256
+                or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
+                or type(candidate.official_asset_id) is not int
+                or candidate.official_asset_id < 1
+            ):
+                raise InstallerStageError("DBeaver installer is not matched to its verified official release")
+        elif candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}:
+            raise InstallerStageError("installer publisher source check did not pass")
+        elif candidate.official_asset_sha256 is not None and candidate.official_asset_sha256 != candidate.installer_sha256.lower():
+            raise InstallerStageError("official release digest did not match the manifest digest")
         parsed_url = urlsplit(candidate.installer_url)
         if (
             parsed_url.scheme != "https"
