@@ -181,3 +181,30 @@ def test_worker_never_marks_success_when_winget_exits_nonzero(monkeypatch, tmp_p
     assert result.state == "UNKNOWN"
     assert result.result_code == "WINGET_NONZERO_EXIT"
     assert [item[1] for item in store.transitions] == ["RUNNING", "UNKNOWN"]
+
+
+def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    cancel_events = []
+
+    def executor(*_args, **kwargs):
+        cancel_events.append(kwargs["cancel_event"])
+        return SimpleNamespace(timed_out=False, cancelled=True, exit_code=None)
+
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=executor,
+        verifier=lambda *_a: False,
+        heartbeat_seconds=5,
+    )
+
+    result = worker.run_once()
+
+    assert cancel_events and cancel_events[0].is_set() is False
+    assert result.state == "UNKNOWN"
+    assert result.result_code == "WORKER_LEASE_LOST_PROCESS_TERMINATED"
