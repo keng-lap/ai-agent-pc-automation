@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import subprocess
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -102,6 +103,7 @@ class SoftwareInstallWorker:
         verifier: Callable[[str, str], bool | None] = verify_exact_user_install,
         lease_seconds: int = _LEASE_SECONDS,
         heartbeat_seconds: int = _HEARTBEAT_SECONDS,
+        stop_event: threading.Event | None = None,
     ) -> None:
         self._store = store
         self._work_root = Path(work_root)
@@ -116,6 +118,7 @@ class SoftwareInstallWorker:
         self._verifier = verifier
         self._lease_seconds = lease_seconds
         self._heartbeat_seconds = heartbeat_seconds
+        self._stop_event = stop_event or threading.Event()
 
     def run_once(self) -> InstallExecutionJob | None:
         """Claim and process one queue item; no item returns None."""
@@ -137,7 +140,13 @@ class SoftwareInstallWorker:
         lease_lost = threading.Event()
 
         def heartbeat() -> None:
-            while not stop_heartbeat.wait(self._heartbeat_seconds):
+            next_heartbeat = time.monotonic() + self._heartbeat_seconds
+            while not stop_heartbeat.wait(0.2):
+                if self._stop_event.is_set():
+                    lease_lost.set()
+                    return
+                if time.monotonic() < next_heartbeat:
+                    continue
                 try:
                     with version_lock:
                         renewed = self._store.renew_install_lease(
@@ -148,6 +157,7 @@ class SoftwareInstallWorker:
                             lease_seconds=self._lease_seconds,
                         )
                         version["value"] = renewed.version
+                    next_heartbeat = time.monotonic() + self._heartbeat_seconds
                 except ApprovalReservationError:
                     lease_lost.set()
                     return
@@ -200,7 +210,7 @@ class SoftwareInstallWorker:
             )
             if getattr(result, "cancelled", False) or lease_lost.is_set():
                 return self._transition(
-                    job, token, version, version_lock, "UNKNOWN", "WORKER_LEASE_LOST_PROCESS_TERMINATED"
+                    job, token, version, version_lock, "UNKNOWN", "WORKER_CANCELLED_PROCESS_TERMINATED"
                 ) or job
             if result.timed_out:
                 return self._transition(
