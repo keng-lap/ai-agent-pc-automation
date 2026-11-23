@@ -182,6 +182,23 @@ def test_expired_worker_lease_becomes_unknown_and_is_never_requeued(tmp_path):
     assert recovered.result_code == "WORKER_LEASE_EXPIRED"
 
 
+def test_passive_reconciliation_expires_leases_without_claiming_queued_jobs(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    receipt = make_reservation(store, binding)
+    claimed = store.claim_next_install(worker_id="worker-1", now=NOW, lease_seconds=1)
+    assert claimed is not None
+
+    reconciled = store.reconcile_expired_install_leases(now=NOW + timedelta(seconds=2))
+
+    assert reconciled == 1
+    recovered = store.get_install_job(reservation_id=receipt.reservation_id, owner_id=OWNER)
+    assert recovered.state == "UNKNOWN"
+    assert recovered.attempts == 1
+    assert recovered.result_code == "WORKER_LEASE_EXPIRED"
+    assert store.claim_next_install(worker_id="worker-2", now=NOW + timedelta(seconds=3)) is None
+
+
 def test_invalid_payload_cannot_be_queued(tmp_path):
     binding = make_binding()
     store = make_store(tmp_path)
