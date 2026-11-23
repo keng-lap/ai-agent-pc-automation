@@ -246,7 +246,9 @@ def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
 def test_readiness_exposes_generic_authenticode_publisher_policy_without_package_pin(monkeypatch):
     monkeypatch.delenv("AI_AGENT_DBEAVER_SIGNER_SHA256", raising=False)
     ready = api.get_software_install_readiness()
+    assert ready["publisher_identity_policy_available"] is True
     assert ready["publisher_trust_configured"] is True
+    assert ready["package_allowlist_enabled"] is False
     assert ready["publisher_trust_mode"] == "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH"
     assert ready["supported_package_ids"] == []
     assert "AI_AGENT_DBEAVER_SIGNER_SHA256" not in str(ready)
