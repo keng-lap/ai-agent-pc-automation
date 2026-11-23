@@ -43,6 +43,18 @@ DBeaver is the first acceptance package, not a hard-coded product boundary.
 - DBeaver continues to require its official release metadata and official asset SHA-256 cross-check.
 - These code paths still require CI and target-Windows acceptance; implementation does not mean live installation is enabled.
 
+## Windows acceptance script
+
+Run from the repository root in PowerShell after `scripts/setup.ps1` has created `.venv`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\acceptance\P6-609-C\verify_generic_publishers.ps1
+```
+
+The script checks two unrelated publishers using exact WinGet versions: GitHub Desktop (`GitHub.GitHubDesktop` 3.7.0) and Discord (`Discord.Discord` 1.0.9269). It independently reads the manifest, downloads the installer into a temporary directory, verifies manifest SHA-256, invokes Windows Authenticode verification, and requires the signer Organization to match the manifest Publisher. It prints the signer subject and certificate fingerprint for each package.
+
+**The script does not execute either installer, does not invoke WinGet install, and does not install software.** Temporary installer files are deleted after each verification. A mismatch or unsupported redirect fails closed.
+
 ## Acceptance boundary
 
 CI may test verification logic with controlled fixtures. Windows acceptance must verify actual WinVerifyTrust behavior and at least two unrelated signed packages before enabling broad use. No live install is authorized by this document.
