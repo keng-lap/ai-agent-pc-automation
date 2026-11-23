@@ -136,6 +136,33 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert step_up.created[0]["plan_id"] == PLAN_ID
 
 
+
+def test_generic_publisher_approval_challenge_allows_no_vendor_release_url(monkeypatch):
+    base = make_binding().evidence
+    evidence = base.model_copy(update={
+        "package_id": "Discord.Discord",
+        "package_name": "Discord",
+        "publisher": "Discord Inc",
+        "installer_url": "https://stable.dl2.discordapp.net/DiscordSetup.exe",
+        "official_release_url": None,
+    })
+    binding = build_install_approval_binding(plan_digest=PLAN_DIGEST, evidence=evidence)
+    setup_context(monkeypatch)
+    monkeypatch.setattr(
+        api.software_evidence_registry,
+        "bind_to_plan",
+        lambda **_kwargs: binding,
+    )
+    response = api.create_software_approval_challenge(
+        PLAN_ID,
+        api.SoftwareApprovalChallengeRequest(evidence_id=evidence.evidence_id),
+        request=object(),
+    )
+    assert response.package_id == "Discord.Discord"
+    assert response.official_release_url is None
+    assert response.approval_digest == binding.approval_digest
+
+
 def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
     binding = make_binding()
     step_up, _principal, reservation_store = setup_context(monkeypatch)
