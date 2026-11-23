@@ -595,6 +595,48 @@ class SQLiteApprovalReservationStore:
             raise ApprovalReservationUnavailable("Reservation could not be read.") from None
 
 
+    def reconcile_expired_install_leases(self, *, now: datetime | None = None) -> int:
+        """Mark expired active leases UNKNOWN without claiming or dispatching queued work."""
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
+                expired = connection.execute(
+                    """
+                    SELECT reservation_id FROM install_execution_jobs
+                    WHERE state IN ('CLAIMED','RUNNING','VERIFYING','REBOOT_REQUIRED')
+                      AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+                    """,
+                    (timestamp,),
+                ).fetchall()
+                for row in expired:
+                    connection.execute(
+                        """
+                        UPDATE install_execution_jobs
+                        SET state='UNKNOWN', worker_id=NULL, lease_token=NULL,
+                            lease_expires_at=NULL, version=version+1,
+                            result_code='WORKER_LEASE_EXPIRED', updated_at=?
+                        WHERE reservation_id=?
+                        """,
+                        (timestamp, row["reservation_id"]),
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO install_execution_events
+                            (reservation_id, state, occurred_at, outcome, result_code)
+                        VALUES (?, 'UNKNOWN', ?, 'denied', 'WORKER_LEASE_EXPIRED')
+                        """,
+                        (row["reservation_id"], timestamp),
+                    )
+                connection.commit()
+                return len(expired)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable(
+                "Expired install leases could not be reconciled."
+            ) from None
+
     def claim_next_install(
         self, *, worker_id: str, now: datetime | None = None, lease_seconds: int = 60
     ) -> InstallExecutionJob | None:
