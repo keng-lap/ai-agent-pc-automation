@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import UTC, datetime, timedelta
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -20,6 +21,14 @@ from dotenv import load_dotenv
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LOCAL_AGENT_TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REAL_INSTALL_ENV = "AI_AGENT_ENABLE_REAL_INSTALL"
+REAL_INSTALL_TASK_ENV = "AI_AGENT_REAL_INSTALL_RELEASE_TASK"
+REAL_INSTALL_PACKAGE_ENV = "AI_AGENT_REAL_INSTALL_PACKAGE_ID"
+REAL_INSTALL_VERSION_ENV = "AI_AGENT_REAL_INSTALL_VERSION"
+REAL_INSTALL_EXPIRES_ENV = "AI_AGENT_REAL_INSTALL_EXPIRES_AT"
+REAL_INSTALL_NONCE_ENV = "AI_AGENT_REAL_INSTALL_NONCE"
+_REAL_INSTALL_PACKAGE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
+_REAL_INSTALL_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
+_REAL_INSTALL_NONCE_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 # src/backend/agent_backend/config.py -> repository root is parents[3]
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -46,6 +55,44 @@ def default_state_directory() -> Path:
     return Path(os.path.abspath(REPO_ROOT / ".agent-state"))
 
 
+def real_install_release_authorization_from_env(*, environ=None, now: datetime | None = None) -> RealInstallReleaseAuthorization | None:
+    """Parse a bounded, exact-package, one-use release authorization from the process environment."""
+    env = os.environ if environ is None else environ
+    enabled = env.get(REAL_INSTALL_ENV, "0").strip()
+    if enabled not in {"0", "1"}:
+        raise ConfigError(f"{REAL_INSTALL_ENV} must be exactly 0 or 1.")
+    if enabled == "0":
+        return None
+    task_id = env.get(REAL_INSTALL_TASK_ENV, "").strip()
+    package_id = env.get(REAL_INSTALL_PACKAGE_ENV, "").strip()
+    version = env.get(REAL_INSTALL_VERSION_ENV, "").strip()
+    raw_expiry = env.get(REAL_INSTALL_EXPIRES_ENV, "").strip()
+    nonce = env.get(REAL_INSTALL_NONCE_ENV, "").strip()
+    if task_id != "P6-609-C":
+        raise ConfigError(f"{REAL_INSTALL_TASK_ENV} must be P6-609-C when real installation is enabled.")
+    if not _REAL_INSTALL_PACKAGE_PATTERN.fullmatch(package_id):
+        raise ConfigError(f"{REAL_INSTALL_PACKAGE_ENV} must be an exact WinGet package ID.")
+    if not _REAL_INSTALL_VERSION_PATTERN.fullmatch(version):
+        raise ConfigError(f"{REAL_INSTALL_VERSION_ENV} must be an exact package version.")
+    if not _REAL_INSTALL_NONCE_PATTERN.fullmatch(nonce):
+        raise ConfigError(f"{REAL_INSTALL_NONCE_ENV} must be a 64-character lowercase hexadecimal one-use nonce.")
+    try:
+        expires_at = datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+    except ValueError:
+        raise ConfigError(f"{REAL_INSTALL_EXPIRES_ENV} must be an offset-aware ISO-8601 timestamp.") from None
+    if expires_at.tzinfo is None or expires_at.utcoffset() is None:
+        raise ConfigError(f"{REAL_INSTALL_EXPIRES_ENV} must include a timezone offset.")
+    current = now or datetime.now(UTC)
+    if expires_at <= current or expires_at > current + timedelta(minutes=15):
+        raise ConfigError("Real-install release authorization must expire within the next 15 minutes.")
+    return RealInstallReleaseAuthorization(
+        task_id=task_id,
+        package_id=package_id,
+        version=version,
+        expires_at=expires_at.astimezone(UTC),
+        nonce=nonce,
+    )
+
 def validate_authenticator_secret_path(path: Path) -> Path:
     """Require the secret file to live in this user's app-owned state directory."""
     if not isinstance(path, Path):
@@ -64,6 +111,17 @@ def validate_authenticator_secret_path(path: Path) -> Path:
 
 
 @dataclass(frozen=True)
+class RealInstallReleaseAuthorization:
+    """Short-lived, one-use Product Owner release for one exact install target."""
+
+    task_id: str
+    package_id: str
+    version: str
+    expires_at: datetime
+    nonce: str
+
+
+@dataclass(frozen=True)
 class Settings:
     app_env: str
     backend_host: str
@@ -79,6 +137,7 @@ class Settings:
     authenticator_secret_path: Path | None = None
     job_store_path: Path | None = None
     real_install_enabled: bool = False
+    real_install_release_authorization: RealInstallReleaseAuthorization | None = None
 
     @property
     def auth_enabled(self) -> bool:
@@ -197,9 +256,7 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
             "authenticator_secret_path": secret_path,
         }
 
-    real_install_raw = os.environ.get(REAL_INSTALL_ENV, "0").strip()
-    if real_install_raw not in {"0", "1"}:
-        raise ConfigError(f"{REAL_INSTALL_ENV} must be exactly 0 or 1.")
+    release_authorization = real_install_release_authorization_from_env()
 
     return Settings(
         app_env=os.environ.get("APP_ENV", "development").strip(),
@@ -208,7 +265,8 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
         frontend_port=frontend_port,
         log_level=os.environ.get("LOG_LEVEL", "info").strip().lower(),
         local_agent_token=token,
-        real_install_enabled=real_install_raw == "1",
+        real_install_enabled=release_authorization is not None,
+        real_install_release_authorization=release_authorization,
         job_store_path=Path(
             os.environ.get("JOB_STORE_PATH", str(default_state_directory() / "jobs.sqlite3"))
         ).expanduser(),
