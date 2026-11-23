@@ -261,13 +261,14 @@ def create_software_approval_challenge(
     )
 
 
+def _release_authorization_for_request(request: Request):
+    return getattr(request.app.state, "real_install_release_authorization", None)
+
+
 @router.post(
     "/api/plans/{plan_id}/software-approval/confirm",
     response_model=SoftwareApprovalResult,
 )
-def _release_authorization_for_request(request: Request):
-    return getattr(request.app.state, "real_install_release_authorization", None)
-
 def confirm_software_approval(
     plan_id: str,
     payload: SoftwareApprovalProofRequest,
@@ -395,7 +396,8 @@ def get_software_install_job_for_plan(
 ) -> SoftwareInstallJobStatusResponse:
     """Recover a previously committed install reservation for its authenticated plan owner."""
     _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
-    _get_install_plan(plan_id, owner_id=principal.owner_sub)
+    if len(plan_id) != 32 or any(char not in "0123456789abcdef" for char in plan_id):
+        raise HTTPException(status_code=404, detail="Install job not found.")
     try:
         job = _reservation_store(request).get_install_job_for_plan(
             plan_id=plan_id,
