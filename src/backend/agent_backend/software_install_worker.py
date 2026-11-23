@@ -51,6 +51,14 @@ class _CombinedCancellationSignal:
     def is_set(self) -> bool:
         return any(event.is_set() for event in self._events)
 
+    def wait(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        while not self.is_set():
+            if deadline is not None and time.monotonic() >= deadline:
+                return False
+            time.sleep(0.01)
+        return True
+
 
 class SoftwareInstallWorkerError(RuntimeError):
     """The worker could not safely process an approved install."""
