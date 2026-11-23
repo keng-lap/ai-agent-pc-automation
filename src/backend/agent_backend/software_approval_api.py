@@ -81,7 +81,7 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     scope: Literal["user"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
     installer_url: str
-    official_release_url: str
+    official_release_url: str | None
     manifest_source_url: str
     repository_commit: str
     installer_sha256: str
