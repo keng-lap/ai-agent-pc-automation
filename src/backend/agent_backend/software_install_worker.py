@@ -196,9 +196,12 @@ class SoftwareInstallWorker:
                 prepared,
                 work_root=self._work_root,
                 timeout_seconds=900,
+                cancel_event=lease_lost,
             )
-            if lease_lost.is_set():
-                return job
+            if getattr(result, "cancelled", False) or lease_lost.is_set():
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "WORKER_LEASE_LOST_PROCESS_TERMINATED"
+                ) or job
             if result.timed_out:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WINGET_TIMEOUT"
