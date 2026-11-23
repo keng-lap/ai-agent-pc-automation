@@ -26,7 +26,10 @@ class FakeChatApi {
   readiness = {
     platform_supported: true,
     authenticode_verification_available: true,
-    publisher_trust_configured: false,
+    publisher_identity_policy_available: true,
+    publisher_trust_configured: true,
+    publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' as const,
+    package_allowlist_enabled: false,
     supported_package_ids: [] as string[],
     notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
   };
@@ -515,8 +518,10 @@ describe('App chat UI (T-202)', () => {
 
   it('queues a verified real install only after exact TOTP approval', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_trust_configured = true;
-    api.readiness.supported_package_ids = ['DBeaver.DBeaver.Community'];
+    // Generic publisher trust does not depend on a per-package certificate pin or allowlist.
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
     await render();
 
     send('install DBeaver Community Edition');
