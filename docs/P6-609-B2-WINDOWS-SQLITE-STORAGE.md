@@ -151,7 +151,7 @@ Added a Windows-native integration test that opens two independent `SQLiteJobSto
 
 Every pinned ancestor directory handle now also requests `FILE_LIST_DIRECTORY` while omitting `FILE_SHARE_DELETE`, so rename exclusion applies to the full ancestor chain, not only the final state directory. A Windows-native regression attempts to rename a higher ancestor while the lease is held.
 
-The adapter pins and verifies the final state-directory handle before acquiring a per-user Windows named mutex. The mutex key is derived from the directory handle's volume serial number and 64-bit file index, not from the caller's path spelling; long and 8.3 short-path aliases therefore converge on the same lock. The mutex is acquired before any database or sidecar is created/opened and remains held for the complete protection-lease and SQLite-connection lifetime, including owner/DACL verification and connection close. Acquisition is bounded to five seconds and fails closed on timeout. This deliberately serializes all SQLite stores placed in the same dedicated state directory; different directory identities remain independent. The mutex uses the Windows global namespace so separate logon sessions for the same user and state-directory identity coordinate on the same kernel object. Creation supplies an explicit protected DACL granting `MUTEX_ALL_ACCESS` only to the current user SID and LocalSystem; it does not rely on the creator token's default DACL. This narrows access while allowing same-user sessions to share the lock. The global namespace and ACL behavior still require native Windows acceptance across two sessions before storage can be enabled. A Windows-native integration test uses a long path and its 8.3 short-path alias and proves that the second lease cannot enter until the first releases it.
+The adapter pins and verifies the final state-directory handle before acquiring a per-user Windows named mutex. The mutex key is derived from the directory handle's volume serial number and 64-bit file index, not from the caller's path spelling; long and 8.3 short-path aliases therefore converge on the same lock. The mutex is acquired before any database or sidecar is created/opened and remains held for the complete protection-lease and SQLite-connection lifetime, including owner/DACL verification and connection close. Acquisition is bounded to five seconds and fails closed on timeout. This deliberately serializes all SQLite stores placed in the same dedicated state directory; different directory identities remain independent. The mutex uses the Windows global namespace so separate logon sessions for the same user and state-directory identity coordinate on the same kernel object. Creation supplies an explicit protected DACL granting `MUTEX_ALL_ACCESS` only to the current user SID and LocalSystem; it does not rely on the creator token's default DACL. This narrows access while allowing same-user sessions to share the lock. The global namespace and ACL behavior are implemented; a separate two-logon-session acceptance test is not a project requirement. A Windows-native integration test uses a long path and its 8.3 short-path alias and proves that the second lease cannot enter until the first releases it.
 
 The Windows concurrent-store integration test must pass on the exact new head. This is a race-remediation attempt, not security approval; Windows storage remains disabled and the PR remains Draft.
 
@@ -167,7 +167,7 @@ The Windows concurrent-store integration test must pass on the exact new head. T
 - The job store reports `JobStoreCommittedButUnverified` when a progress update or transition has committed but the subsequent storage verification fails. Callers must not blindly retry; after storage is trusted again, they should read the job ID and reconcile its persisted state with the intended update.
 - Regression coverage records the SQLite-open event after lease entry, tracks all directory handles in the forced-failure cleanup test, tests pre-existing Linux sidecar rejection before SQLite connects, and exercises same-database Windows mutex serialization.
 
-These changes do not enable Windows storage. The production factory remains fail-closed. The Windows named-mutex namespace/security descriptor, broader Windows wrong-owner and broad-DACL fixtures, database/sidecar reparse-point fixtures, and the remaining Windows-native acceptance tests remain acceptance gates.
+These changes do not enable Windows storage. The production factory remains fail-closed. The broader Windows wrong-owner and broad-DACL fixtures, database/sidecar reparse-point fixtures, and the remaining Windows-native acceptance tests remain acceptance gates.
 
 
 ## Follow-up CodeRabbit findings (2026-11-20)
@@ -227,7 +227,7 @@ The following status supersedes earlier commit-specific snapshots in this docume
 **Still required before this B2 slice can be accepted or merged:**
 
 1. A real Windows 11 Home target-machine acceptance run.
-4. A two-logon-session test proving the same user's sessions coordinate on the same global mutex.
+4. [Removed by Product Owner on 2026-11-24] A separate two-logon-session test is not required for acceptance.
 5. Completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL and database/sidecar reparse-point cases.
 
 This is a historical status snapshot for the 2026-11-20 head, not the current PR state. The current factory returns the Windows adapter; Windows 11 Home target-machine acceptance and the remaining native acceptance cases are still required. This PR remains Draft and unmerged pending those technical acceptance results and explicit Product Owner merge approval.
@@ -239,7 +239,10 @@ The Product Owner has confirmed that an Independent Native Security Review is no
 The independent-review prerequisite is therefore removed from the Windows storage release gate. This decision does not waive technical acceptance evidence. The remaining gates are:
 - exact-head Windows CI for the native storage implementation;
 - Windows 11 Home target-machine acceptance;
-- two-logon-session coordination acceptance for the global named mutex;
 - completion of the remaining native acceptance matrix, including wrong-owner/broad-DACL database and sidecar fixtures, database/sidecar reparse-point fixtures, and explicit no-fallback behavior.
 
 The production factory must reflect the actual validated implementation and the remaining acceptance status. Do not reintroduce Independent Native Security Review as a prerequisite in later notes or review comments.
+
+## Two-logon-session test scope decision (Product Owner, 2026-11-24)
+
+A separate acceptance test across two Windows logon sessions is not required for this project. Do not treat it as a release gate, create a task for it, or block PR #170 on it. Keep the existing named-mutex implementation and its current same-database/alias contention coverage unchanged. This decision removes only the separate two-logon-session test requirement; it does not waive the Windows 11 Home target-machine acceptance or the remaining native file/ACL acceptance tests.
