@@ -272,7 +272,7 @@ def confirm_software_approval(
         request,
         require_enrolled=False,
     )
-    plan = _get_install_plan(plan_id)
+    plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
     with _lock:
         _prune_bindings()
         if plan_id in _consumed_bindings:
@@ -375,7 +375,9 @@ def get_software_install_job_status(
     request: Request,
 ) -> SoftwareInstallJobStatusResponse:
     """Read an owner-scoped status summary without exposing the approved binding."""
-    if len(reservation_id) != 32 or any(char not in "0123456789abcdef" for char in reservation_id):
+    is_legacy_hex = len(reservation_id) == 32 and all(char in "0123456789abcdef" for char in reservation_id)
+    is_uuid = len(reservation_id) == 36 and reservation_id.count("-") == 4
+    if not (is_legacy_hex or is_uuid):
         raise HTTPException(status_code=404, detail="Install job not found.")
     _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
     try:
