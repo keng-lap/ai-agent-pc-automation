@@ -9,6 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent_backend.config import REAL_INSTALL_ENV
 from agent_backend.software_discovery import DiscoveryNotFound, DiscoveryUnavailable
 from agent_backend.software_discovery_api import _repository
 from agent_backend.software_evidence import EvidenceRejected, software_evidence_registry
@@ -62,13 +63,14 @@ def get_software_install_readiness() -> dict:
     """Expose non-secret readiness flags for the real-install workflow."""
     return {
         "platform_supported": sys.platform == "win32",
+        "real_install_enabled": sys.platform == "win32" and __import__("os").environ.get(REAL_INSTALL_ENV, "0").strip() == "1",
         "authenticode_verification_available": sys.platform == "win32",
         "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_mode": "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH",
         "package_allowlist_enabled": False,
         "supported_package_ids": [],
-        "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
+        "notice": "REAL_INSTALL_REQUIRES_WINDOWS_AND_EXPLICIT_AI_AGENT_ENABLE_REAL_INSTALL_1",
     }
 
 
