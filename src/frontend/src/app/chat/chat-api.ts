@@ -93,7 +93,10 @@ export interface SoftwareDiscoveryResponse {
 export interface SoftwareInstallReadiness {
   platform_supported: boolean;
   authenticode_verification_available: boolean;
+  publisher_identity_policy_available: boolean;
   publisher_trust_configured: boolean;
+  publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH';
+  package_allowlist_enabled: boolean;
   supported_package_ids: string[];
   notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
 }
@@ -123,7 +126,7 @@ export interface SoftwareApprovalChallenge {
   scope: 'user';
   installer_type: 'exe' | 'msi' | 'msix' | 'appx';
   installer_url: string;
-  official_release_url: string;
+  official_release_url: string | null;
   manifest_source_url: string;
   repository_commit: string;
   installer_sha256: string;
