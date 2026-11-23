@@ -312,7 +312,8 @@ class WinGetManifestRepository:
             ):
                 raise DiscoveryUnavailable("manifest content response was invalid")
             try:
-                raw = base64.b64decode(content_response["content"], validate=True)
+                encoded_content = "".join(content_response["content"].split())
+                raw = base64.b64decode(encoded_content, validate=True)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     raise DiscoveryUnavailable("manifest document exceeded its size limit")
                 if any(isinstance(token, (AliasToken, AnchorToken)) for token in yaml.scan(raw)):
