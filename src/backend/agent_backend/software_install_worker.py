@@ -138,6 +138,8 @@ class SoftwareInstallWorker:
 
     def run_once(self) -> InstallExecutionJob | None:
         """Claim and process one queue item; no item returns None."""
+        if self._stop_event.is_set():
+            return None
         job = self._store.claim_next_install(
             worker_id=self._worker_id,
             lease_seconds=self._lease_seconds,
@@ -174,7 +176,10 @@ class SoftwareInstallWorker:
                         )
                         version["value"] = renewed.version
                     next_heartbeat = time.monotonic() + self._heartbeat_seconds
-                except ApprovalReservationError:
+                except Exception:
+                    # Any unexpected renewal failure means the worker can no
+                    # longer prove exclusive ownership. Stop the process rather
+                    # than continuing under an unverified lease.
                     lease_lost.set()
                     return
 
@@ -291,7 +296,9 @@ class SoftwareInstallWorker:
             ) or job
         finally:
             stop_heartbeat.set()
-            thread.join(timeout=2)
+            # Do not return while a renewal thread can still mutate lease state.
+            # Store operations have bounded SQLite timeouts.
+            thread.join()
             if prepared is not None:
                 try:
                     cleanup_prepared_install(prepared, work_root=self._work_root)
