@@ -54,6 +54,8 @@ Prepare the bounded release authorization from the same PowerShell process that 
 
 Use the exact package ID and version shown in the verified proposal. Then restart the backend from that same PowerShell window. The script does not use `setx` or persist machine-wide environment variables. The nonce is atomically consumed in the protected SQLite store and bound to the exact approval digest; a replay or a different package/version is rejected. Prepare a fresh authorization for each real install. The readiness endpoint reports whether the full authorization is currently valid. To disable live execution, restart the backend without running the authorization script.
 
+EXE candidates are eligible only when the selected Microsoft WinGet manifest declares a bounded `InstallerSwitches.Silent` value. That backend-resolved value is included in immutable approval evidence and the generated local manifest; the client and Gemini cannot supply or override it. EXE installers without a declared silent switch are rejected rather than launched interactively.
+
 The worker consumes the one-use release authorization immediately before the side-effect boundary, then passes a cancellation signal to the contained WinGet executor. Lease-renewal failure or application shutdown signals cancellation; the executor terminates the WinGet Job Object process tree and waits for the process handle before returning. The resulting job outcome is UNKNOWN, not success, and must be reconciled against the exact installed package/version before any later action. An expired lease is also reconciled to UNKNOWN by the durable queue and is never automatically retried.
 
 ## Acceptance boundary
