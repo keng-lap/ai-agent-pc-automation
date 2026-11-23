@@ -73,8 +73,7 @@ with tempfile.TemporaryDirectory(prefix="aiagent-publisher-acceptance-") as temp
 '@
 
 $pythonScript = Join-Path $env:TEMP ('aiagent-publisher-acceptance-' + [Guid]::NewGuid().ToString('N') + '.py')
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText($pythonScript, $pythonCode, $utf8NoBom)
+[System.IO.File]::WriteAllText($pythonScript, $pythonCode, [System.Text.UTF8Encoding]::new($false))
 
 Push-Location $repoRoot
 try {
