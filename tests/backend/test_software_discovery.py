@@ -335,19 +335,16 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
 
 
 
-def test_manifest_source_retries_transient_network_errors_and_uses_actions_token(monkeypatch):
+def test_manifest_source_retries_transient_server_errors_and_uses_actions_token(monkeypatch):
     source = FakeSource()
-    original_get = source.get
     attempts = 0
 
     def flaky_get(url, **kwargs):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            import requests
-
-            raise requests.ConnectionError("temporary connection reset")
-        return original_get(url, **kwargs)
+            return FakeResponse({}, status_code=503)
+        return source.get(url, **kwargs)
 
     monkeypatch.setenv("GITHUB_TOKEN", "read-only-actions-token")
     result = WinGetManifestRepository(http_get=flaky_get).discover(
