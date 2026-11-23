@@ -207,6 +207,7 @@ class SoftwareEvidenceRegistry:
             version=candidate.version,
             source="winget",
             installer_type=candidate.installer_type,
+            installer_silent_switch=candidate.installer_silent_switch,
             installer_url=candidate.installer_url,
             official_release_url=candidate.official_release_url,
             manifest_source_url=candidate.manifest_source_url,
