@@ -370,6 +370,35 @@ def confirm_software_approval(
 
 
 @router.get(
+    "/api/plans/{plan_id}/software-approval/reservation",
+    response_model=SoftwareInstallJobStatusResponse,
+)
+def get_software_install_job_for_plan(
+    plan_id: str,
+    request: Request,
+) -> SoftwareInstallJobStatusResponse:
+    """Recover a previously committed install reservation for its authenticated plan owner."""
+    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    _get_install_plan(plan_id, owner_id=principal.owner_sub)
+    try:
+        job = _reservation_store(request).get_install_job_for_plan(
+            plan_id=plan_id,
+            owner_id=principal.owner_sub,
+        )
+    except ApprovalReservationNotFound:
+        raise HTTPException(status_code=404, detail="Install job not found.") from None
+    except ApprovalReservationError:
+        raise HTTPException(status_code=503, detail="Install job status is temporarily unavailable.") from None
+    return SoftwareInstallJobStatusResponse(
+        reservation_id=job.reservation_id,
+        state=job.state,
+        attempts=job.attempts,
+        version=job.version,
+        result_code=job.result_code,
+        lease_expires_at=job.lease_expires_at,
+    )
+
+@router.get(
     "/api/software/install/jobs/{reservation_id}",
     response_model=SoftwareInstallJobStatusResponse,
 )
