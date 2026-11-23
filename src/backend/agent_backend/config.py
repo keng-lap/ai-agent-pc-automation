@@ -77,7 +77,7 @@ def real_install_release_authorization_from_env(*, environ=None, now: datetime |
     if not _REAL_INSTALL_NONCE_PATTERN.fullmatch(nonce):
         raise ConfigError(f"{REAL_INSTALL_NONCE_ENV} must be a 64-character lowercase hexadecimal one-use nonce.")
     try:
-        expires_at = datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+        expires_at = datetime.fromisoformat(raw_expiry)
     except ValueError:
         raise ConfigError(f"{REAL_INSTALL_EXPIRES_ENV} must be an offset-aware ISO-8601 timestamp.") from None
     if expires_at.tzinfo is None or expires_at.utcoffset() is None:
