@@ -63,8 +63,10 @@ def get_software_install_readiness() -> dict:
     return {
         "platform_supported": sys.platform == "win32",
         "authenticode_verification_available": sys.platform == "win32",
+        "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_mode": "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH",
+        "package_allowlist_enabled": False,
         "supported_package_ids": [],
         "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
     }
