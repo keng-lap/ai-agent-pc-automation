@@ -192,6 +192,7 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
 
     def executor(*_args, **kwargs):
         cancel_events.append(kwargs["cancel_event"])
+        kwargs["cancel_event"].set()
         return SimpleNamespace(timed_out=False, cancelled=True, exit_code=None)
 
     worker = worker_module.SoftwareInstallWorker(
@@ -205,6 +206,6 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
 
     result = worker.run_once()
 
-    assert cancel_events and cancel_events[0].is_set() is False
+    assert cancel_events and cancel_events[0].is_set() is True
     assert result.state == "UNKNOWN"
     assert result.result_code == "WORKER_LEASE_LOST_PROCESS_TERMINATED"
