@@ -142,7 +142,7 @@ class InstallerStager:
                 allowed_redirect_hosts = (
                     ALLOWED_RELEASE_REDIRECT_HOSTS
                     if candidate.package_id == "DBeaver.DBeaver.Community"
-                    else frozenset({candidate.installer_domain.casefold()})
+                    else frozenset({candidate.installer_domain.casefold()}) | ALLOWED_RELEASE_REDIRECT_HOSTS
                 )
                 response = self._get_safe_release_response(
                     download_url,
