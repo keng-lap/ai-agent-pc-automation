@@ -2,8 +2,8 @@
 
 This module reads the Microsoft-owned winget-pkgs repository over its fixed
 GitHub API origin. It never invokes WinGet, downloads installers, or executes
-package code. A manifest match is only a CONDITIONAL candidate until publisher
-ownership and the downloaded installer's Authenticode signature are verified.
+package code. A manifest match is only a CONDITIONAL candidate until the downloaded installer's
+Authenticode chain and signer identity are verified against the manifest Publisher.
 """
 
 from __future__ import annotations
