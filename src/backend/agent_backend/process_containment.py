@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import time
 from ctypes import wintypes
 from typing import Self
 
@@ -35,6 +36,19 @@ class _BasicLimitInformation(ctypes.Structure):
         ("Affinity", ctypes.c_size_t),
         ("PriorityClass", wintypes.DWORD),
         ("SchedulingClass", wintypes.DWORD),
+    ]
+
+
+class _BasicAccountingInformation(ctypes.Structure):
+    _fields_ = [
+        ("TotalUserTime", ctypes.c_longlong),
+        ("TotalKernelTime", ctypes.c_longlong),
+        ("ThisPeriodTotalUserTime", ctypes.c_longlong),
+        ("ThisPeriodTotalKernelTime", ctypes.c_longlong),
+        ("TotalPageFaultCount", wintypes.DWORD),
+        ("TotalProcesses", wintypes.DWORD),
+        ("ActiveProcesses", wintypes.DWORD),
+        ("TotalTerminatedProcesses", wintypes.DWORD),
     ]
 
 
@@ -101,6 +115,14 @@ class WindowsJobObject:
         self._kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
         self._kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
         self._kernel32.TerminateJobObject.restype = wintypes.BOOL
+        self._kernel32.QueryInformationJobObject.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        self._kernel32.QueryInformationJobObject.restype = wintypes.BOOL
         self._kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         self._kernel32.CloseHandle.restype = wintypes.BOOL
 
@@ -135,22 +157,32 @@ class WindowsJobObject:
             raise self._last_error("TerminateJobObject failed")
 
     def wait_for_empty(self, timeout_ms: int = 0xFFFFFFFF) -> None:
-        """Wait until every process assigned to this Job Object has exited."""
+        """Poll active-process accounting until every contained process exits.
+
+        Job Object handles are not signaled for ordinary process-tree completion.
+        QueryInformationJobObject exposes the active process count for this job.
+        """
         if not self.is_open:
             raise ProcessContainmentError("Job Object is closed")
         if type(timeout_ms) is not int or not 0 <= timeout_ms <= 0xFFFFFFFF:
             raise ValueError("timeout_ms must be an unsigned 32-bit integer")
-        wait_for_single_object = self._kernel32.WaitForSingleObject
-        wait_for_single_object.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-        wait_for_single_object.restype = wintypes.DWORD
-        result = wait_for_single_object(self._handle, timeout_ms)
-        if result == 0x00000000:
-            return
-        if result == 0x00000102:
-            raise ProcessContainmentError("Timed out waiting for contained processes to exit")
-        if result == 0xFFFFFFFF:
-            raise self._last_error("Waiting for contained processes failed")
-        raise ProcessContainmentError("Job Object wait returned an unexpected status")
+        deadline = time.monotonic() + timeout_ms / 1000
+        while True:
+            accounting = _BasicAccountingInformation()
+            if not self._kernel32.QueryInformationJobObject(
+                self._handle,
+                1,  # JobObjectBasicAccountingInformation
+                ctypes.byref(accounting),
+                ctypes.sizeof(accounting),
+                None,
+            ):
+                raise self._last_error("QueryInformationJobObject failed")
+            if accounting.ActiveProcesses == 0:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ProcessContainmentError("Timed out waiting for contained processes to exit")
+            time.sleep(min(0.05, remaining))
 
     def close(self) -> None:
         handle = getattr(self, "_handle", None)
