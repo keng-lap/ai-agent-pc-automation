@@ -100,10 +100,13 @@ class FakeSource:
             filename = path.rsplit("/", 1)[-1]
             document = self.documents[filename]
             raw = json.dumps(document).encode()
-            payload = {
-                "encoding": "base64",
-                "content": (lambda encoded: "\n".join(encoded[i:i + 60] for i in range(0, len(encoded), 60)) if self.wrap_base64 else encoded)(base64.b64encode(raw).decode()),
-            }
+            encoded = base64.b64encode(raw).decode()
+            if self.wrap_base64:
+                encoded = "\n".join(
+                    encoded[index:index + 60]
+                    for index in range(0, len(encoded), 60)
+                )
+            payload = {"encoding": "base64", "content": encoded}
         return FakeResponse(payload)
 
 
