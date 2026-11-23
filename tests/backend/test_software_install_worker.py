@@ -228,7 +228,7 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
     assert result.result_code == "WORKER_LEASE_LOST_PROCESS_TERMINATED"
 
 
-@pytest.mark.parametrize("returncode", [0x8A150014, -1978331116])
+@pytest.mark.parametrize("returncode", [0x8A150014, -1978335212])
 def test_verifier_treats_winget_no_applications_result_as_absent(monkeypatch, returncode):
     monkeypatch.setattr(worker_module, "_winget_alias_path", lambda: Path("C:/winget.exe"))
     monkeypatch.setattr(
