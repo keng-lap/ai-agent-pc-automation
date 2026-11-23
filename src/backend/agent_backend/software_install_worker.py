@@ -17,10 +17,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from agent_backend.approval_reservation_store import (
+    ApprovalReservationConflict,
     ApprovalReservationError,
+    ApprovalReservationExpired,
     InstallExecutionJob,
     SQLiteApprovalReservationStore,
 )
+from agent_backend.config import RealInstallReleaseAuthorization
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.winget_adapter import (
     WinGetAdapterError,
@@ -115,6 +118,7 @@ class SoftwareInstallWorker:
         lease_seconds: int = _LEASE_SECONDS,
         heartbeat_seconds: int = _HEARTBEAT_SECONDS,
         stop_event: threading.Event | None = None,
+        release_authorization: RealInstallReleaseAuthorization | None = None,
     ) -> None:
         self._store = store
         self._work_root = Path(work_root)
@@ -130,6 +134,7 @@ class SoftwareInstallWorker:
         self._lease_seconds = lease_seconds
         self._heartbeat_seconds = heartbeat_seconds
         self._stop_event = stop_event or threading.Event()
+        self._release_authorization = release_authorization
 
     def run_once(self) -> InstallExecutionJob | None:
         """Claim and process one queue item; no item returns None."""
@@ -210,6 +215,35 @@ class SoftwareInstallWorker:
                 ) or job
 
             prepared = prepare_approved_install(binding, work_root=self._work_root)
+            authorization = self._release_authorization
+            if (
+                authorization is None
+                or authorization.task_id != "P6-609-C"
+                or authorization.package_id != binding.evidence.package_id
+                or authorization.version != binding.evidence.version
+            ):
+                return self._transition(
+                    job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
+                ) or job
+            try:
+                self._store.consume_real_install_release_authorization(
+                    task_id=authorization.task_id,
+                    package_id=authorization.package_id,
+                    version=authorization.version,
+                    action_digest=binding.approval_digest,
+                    nonce=authorization.nonce,
+                    expires_at=authorization.expires_at,
+                )
+            except (ApprovalReservationConflict, ApprovalReservationExpired):
+                return self._transition(
+                    job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
+                ) or job
+            except ApprovalReservationError:
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "RELEASE_AUTHORIZATION_UNAVAILABLE"
+                ) or job
+            if lease_lost.is_set():
+                return job
             if lease_lost.is_set():
                 return job
             result = self._executor(
