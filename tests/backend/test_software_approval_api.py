@@ -24,6 +24,7 @@ def make_binding():
         version="26.2.4",
         source="winget",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver.exe",
         official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         manifest_source_url="https://github.com/microsoft/winget-pkgs/tree/cccccccccccccccccccccccccccccccccccccccc",
