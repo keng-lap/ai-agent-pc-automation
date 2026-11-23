@@ -1169,7 +1169,7 @@ describe('App chat UI (T-202)', () => {
     api.readiness.publisher_identity_policy_available = true;
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
-    const reservationId = '12345678-1234-5678-1234-567812345678';
+    const reservationId = '12345678-1234-4678-9234-567812345678';
     api.reservationRecoveryResponder = () => of({
       reservation_id: reservationId,
       state: 'QUEUED',
