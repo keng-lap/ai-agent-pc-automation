@@ -13,7 +13,7 @@ $sourceCommit = (& git -C $RepoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw "Cannot determine tested source commit." }
 if (-not (Test-Path $ResultFile)) { throw "Test output file not found: $ResultFile" }
 
-$stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss")
+$stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmssfff")
 $runId = "$stamp-$SuiteName"
 $worktree = Join-Path ([System.IO.Path]::GetTempPath()) ("ai-agent-acceptance-" + [guid]::NewGuid().ToString("N"))
 $null = & git -C $RepoRoot worktree add --detach $worktree $sourceCommit 2>&1
