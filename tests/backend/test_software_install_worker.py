@@ -38,6 +38,14 @@ def make_binding():
     )
     return build_install_approval_binding(plan_digest="a" * 64, evidence=evidence)
 
+def make_release_authorization(binding):
+    return SimpleNamespace(
+        task_id="P6-609-C",
+        package_id=binding.evidence.package_id,
+        version=binding.evidence.version,
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        nonce="f" * 64,
+    )
 
 class FakeStore:
     def __init__(self, binding):
@@ -55,6 +63,7 @@ class FakeStore:
             result_code=None,
         )
         self.transitions = []
+        self.release_consumptions = []
 
     def claim_next_install(self, **_kwargs):
         return self.job
@@ -68,6 +77,9 @@ class FakeStore:
             result_code=kwargs["result_code"],
         )
         return self.job
+
+    def consume_real_install_release_authorization(self, **kwargs):
+        self.release_consumptions.append(kwargs)
 
     def renew_install_lease(self, *_args, **_kwargs):
         self.job = replace(self.job, version=self.job.version + 1)
@@ -94,6 +106,7 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         executor=executor,
         verifier=lambda *_args: next(verification_results),
         heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
     )
     result = worker.run_once()
 
