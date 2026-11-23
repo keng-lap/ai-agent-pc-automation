@@ -63,8 +63,15 @@ This record distinguishes findings already addressed in the current branch from 
 
 - Review thread: `PRRT_kwDOU_JsvM662R1j`
 - The Product Owner confirmed that Independent Native Security Review is not an available project activity and instructed that this prerequisite be removed. Do not create a separate review task or substitute review process.
-- The independent-review prerequisite is removed. Remaining technical acceptance items are Windows 11 Home target-machine acceptance, two-logon-session coordination, and the outstanding native acceptance matrix (wrong-owner/broad-DACL database and sidecar fixtures, database/sidecar reparse-point fixtures, and explicit no-fallback behavior).
+- The independent-review prerequisite is removed. Remaining technical acceptance items are Windows 11 Home target-machine acceptance and the outstanding native acceptance matrix (wrong-owner/broad-DACL database and sidecar fixtures, database/sidecar reparse-point fixtures, and explicit no-fallback behavior).
 - This is a documentation/release-gate correction only. It does not claim that unperformed Windows acceptance tests have passed.
 - Status: independent-review prerequisite REMOVED; remaining technical acceptance items remain OPEN. PR #170 stays Draft and unmerged pending those results and explicit Product Owner merge approval.
+
+## Additional Product Owner scope decision (2026-11-24)
+
+- A separate two-logon-session coordination test is not required and is removed from the release gates.
+- Do not create a task or block PR #170 on that test.
+- Existing mutex implementation and same-database/alias contention coverage remain unchanged.
+- Windows 11 Home target-machine acceptance and the remaining native wrong-owner/broad-DACL, reparse-point, and no-fallback acceptance cases remain open.
 
 ## Verification record
