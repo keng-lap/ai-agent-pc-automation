@@ -42,6 +42,7 @@ def make_binding():
         version="26.2.5",
         source="winget",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url=(
             "https://github.com/dbeaver/dbeaver/releases/download/26.2.5/"
             "dbeaver-ce-26.2.5-windows-x86_64.exe"
