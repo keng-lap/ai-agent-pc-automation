@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Literal
@@ -63,7 +64,7 @@ def get_software_install_readiness() -> dict:
     """Expose non-secret readiness flags for the real-install workflow."""
     return {
         "platform_supported": sys.platform == "win32",
-        "real_install_enabled": sys.platform == "win32" and __import__("os").environ.get(REAL_INSTALL_ENV, "0").strip() == "1",
+        "real_install_enabled": sys.platform == "win32" and os.environ.get(REAL_INSTALL_ENV, "0").strip() == "1",
         "authenticode_verification_available": sys.platform == "win32",
         "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
