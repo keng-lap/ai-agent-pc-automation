@@ -861,7 +861,7 @@ export class App implements AfterViewChecked {
   protected requestSoftwareApproval(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const proposal = discovery?.proposal;
-    if (!discovery || !proposal || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
+    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== proposal.package_id || discovery.readiness.real_install_release_version !== proposal.version || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
@@ -900,7 +900,7 @@ export class App implements AfterViewChecked {
     const proposal = discovery?.proposal;
     const challenge = discovery?.approvalChallenge;
     const code = discovery?.totpCode ?? '';
-    if (!discovery || !proposal || !challenge || !/^\d{6}$/.test(code) || this.planning()) return;
+    if (!discovery || !proposal || !challenge || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
