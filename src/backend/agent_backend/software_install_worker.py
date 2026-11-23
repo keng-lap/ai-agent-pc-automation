@@ -244,8 +244,6 @@ class SoftwareInstallWorker:
                 ) or job
             if lease_lost.is_set():
                 return job
-            if lease_lost.is_set():
-                return job
             result = self._executor(
                 binding,
                 prepared,
