@@ -104,9 +104,9 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
 
     @application.on_event("startup")
     def start_local_install_worker() -> None:
-        # Real WinGet execution requires both Windows and explicit local release opt-in.
-        # The default remains disabled; TOTP approval alone never enables the worker.
-        if os.name != "nt" or not settings.real_install_enabled:
+        # Reconcile stale jobs on Windows even while live execution is disabled.
+        # This path never claims queued work or starts WinGet.
+        if os.name != "nt":
             return
         try:
             store = application.state.approval_reservation_store
@@ -116,6 +116,9 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
                     if store is None:
                         store = SQLiteApprovalReservationStore(settings.job_store_path)
                         application.state.approval_reservation_store = store
+            store.reconcile_expired_install_leases()
+            if not settings.real_install_enabled:
+                return
             worker = SoftwareInstallWorker(
                 store,
                 work_root=Path(settings.job_store_path).parent / "winget-work",
