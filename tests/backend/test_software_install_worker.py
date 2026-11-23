@@ -1,9 +1,9 @@
 """Tests for the one-shot local WinGet install worker."""
 
+import threading
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import threading
 from types import SimpleNamespace
 
 import pytest
