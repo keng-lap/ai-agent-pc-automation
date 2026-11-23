@@ -96,9 +96,12 @@ def verify_exact_user_install(
         re.IGNORECASE,
     )
     for line in (result.stdout or "").splitlines():
-        match = package_pattern.search(line)
-        if match is not None:
-            return match.group(1) == version
+        matches = list(package_pattern.finditer(line))
+        if matches:
+            # The display name may itself contain the package ID and a version
+            # (for example "Acme.Editor 1.2.3"). The ID column is the final
+            # exact ID occurrence in the row; use its following version value.
+            return matches[-1].group(1) == version
     # A successful but unparseable/empty table is ambiguous, not proof that
     # the package is absent. Only the explicit no-applications HRESULT means False.
     return None
