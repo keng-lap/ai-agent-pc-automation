@@ -419,6 +419,7 @@ def test_build_auth_services_keeps_google_dashboard_available_when_secret_load_f
     from agent_backend.auth_api import build_auth_services
     from agent_backend.authenticator import SecretStoreError
 
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     settings = replace(
         load_settings(load_env_file=False),
         google_oidc_client_id="test-client-id",
@@ -458,6 +459,7 @@ def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_abse
 ):
     from agent_backend.auth_api import build_auth_services
 
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     monkeypatch.setattr(
         EncryptedTotpSecretFileStore,
         "load",
@@ -472,8 +474,7 @@ def test_build_auth_services_does_not_block_first_enrollment_when_secret_is_abse
         master_google_sub=OWNER,
         app_session_ttl_seconds=1800,
         authenticator_secret_path=(
-            Path(__file__).resolve().parents[2]
-            / ".agent-state" / "authenticator" / "authenticator.json"
+            default_state_directory() / "authenticator" / "authenticator.json"
         ),
     )
 
