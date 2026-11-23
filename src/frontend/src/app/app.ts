@@ -787,6 +787,11 @@ export class App implements AfterViewChecked {
   }
 
   protected refreshSoftwareInstallReadiness(entryId: number): void {
+    this.entries.update((entries) => entries.map((entry) => (
+      entry.id === entryId && entry.discovery
+        ? { ...entry, discovery: { ...entry.discovery, proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: "", reservationId: undefined } }
+        : entry
+    )));
     this.loadSoftwareInstallReadiness(entryId);
   }
 
