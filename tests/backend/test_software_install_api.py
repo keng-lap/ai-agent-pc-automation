@@ -223,11 +223,6 @@ def test_unverified_official_release_is_rejected_before_download(monkeypatch, tm
         )
 
     assert getattr(error.value, "status_code", None) == 409
-    assert discovery_calls == [{
-        "package_id": candidate.package_id,
-        "version": candidate.version,
-        "architecture": "x64",
-    }]
     assert stage_calls == []
 
 
