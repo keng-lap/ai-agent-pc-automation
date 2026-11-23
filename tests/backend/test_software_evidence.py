@@ -31,6 +31,7 @@ def candidate() -> InstallerCandidate:
         architecture="x64",
         scope="user",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver-ce-26.2.4-windows-x86_64.exe",
         installer_domain="github.com",
         installer_sha256="a" * 64,
