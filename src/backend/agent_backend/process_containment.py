@@ -156,7 +156,7 @@ class WindowsJobObject:
         if not self._kernel32.TerminateJobObject(self._handle, exit_code):
             raise self._last_error("TerminateJobObject failed")
 
-    def wait_for_empty(self, timeout_ms: int = 0xFFFFFFFF) -> None:
+    def wait_for_empty(self, timeout_ms: int = 10_000) -> None:
         """Poll active-process accounting until every contained process exits.
 
         Job Object handles are not signaled for ordinary process-tree completion.
