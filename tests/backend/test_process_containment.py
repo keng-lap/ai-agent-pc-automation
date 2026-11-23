@@ -35,7 +35,9 @@ def test_job_object_waits_until_active_process_count_reaches_zero():
         calls.append((handle, info_class, buffer_size, returned_length))
         accounting = containment_module.ctypes.cast(
             buffer,
-            containment_module.ctypes.POINTER(containment_module._BasicAccountingInformation),
+            containment_module.ctypes.POINTER(
+                containment_module._BasicAccountingInformation,
+            ),
         ).contents
         accounting.ActiveProcesses = next(active_counts)
         return 1
@@ -53,9 +55,9 @@ def test_job_object_wait_times_out_while_processes_remain_active():
     job._handle = 1234
 
     def query(_handle, _info_class, buffer, _buffer_size, _returned_length):
-        accounting = ctypes.cast(
+        accounting = containment_module.ctypes.cast(
             buffer,
-            ctypes.POINTER(containment_module._BasicAccountingInformation),
+            containment_module.ctypes.POINTER(containment_module._BasicAccountingInformation),
         ).contents
         accounting.ActiveProcesses = 1
         return 1
