@@ -59,22 +59,12 @@ This record distinguishes findings already addressed in the current branch from 
 - Test commit: `f351891b69ae7a150e174d50311756c62bf82de7`.
 - Status: IMPLEMENTED; CI VERIFICATION PENDING.
 
-## Unresolved existing Windows storage release gate
+## Windows storage acceptance status after Product Owner decision (2026-11-24)
 
-### 9. Windows SQLite secure-storage enablement
 - Review thread: `PRRT_kwDOU_JsvM662R1j`
-- Current factory `create_platform_secure_storage(platform="win32")` returns `WindowsSecureStorage()`.
-- However, `docs/P6-609-B2-WINDOWS-SQLITE-STORAGE.md` explicitly states that Windows production storage remains disabled until independent native security review, Windows 11 Home target-machine acceptance, two-logon-session coordination testing, and the remaining native acceptance matrix are complete.
-- This is a real inconsistency between the current factory and the existing B2 release-gate documentation. It is not a code finding that can safely be dismissed based on Windows CI alone.
-- Product Owner instruction: do not create or add a separate independent Windows storage security review task. No such task is started by this record.
-- Status: BLOCKED / DECISION REQUIRED. Do not resolve this thread, merge PR #170, or enable live installation by silently waiving the documented gate. Preserve the current fail-closed policy until the conflict is explicitly resolved.
+- The Product Owner confirmed that Independent Native Security Review is not an available project activity and instructed that this prerequisite be removed. Do not create a separate review task or substitute review process.
+- The independent-review prerequisite is removed. Remaining technical acceptance items are Windows 11 Home target-machine acceptance, two-logon-session coordination, and the outstanding native acceptance matrix (wrong-owner/broad-DACL database and sidecar fixtures, database/sidecar reparse-point fixtures, and explicit no-fallback behavior).
+- This is a documentation/release-gate correction only. It does not claim that unperformed Windows acceptance tests have passed.
+- Status: independent-review prerequisite REMOVED; remaining technical acceptance items remain OPEN. PR #170 stays Draft and unmerged pending those results and explicit Product Owner merge approval.
 
 ## Verification record
-
-- Branch: `feat/P6-609-C-winget-execution`
-- Head when targeted regressions were added: `f351891b69ae7a150e174d50311756c62bf82de7`
-- GitHub Actions on test head `f351891b69ae7a150e174d50311756c62bf82de7`: 10/10 checks succeeded, including backend tests + AI reviewer tests + Ruff; frontend unit tests + Playwright desktop/mobile viewport E2E + build; Windows WinGet Adapter, Real Install Frontend, Generic Publisher Trust, Process Containment, and DPAPI.
-- Targeted post-commit recovery backend test and ambiguous-confirmation frontend recovery test passed in the same CI run.
-- No live installation was performed by CI or this change.
-- PR #170 remains Draft and unmerged.
-- No Full Review was initiated.
