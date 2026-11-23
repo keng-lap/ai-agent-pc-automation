@@ -369,6 +369,12 @@ def confirm_software_approval(
                 raise HTTPException(status_code=503, detail="Install job could not be durably queued.") from None
             _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:
+        challenge_state = services.step_up.get(payload.challenge_id)
+        if challenge_state is None or challenge_state.status != "active":
+            raise HTTPException(
+                status_code=410,
+                detail="Authenticator challenge expired or is no longer usable; create a new challenge.",
+            )
         record_auth_audit_event(
             event_type="auth.step_up",
             outcome="denied",
