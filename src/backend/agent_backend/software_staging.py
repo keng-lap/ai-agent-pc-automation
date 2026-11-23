@@ -45,7 +45,7 @@ class StagedInstaller(BaseModel):
     file_size: int
     sha256: str
     authenticode_valid: Literal[True] = True
-    # Subject is for display; trust decisions must use the certificate DER fingerprint.
+    # Subject is matched to the manifest Publisher; fingerprint is bound into approval evidence.
     signature_subject: str | None = None
     signature_sha256: str | None = None
     official_release_url: str | None = None
