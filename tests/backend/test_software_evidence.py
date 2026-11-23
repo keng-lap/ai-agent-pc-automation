@@ -70,6 +70,7 @@ def staged(**overrides) -> StagedInstaller:
     "subject,publisher,expected",
     [
         ("CN=Acme Software, O=Acme Corporation, C=US", "Acme Corp", True),
+        ('C=US, S=California, L=San Francisco, O="GitHub, Inc.", CN="GitHub, Inc."', "GitHub, Inc.", True),
         ("CN=Acme, O=Acme\\, Incorporated, C=US", "Acme Inc", True),
         ("CN=Acme Inc, O=Evil Corp, C=US", "Acme Inc", False),
         ("CN=Acme Inc, O=Acme Inc, O=Other Inc", "Acme Inc", False),
