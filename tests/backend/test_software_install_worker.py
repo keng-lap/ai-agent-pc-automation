@@ -283,8 +283,8 @@ def test_verifier_uses_version_after_package_id_when_display_name_contains_id(mo
         lambda *_a, **_k: SimpleNamespace(
             returncode=0,
             stdout=(
-                "Name Id Version Available Source\\n"
-                "Acme.Editor 1.2.3 Acme.Editor 9.9.9 winget\\n"
+                "Name Id Version Available Source\n"
+                "Acme.Editor 1.2.3 Acme.Editor 9.9.9 winget\n"
             ),
         ),
     )
