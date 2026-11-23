@@ -21,6 +21,7 @@ ENV_NAMES = [
     "AUTHENTICATOR_SECRET_PATH",
     "JOB_STORE_PATH",
     "LOCALAPPDATA",
+    "AI_AGENT_ENABLE_REAL_INSTALL",
 ]
 
 
@@ -158,3 +159,20 @@ def test_google_auth_configuration_rejects_secret_path_outside_dedicated_state_d
 
     with pytest.raises(ConfigError, match="per-user authenticator state directory"):
         load_settings(load_env_file=False)
+
+
+def test_real_install_is_disabled_by_default():
+    settings = load_settings(load_env_file=False)
+    assert settings.real_install_enabled is False
+
+
+@pytest.mark.parametrize("value", ["true", "yes", "2", "enabled", ""])
+def test_real_install_flag_rejects_ambiguous_values(monkeypatch, value):
+    monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", value)
+    with pytest.raises(ConfigError, match="AI_AGENT_ENABLE_REAL_INSTALL"):
+        load_settings(load_env_file=False)
+
+
+def test_real_install_requires_explicit_one(monkeypatch):
+    monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
+    assert load_settings(load_env_file=False).real_install_enabled is True
