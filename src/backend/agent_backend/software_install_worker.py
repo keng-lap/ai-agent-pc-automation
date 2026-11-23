@@ -257,6 +257,10 @@ class SoftwareInstallWorker:
                 return self._transition(
                     job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
                 ) or job
+            if self._stop_event.is_set() or lease_lost.is_set():
+                return self._transition(
+                    job, token, version, version_lock, "UNKNOWN", "WORKER_CANCELLED_BEFORE_EXECUTION"
+                ) or job
             try:
                 self._store.consume_real_install_release_authorization(
                     task_id=authorization.task_id,
@@ -274,8 +278,6 @@ class SoftwareInstallWorker:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "RELEASE_AUTHORIZATION_UNAVAILABLE"
                 ) or job
-            if lease_lost.is_set():
-                return job
             result = self._executor(
                 binding,
                 prepared,
