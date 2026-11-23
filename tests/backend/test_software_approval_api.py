@@ -57,6 +57,9 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
                 self.loaded_secret = kwargs["secret_loader"]()
             return accepted
 
+        def get(self, _challenge_id):
+            return SimpleNamespace(status="active")
+
     step_up = StepUp()
     principal = SimpleNamespace(owner_sub=owner, session_id=session)
     monkeypatch.setattr(
