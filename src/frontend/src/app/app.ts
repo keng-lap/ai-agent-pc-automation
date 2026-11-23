@@ -913,14 +913,37 @@ export class App implements AfterViewChecked {
           }));
           if (reservationId) this.loadSoftwareInstallJobStatus(entryId, reservationId);
         },
+        error: () => this.recoverSoftwareInstallReservation(entryId, proposal.plan_id),
+      });
+  }
+
+  private recoverSoftwareInstallReservation(entryId: number, planId: string): void {
+    defer(() => this.chatApi.getSoftwareInstallJobForPlan(planId))
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => {
+          if (!isSoftwareInstallJobStatus(value)) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาตรวจสอบ Jobs ก่อนทำรายการใหม่' : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
+                : item
+            )));
+            return;
+          }
+          this.entries.update((entries) => entries.map((item) => (
+            item.id === entryId && item.discovery
+              ? { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, jobStatus: value, jobStatusChecking: false, totpCode: '', approvalChallenge: undefined, proposalError: undefined } }
+              : item
+          )));
+          this.loadSoftwareInstallJobStatus(entryId, value.reservation_id);
+        },
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'TOTP ไม่ถูกต้อง หมดอายุ หรือไม่สามารถเข้าคิวติดตั้งได้ กรุณาขอรหัสใหม่' : 'TOTP was invalid, expired, or the install could not be queued. Request a new code.' } }
+            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณาตรวจสอบสถานะก่อนอนุมัติซ้ำ' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
             : item
         ))),
       });
   }
-
   protected refreshSoftwareInstallStatus(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     if (!discovery?.reservationId || discovery.jobStatusChecking) return;
