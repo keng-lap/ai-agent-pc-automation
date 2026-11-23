@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "src" / "backend"))
 
 from agent_backend.software_discovery import WinGetManifestRepository
-from agent_backend.software_evidence import SoftwareEvidenceRegistry
+from agent_backend.software_evidence import SoftwareEvidenceRegistry, signer_subject_matches_publisher
 from agent_backend.software_staging import InstallerStager
 
 package_id, version, architecture = sys.argv[1:4]
@@ -51,6 +51,16 @@ with tempfile.TemporaryDirectory(prefix="aiagent-publisher-acceptance-") as temp
     staging_root = Path(temp_dir) / "staging"
     staged = InstallerStager().stage(candidate, staging_root=staging_root)
     try:
+        print(json.dumps({
+            "diagnostic": "PUBLISHER_IDENTITY",
+            "package_id": candidate.package_id,
+            "manifest_publisher": candidate.publisher,
+            "authenticode_signer_subject": staged.signature_subject,
+            "certificate_sha256": staged.signature_sha256,
+            "subject_match": signer_subject_matches_publisher(
+                staged.signature_subject or "", candidate.publisher
+            ),
+        }, ensure_ascii=False))
         evidence = SoftwareEvidenceRegistry().register_staged_candidate(
             candidate=candidate,
             staged=staged,
