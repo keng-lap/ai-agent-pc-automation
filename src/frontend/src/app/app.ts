@@ -184,7 +184,7 @@ function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalC
 function isSoftwareInstallJobStatus(value: unknown): value is SoftwareInstallJobStatus {
   return isRecord(value)
     && typeof value['reservation_id'] === 'string'
-    && /^[0-9a-f]{32}$/.test(value['reservation_id'])
+    && (/^[0-9a-f]{32}$/.test(value['reservation_id']) || UUID_PATTERN.test(value['reservation_id']))
     && ['QUEUED', 'CLAIMED', 'RUNNING', 'VERIFYING', 'SUCCEEDED', 'FAILED', 'REBOOT_REQUIRED', 'UNKNOWN'].includes(String(value['state']))
     && Number.isInteger(value['attempts'])
     && Number.isInteger(value['version'])
@@ -747,7 +747,7 @@ export class App implements AfterViewChecked {
         return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
       }
       loadReadiness = value.status === 'CONDITIONAL'
-        && value.candidate?.publisher_verification === 'VERIFIED';
+        && ['VERIFIED', 'NOT_CHECKED'].includes(value.candidate?.publisher_verification ?? '');
       return {
         ...entry,
         discovery: {
