@@ -118,6 +118,56 @@ def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file
     assert not staged_path.exists()
 
 
+
+def test_generic_package_proposal_is_not_blocked_by_dbeaver_release_metadata(monkeypatch, tmp_path):
+    candidate = make_candidate(
+        package_id="Acme.Editor",
+        package_name="Acme Editor",
+        publisher="Acme Inc",
+        installer_url="https://downloads.acme.example/editor.exe",
+        installer_domain="downloads.acme.example",
+        publisher_verification="NOT_CHECKED",
+        official_version=None,
+        official_release_url=None,
+        official_asset_sha256=None,
+        official_asset_id=None,
+    )
+    staged_path = tmp_path / "generic-installer.exe"
+    staged_path.write_bytes(b"verified installer")
+    staged = StagedInstaller(
+        package_id=candidate.package_id,
+        version=candidate.version,
+        architecture=candidate.architecture,
+        file_path=str(staged_path),
+        file_size=18,
+        sha256="a" * 64,
+        authenticode_valid=True,
+        signature_subject="CN=Acme Editor, O=Acme Inc",
+        signature_sha256="d" * 64,
+        official_release_url=None,
+        staged_at=NOW.isoformat(),
+    )
+    evidence = make_evidence().model_copy(update={
+        "package_id": "Acme.Editor",
+        "package_name": "Acme Editor",
+        "publisher": "Acme Inc",
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "official_release_url": None,
+    })
+    stage_calls = []
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
+    monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: (stage_calls.append(args) or staged))
+    monkeypatch.setattr(api.software_evidence_registry, "register_staged_candidate", lambda **_kwargs: evidence)
+    response = api.create_software_install_proposal(
+        api.SoftwareInstallProposalRequest(package_id="Acme.Editor", version=candidate.version),
+        request=make_request(tmp_path),
+    )
+    assert response.package_id == "Acme.Editor"
+    assert stage_calls
+    assert not staged_path.exists()
+
+
 def test_unverified_official_release_is_rejected_before_download(monkeypatch, tmp_path):
     candidate = make_candidate(publisher_verification="NOT_CHECKED")
     stage_calls = []
@@ -138,7 +188,7 @@ def test_unverified_official_release_is_rejected_before_download(monkeypatch, tm
     assert stage_calls == []
 
 
-def test_missing_backend_publisher_trust_anchor_fails_closed_and_removes_staged_file(monkeypatch, tmp_path):
+def test_publisher_identity_mismatch_fails_closed_and_removes_staged_file(monkeypatch, tmp_path):
     candidate = make_candidate()
     staged_path = tmp_path / "installer.exe"
     staged_path.write_bytes(b"verified installer")
@@ -193,14 +243,11 @@ def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
 
 
 
-def test_readiness_exposes_only_non_secret_publisher_pin_state(monkeypatch):
+def test_readiness_exposes_generic_authenticode_publisher_policy_without_package_pin(monkeypatch):
     monkeypatch.delenv("AI_AGENT_DBEAVER_SIGNER_SHA256", raising=False)
-    blocked = api.get_software_install_readiness()
-    assert blocked["publisher_trust_configured"] is False
-    assert blocked["supported_package_ids"] == []
-
-    monkeypatch.setenv("AI_AGENT_DBEAVER_SIGNER_SHA256", "d" * 64)
     ready = api.get_software_install_readiness()
     assert ready["publisher_trust_configured"] is True
-    assert ready["supported_package_ids"] == ["DBeaver.DBeaver.Community"]
+    assert ready["publisher_trust_mode"] == "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH"
+    assert ready["supported_package_ids"] == []
+    assert "AI_AGENT_DBEAVER_SIGNER_SHA256" not in str(ready)
     assert "d" * 64 not in str(ready)
