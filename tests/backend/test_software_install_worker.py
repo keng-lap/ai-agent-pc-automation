@@ -108,6 +108,7 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         verifier=lambda *_args: next(verification_results),
         heartbeat_seconds=5,
         release_authorization=make_release_authorization(binding),
+        release_authorization=make_release_authorization(binding),
     )
     result = worker.run_once()
 
@@ -129,6 +130,7 @@ def test_worker_records_unknown_after_execution_timeout(monkeypatch, tmp_path):
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=True, exit_code=None),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -169,6 +171,7 @@ def test_worker_does_not_reinstall_an_exact_package_already_present(monkeypatch,
         executor=lambda *_a, **_k: executor_calls.append(True),
         verifier=lambda *_a: True,
         heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -191,6 +194,7 @@ def test_worker_never_marks_success_when_winget_exits_nonzero(monkeypatch, tmp_p
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=1),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -219,13 +223,14 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
         executor=executor,
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
 
     assert cancel_events and cancel_events[0].is_set() is True
     assert result.state == "UNKNOWN"
-    assert result.result_code == "WORKER_LEASE_LOST_PROCESS_TERMINATED"
+    assert result.result_code == "WORKER_CANCELLED_PROCESS_TERMINATED"
 
 
 @pytest.mark.parametrize("returncode", [0x8A150014, -1978335212])
@@ -276,6 +281,7 @@ def test_worker_denies_release_for_different_exact_package_without_execution(mon
         executor=lambda *_a, **_k: executor_calls.append(True),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
         release_authorization=authorization,
     )
 
