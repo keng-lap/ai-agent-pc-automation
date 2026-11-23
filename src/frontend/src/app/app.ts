@@ -954,6 +954,32 @@ export class App implements AfterViewChecked {
             )));
             return;
           }
+          const releaseAuthorizationRejected = isRecord(error)
+            && error['status'] === 409
+            && isRecord(error['error'])
+            && typeof error['error']['detail'] === 'string'
+            && error['error']['detail'].toLowerCase().includes('release authorization');
+          if (releaseAuthorizationRejected) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'Release Authorization หมดอายุหรือไม่ตรงกับ Package/Version กรุณาตั้งค่าใหม่แล้วรีเฟรช'
+                      : 'The release authorization expired or does not match this package/version. Refresh authorization and try again.',
+                  },
+                }
+                : item
+            )));
+            this.loadSoftwareInstallReadiness(entryId);
+            return;
+          }
           if (isRecord(error) && error['status'] === 403) {
             this.entries.update((entries) => entries.map((item) => (
               item.id === entryId && item.discovery
