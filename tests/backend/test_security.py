@@ -253,6 +253,7 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/jobs/{job_id}",
         "/api/software/install/readiness",
         "/api/software/install/jobs/{reservation_id}",
+        "/api/plans/{plan_id}/software-approval/reservation",
         "/api/auth/session",
         "/api/auth/google/start",
         "/api/authenticator/status",
@@ -264,6 +265,7 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/settings/gemini/test"]) == {"post"}
     assert set(paths["/api/plans"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}"]) == {"get"}
+    assert set(paths["/api/plans/{plan_id}/software-approval/reservation"]) == {"get"}
     assert set(paths["/api/plans/{plan_id}/refine"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}/approve"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}/step-up"]) == {"post"}
@@ -351,7 +353,7 @@ def test_runtime_dependencies_include_oidc_and_png_qr_requirements():
         "fastapi>=0.143",
         "uvicorn>=0.54",
         "python-dotenv>=1.2",
-        "google-genai>=1.0.0",
+        "google-genai>=1.22.0",
         "qrcode[pil]>=8.2",
         "google-auth>=2.62.1",
         "requests>=2.32",
