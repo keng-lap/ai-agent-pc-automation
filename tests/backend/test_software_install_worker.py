@@ -22,6 +22,7 @@ def make_binding():
         version="26.2.4",
         source="winget",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url="https://example.com/dbeaver.exe",
         official_release_url="https://example.com/releases/26.2.4",
         manifest_source_url="https://github.com/microsoft/winget-pkgs/tree/" + "c" * 40,
