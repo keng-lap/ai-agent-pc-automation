@@ -67,7 +67,7 @@ class _FailPostCommitSecureStorage(_TestSecureStorage):
         yield _Lease()
 
 
-def make_install_binding_json():
+def make_install_binding():
     evidence = VerifiedPackageEvidence(
         evidence_id="e" * 32,
         package_id="Contoso.Sample",
@@ -92,7 +92,7 @@ def make_install_binding_json():
     return build_install_approval_binding(
         plan_digest=PLAN_DIGEST,
         evidence=evidence,
-    ).model_dump_json()
+    )
 
 
 def create_approval(store, *, approval_id="approval-1", expires=None):
@@ -143,7 +143,17 @@ def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_
         clock=lambda: NOW,
         secure_storage=storage,
     )
-    create_approval(store)
+    binding = make_install_binding()
+    store.create_approval(
+        approval_id="approval-1",
+        owner_id=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+        plan_digest=PLAN_DIGEST,
+        action_digest=binding.approval_digest,
+        evidence_expires_at=NOW + timedelta(minutes=10),
+        now=NOW,
+    )
     storage.fail_post_commit_once = True
 
     with pytest.raises(ApprovalReservationUnavailable):
@@ -153,9 +163,9 @@ def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_
             session_id=SESSION,
             plan_id=PLAN_ID,
             plan_digest=PLAN_DIGEST,
-            action_digest=ACTION_DIGEST,
+            action_digest=binding.approval_digest,
             idempotency_key=PLAN_ID,
-            binding_json=make_install_binding_json(),
+            binding_json=binding.model_dump_json(),
             now=NOW,
         )
 
