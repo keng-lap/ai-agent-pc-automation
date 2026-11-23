@@ -249,7 +249,7 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
         worker_id="worker-1",
         executor=executor,
         verifier=lambda *_a: False,
-        heartbeat_seconds=0.01,
+        heartbeat_seconds=5,
         release_authorization=make_release_authorization(binding),
     )
 
