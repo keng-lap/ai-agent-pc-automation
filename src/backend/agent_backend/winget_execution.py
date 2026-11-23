@@ -36,19 +36,22 @@ _STILL_ACTIVE = 259
 _MAX_TIMEOUT_SECONDS = 1800
 
 
-def _wait_for_process_exit(wait_for_single_object, process_handle) -> None:
-    """Do not report cancellation/timeout until Windows signals process exit."""
+def _wait_for_process_exit(wait_for_single_object, process_handle, timeout_ms: int = 10_000) -> None:
+    """Wait a bounded interval for the WinGet root process to terminate."""
+    deadline = time.monotonic() + timeout_ms / 1000
     while True:
-        result = wait_for_single_object(process_handle, 1000)
+        result = wait_for_single_object(process_handle, 250)
         if result == _WAIT_OBJECT_0:
             return
-        if result == _WAIT_TIMEOUT:
-            continue
         if result == _WAIT_FAILED:
             raise WinGetExecutionError(
                 f"WinGet termination wait failed (Windows error {getattr(ctypes, 'get_last_error', lambda: 0)()})"
             )
-        raise WinGetExecutionError("WinGet termination returned an unexpected wait status")
+        if result != _WAIT_TIMEOUT:
+            raise WinGetExecutionError("WinGet termination returned an unexpected wait status")
+        if time.monotonic() >= deadline:
+            raise WinGetExecutionError("WinGet process did not exit within the termination grace period")
+
 
 class WinGetExecutionError(RuntimeError):
     """The exact approved WinGet operation could not be safely executed."""
