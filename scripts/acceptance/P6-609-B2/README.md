@@ -8,7 +8,7 @@ The scripts do not enable the application worker, invoke WinGet, or install soft
 
 - Windows 11 Home.
 - Repository checked out at the exact PR commit nominated for acceptance.
-- Project virtual environment created with `scripts\\setup.ps1`.
+- Project virtual environment created with `scripts\setup.ps1`.
 - 64-bit Python 3.11+ with pytest and pywin32 installed.
 - Local fixed NTFS volume.
 - Run in a normal, non-elevated PowerShell. If a native test is denied, report the displayed error; do not rerun elevated and treat it as equivalent.
@@ -29,13 +29,13 @@ From the repository root:
 2. Run preflight:
 
    ```powershell
-   .\\scripts\\acceptance\\P6-609-B2\\preflight.ps1
+   .\scripts\acceptance\P6-609-B2\preflight.ps1
    ```
 
 3. Run storage and lifecycle tests:
 
    ```powershell
-   .\\scripts\\acceptance\\P6-609-B2\\test-storage.ps1
+   .\scripts\acceptance\P6-609-B2\test-storage.ps1
    ```
 
    Runs `tests/backend/test_platform_storage.py` and `tests/backend/test_job_store.py`. This includes applicable Windows native directory/file protection, ACL, reparse-point, handle-lifetime, rename, and same-database mutex tests. It does not include a separate two-logon-session coordination test.
@@ -43,7 +43,7 @@ From the repository root:
 4. Run Windows security regression tests:
 
    ```powershell
-   .\\scripts\\acceptance\\P6-609-B2\\test-security.ps1
+   .\scripts\acceptance\P6-609-B2\test-security.ps1
    ```
 
    Runs the Windows-specific cases in `test_platform_storage.py`, including wrong-owner/broad-DACL and reparse-point rejection fixtures.
