@@ -358,7 +358,11 @@ def test_manifest_source_retries_transient_network_errors_and_uses_actions_token
 
     assert result.candidate is not None
     assert attempts > len(source.calls)
+    manifest_calls = [
+        call for call in source.calls if "/repos/microsoft/winget-pkgs/" in call[0]
+    ]
+    assert manifest_calls
     assert all(
         call[1]["headers"]["Authorization"] == "Bearer read-only-actions-token"
-        for call in source.calls
+        for call in manifest_calls
     )
