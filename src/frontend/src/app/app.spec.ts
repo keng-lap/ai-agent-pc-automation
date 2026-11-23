@@ -164,6 +164,11 @@ class FakeChatApi {
     return of(this.readiness);
   }
 
+  getSoftwareInstallJobForPlan(planId: string): Observable<unknown> {
+    this.reservationRecoveryCalls.push(planId);
+    return throwError(() => ({ status: 404 }));
+  }
+
   createSoftwareInstallProposal(packageId: string, version: string, architecture: string): Observable<unknown> {
     this.proposalCalls.push({ packageId, version, architecture });
     return of({
