@@ -297,3 +297,35 @@ def test_expired_reboot_required_lease_becomes_unknown_without_retry(tmp_path):
     assert recovered.state == "UNKNOWN"
     assert recovered.attempts == 1
     assert recovered.result_code == "WORKER_LEASE_EXPIRED"
+
+def test_real_install_release_nonce_is_one_use_and_bound_to_exact_action(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    expiry = NOW + timedelta(minutes=5)
+    args = dict(
+        task_id="P6-609-C",
+        package_id=binding.evidence.package_id,
+        version=binding.evidence.version,
+        action_digest=binding.approval_digest,
+        nonce="a" * 64,
+        expires_at=expiry,
+        now=NOW,
+    )
+    store.consume_real_install_release_authorization(**args)
+    with pytest.raises(ApprovalReservationConflict, match="already consumed"):
+        store.consume_real_install_release_authorization(**args)
+
+
+def test_expired_real_install_release_authorization_is_rejected(tmp_path):
+    binding = make_binding()
+    store = make_store(tmp_path)
+    with pytest.raises(Exception, match="expired"):
+        store.consume_real_install_release_authorization(
+            task_id="P6-609-C",
+            package_id=binding.evidence.package_id,
+            version=binding.evidence.version,
+            action_digest=binding.approval_digest,
+            nonce="b" * 64,
+            expires_at=NOW,
+            now=NOW,
+        )
