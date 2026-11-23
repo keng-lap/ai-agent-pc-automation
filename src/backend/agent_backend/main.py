@@ -118,6 +118,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
             worker = SoftwareInstallWorker(
                 store,
                 work_root=Path(settings.job_store_path).parent / "winget-work",
+                stop_event=application.state.install_worker_stop,
             )
         except Exception:
             logging.getLogger(__name__).exception("Local software install worker could not start.")
