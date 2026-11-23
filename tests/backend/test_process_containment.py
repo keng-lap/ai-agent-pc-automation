@@ -1,7 +1,5 @@
-import ctypes
+import multiprocessing
 import os
-import subprocess
-import sys
 import time
 from types import SimpleNamespace
 
@@ -35,9 +33,9 @@ def test_job_object_waits_until_active_process_count_reaches_zero():
 
     def query(handle, info_class, buffer, buffer_size, returned_length):
         calls.append((handle, info_class, buffer_size, returned_length))
-        accounting = ctypes.cast(
+        accounting = containment_module.ctypes.cast(
             buffer,
-            ctypes.POINTER(containment_module._BasicAccountingInformation),
+            containment_module.ctypes.POINTER(containment_module._BasicAccountingInformation),
         ).contents
         accounting.ActiveProcesses = next(active_counts)
         return 1
@@ -68,36 +66,41 @@ def test_job_object_wait_times_out_while_processes_remain_active():
         job.wait_for_empty(timeout_ms=1)
 
 
+def _sleep_for_process_tree():
+    time.sleep(60)
+
+
+def _spawn_contained_descendant(start_event, child_ready_event):
+    if not start_event.wait(timeout=10):
+        return
+    child = multiprocessing.get_context("spawn").Process(target=_sleep_for_process_tree)
+    child.start()
+    child_ready_event.set()
+    child.join()
+    time.sleep(60)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows Job Object APIs are required")
-def test_terminating_job_waits_for_contained_parent_and_descendant(tmp_path):
-    start_file = tmp_path / "start-child"
-    child_ready_file = tmp_path / "child-ready"
-    child_code = "import time; time.sleep(60)"
-    parent_code = (
-        "import os, subprocess, sys, time\n"
-        f"start = {str(start_file)!r}\n"
-        f"ready = {str(child_ready_file)!r}\n"
-        "while not os.path.exists(start):\n"
-        "    time.sleep(0.01)\n"
-        f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
-        "open(ready, 'w', encoding='utf-8').write(str(child.pid))\n"
-        "time.sleep(60)\n"
+def test_terminating_job_waits_for_contained_parent_and_descendant():
+    context = multiprocessing.get_context("spawn")
+    start_event = context.Event()
+    child_ready_event = context.Event()
+    parent = context.Process(
+        target=_spawn_contained_descendant,
+        args=(start_event, child_ready_event),
     )
-    parent = subprocess.Popen([sys.executable, "-c", parent_code])
+    parent.start()
     job = WindowsJobObject()
     try:
-        job.assign_suspended_process(int(parent._handle))
-        start_file.write_text("go", encoding="utf-8")
-        deadline = time.monotonic() + 10
-        while not child_ready_file.exists() and time.monotonic() < deadline:
-            time.sleep(0.02)
-        assert child_ready_file.exists(), "descendant process did not start"
+        job.assign_suspended_process(int(parent.sentinel))
+        start_event.set()
+        assert child_ready_event.wait(timeout=10), "descendant process did not start"
         job.terminate()
         job.wait_for_empty(timeout_ms=10_000)
-        assert parent.wait(timeout=5) is not None
+        parent.join(timeout=5)
+        assert not parent.is_alive()
     finally:
-        if parent.poll() is None:
-            parent.kill()
-            parent.wait(timeout=5)
+        if parent.is_alive():
+            parent.terminate()
+            parent.join(timeout=5)
         job.close()
-
