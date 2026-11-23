@@ -143,7 +143,10 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
   return isRecord(value)
     && typeof value['platform_supported'] === 'boolean'
     && typeof value['authenticode_verification_available'] === 'boolean'
+    && typeof value['publisher_identity_policy_available'] === 'boolean'
     && typeof value['publisher_trust_configured'] === 'boolean'
+    && value['publisher_trust_mode'] === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+    && typeof value['package_allowlist_enabled'] === 'boolean'
     && Array.isArray(value['supported_package_ids'])
     && value['supported_package_ids'].every((item) => typeof item === 'string')
     && value['notice'] === 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
@@ -800,8 +803,9 @@ export class App implements AfterViewChecked {
       !discovery
       || !candidate
       || discovery.readiness?.platform_supported !== true
-      || discovery.readiness.publisher_trust_configured !== true
-      || !discovery.readiness.supported_package_ids.includes(candidate.package_id)
+      || discovery.readiness.authenticode_verification_available !== true
+      || discovery.readiness.publisher_identity_policy_available !== true
+      || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
       || candidate.publisher_verification !== 'VERIFIED'
       || this.planning()
     ) return;
