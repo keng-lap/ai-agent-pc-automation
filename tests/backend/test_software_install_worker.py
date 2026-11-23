@@ -227,12 +227,21 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
     store = FakeStore(binding)
     monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
     monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
-    cancel_events = []
+    observed_cancellation = threading.Event()
+    renewal_attempted = threading.Event()
+
+    def fail_renewal(*_args, **_kwargs):
+        renewal_attempted.set()
+        raise RuntimeError("lease renewal rejected")
+
+    store.renew_install_lease = fail_renewal
 
     def executor(*_args, **kwargs):
-        cancel_events.append(kwargs["cancel_event"])
-        kwargs["cancel_event"].set()
-        return SimpleNamespace(timed_out=False, cancelled=True, exit_code=None)
+        cancel_event = kwargs["cancel_event"]
+        assert renewal_attempted.wait(timeout=2)
+        assert cancel_event.wait(timeout=2)
+        observed_cancellation.set()
+        return SimpleNamespace(timed_out=False, cancelled=cancel_event.is_set(), exit_code=None)
 
     worker = worker_module.SoftwareInstallWorker(
         store,
@@ -240,13 +249,13 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
         worker_id="worker-1",
         executor=executor,
         verifier=lambda *_a: False,
-        heartbeat_seconds=5,
+        heartbeat_seconds=0.01,
         release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
 
-    assert cancel_events and cancel_events[0].is_set() is True
+    assert observed_cancellation.is_set()
     assert result.state == "UNKNOWN"
     assert result.result_code == "WORKER_CANCELLED_PROCESS_TERMINATED"
 
