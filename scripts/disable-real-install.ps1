@@ -11,5 +11,8 @@ foreach ($name in $names) {
     Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
 }
 
+# Explicitly override any enabled value loaded from .env on backend restart.
+$env:AI_AGENT_ENABLE_REAL_INSTALL = '0'
+
 Write-Host 'Real-install release authorization cleared from this PowerShell process.'
 Write-Host 'Restart the backend from this window to keep live installation disabled.'
