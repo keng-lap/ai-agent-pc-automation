@@ -86,6 +86,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
     application.state.real_install_enabled = settings.real_install_enabled
+    application.state.real_install_release_authorization = settings.real_install_release_authorization
     application.state.job_store_lock = threading.Lock()
     application.state.approval_reservation_store = None
     application.state.approval_reservation_store_lock = threading.Lock()
