@@ -28,11 +28,28 @@ class ConfigError(ValueError):
     """Raised when configuration is invalid or unsafe."""
 
 
+def default_state_directory() -> Path:
+    """Return a per-Windows-user state root, with a repository fallback elsewhere.
+
+    LOCALAPPDATA is scoped to the interactive Windows user, so separate
+    Windows accounts never share the same default SQLite or DPAPI state.
+    Explicit JOB_STORE_PATH/AUTHENTICATOR_SECRET_PATH overrides remain
+    subject to the platform adapters' strict owner and ACL checks.
+    """
+    local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
+    if local_app_data:
+        base = Path(local_app_data).expanduser()
+        if not base.is_absolute():
+            raise ConfigError("LOCALAPPDATA must be an absolute local path.")
+        return Path(os.path.abspath(base / "AI-Agent-PC-Automation"))
+    return Path(os.path.abspath(REPO_ROOT / ".agent-state"))
+
+
 def validate_authenticator_secret_path(path: Path) -> Path:
-    """Require the secret file to live in the app-owned authenticator directory."""
+    """Require the secret file to live in this user's app-owned state directory."""
     if not isinstance(path, Path):
         raise ConfigError("AUTHENTICATOR_SECRET_PATH must be a filesystem path.")
-    expected_dir = Path(os.path.abspath(REPO_ROOT / ".agent-state" / "authenticator"))
+    expected_dir = default_state_directory() / "authenticator"
     candidate = path.expanduser()
     if not candidate.is_absolute():
         candidate = REPO_ROOT / candidate
@@ -40,7 +57,7 @@ def validate_authenticator_secret_path(path: Path) -> Path:
     if candidate.parent != expected_dir:
         raise ConfigError(
             "AUTHENTICATOR_SECRET_PATH must be a direct child of the "
-            "dedicated .agent-state/authenticator directory."
+            "per-user authenticator state directory."
         )
     return candidate
 
@@ -162,9 +179,7 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
             raise ConfigError(
                 "GOOGLE_OIDC_REDIRECT_URI must be the configured loopback callback URL."
             )
-        authenticator_state_dir = Path(
-            os.path.abspath(REPO_ROOT / ".agent-state" / "authenticator")
-        )
+        authenticator_state_dir = default_state_directory() / "authenticator"
         secret_path = validate_authenticator_secret_path(
             Path(
                 auth_values["AUTHENTICATOR_SECRET_PATH"]
@@ -187,6 +202,8 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
         frontend_port=frontend_port,
         log_level=os.environ.get("LOG_LEVEL", "info").strip().lower(),
         local_agent_token=token,
-        job_store_path=Path(os.environ.get("JOB_STORE_PATH", str(REPO_ROOT / ".agent-state" / "jobs.sqlite3"))).expanduser(),
+        job_store_path=Path(
+            os.environ.get("JOB_STORE_PATH", str(default_state_directory() / "jobs.sqlite3"))
+        ).expanduser(),
         **auth_settings,
     )
