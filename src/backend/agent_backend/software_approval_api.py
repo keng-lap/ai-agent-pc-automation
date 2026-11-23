@@ -7,6 +7,7 @@ A separate local worker performs the contained WinGet operation.
 from __future__ import annotations
 
 import threading
+import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -376,8 +377,12 @@ def get_software_install_job_status(
 ) -> SoftwareInstallJobStatusResponse:
     """Read an owner-scoped status summary without exposing the approved binding."""
     is_legacy_hex = len(reservation_id) == 32 and all(char in "0123456789abcdef" for char in reservation_id)
-    is_uuid = len(reservation_id) == 36 and reservation_id.count("-") == 4
-    if not (is_legacy_hex or is_uuid):
+    try:
+        parsed_uuid = uuid.UUID(reservation_id)
+    except (ValueError, AttributeError):
+        parsed_uuid = None
+    is_canonical_uuid = parsed_uuid is not None and str(parsed_uuid) == reservation_id
+    if not (is_legacy_hex or is_canonical_uuid):
         raise HTTPException(status_code=404, detail="Install job not found.")
     _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
     try:
