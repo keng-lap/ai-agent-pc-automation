@@ -438,6 +438,10 @@ class WinGetManifestRepository:
                 "manifest must contain exactly one installer for the requested architecture and user scope"
             )
         installer = matching[0]
+        if installer.get("Dependencies"):
+            raise DiscoveryUnavailable(
+                "selected installer dependencies are not eligible for exact single-package approval"
+            )
         installer_url = installer.get("InstallerUrl")
         installer_hash = installer.get("InstallerSha256")
         installer_type = installer.get("InstallerType") or installer_doc.get("InstallerType")
