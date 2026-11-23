@@ -7,7 +7,6 @@ The certificate fingerprint is bound to approval evidence, not used as a pin.
 
 from __future__ import annotations
 
-import csv
 import secrets
 import threading
 from collections.abc import Callable
@@ -36,18 +35,38 @@ def _normalize_publisher(value: str) -> str:
 
 
 def _subject_attributes(subject: str) -> dict[str, list[str]]:
-    """Extract organization and common-name attributes from the Windows subject string."""
+    """Extract O and CN from quoted or escaped Windows X.500 subject strings."""
     attributes: dict[str, list[str]] = {}
-    try:
-        components = next(csv.reader([subject], escapechar=chr(92), strict=True))
-    except (csv.Error, StopIteration):
+    components: list[str] = []
+    current: list[str] = []
+    escaped = False
+    quoted = False
+    for char in subject:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == chr(92):
+            current.append(char)
+            escaped = True
+        elif char == chr(34):
+            current.append(char)
+            quoted = not quoted
+        elif char == ',' and not quoted:
+            components.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    if quoted or escaped:
         return attributes
+    components.append("".join(current).strip())
     for component in components:
-        key, separator, value = component.partition('=')
-        if separator and key.strip().upper() in {'O', 'CN'}:
-            attributes.setdefault(key.strip().upper(), []).append(value.strip().strip(chr(34)))
+        key, separator, raw_value = component.partition("=")
+        name = key.strip().upper()
+        if separator and name in {"O", "CN"}:
+            value = raw_value.strip().strip(chr(34))
+            value = value.replace(chr(92) + ",", ",").replace(chr(92) * 2, chr(92))
+            attributes.setdefault(name, []).append(value)
     return attributes
-
 
 def signer_subject_matches_publisher(subject: str, publisher: str) -> bool:
     """Require exact organization match; use CN only when no organization is present."""
