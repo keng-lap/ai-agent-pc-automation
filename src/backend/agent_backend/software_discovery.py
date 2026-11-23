@@ -490,7 +490,7 @@ class WinGetManifestRepository:
             version=version,
             architecture=architecture,
             scope="user",
-            installer_type=installer_type,
+            installer_type=installer_type.strip().casefold(),
             installer_silent_switch=silent_switch,
             installer_url=installer_url,
             installer_domain=domain,
