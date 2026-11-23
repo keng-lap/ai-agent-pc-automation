@@ -906,7 +906,7 @@ export class App implements AfterViewChecked {
     const proposal = discovery?.proposal;
     const challenge = discovery?.approvalChallenge;
     const code = discovery?.totpCode ?? '';
-    if (!discovery || !proposal || !challenge || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
+    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
@@ -933,7 +933,28 @@ export class App implements AfterViewChecked {
           }));
           if (reservationId) this.loadSoftwareInstallJobStatus(entryId, reservationId);
         },
-        error: () => this.recoverSoftwareInstallReservation(entryId, proposal.plan_id),
+        error: (error: unknown) => {
+          if (isRecord(error) && error['status'] === 403) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'รหัส Authenticator ไม่ถูกต้องหรือหมดอายุ กรุณากรอกรหัสใหม่แล้วลองอนุมัติอีกครั้ง'
+                      : 'The authenticator code was rejected or expired. Enter a new code and try approval again.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          this.recoverSoftwareInstallReservation(entryId, proposal.plan_id);
+        },
       });
   }
 
@@ -957,7 +978,7 @@ export class App implements AfterViewChecked {
           if (!isSoftwareInstallJobStatus(value)) {
             this.entries.update((entries) => entries.map((item) => (
               item.id === entryId && item.discovery
-                ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาลองตรวจสอบซ้ำก่อนอนุมัติใหม่'  : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาลองตรวจสอบซ้ำก่อนอนุมัติใหม่'  : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
                 : item
             )));
             return;
@@ -971,7 +992,7 @@ export class App implements AfterViewChecked {
         },
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
+            ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
             : item
         ))),
       });
