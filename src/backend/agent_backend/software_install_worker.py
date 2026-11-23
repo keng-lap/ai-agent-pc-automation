@@ -95,7 +95,18 @@ def verify_exact_user_install(
         rf"(?<!\S){re.escape(package_id)}(?!\S)\s+(\S+)",
         re.IGNORECASE,
     )
-    for line in (result.stdout or "").splitlines():
+    lines = (result.stdout or "").splitlines()
+    header_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if re.search(r"\\bName\\s+Id\\s+Version\\b", line, re.IGNORECASE)
+        ),
+        None,
+    )
+    if header_index is None:
+        return None
+    for line in lines[header_index + 1:]:
         matches = list(package_pattern.finditer(line))
         if matches:
             # The display name may itself contain the package ID and a version
