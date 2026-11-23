@@ -45,7 +45,7 @@ def _subject_attributes(subject: str) -> dict[str, list[str]]:
         return attributes
     for component in components:
         key, separator, value = component.partition('=')
-        if separator and key.strip().upper() in {'O', 'CN'} and value.strip():
+        if separator and key.strip().upper() in {'O', 'CN'}:
             attributes.setdefault(key.strip().upper(), []).append(value.strip().strip(chr(34)))
     return attributes
 
