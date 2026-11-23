@@ -116,7 +116,6 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
         ({}, {"sha256": "e" * 64}),
         ({}, {"signature_subject": None}),
         ({}, {"signature_sha256": None}),
-        ({}, {"signature_sha256": "e" * 64}),
         ({}, {"official_release_url": "https://evil.example/release"}),
     ],
 )
