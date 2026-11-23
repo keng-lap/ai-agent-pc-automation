@@ -146,6 +146,10 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
     && typeof value['publisher_identity_policy_available'] === 'boolean'
     && typeof value['publisher_trust_configured'] === 'boolean'
     && value['publisher_trust_mode'] === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+    && typeof value['real_install_enabled'] === 'boolean'
+    && (value['real_install_release_package_id'] === null || typeof value['real_install_release_package_id'] === 'string')
+    && (value['real_install_release_version'] === null || typeof value['real_install_release_version'] === 'string')
+    && (value['real_install_release_expires_at'] === null || typeof value['real_install_release_expires_at'] === 'string')
     && typeof value['package_allowlist_enabled'] === 'boolean'
     && Array.isArray(value['supported_package_ids'])
     && value['supported_package_ids'].every((item) => typeof item === 'string')
@@ -780,6 +784,10 @@ export class App implements AfterViewChecked {
       };
     }));
     if (loadReadiness) this.loadSoftwareInstallReadiness(entryId);
+  }
+
+  protected refreshSoftwareInstallReadiness(entryId: number): void {
+    this.loadSoftwareInstallReadiness(entryId);
   }
 
   private loadSoftwareInstallReadiness(entryId: number): void {
