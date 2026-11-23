@@ -176,7 +176,7 @@ class SoftwareInstallWorker:
                         )
                         version["value"] = renewed.version
                     next_heartbeat = time.monotonic() + self._heartbeat_seconds
-                except Exception:
+                except Exception:  # noqa: BLE001 - any renewal fault invalidates lease ownership
                     # Any unexpected renewal failure means the worker can no
                     # longer prove exclusive ownership. Stop the process rather
                     # than continuing under an unverified lease.
