@@ -1,8 +1,8 @@
 import pytest
 
 from agent_backend.config import (
-    ConfigError,
     REPO_ROOT,
+    ConfigError,
     default_state_directory,
     load_settings,
 )
