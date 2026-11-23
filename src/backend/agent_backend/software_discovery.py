@@ -55,6 +55,7 @@ class InstallerCandidate(BaseModel):
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
     installer_type: str
+    installer_silent_switch: str | None = None
     installer_url: str
     installer_domain: str
     installer_sha256: str
@@ -445,6 +446,17 @@ class WinGetManifestRepository:
         installer_url = installer.get("InstallerUrl")
         installer_hash = installer.get("InstallerSha256")
         installer_type = installer.get("InstallerType") or installer_doc.get("InstallerType")
+        switches = installer.get("InstallerSwitches")
+        silent_switch = switches.get("Silent") if isinstance(switches, dict) else None
+        if installer_type == "exe" and (
+            not isinstance(silent_switch, str)
+            or not silent_switch.strip()
+            or len(silent_switch) > 256
+            or any(ord(char) < 0x20 for char in silent_switch)
+        ):
+            raise DiscoveryUnavailable(
+                "EXE installer has no valid manifest-declared silent switch"
+            )
         domain = _validate_installer_url(installer_url)
         if not isinstance(installer_hash, str) or not SHA256_PATTERN.fullmatch(installer_hash):
             raise DiscoveryUnavailable("installer SHA-256 was missing or invalid")
@@ -485,6 +497,7 @@ class WinGetManifestRepository:
             architecture=architecture,
             scope="user",
             installer_type=installer_type,
+            installer_silent_switch=silent_switch,
             installer_url=installer_url,
             installer_domain=domain,
             installer_sha256=installer_hash.lower(),
