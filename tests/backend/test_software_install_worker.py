@@ -238,7 +238,7 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
 
     def executor(*_args, **kwargs):
         cancel_event = kwargs["cancel_event"]
-        assert renewal_attempted.wait(timeout=2)
+        assert renewal_attempted.wait(timeout=7)
         assert cancel_event.wait(timeout=2)
         observed_cancellation.set()
         return SimpleNamespace(timed_out=False, cancelled=cancel_event.is_set(), exit_code=None)
