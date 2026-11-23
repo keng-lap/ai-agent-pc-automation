@@ -100,7 +100,7 @@ def verify_exact_user_install(
         (
             index
             for index, line in enumerate(lines)
-            if re.search(r"\\bName\\s+Id\\s+Version\\b", line, re.IGNORECASE)
+            if re.search(r"\bName\s+Id\s+Version\b", line, re.IGNORECASE)
         ),
         None,
     )
