@@ -18,13 +18,7 @@ PLAN_DIGEST = "d" * 64
 
 
 def make_registry(*, clock=lambda: NOW) -> SoftwareEvidenceRegistry:
-    return SoftwareEvidenceRegistry(
-        clock=clock,
-        signer_sha256_verifier=lambda item, fingerprint: (
-            item.package_id == "DBeaver.DBeaver.Community"
-            and fingerprint == "d" * 64
-        ),
-    )
+    return SoftwareEvidenceRegistry(clock=clock)
 
 
 def candidate() -> InstallerCandidate:
@@ -151,20 +145,67 @@ def test_binding_is_digest_specific_and_revocable():
         registry.get(evidence.evidence_id)
 
 
-def test_default_registry_rejects_signer_without_configured_trust_anchor():
+def test_default_registry_accepts_matching_manifest_publisher_without_user_pin():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
-    with pytest.raises(EvidenceRejected, match="trust anchor"):
-        registry.register_staged_candidate(candidate=candidate(), staged=staged())
+    evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
+    assert evidence.publisher == "DBeaver Corp"
 
 
-def test_registry_rejects_wrong_signer_even_when_signature_is_trusted_by_windows():
+def test_registry_rejects_signer_subject_mismatch_even_when_windows_trusts_chain():
     registry = make_registry(clock=lambda: NOW)
-    with pytest.raises(EvidenceRejected, match="trust anchor"):
+    with pytest.raises(EvidenceRejected, match="does not match"):
         registry.register_staged_candidate(
             candidate=candidate(),
-            staged=staged(signature_sha256="e" * 64),
+            staged=staged(signature_subject="CN=Unrelated Publisher"),
         )
 
+
+
+def test_registry_accepts_unrelated_package_with_exact_manifest_publisher_match():
+    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    generic_candidate = candidate().model_copy(update={
+        "package_id": "Acme.Editor",
+        "package_name": "Acme Editor",
+        "publisher": "Acme Inc",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "installer_domain": "downloads.acme.example",
+    })
+    generic_staged = staged(
+        package_id="Acme.Editor",
+        signature_subject="CN=Acme Editor, O=Acme Inc",
+        official_release_url=None,
+    )
+    evidence = registry.register_staged_candidate(candidate=generic_candidate, staged=generic_staged)
+    assert evidence.package_id == "Acme.Editor"
+    assert evidence.official_release_url is None
+    assert evidence.signature_sha256 == "d" * 64
+
+
+def test_registry_rejects_generic_package_when_manifest_publisher_does_not_match():
+    registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
+    generic_candidate = candidate().model_copy(update={
+        "package_id": "Acme.Editor",
+        "publisher": "Acme Inc",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+    })
+    with pytest.raises(EvidenceRejected, match="does not match"):
+        registry.register_staged_candidate(
+            candidate=generic_candidate,
+            staged=staged(
+                package_id="Acme.Editor",
+                signature_subject="CN=Evil Corp, O=Evil Corp",
+                official_release_url=None,
+            ),
+        )
 
 def test_approval_digest_changes_when_signer_certificate_fingerprint_changes():
     registry = make_registry(clock=lambda: NOW)
