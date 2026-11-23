@@ -38,6 +38,7 @@ interface SoftwareDiscoveryUiState {
   approvalChallenge?: SoftwareApprovalChallenge;
   totpCode?: string;
   reservationId?: string;
+  reservationRecoveryPending?: boolean;
   jobStatus?: SoftwareInstallJobStatus;
   jobStatusChecking?: boolean;
   jobStatusError?: string;
@@ -936,7 +937,19 @@ export class App implements AfterViewChecked {
       });
   }
 
+  protected retrySoftwareInstallReservation(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const planId = discovery?.proposal?.plan_id;
+    if (!planId || discovery?.jobStatusChecking) return;
+    this.recoverSoftwareInstallReservation(entryId, planId);
+  }
+
   private recoverSoftwareInstallReservation(entryId: number, planId: string): void {
+    this.entries.update((entries) => entries.map((item) => (
+      item.id === entryId && item.discovery
+        ? { ...item, discovery: { ...item.discovery, reservationRecoveryPending: true, jobStatusChecking: true, totpCode: '' } }
+        : item
+    )));
     defer(() => this.chatApi.getSoftwareInstallJobForPlan(planId))
       .pipe(timeout({ first: 10_000 }), take(1))
       .subscribe({
@@ -944,21 +957,21 @@ export class App implements AfterViewChecked {
           if (!isSoftwareInstallJobStatus(value)) {
             this.entries.update((entries) => entries.map((item) => (
               item.id === entryId && item.discovery
-                ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาตรวจสอบ Jobs ก่อนทำรายการใหม่' : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาลองตรวจสอบซ้ำก่อนอนุมัติใหม่'  : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
                 : item
             )));
             return;
           }
           this.entries.update((entries) => entries.map((item) => (
             item.id === entryId && item.discovery
-              ? { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, jobStatus: value, jobStatusChecking: false, totpCode: '', approvalChallenge: undefined, proposalError: undefined } }
+              ? { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, jobStatus: value, jobStatusChecking: false, reservationRecoveryPending: false, totpCode: '', approvalChallenge: undefined, proposalError: undefined } }
               : item
           )));
           this.loadSoftwareInstallJobStatus(entryId, value.reservation_id);
         },
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณาตรวจสอบสถานะก่อนอนุมัติซ้ำ' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
+            ? { ...item, discovery: { ...item.discovery, totpCode: '', approvalChallenge: undefined, jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
             : item
         ))),
       });
