@@ -172,7 +172,18 @@ def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_
     candidate = make_candidate(installer_type="inno")
     stage_calls = []
     monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
+    discovery_calls = []
+
+    def discover(**kwargs):
+        discovery_calls.append(kwargs)
+        assert kwargs == {
+            "package_id": candidate.package_id,
+            "version": candidate.version,
+            "architecture": "x64",
+        }
+        return SimpleNamespace(status="CONDITIONAL", candidate=candidate)
+
+    monkeypatch.setattr(api._repository, "discover", discover)
     monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: stage_calls.append(args))
 
     with pytest.raises(Exception) as error:
@@ -185,6 +196,11 @@ def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_
         )
 
     assert getattr(error.value, "status_code", None) == 409
+    assert discovery_calls == [{
+        "package_id": candidate.package_id,
+        "version": candidate.version,
+        "architecture": "x64",
+    }]
     assert stage_calls == []
 
 
