@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_backend.config import REAL_INSTALL_ENV
+from agent_backend.config import ConfigError, real_install_release_authorization_from_env
 from agent_backend.software_discovery import DiscoveryNotFound, DiscoveryUnavailable
 from agent_backend.software_discovery_api import _repository
 from agent_backend.software_evidence import EvidenceRejected, software_evidence_registry
@@ -62,9 +62,13 @@ class SoftwareInstallProposalResponse(BaseModel):
 @router.get("/api/software/install/readiness")
 def get_software_install_readiness() -> dict:
     """Expose non-secret readiness flags for the real-install workflow."""
+    try:
+        release_authorization = real_install_release_authorization_from_env()
+    except ConfigError:
+        release_authorization = None
     return {
         "platform_supported": sys.platform == "win32",
-        "real_install_enabled": sys.platform == "win32" and os.environ.get(REAL_INSTALL_ENV, "0").strip() == "1",
+        "real_install_enabled": sys.platform == "win32" and release_authorization is not None,
         "authenticode_verification_available": sys.platform == "win32",
         "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
         "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
