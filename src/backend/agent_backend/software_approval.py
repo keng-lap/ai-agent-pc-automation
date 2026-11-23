@@ -57,6 +57,22 @@ class VerifiedPackageEvidence(BaseModel):
             raise ValueError("installer URL must be an absolute HTTPS URL without credentials or fragment")
         return value
 
+    @field_validator("official_release_url")
+    @classmethod
+    def validate_optional_official_release_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+        ):
+            raise ValueError("official release URL must be absolute HTTPS without credentials or fragment")
+        return value
+
     @model_validator(mode="after")
     def validate_evidence_window(self) -> VerifiedPackageEvidence:
         if (
