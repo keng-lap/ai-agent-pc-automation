@@ -44,17 +44,17 @@ The application must be run as the signed-in standard user for normal use. Admin
 
 ## Real WinGet release gate and process lifecycle
 
-Real installation is a supported product capability, but the local worker is not started by default. The backend reads `AI_AGENT_ENABLE_REAL_INSTALL` at process startup; only the exact value `1` enables the Windows-local worker. Missing, `0`, or any other value does not enable execution (invalid values fail configuration validation). This is a release opt-in, not a substitute for the authenticated owner session, exact package evidence, one-use TOTP approval, or post-install verification.
+Real installation is a supported product capability, but the local worker is not started by default. The release gate requires all of the following at backend startup: `AI_AGENT_ENABLE_REAL_INSTALL=1`, task `P6-609-C`, one exact WinGet package ID and version, a 64-character random nonce, and an offset-aware expiry no more than 15 minutes in the future. Missing, malformed, expired, mismatched, or uncertain authorization fails closed. This release authorization is separate from the authenticated owner session, exact package evidence, one-use TOTP approval, and post-install verification.
 
-For an explicitly authorized Windows test session, set the flag in the same PowerShell process before starting the backend:
+Prepare the bounded release authorization from the same PowerShell process that will start/restart the backend:
 
 ```powershell
-$env:AI_AGENT_ENABLE_REAL_INSTALL = "1"
+.\\scripts\\authorize-real-install.ps1 -PackageId "Contoso.Editor" -Version "2.4.1" -ExpiresInMinutes 10
 ```
 
-Restart the backend after changing the value. To disable live execution in that process, set it to `0` and restart. The readiness endpoint reports whether the running process has the release gate enabled. Do not use a persistent machine-wide setting as a shortcut; keep the opt-in scoped to the intended test session.
+Use the exact package ID and version shown in the verified proposal. Then restart the backend from that same PowerShell window. The script does not use `setx` or persist machine-wide environment variables. The nonce is atomically consumed in the protected SQLite store and bound to the exact approval digest; a replay or a different package/version is rejected. Prepare a fresh authorization for each real install. The readiness endpoint reports whether the full authorization is currently valid. To disable live execution, restart the backend without running the authorization script.
 
-The worker passes a cancellation signal to the contained WinGet executor. Lease-renewal failure or application shutdown signals cancellation; the executor terminates the WinGet Job Object process tree and waits for the process handle before returning. The resulting job outcome is UNKNOWN, not success, and must be reconciled against the exact installed package/version before any later action. An expired lease is also reconciled to UNKNOWN by the durable queue and is never automatically retried.
+The worker consumes the one-use release authorization immediately before the side-effect boundary, then passes a cancellation signal to the contained WinGet executor. Lease-renewal failure or application shutdown signals cancellation; the executor terminates the WinGet Job Object process tree and waits for the process handle before returning. The resulting job outcome is UNKNOWN, not success, and must be reconciled against the exact installed package/version before any later action. An expired lease is also reconciled to UNKNOWN by the durable queue and is never automatically retried.
 
 ## Acceptance boundary
 
