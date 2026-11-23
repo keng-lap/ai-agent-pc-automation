@@ -138,7 +138,16 @@ class InstallerStager:
             total = 0
             declared_length: int | None = None
             with staged_file:
-                response = self._get_safe_release_response(self._download_url(candidate))
+                download_url = self._download_url(candidate)
+                allowed_redirect_hosts = (
+                    ALLOWED_RELEASE_REDIRECT_HOSTS
+                    if candidate.package_id == "DBeaver.DBeaver.Community"
+                    else frozenset({candidate.installer_domain.casefold()})
+                )
+                response = self._get_safe_release_response(
+                    download_url,
+                    allowed_redirect_hosts=allowed_redirect_hosts,
+                )
 
                 headers = getattr(response, "headers", {})
                 encoding = str(headers.get("Content-Encoding", "identity")).strip().lower()
@@ -236,7 +245,12 @@ class InstallerStager:
             return f"https://api.github.com/repos/dbeaver/dbeaver/releases/assets/{asset_id}"
         return candidate.installer_url
 
-    def _get_safe_release_response(self, initial_url: str):
+    def _get_safe_release_response(
+        self,
+        initial_url: str,
+        *,
+        allowed_redirect_hosts: frozenset[str] = ALLOWED_RELEASE_REDIRECT_HOSTS,
+    ):
         current_url = initial_url
         for redirect_count in range(MAX_RELEASE_REDIRECTS + 1):
             request_headers = {
@@ -272,7 +286,7 @@ class InstallerStager:
             if (
                 parsed_target.scheme != "https"
                 or not parsed_target.hostname
-                or parsed_target.hostname.casefold() not in ALLOWED_RELEASE_REDIRECT_HOSTS
+                or parsed_target.hostname.casefold() not in allowed_redirect_hosts
                 or parsed_target.port not in (None, 443)
                 or parsed_target.username
                 or parsed_target.password
