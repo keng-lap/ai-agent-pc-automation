@@ -121,6 +121,7 @@ class GeminiKeyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     api_key: str
+    model: str | None = None
 
     @field_validator("api_key")
     @classmethod
@@ -133,18 +134,52 @@ class GeminiKeyRequest(BaseModel):
 
 @router.get("/api/settings/gemini")
 def gemini_status() -> dict[str, object]:
-    return {"configured": gemini.is_configured(), "model": gemini.MODEL_NAME}
+    return {
+        "configured": gemini.is_configured(),
+        "model": gemini.get_model_name(),
+        "models": list(gemini.SUPPORTED_MODELS),
+    }
 
 
 @router.put("/api/settings/gemini")
 def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
     gemini.save_api_key(payload.api_key)
-    return {"configured": True, "model": gemini.MODEL_NAME}
+    if payload.model is not None:
+        try:
+            gemini.save_model_name(payload.model)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    return {
+        "configured": True,
+        "model": gemini.get_model_name(),
+        "models": list(gemini.SUPPORTED_MODELS),
+    }
+
+
+class GeminiTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    model: str
+    api_key: str | None = None
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_optional_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not 20 <= len(value) <= 512:
+            raise ValueError("API key length is invalid")
+        return value
 
 
 @router.post("/api/settings/gemini/test")
-def test_gemini_connection(request: Request) -> dict[str, object]:
-    if not gemini.is_configured():
+def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict[str, object]:
+    try:
+        selected_model = gemini.validate_model_name(payload.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    if not payload.api_key and not gemini.is_configured():
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     started = time.perf_counter()
     correlation = getattr(request.state, "correlation_id", "unknown")
@@ -155,7 +190,7 @@ def test_gemini_connection(request: Request) -> dict[str, object]:
         correlation=correlation,
     )
     try:
-        gemini.test_connection()
+        gemini.test_connection(model=selected_model, api_key=payload.api_key)
     except gemini.GeminiProviderError as exc:
         emit_exception(
             event_code="GEMINI_CONNECTION_TEST_FAILED",
@@ -182,7 +217,7 @@ def test_gemini_connection(request: Request) -> dict[str, object]:
         correlation=correlation,
         fields={"duration_ms": round((time.perf_counter() - started) * 1000, 2)},
     )
-    return {"connected": True, "model": gemini.MODEL_NAME}
+    return {"connected": True, "model": selected_model}
 
 
 @router.post("/api/chat")
@@ -196,7 +231,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
         component="gemini",
         stage="provider_generation",
         correlation=correlation,
-        fields={"model": gemini.MODEL_NAME},
+        fields={"model": gemini.get_model_name()},
     )
     conversation = _conversation_store.get_or_create(payload.conversation_id)
     with conversation.lock:
@@ -300,7 +335,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
         "gemini_response": normalized,
         "gemini_raw_json": raw_response,
         "provider": "gemini",
-        "model": gemini.MODEL_NAME,
+        "model": gemini.get_model_name(),
         "provider_connected": True,
     }
 
