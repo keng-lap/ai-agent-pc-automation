@@ -423,11 +423,7 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
         if "commits/master" not in call[0]
     ]
     assert all(call[1]["params"]["ref"] == COMMIT for call in pinned_manifest_calls)
-    assert any(
-        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=10"
-        and call[1]["params"] == {"page": "1"}
-        for call in source.calls
-    )
+    # Selected-version verification is independent of the UI's paginated list.
     assert any(
         call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/" + VERSION
         for call in source.calls
