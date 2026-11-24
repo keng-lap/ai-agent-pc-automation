@@ -535,24 +535,17 @@ def test_discovery_not_found_preserves_upstream_404(monkeypatch):
 
 
 
-def test_discovery_reports_safe_installer_selection_facts_without_relaxing_scope():
+def test_discovery_reports_safe_scope_choices_without_implicitly_selecting_machine():
     source = FakeSource(bad_scope=True)
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
 
-    with pytest.raises(DiscoveryUnavailable) as captured:
-        WinGetManifestRepository(http_get=source.get).discover(
-            package_id=PACKAGE_ID,
-            version=VERSION,
-            architecture="x64",
-        )
-
-    assert captured.value.failure_code == "installer_selection_not_unique"
-    assert captured.value.diagnostic_fields == {
-        "requested_architecture": "x64",
-        "requested_scope": "user",
-        "installer_matching_count": 0,
-        "installer_architectures": "x64",
-        "installer_scopes": "machine",
-    }
+    assert result.status == "SCOPE_REQUIRED"
+    assert result.candidate is None
+    assert result.available_scopes == ("machine",)
 
 def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     class VersionListingSource(FakeSource):
