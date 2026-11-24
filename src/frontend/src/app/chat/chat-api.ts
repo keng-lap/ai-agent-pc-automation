@@ -305,6 +305,13 @@ export class ChatApi {
     });
   }
 
+  revokeSoftwareInstallProposal(planId: string): Observable<{ revoked: boolean; revoked_approvals: number }> {
+    return this.http.post<{ revoked: boolean; revoked_approvals: number }>(
+      `/api/software/install/proposals/${encodeURIComponent(planId)}/revoke`,
+      {},
+    );
+  }
+
   createSoftwareApprovalChallenge(
     planId: string,
     evidenceId: string,
