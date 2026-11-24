@@ -39,7 +39,11 @@ def is_current_process_elevated() -> bool:
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
     open_process_token = advapi32.OpenProcessToken
-    open_process_token.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    open_process_token.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.HANDLE),
+    ]
     open_process_token.restype = wintypes.BOOL
 
     get_token_information = advapi32.GetTokenInformation
@@ -77,7 +81,9 @@ def is_current_process_elevated() -> bool:
                 f"(Windows error {ctypes.get_last_error()})"
             )
         if returned.value < ctypes.sizeof(elevation):
-            raise BackendPrivilegeError("Windows returned an incomplete process-token elevation record")
+            raise BackendPrivilegeError(
+                "Windows returned an incomplete process-token elevation record"
+            )
         return bool(elevation.TokenIsElevated)
     finally:
         if not close_handle(token):
