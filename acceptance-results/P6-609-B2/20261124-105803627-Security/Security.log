@@ -1,0 +1,31 @@
+﻿..............s.ssss.....                                                [100%]
+20 passed, 5 skipped, 8 deselected in 0.63s
+D:\work\aiagent\aiAgent2\ai-agent-pc-automation\src\backend\agent_backend\main.py:105: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @application.on_event("startup")
+D:\work\aiagent\aiAgent2\ai-agent-pc-automation\.venv\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  return self.router.on_event(event_type)  # ty: ignore[deprecated]
+D:\work\aiagent\aiAgent2\ai-agent-pc-automation\src\backend\agent_backend\main.py:154: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @application.on_event("shutdown")
+D:\work\aiagent\aiAgent2\ai-agent-pc-automation\.venv\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
