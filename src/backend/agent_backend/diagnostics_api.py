@@ -40,8 +40,9 @@ def get_diagnostics_mode() -> dict[str, bool]:
 def update_diagnostics_mode(payload: DiagnosticsModeRequest) -> dict[str, bool]:
     if payload.enabled and not store_available():
         raise HTTPException(status_code=503, detail="Diagnostics storage is unavailable.")
+    was_enabled = is_enabled()
     enabled = set_enabled(payload.enabled)
-    if not enabled:
+    if was_enabled and not enabled:
         # Start publishing only after detailed capture has stopped. The daemon thread
         # keeps the OFF response immediate; failures remain retryable from the UI.
         start_publish("diagnostics_disabled")
