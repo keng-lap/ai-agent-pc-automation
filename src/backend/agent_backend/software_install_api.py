@@ -32,6 +32,7 @@ class SoftwareInstallProposalRequest(BaseModel):
     package_id: str = Field(min_length=3, max_length=160)
     version: str = Field(min_length=1, max_length=80)
     architecture: Literal["x86", "x64", "arm64"] = "x64"
+    scope: Literal["user"] = "user"
 
     @field_validator("package_id", "version")
     @classmethod
@@ -137,6 +138,7 @@ def create_software_install_proposal(
             package_id=payload.package_id,
             version=payload.version,
             architecture=payload.architecture,
+            scope=payload.scope,
         )
     except DiscoveryNotFound as exc:
         emit_exception(
@@ -169,6 +171,7 @@ def create_software_install_proposal(
         or candidate.package_id != payload.package_id
         or candidate.version != payload.version
         or candidate.architecture != payload.architecture
+        or candidate.scope != payload.scope
         or (
             candidate.package_id == "DBeaver.DBeaver.Community"
             and (
