@@ -557,6 +557,9 @@ def test_discovery_reports_safe_installer_selection_facts_without_relaxing_scope
 
 def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     class VersionListingSource(FakeSource):
+        def __init__(self):
+            super().__init__(official_versions=["1.0.0", VERSION])
+
         def get(self, url, **kwargs):
             if request_path(url).endswith("/DBeaver/DBeaver/Community"):
                 versions = [f"{major}.0.0" for major in range(1, 26)]
@@ -577,7 +580,7 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     assert result.status == "VERSION_REQUIRED"
     assert len(result.manifest_versions) == 28
     assert result.manifest_versions[-3:] == ("26.0.0", "26.1.0", "26.2.5")
-    assert result.available_versions == (VERSION,)
+    assert result.available_versions == ("1.0.0", VERSION)
     assert "7.0.0" in result.manifest_versions
     assert "CN" not in result.manifest_versions
 
