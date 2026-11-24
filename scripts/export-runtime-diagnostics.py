@@ -25,6 +25,8 @@ ALLOWED_FIELDS = {
     "candidate_count",
     "available_version_count",
     "available_versions",
+    "official_version_count",
+    "official_versions",
     "latest_available_version",
     "selected_version",
     "version_limit",
@@ -56,7 +58,7 @@ def sanitize_event(event: dict[str, Any]) -> dict[str, Any]:
             if key not in ALLOWED_FIELDS:
                 continue
             if isinstance(value, (str, int, float, bool)) or (
-                key == "available_versions"
+                key in {"available_versions", "official_versions"}
                 and isinstance(value, list)
                 and len(value) <= 20
                 and all(
