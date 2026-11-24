@@ -295,11 +295,13 @@ export class ChatApi {
     packageId: string,
     version: string,
     architecture: 'x86' | 'x64' | 'arm64',
+    scope: 'user',
   ): Observable<SoftwareInstallProposalResponse> {
     return this.http.post<SoftwareInstallProposalResponse>('/api/software/install/proposals', {
       package_id: packageId,
       version,
       architecture,
+      scope,
     });
   }
 
