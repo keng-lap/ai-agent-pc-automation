@@ -12,11 +12,13 @@ from typing import Any
 
 from .config import REPO_ROOT
 from .process_containment import WindowsJobObject
+from .runtime_diagnostics import current_capture_session_id
 
 _lock = threading.RLock()
 _state: dict[str, Any] = {
     "status": "idle",
     "run_id": None,
+    "session_id": None,
     "reason": None,
     "url": None,
     "error_code": None,
@@ -47,6 +49,7 @@ def _run_publisher(run_id: str) -> None:
             "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
             "-ExecutionPolicy", "Bypass", "-File", str(script),
             "-RepoRoot", str(REPO_ROOT), "-RunId", run_id,
+            "-SessionId", str(_state.get("session_id") or ""),
         ]
         # Start suspended, assign to a kill-on-close Job Object, then resume.
         # This prevents Git descendants from escaping the timeout boundary.
@@ -121,9 +124,11 @@ def start_publish(reason: str = "manual") -> dict[str, Any]:
         if _state["status"] == "running":
             return dict(_state)
         run_id = str(uuid.uuid4())
+        session_id = _state.get("session_id") if reason == "retry" else current_capture_session_id()
         _state.update(
             status="running",
             run_id=run_id,
+            session_id=session_id,
             reason=reason if reason in {"manual", "diagnostics_disabled", "retry"} else "manual",
             url=None,
             error_code=None,
