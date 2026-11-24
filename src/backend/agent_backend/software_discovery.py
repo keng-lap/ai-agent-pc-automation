@@ -54,10 +54,12 @@ class DiscoveryUnavailable(DiscoveryError):
         *,
         upstream_status: int | None = None,
         failure_code: str = "source_unavailable",
+        diagnostic_fields: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.upstream_status = upstream_status
         self.failure_code = failure_code
+        self.diagnostic_fields = diagnostic_fields or {}
 
 
 class InstallerCandidate(BaseModel):
@@ -443,17 +445,37 @@ class WinGetManifestRepository:
         installers = installer_doc.get("Installers")
         if not isinstance(installers, list):
             raise DiscoveryUnavailable("installer list was invalid")
+        installer_facts = [
+            item for item in installers if isinstance(item, dict)
+        ]
         matching = [
             item
-            for item in installers
-            if isinstance(item, dict)
-            and item.get("Architecture") == architecture
+            for item in installer_facts
+            if item.get("Architecture") == architecture
             and isinstance(item.get("Scope", installer_doc.get("Scope")), str)
             and item.get("Scope", installer_doc.get("Scope")).lower() == "user"
         ]
         if len(matching) != 1:
+            available_architectures = sorted({
+                item.get("Architecture")
+                for item in installer_facts
+                if isinstance(item.get("Architecture"), str)
+            })
+            available_scopes = sorted({
+                item.get("Scope", installer_doc.get("Scope"))
+                for item in installer_facts
+                if isinstance(item.get("Scope", installer_doc.get("Scope")), str)
+            })
             raise DiscoveryUnavailable(
-                "manifest must contain exactly one installer for the requested architecture and user scope"
+                "manifest does not contain exactly one installer for the requested architecture and user scope",
+                failure_code="installer_selection_not_unique",
+                diagnostic_fields={
+                    "requested_architecture": architecture,
+                    "requested_scope": "user",
+                    "installer_matching_count": len(matching),
+                    "installer_architectures": ",".join(available_architectures),
+                    "installer_scopes": ",".join(available_scopes),
+                },
             )
         installer = matching[0]
         if installer.get("Dependencies"):
