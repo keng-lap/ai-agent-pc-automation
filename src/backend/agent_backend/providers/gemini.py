@@ -13,6 +13,7 @@ from threading import RLock
 import httpx2
 from google import genai
 from google.genai import errors, types
+from pydantic import ValidationError
 
 MODEL_NAME = "gemini-3.1-flash-lite"
 SUPPORTED_MODELS = (
@@ -234,7 +235,7 @@ def test_connection(model: str | None = None, api_key: str | None = None) -> Non
     )
     try:
         UniversalConversationResponse.model_validate_json(raw_response)
-    except Exception as exc:
+    except ValidationError:
         raise GeminiProviderError("invalid_response") from None
 
 
