@@ -177,7 +177,7 @@ def create_software_approval_challenge(
     request: Request,
 ) -> SoftwareApprovalChallengeResponse:
     """Bind registry evidence to the plan, then create an exact-digest TOTP challenge."""
-    correlation = getattr(request.state, "correlation_id", "unknown")
+    correlation = getattr(getattr(request, "state", None), "correlation_id", "unknown")
     services, principal, _secret = _authenticated_context(request)
     plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
     try:
