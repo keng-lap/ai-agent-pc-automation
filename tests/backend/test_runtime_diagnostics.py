@@ -176,3 +176,31 @@ def test_diagnostics_store_persists_and_exports_bounded_structured_events(tmp_pa
         assert store.export_recent() == [event]
     finally:
         store.close()
+
+
+def test_diagnostics_export_returns_ndjson_without_enabling_collection(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from agent_backend.auth_api import require_session
+    from agent_backend import diagnostics_api
+
+    sample = [{
+        "timestamp": "2026-11-24T00:00:00+00:00",
+        "severity": "ERROR",
+        "event_code": "MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID",
+        "component": "manifest",
+        "stage": "manifest_validation",
+        "correlation_id": "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+        "fields": {"status_code": 503},
+    }]
+    monkeypatch.setattr(diagnostics_api, "export_recent_events", lambda limit: sample)
+    app = FastAPI()
+    app.include_router(diagnostics_api.router)
+    app.dependency_overrides[require_session] = lambda: object()
+    response = TestClient(app).get("/api/diagnostics/export?limit=1")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert response.text.endswith("\\n")
+    assert '"status_code":503' in response.text
