@@ -21,6 +21,7 @@ ALLOWED_FIELDS = {
     "method",
     "candidate_count",
     "available_version_count",
+    "official_version",
     "exception_type",
     "stack",
 }
