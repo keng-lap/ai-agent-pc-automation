@@ -94,6 +94,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--limit", type=int, default=5000)
+    parser.add_argument("--session-id", required=True)
     args = parser.parse_args()
     if not 1 <= args.limit <= 20000:
         parser.error("--limit must be between 1 and 20000")
@@ -107,8 +108,15 @@ def main() -> int:
         print("No runtime diagnostics database exists.", file=sys.stderr)
         return 2
 
+    if not re.fullmatch(r"[0-9a-f-]{36}", args.session_id):
+        parser.error("--session-id must be a capture session UUID")
+
     store = RuntimeDiagnosticsStore(diagnostics_database)
-    events = [sanitize_event(event) for event in store.export_recent(args.limit)]
+    events = [
+        sanitize_event(event)
+        for event in store.export_recent(args.limit)
+        if event.get("capture_session_id") == args.session_id
+    ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8", newline="\n") as output:
         for event in events:
