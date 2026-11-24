@@ -234,7 +234,8 @@ def test_discovery_does_not_offer_versions_when_official_release_source_is_unava
 
     assert result.status == "VERSION_REQUIRED"
     assert result.official_versions is None
-    assert result.available_versions == (VERSION,)
+    assert result.available_versions == ()
+    assert result.manifest_versions == (VERSION,)
 
 
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
@@ -248,6 +249,7 @@ def test_discovery_requires_explicit_version_and_never_guesses_latest():
     assert result.status == "VERSION_REQUIRED"
     assert result.candidate is None
     assert result.available_versions == (VERSION,)
+    assert result.manifest_versions == (VERSION,)
     assert result.official_versions == (VERSION,)
 
 
@@ -500,9 +502,10 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     )
 
     assert result.status == "VERSION_REQUIRED"
-    assert len(result.available_versions) == 20
-    assert result.available_versions[-3:] == ("26.0.0", "26.1.0", "26.2.5")
-    assert "7.0.0" not in result.available_versions
+    assert len(result.manifest_versions) == 20
+    assert result.manifest_versions[-3:] == ("26.0.0", "26.1.0", "26.2.5")
+    assert result.available_versions == (VERSION,)
+    assert "7.0.0" not in result.manifest_versions
 
     selected = WinGetManifestRepository(
         http_get=VersionListingSource().get
@@ -511,4 +514,4 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
         version=VERSION,
         architecture="x64",
     )
-    assert selected.available_versions == result.available_versions
+    assert selected.available_versions == result.manifest_versions
