@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import traceback
 from contextvars import ContextVar, Token
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -80,7 +80,7 @@ class RuntimeDiagnosticsStore:
                     "INSERT OR IGNORE INTO diagnostic_events_archive "
                     "SELECT sequence, occurred_at, correlation_id, event_json "
                     "FROM diagnostic_events WHERE occurred_at < ?",
-                    ((datetime.now(UTC) - __import__("datetime").timedelta(days=7)).isoformat(),),
+                    ((datetime.now(UTC) - timedelta(days=7)).isoformat(),),
                 )
                 connection.execute(
                     "DELETE FROM diagnostic_events WHERE occurred_at < ?",
