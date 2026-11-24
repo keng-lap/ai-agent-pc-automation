@@ -68,8 +68,8 @@ def test_diagnostics_control_api_changes_mode_immediately(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from agent_backend.auth_api import require_session
     from agent_backend import diagnostics_api
+    from agent_backend.auth_api import require_session
 
     monkeypatch.setattr(diagnostics_api, "store_available", lambda: True)
     diagnostics.set_enabled(False)
