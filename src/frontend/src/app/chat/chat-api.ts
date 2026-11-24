@@ -277,11 +277,13 @@ export class ChatApi {
     packageId: string,
     version: string | null,
     architecture: 'x86' | 'x64' | 'arm64' = 'x64',
+    scope: 'user' | 'machine' = 'user',
   ): Observable<SoftwareDiscoveryResponse> {
     return this.http.post<SoftwareDiscoveryResponse>('/api/software/discovery', {
       package_id: packageId,
       version,
       architecture,
+      scope,
     });
   }
 
