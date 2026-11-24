@@ -165,7 +165,7 @@ class DBeaverGitHubReleaseVerifier:
                     # been truncated; never expose an incomplete intersection.
                     if releases:
                         return None
-                    return tuple(sorted(set(versions), key=_version_sort_key))
+                    return tuple(sorted(set(versions), key=_version_sort_key, reverse=True))
                 for release in releases:
                     if not isinstance(release, dict):
                         return None
@@ -389,6 +389,7 @@ class WinGetManifestRepository:
                     and version_pattern.fullmatch(item["name"])
                 },
                 key=_version_sort_key,
+                reverse=normalized_id == "DBeaver.DBeaver.Community",
             )
         )
         if not versions:
