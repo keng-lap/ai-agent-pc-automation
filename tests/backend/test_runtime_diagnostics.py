@@ -202,5 +202,5 @@ def test_diagnostics_export_returns_ndjson_without_enabling_collection(monkeypat
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-ndjson")
-    assert response.text.endswith("\\n")
+    assert response.text.count("MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID") == 1
     assert '"status_code":503' in response.text
