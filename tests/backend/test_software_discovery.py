@@ -536,7 +536,7 @@ def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata
     class IncompleteMetadataSource(FakeSource):
         def get(self, url, **kwargs):
             response = super().get(url, **kwargs)
-            if request_path(url).endswith(f"/{VERSION}"):
+            if request_path(url).endswith(f"/manifests/d/DBeaver/DBeaver/Community/{VERSION}"):
                 entries = json.loads(response._body)
                 for entry in entries:
                     entry.pop("type", None)
