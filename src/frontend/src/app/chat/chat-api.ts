@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export type UiLanguage = 'th' | 'en';
-export interface GeminiStatus { configured: boolean; model: string; }
+export interface GeminiStatus { configured: boolean; model: string; models: string[]; }
 export interface DiagnosticsMode { enabled: boolean; storage_available: boolean; }
 export type BrowserDiagnosticCode = 'BROWSER_UNCAUGHT_ERROR' | 'BROWSER_UNHANDLED_REJECTION';
 export interface GeminiTestResult { connected: boolean; model: string; }
@@ -374,12 +374,16 @@ export class ChatApi {
     return this.http.get<GeminiStatus>('/api/settings/gemini');
   }
 
-  saveGeminiKey(apiKey: string): Observable<GeminiStatus> {
-    return this.http.put<GeminiStatus>('/api/settings/gemini', { api_key: apiKey });
+  saveGeminiKey(apiKey: string, model: string): Observable<GeminiStatus> {
+    const payload: { api_key?: string; model: string } = { model };
+    if (apiKey.trim()) payload.api_key = apiKey.trim();
+    return this.http.put<GeminiStatus>('/api/settings/gemini', payload);
   }
 
-  testGeminiConnection(): Observable<GeminiTestResult> {
-    return this.http.post<GeminiTestResult>('/api/settings/gemini/test', {});
+  testGeminiConnection(model: string, apiKey: string): Observable<GeminiTestResult> {
+    const payload: { model: string; api_key?: string } = { model };
+    if (apiKey.trim()) payload.api_key = apiKey.trim();
+    return this.http.post<GeminiTestResult>('/api/settings/gemini/test', payload);
   }
 
   recordBrowserDiagnostic(
