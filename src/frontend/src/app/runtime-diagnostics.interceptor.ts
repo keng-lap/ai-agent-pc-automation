@@ -10,7 +10,10 @@ export const runtimeDiagnosticsInterceptor: HttpInterceptorFn = (request, next) 
   const diagnosticsState = inject(RuntimeDiagnosticsState);
   const correlationId = request.headers.get('X-Correlation-ID') ?? globalThis.crypto.randomUUID();
   const correlatedRequest = request.clone({
-    setHeaders: { 'X-Correlation-ID': correlationId },
+    setHeaders: {
+      'X-Correlation-ID': correlationId,
+      'X-Workflow-ID': diagnosticsState.workflowId,
+    },
   });
 
   return next(correlatedRequest).pipe(
