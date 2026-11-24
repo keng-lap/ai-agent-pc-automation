@@ -69,10 +69,6 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
                 "status_code": 503,
                 "upstream_status": exc.upstream_status,
                 "failure_code": exc.failure_code,
-                "package_id": payload.package_id,
-                "version": payload.version,
-                "selected_version": payload.version,
-                "architecture": payload.architecture,
                 **exc.diagnostic_fields,
             },
         )
@@ -117,7 +113,13 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             correlation=getattr(request.state, "correlation_id", "unknown"),
             error=exc,
             severity="WARNING",
-            fields={"status_code": 404, "upstream_status": exc.upstream_status},
+            fields={
+                "status_code": 404,
+                "upstream_status": exc.upstream_status,
+                "package_id": payload.package_id,
+                "selected_version": payload.version,
+                "architecture": payload.architecture,
+            },
         )
         raise HTTPException(status_code=404, detail="Package or version not found in the approved source.") from None
     except DiscoveryUnavailable as exc:
@@ -133,6 +135,7 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
                 "failure_code": exc.failure_code,
                 "package_id": payload.package_id,
                 "version": payload.version,
+                "selected_version": payload.version,
                 "architecture": payload.architecture,
                 **exc.diagnostic_fields,
             },
