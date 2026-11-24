@@ -284,6 +284,7 @@ def confirm_software_approval(
     request: Request,
 ) -> SoftwareApprovalResult:
     """Consume the one-use TOTP challenge for the exact evidence-bound proposal."""
+    correlation = getattr(request.state, "correlation_id", "unknown")
     services, principal, _secret = _authenticated_context(
         request,
         require_enrolled=False,
