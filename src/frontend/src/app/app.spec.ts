@@ -517,7 +517,11 @@ describe('App chat UI (T-202)', () => {
   it('lets the user select an older WinGet version when it matches an official release', async () => {
     const originalDiscoveryResponder = api.discoveryResponder;
     api.discoveryResponder = (packageId, version) => originalDiscoveryResponder(packageId, version).pipe(
-      map((result) => version === null ? { ...result, official_versions: ['25.2.0', '25.3.0'] } : result),
+      map((result) => version === null ? {
+        ...result,
+        available_versions: ['25.2.0', '25.3.0'],
+        official_versions: ['25.2.0', '25.3.0'],
+      } : result),
     );
     await render();
 
@@ -703,12 +707,11 @@ describe('App chat UI (T-202)', () => {
     packageButton.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    const versionButton = Array.from(
+    const versionButtons = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.includes('7.3.5'));
-    if (!versionButton) throw new Error('Stale manifest version was not rendered');
-    expect(versionButton.disabled).toBe(true);
-    expect(fixture.nativeElement.textContent).toContain('7.3.5');
+    );
+    expect(versionButtons).toHaveLength(0);
+    expect(fixture.nativeElement.textContent).not.toContain('7.3.5');
     expect(fixture.nativeElement.textContent).toContain('26.2.4');
     expect(fixture.nativeElement.textContent).toContain('ไม่มีเวอร์ชันจาก WinGet ที่ตรงกับ Release ทางการ');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
