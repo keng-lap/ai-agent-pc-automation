@@ -46,7 +46,7 @@ class FakeChatApi {
   reservationRecoveryCalls: string[] = [];
   reservationRecoveryResponder: (planId: string) => Observable<unknown> = () => throwError(() => ({ status: 404 }));
   jobStatusCalls: string[] = [];
-  discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
+  discoveryResponder: (packageId: string, version: string | null, scope?: 'user' | 'machine') => Observable<SoftwareDiscoveryResponse> = (packageId, version, scope = 'user') => of(
     version === null
       ? {
         status: 'VERSION_REQUIRED',
@@ -70,7 +70,7 @@ class FakeChatApi {
           publisher: 'DBeaver Corp',
           version,
           architecture: 'x64',
-          scope: 'user',
+          scope,
           installer_type: 'exe',
           installer_url: 'https://github.com/dbeaver/dbeaver/releases/download/' + version + '/dbeaver-ce-' + version + '-windows-x86_64.exe',
           installer_domain: 'github.com',
@@ -173,9 +173,9 @@ class FakeChatApi {
     return this.catalogResponder(query);
   }
 
-  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64', _scope: 'user' | 'machine' = 'user'): Observable<SoftwareDiscoveryResponse> {
+  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64', scope: 'user' | 'machine' = 'user'): Observable<SoftwareDiscoveryResponse> {
     this.discoveryCalls.push({ packageId, version, architecture });
-    return this.discoveryResponder(packageId, version);
+    return this.discoveryResponder(packageId, version, scope);
   }
 
   getSoftwareInstallReadiness(): Observable<typeof this.readiness> {
