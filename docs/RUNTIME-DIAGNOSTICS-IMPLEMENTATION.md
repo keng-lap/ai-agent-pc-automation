@@ -38,7 +38,7 @@ Diagnostics is observability only. It does not enable or alter Approval, TOTP, P
 From the repository root, after the application has been run with Diagnostics enabled and at least one event recorded:
 
 ```powershell
-.`scripts\publish-runtime-diagnostics.ps1`
+.\scripts\publish-runtime-diagnostics.ps1
 ```
 
 The script requires the project `.venv`, Git authentication for `origin`, and the `diagnostics/runtime-logs` branch. It does not modify the source checkout.
