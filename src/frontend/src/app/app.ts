@@ -508,7 +508,10 @@ export class App implements AfterViewChecked {
   protected publishDiagnostics(): void {
     if (this.diagnosticsPublishBusy()) return;
     this.diagnosticsPublishBusy.set(true);
-    this.diagnosticsPublishMessage.set('');
+    this.diagnosticsPublishStatus.set('running');
+    this.diagnosticsPublishMessage.set(this.language() === 'th'
+      ? 'กำลังส่ง Log ไปยัง GitHub...'
+      : 'Publishing logs to GitHub...');
     this.diagnosticsPublishUrl.set('');
     defer(() => this.diagnosticsPublishStatus() === 'failed'
       ? this.chatApi.retryDiagnosticsPublish()
@@ -549,6 +552,10 @@ export class App implements AfterViewChecked {
 
   private pollDiagnosticsPublish(): void {
     this.diagnosticsPublishBusy.set(true);
+    this.diagnosticsPublishStatus.set('running');
+    this.diagnosticsPublishMessage.set(this.language() === 'th'
+      ? 'กำลังส่ง Log ไปยัง GitHub...'
+      : 'Publishing logs to GitHub...');
     timer(0, 1000).pipe(
       switchMap(() => defer(() => this.chatApi.getDiagnosticsPublishStatus())),
       takeWhile((status) => status.status === 'running', true),
