@@ -154,7 +154,11 @@ class DBeaverGitHubReleaseVerifier:
             for release in releases:
                 if not isinstance(release, dict):
                     return None
-                if release.get("draft") is True or release.get("prerelease") is True:
+                draft = release.get("draft")
+                prerelease = release.get("prerelease")
+                if type(draft) is not bool or type(prerelease) is not bool:
+                    return None
+                if draft or prerelease:
                     continue
                 tag = release.get("tag_name")
                 url = release.get("html_url")
@@ -238,6 +242,12 @@ class DBeaverGitHubReleaseVerifier:
                 or release_url != self.RELEASE_PAGE_PREFIX + official_version
             ):
                 return PublisherVerification(status="UNAVAILABLE")
+            if release.get("draft") is not False or release.get("prerelease") is not False:
+                return PublisherVerification(
+                    status="MISMATCH",
+                    official_version=official_version,
+                    official_release_url=release_url,
+                )
 
             asset_name_by_architecture = {
                 "x64": f"dbeaver-ce-{official_version}-windows-x86_64.exe",
