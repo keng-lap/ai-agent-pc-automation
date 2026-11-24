@@ -7,7 +7,7 @@
       <a class="rail-link" href="#workspace" [class.active]="activeView() === 'chat'" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">⌘</span>สนทนากับ Agent</a>
       <button type="button" class="rail-link" [class.active]="activeView() === 'workflow'" [attr.aria-current]="activeView() === 'workflow' ? 'page' : null" (click)="setActiveView('workflow')"><span class="rail-icon" aria-hidden="true">◇</span>ออกแบบ Workflow</button>
       <button type="button" class="rail-link" [class.active]="activeView() === 'jobs'" [attr.aria-current]="activeView() === 'jobs' ? 'page' : null" (click)="setActiveView('jobs')"><span class="rail-icon" aria-hidden="true">◷</span>ติดตามงาน</button>
-      <a class="rail-link" href="#provider-settings" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">✳</span>ตั้งค่า Gemini</a>
+      <a class="rail-link" href="#provider-settings" (click)="setActiveView('chat')"><span class="rail-icon" aria-hidden="true">✳</span>ตั้งค่า AI Provider</a>
     </nav>
     <section class="rail-safety" aria-label="ขอบเขตความปลอดภัย">
       <span class="safety-symbol" aria-hidden="true">◇</span>
@@ -103,7 +103,8 @@
       </section>
     }
     <div class="workspace-grid">
-      <app-gemini-settings id="provider-settings"></app-gemini-settings>
+      <app-provider-settings id="provider-settings"></app-provider-settings>
+      <app-gemini-settings></app-gemini-settings>
 
     <section class="chat-card workspace-card" id="workspace" aria-labelledby="chat-title">
     <div class="chat-heading">
@@ -149,7 +150,7 @@
               }
               @if (entry.geminiResponse; as geminiResponse) {
                 <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'ข้อเสนอจาก Gemini' : 'Gemini proposal'">
-                  <div class="detail-heading">{{ language() === 'th' ? 'ข้อเสนอจาก Gemini (ยังไม่ผ่านการตรวจสอบ)' : 'Gemini proposal (not yet verified)' }}</div>
+                  <div class="detail-heading">{{ language() === 'th' ? 'ข้อเสนอจาก AI (ยังไม่ผ่านการตรวจสอบ)' : 'Gemini proposal (not yet verified)' }}</div>
                   <p class="detail-meta">{{ geminiResponse.intent }} · {{ geminiResponse.status }}</p>
                   @if (geminiResponse.needs_clarification && geminiResponse.clarification) {
                     <p class="detail-meta"><strong>{{ language() === 'th' ? 'คำถามจาก Gemini' : 'Gemini clarification' }}:</strong> {{ geminiResponse.clarification }}</p>
