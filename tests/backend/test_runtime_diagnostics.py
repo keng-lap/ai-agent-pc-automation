@@ -339,7 +339,11 @@ def test_export_sanitizer_includes_only_bounded_version_options():
         "fields": {
             "available_version_count": 2,
             "official_version_count": 1,
-            "available_versions": ["7.3.5", "26.2.5"],
+            "available_versions": ["26.2.5"],
+            "manifest_versions": ["7.3.5", "26.2.5"],
+            "selectable_version_count": 1,
+            "selectable_versions": ["26.2.5"],
+            "manifest_version_count": 2,
             "official_versions": ["26.2.5"],
             "latest_available_version": "26.2.5",
             "selected_version": "26.2.5",
@@ -352,7 +356,11 @@ def test_export_sanitizer_includes_only_bounded_version_options():
 
     assert sanitized["fields"] == {
         "available_version_count": 2,
-        "available_versions": ["7.3.5", "26.2.5"],
+        "available_versions": ["26.2.5"],
+        "manifest_versions": ["7.3.5", "26.2.5"],
+        "selectable_version_count": 1,
+        "selectable_versions": ["26.2.5"],
+        "manifest_version_count": 2,
         "official_version_count": 1,
         "official_versions": ["26.2.5"],
         "latest_available_version": "26.2.5",
