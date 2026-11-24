@@ -169,18 +169,9 @@ def create_software_install_proposal(
         or candidate.package_id != payload.package_id
         or candidate.version != payload.version
         or candidate.architecture != payload.architecture
-        or (
-            candidate.package_id == "DBeaver.DBeaver.Community"
-            and (
-                candidate.publisher_verification != "VERIFIED"
-                or candidate.official_version != candidate.version
-                or candidate.official_asset_sha256 != candidate.installer_sha256
-            )
-        )
-        or (
-            candidate.package_id != "DBeaver.DBeaver.Community"
-            and candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}
-        )
+        or candidate.publisher_verification != "VERIFIED"
+        or candidate.official_version != candidate.version
+        or candidate.official_asset_sha256 != candidate.installer_sha256
         or (candidate.installer_type == "exe" and not candidate.installer_silent_switch)
     ):
         raise HTTPException(
