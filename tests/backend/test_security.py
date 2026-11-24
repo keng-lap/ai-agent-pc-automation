@@ -247,6 +247,8 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert get_routes == {
         "/health",
         "/api/settings/gemini",
+        "/api/settings/grok",
+        "/api/settings/provider",
         "/api/chat/{conversation_id}",
         "/api/plans/{plan_id}",
         "/api/jobs",
@@ -264,6 +266,9 @@ def test_openapi_read_routes_and_methods_match_allow_list():
     assert set(paths["/api/chat"]) == {"post"}
     assert set(paths["/api/chat/{conversation_id}"]) == {"get", "delete"}
     assert set(paths["/api/settings/gemini"]) == {"get", "put"}
+    assert set(paths["/api/settings/grok"]) == {"get", "put"}
+    assert set(paths["/api/settings/grok/test"]) == {"post"}
+    assert set(paths["/api/settings/provider"]) == {"get", "put"}
     assert set(paths["/api/diagnostics"]) == {"get", "put"}
     assert set(paths["/api/diagnostics/export"]) == {"get"}
     assert set(paths["/api/diagnostics/browser-events"]) == {"post"}
