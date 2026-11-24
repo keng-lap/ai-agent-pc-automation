@@ -1072,6 +1072,7 @@ export class App implements AfterViewChecked {
       candidate.package_id,
       candidate.version,
       candidate.architecture,
+      'user',
     ))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
