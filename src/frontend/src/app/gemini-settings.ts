@@ -24,6 +24,7 @@ import { ChatApi } from './chat/chat-api';
       <input
         id="gemini-key"
         type="password"
+        [disabled]="busy()"
         autocomplete="off"
         spellcheck="false"
         [value]="apiKey()"
