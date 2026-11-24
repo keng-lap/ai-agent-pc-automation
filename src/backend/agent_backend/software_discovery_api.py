@@ -71,6 +71,7 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
                 "failure_code": exc.failure_code,
                 "package_id": payload.package_id,
                 "version": payload.version,
+                "selected_version": payload.version,
                 "architecture": payload.architecture,
                 **exc.diagnostic_fields,
             },
@@ -155,6 +156,13 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
         fields={
             "status_code": 200,
             "available_version_count": len(result.available_versions),
+            "available_versions": list(result.available_versions),
+            "latest_available_version": (
+                result.available_versions[-1] if result.available_versions else None
+            ),
+            "version_limit": 20,
+            "version_sort_strategy": "numeric-natural-v1",
+            "selected_version": payload.version,
             "package_id": payload.package_id,
             "version": payload.version,
             "architecture": payload.architecture,
