@@ -5,6 +5,13 @@ import { Observable } from 'rxjs';
 export type UiLanguage = 'th' | 'en';
 export interface GeminiStatus { configured: boolean; model: string; models: string[]; }
 export interface DiagnosticsMode { enabled: boolean; storage_available: boolean; }
+export interface DiagnosticsPublishStatus {
+  status: 'idle' | 'running' | 'succeeded' | 'failed';
+  run_id: string | null;
+  reason: string | null;
+  url: string | null;
+  error_code: string | null;
+}
 export type BrowserDiagnosticCode = 'BROWSER_UNCAUGHT_ERROR' | 'BROWSER_UNHANDLED_REJECTION';
 export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
@@ -405,6 +412,18 @@ export class ChatApi {
 
   setDiagnosticsMode(enabled: boolean): Observable<DiagnosticsMode> {
     return this.http.put<DiagnosticsMode>('/api/diagnostics', { enabled });
+  }
+
+  publishDiagnostics(): Observable<DiagnosticsPublishStatus> {
+    return this.http.post<DiagnosticsPublishStatus>('/api/diagnostics/publish', {});
+  }
+
+  retryDiagnosticsPublish(): Observable<DiagnosticsPublishStatus> {
+    return this.http.post<DiagnosticsPublishStatus>('/api/diagnostics/publish/retry', {});
+  }
+
+  getDiagnosticsPublishStatus(): Observable<DiagnosticsPublishStatus> {
+    return this.http.get<DiagnosticsPublishStatus>('/api/diagnostics/publish/status');
   }
 
   getAuthSession(): Observable<AuthSession> {
