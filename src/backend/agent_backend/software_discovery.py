@@ -148,11 +148,9 @@ class DBeaverGitHubReleaseVerifier:
                 if response.status_code != 200:
                     return None
                 chunks: list[bytes] = []
-                page_bytes = 0
                 for chunk in response.iter_content(chunk_size=65536):
                     if not chunk:
                         continue
-                    page_bytes += len(chunk)
                     total_bytes += len(chunk)
                     if total_bytes > MAX_RESPONSE_BYTES:
                         return None
