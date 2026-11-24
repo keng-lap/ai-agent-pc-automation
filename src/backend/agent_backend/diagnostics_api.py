@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from .auth_api import require_session
@@ -26,6 +26,6 @@ def get_diagnostics_mode() -> dict[str, bool]:
 
 
 @router.put("")
-def update_diagnostics_mode(payload: DiagnosticsModeRequest, request: Request) -> dict[str, bool]:
+def update_diagnostics_mode(payload: DiagnosticsModeRequest) -> dict[str, bool]:
     enabled = set_enabled(payload.enabled)
     return {"enabled": enabled}
