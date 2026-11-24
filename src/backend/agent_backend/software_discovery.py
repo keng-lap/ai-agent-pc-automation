@@ -367,7 +367,8 @@ class WinGetManifestRepository:
         if not versions:
             raise DiscoveryNotFound("package has no published manifest versions")
         if version is None:
-            official_versions = self._publisher_verifier.list_official_versions(normalized_id)
+            list_versions = getattr(self._publisher_verifier, "list_official_versions", None)
+            official_versions = list_versions(normalized_id) if callable(list_versions) else None
             return DiscoveryResponse(
                 status="VERSION_REQUIRED",
                 package_id=normalized_id,
@@ -624,6 +625,7 @@ class WinGetManifestRepository:
         response_status = {
             "MISMATCH": "SOURCE_MISMATCH",
             "UNAVAILABLE": "SOURCE_CHECK_UNAVAILABLE",
+            "NOT_CHECKED": "SOURCE_CHECK_UNAVAILABLE",
         }.get(publisher_check.status, "CONDITIONAL")
         return DiscoveryResponse(
             status=response_status,
