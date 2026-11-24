@@ -7,27 +7,42 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-# Git writes normal progress/status messages to stderr. In PowerShell 7.3+,
-# prevent native stderr from becoming a terminating PowerShell error;
-# every Git operation below is checked explicitly through $LASTEXITCODE.
-$PSNativeCommandUseErrorActionPreference = $false
+# Windows PowerShell 5.1 promotes native stderr records to errors when the
+# caller uses ErrorActionPreference=Stop. Run Git with Continue locally,
+# capture its output, and always validate the native exit code explicitly.
+function Invoke-GitChecked {
+    param([Parameter(Mandatory=$true)][string[]]$GitArguments)
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = @(& git @GitArguments 2>&1)
+        $gitExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    if ($gitExitCode -ne 0) {
+        $details = ($output | ForEach-Object { "$_" }) -join [Environment]::NewLine
+        throw ("Git command failed (exit " + $gitExitCode + "): git " + ($GitArguments -join " ") + [Environment]::NewLine + $details)
+    }
+    return $output
+}
+
 $resultsBranch = "acceptance-results/P6-609-B2"
 $remote = "origin"
-$sourceCommit = (& git -C $RepoRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0) { throw "Cannot determine tested source commit." }
+$sourceCommit = (Invoke-GitChecked -GitArguments @("-C", $RepoRoot, "rev-parse", "HEAD") | Select-Object -First 1).ToString().Trim()
 if (-not (Test-Path $ResultFile)) { throw "Test output file not found: $ResultFile" }
 
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmssfff")
 $runId = "$stamp-$SuiteName"
 $worktree = Join-Path ([System.IO.Path]::GetTempPath()) ("ai-agent-acceptance-" + [guid]::NewGuid().ToString("N"))
-$null = & git -C $RepoRoot worktree add --detach $worktree $sourceCommit 2>&1
-if ($LASTEXITCODE -ne 0) { throw "Could not create temporary Git worktree for publishing results." }
+$null = Invoke-GitChecked -GitArguments @("-C", $RepoRoot, "worktree", "add", "--detach", $worktree, $sourceCommit)
 
 try {
-    & git -C $worktree fetch $remote "refs/heads/$resultsBranch"
-    if ($LASTEXITCODE -ne 0) { throw "Could not fetch results branch '$resultsBranch'; no log was pushed." }
-    & git -C $worktree switch --force-create $resultsBranch "FETCH_HEAD"
-    if ($LASTEXITCODE -ne 0) { throw "Could not switch temporary worktree to results branch." }
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "fetch", $remote, "refs/heads/$resultsBranch")
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "switch", "--force-create", $resultsBranch, "FETCH_HEAD")
 
     $target = Join-Path $worktree "acceptance-results\P6-609-B2\$runId"
     New-Item -ItemType Directory -Force -Path $target | Out-Null
@@ -52,12 +67,9 @@ The accompanying log is sanitized for the current user's profile path and common
 "@
     Set-Content -LiteralPath (Join-Path $target "SUMMARY.md") -Value $summary -Encoding utf8
 
-    & git -C $worktree add "acceptance-results/P6-609-B2/$runId"
-    if ($LASTEXITCODE -ne 0) { throw "Git could not stage acceptance results." }
-    & git -C $worktree -c user.name="Acceptance Reporter" -c user.email="acceptance-reporter@users.noreply.github.com" commit -m "test: record $SuiteName acceptance $status"
-    if ($LASTEXITCODE -ne 0) { throw "Git could not commit acceptance results." }
-    & git -C $worktree push $remote "HEAD:refs/heads/$resultsBranch"
-    if ($LASTEXITCODE -ne 0) { throw "Git push failed; acceptance result remains local and was not uploaded." }
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "add", "acceptance-results/P6-609-B2/$runId")
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "-c", "user.name=Acceptance Reporter", "-c", "user.email=acceptance-reporter@users.noreply.github.com", "commit", "-m", "test: record $SuiteName acceptance $status")
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "push", $remote, "HEAD:refs/heads/$resultsBranch")
 
     Write-Host "LOG PUSHED: https://github.com/keng-lap/ai-agent-pc-automation/tree/$resultsBranch/acceptance-results/P6-609-B2/$runId"
 }
