@@ -27,6 +27,7 @@ on:
       - "src/backend/agent_backend/software_catalog.py"
       - "src/backend/agent_backend/software_discovery_api.py"
       - "tests/backend/test_runtime_diagnostics.py"
+      - "tests/backend/test_security.py"
       - "scripts/export-runtime-diagnostics.py"
       - "scripts/publish-runtime-diagnostics.ps1"
       - "tests/backend/test_software_approval_api.py"
