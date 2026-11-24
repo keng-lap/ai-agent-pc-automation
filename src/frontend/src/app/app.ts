@@ -401,6 +401,7 @@ export class App implements AfterViewChecked {
   private readonly conversationId = signal('');
   protected readonly diagnosticsEnabled = signal(false);
   protected readonly diagnosticsBusy = signal(false);
+  protected readonly diagnosticsStorageAvailable = signal(false);
   protected readonly diagnosticsError = signal('');
   protected readonly authReady = signal(false);
   protected readonly authEnabled = signal(false);
@@ -445,7 +446,15 @@ export class App implements AfterViewChecked {
     defer(() => this.chatApi.getDiagnosticsMode())
       .pipe(timeout({ first: 10_000 }), take(1))
       .subscribe({
-        next: (mode: DiagnosticsMode) => this.diagnosticsEnabled.set(mode.enabled),
+        next: (mode: DiagnosticsMode) => {
+          this.diagnosticsStorageAvailable.set(mode.storage_available);
+          this.diagnosticsEnabled.set(mode.enabled);
+          if (!mode.storage_available) {
+            this.diagnosticsError.set(this.language() === 'th'
+              ? 'พื้นที่จัดเก็บ Diagnostics ไม่พร้อมใช้งาน'
+              : 'Diagnostics storage is unavailable.');
+          }
+        },
         error: () => this.diagnosticsError.set(
           this.language() === 'th' ? 'อ่านสถานะ Diagnostics ไม่สำเร็จ' : 'Could not read diagnostics status.',
         ),
@@ -453,7 +462,7 @@ export class App implements AfterViewChecked {
   }
 
   protected toggleDiagnostics(): void {
-    if (this.diagnosticsBusy()) return;
+    if (this.diagnosticsBusy() || !this.diagnosticsStorageAvailable()) return;
     const nextValue = !this.diagnosticsEnabled();
     this.diagnosticsBusy.set(true);
     this.diagnosticsError.set('');
@@ -464,7 +473,10 @@ export class App implements AfterViewChecked {
         finalize(() => this.diagnosticsBusy.set(false)),
       )
       .subscribe({
-        next: (mode: DiagnosticsMode) => this.diagnosticsEnabled.set(mode.enabled),
+        next: (mode: DiagnosticsMode) => {
+          this.diagnosticsStorageAvailable.set(mode.storage_available);
+          this.diagnosticsEnabled.set(mode.enabled);
+        },
         error: () => this.diagnosticsError.set(
           this.language() === 'th' ? 'เปลี่ยนโหมด Diagnostics ไม่สำเร็จ' : 'Could not change diagnostics mode.',
         ),
