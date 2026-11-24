@@ -107,3 +107,17 @@ h1 { margin: 0; font-size: clamp(15px, 2.5vw, 19px); letter-spacing: -.025em; }
 .plan-review { min-width: 0; }
 .plan-review .detail-meta { overflow-wrap: anywhere; }
 
+
+.diagnostics-status-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 30px 18px; padding: 13px 16px; border: 1px solid var(--line-strong); border-left: 4px solid #777; border-radius: 12px; background: var(--surface); color: var(--ink); }
+.diagnostics-status-banner--running { border-left-color: #b78322; }
+.diagnostics-status-banner--success { border-left-color: #27865a; }
+.diagnostics-status-banner--error { border-left-color: #c44c55; }
+.diagnostics-status-copy { display: grid; gap: 3px; min-width: 0; }
+.diagnostics-status-copy strong { font-size: 12px; }
+.diagnostics-status-copy span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.diagnostics-status-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.diagnostics-github-link { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 600px) {
+  .diagnostics-status-banner { align-items: stretch; flex-direction: column; margin: 0 11px 14px; padding: 12px; }
+  .diagnostics-status-actions { flex-wrap: wrap; }
+}
