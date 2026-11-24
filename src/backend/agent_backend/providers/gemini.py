@@ -120,7 +120,7 @@ def _generate_content(
     api_key: str | None = None,
 ) -> types.GenerateContentResponse:
     try:
-        client = _client(api_key=api_key)
+        client = _client(api_key=api_key) if api_key is not None else _client()
     except RuntimeError as exc:
         if str(exc) == "Could not resolve API token from the environment":
             raise GeminiProviderError("google_cloud_auth_missing") from None
