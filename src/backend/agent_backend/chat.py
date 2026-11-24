@@ -145,15 +145,17 @@ def gemini_status() -> dict[str, object]:
 
 @router.put("/api/settings/gemini")
 def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
+    if payload.model is not None:
+        try:
+            gemini.validate_model_name(payload.model)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
     if payload.api_key is not None:
         gemini.save_api_key(payload.api_key)
     elif not gemini.is_configured():
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     if payload.model is not None:
-        try:
-            gemini.save_model_name(payload.model)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+        gemini.save_model_name(payload.model)
     return {
         "configured": True,
         "model": gemini.get_model_name(),
