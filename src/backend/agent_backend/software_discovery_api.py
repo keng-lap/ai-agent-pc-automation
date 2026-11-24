@@ -65,7 +65,11 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
             stage="catalog_lookup",
             correlation=getattr(request.state, "correlation_id", "unknown"),
             error=exc,
-            fields={"status_code": 503},
+            fields={
+                "status_code": 503,
+                "upstream_status": exc.upstream_status,
+                "failure_code": exc.failure_code,
+            },
         )
         raise HTTPException(
             status_code=503,
@@ -108,7 +112,7 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             correlation=getattr(request.state, "correlation_id", "unknown"),
             error=exc,
             severity="WARNING",
-            fields={"status_code": 404},
+            fields={"status_code": 404, "upstream_status": exc.upstream_status},
         )
         raise HTTPException(status_code=404, detail="Package or version not found in the approved source.") from None
     except DiscoveryUnavailable as exc:
