@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_backend.runtime_diagnostics import emit_event
+from agent_backend.runtime_diagnostics import emit_event, emit_exception
 from agent_backend.software_catalog import CatalogUnavailable, MicrosoftWinGetCatalogIndex
 from agent_backend.software_discovery import (
     DiscoveryNotFound,
@@ -58,13 +58,13 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
     """Search Microsoft's signed source2 catalog without invoking winget.exe."""
     try:
         result = _catalog.search(payload.query, limit=payload.limit)
-    except CatalogUnavailable:
-        emit_event(
+    except CatalogUnavailable as exc:
+        emit_exception(
             event_code="CATALOG_SOURCE_UNAVAILABLE",
             component="catalog",
             stage="catalog_lookup",
             correlation=getattr(request.state, "correlation_id", "unknown"),
-            severity="ERROR",
+            error=exc,
             fields={"status_code": 503},
         )
         raise HTTPException(
@@ -100,23 +100,24 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             version=payload.version,
             architecture=payload.architecture,
         )
-    except DiscoveryNotFound:
-        emit_event(
+    except DiscoveryNotFound as exc:
+        emit_exception(
             event_code="MANIFEST_NOT_FOUND",
             component="manifest",
             stage="manifest_discovery",
             correlation=getattr(request.state, "correlation_id", "unknown"),
+            error=exc,
             severity="WARNING",
             fields={"status_code": 404},
         )
         raise HTTPException(status_code=404, detail="Package or version not found in the approved source.") from None
-    except DiscoveryUnavailable:
-        emit_event(
+    except DiscoveryUnavailable as exc:
+        emit_exception(
             event_code="MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID",
             component="manifest",
             stage="manifest_validation",
             correlation=getattr(request.state, "correlation_id", "unknown"),
-            severity="ERROR",
+            error=exc,
             fields={"status_code": 503},
         )
         raise HTTPException(status_code=503, detail="Approved package source is unavailable or its data failed validation.") from None
