@@ -69,6 +69,10 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
                 "status_code": 503,
                 "upstream_status": exc.upstream_status,
                 "failure_code": exc.failure_code,
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "architecture": payload.architecture,
+                **exc.diagnostic_fields,
             },
         )
         raise HTTPException(
@@ -144,7 +148,13 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
         component="manifest",
         stage="manifest_validation",
         correlation=getattr(request.state, "correlation_id", "unknown"),
-        fields={"status_code": 200, "available_version_count": len(result.available_versions)},
+        fields={
+            "status_code": 200,
+            "available_version_count": len(result.available_versions),
+            "package_id": payload.package_id,
+            "version": payload.version,
+            "architecture": payload.architecture,
+        },
     )
     if result.candidate is not None:
         emit_event(
