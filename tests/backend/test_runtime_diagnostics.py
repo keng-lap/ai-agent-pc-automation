@@ -284,6 +284,7 @@ def test_version_choices_are_retained_as_bounded_safe_diagnostic_field(caplog):
                 fields={
                     "available_version_count": 3,
                     "available_versions": ["7.3.5", "26.1.0", "26.2.5"],
+                    "official_versions": ["26.1.0", "26.2.5"],
                     "latest_available_version": "26.2.5",
                     "selected_version": None,
                     "authorization": "must-not-appear",
@@ -295,6 +296,7 @@ def test_version_choices_are_retained_as_bounded_safe_diagnostic_field(caplog):
             "7.3.5", "26.1.0", "26.2.5"
         ]
         assert payload["fields"]["latest_available_version"] == "26.2.5"
+        assert payload["fields"]["official_versions"] == ["26.1.0", "26.2.5"]
         assert "authorization" not in payload["fields"]
     finally:
         diagnostics.set_enabled(False)
@@ -334,7 +336,9 @@ def test_export_sanitizer_includes_only_bounded_version_options():
         "correlation_id": "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
         "fields": {
             "available_version_count": 2,
+            "official_version_count": 1,
             "available_versions": ["7.3.5", "26.2.5"],
+            "official_versions": ["26.2.5"],
             "latest_available_version": "26.2.5",
             "selected_version": "26.2.5",
             "authorization": "secret",
@@ -347,6 +351,8 @@ def test_export_sanitizer_includes_only_bounded_version_options():
     assert sanitized["fields"] == {
         "available_version_count": 2,
         "available_versions": ["7.3.5", "26.2.5"],
+        "official_version_count": 1,
+        "official_versions": ["26.2.5"],
         "latest_available_version": "26.2.5",
         "selected_version": "26.2.5",
     }
