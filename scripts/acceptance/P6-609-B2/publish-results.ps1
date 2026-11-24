@@ -7,6 +7,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Git writes normal progress/status messages to stderr. In PowerShell 7.3+,
+# prevent native stderr from becoming a terminating PowerShell error;
+# every Git operation below is checked explicitly through $LASTEXITCODE.
+$PSNativeCommandUseErrorActionPreference = $false
 $resultsBranch = "acceptance-results/P6-609-B2"
 $remote = "origin"
 $sourceCommit = (& git -C $RepoRoot rev-parse HEAD).Trim()
