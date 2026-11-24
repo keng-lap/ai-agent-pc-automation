@@ -5,6 +5,7 @@ endpoint, written to disk, or included in logs. Restarting the backend clears it
 """
 from __future__ import annotations
 
+import hashlib
 import traceback
 from pathlib import PurePath
 from threading import RLock
@@ -16,6 +17,7 @@ from google.genai import errors, types
 MODEL_NAME = "gemini-3.1-flash-lite"
 SUPPORTED_MODELS = (MODEL_NAME, "gemini-2.5-flash", "gemini-2.5-pro")
 _model_name = MODEL_NAME
+_tested_configuration: tuple[str, str] | None = None
 
 
 def get_model_name() -> str:
@@ -35,6 +37,30 @@ def save_model_name(model: str) -> None:
     with _lock:
         global _model_name
         _model_name = value
+
+def record_successful_test(model: str, api_key: str | None = None) -> None:
+    selected_model = validate_model_name(model)
+    with _lock:
+        key = api_key or _api_key
+        if not key:
+            raise GeminiNotConfiguredError("Gemini API key is not configured")
+        fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        global _tested_configuration
+        _tested_configuration = (selected_model, fingerprint)
+
+
+def consume_successful_test(model: str, api_key: str | None = None) -> bool:
+    selected_model = validate_model_name(model)
+    with _lock:
+        key = api_key or _api_key
+        if not key:
+            return False
+        fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        global _tested_configuration
+        if _tested_configuration != (selected_model, fingerprint):
+            return False
+        _tested_configuration = None
+        return True
 
 # Backend-owned instruction is supplied on every chat generation request.
 CHAT_SYSTEM_INSTRUCTION = """You are the concise assistant in a local Windows PC automation application.
