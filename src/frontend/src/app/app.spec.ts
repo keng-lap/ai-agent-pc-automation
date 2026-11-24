@@ -130,6 +130,18 @@ class FakeChatApi {
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
 
+  getDiagnosticsMode(): Observable<{ enabled: boolean; storage_available: boolean }> {
+    return of({ enabled: false, storage_available: true });
+  }
+
+  setDiagnosticsMode(enabled: boolean): Observable<{ enabled: boolean; storage_available: boolean }> {
+    return of({ enabled, storage_available: true });
+  }
+
+  recordBrowserDiagnostic(): Observable<{ recorded: boolean }> {
+    return of({ recorded: true });
+  }
+
   getAuthSession(): Observable<{ enabled: boolean; authenticated: boolean; authenticator_enrolled: boolean }> {
     return of(this.authSession);
   }
