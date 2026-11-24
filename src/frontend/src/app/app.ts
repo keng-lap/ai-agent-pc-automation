@@ -530,13 +530,38 @@ export class App implements AfterViewChecked {
       });
   }
 
+  private refreshDiagnosticsPublishStatus(): void {
+    defer(() => this.chatApi.getDiagnosticsPublishStatus())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (status) => {
+          if (status.status === 'running') this.pollDiagnosticsPublish();
+          else if (status.status !== 'idle') this.applyDiagnosticsPublishStatus(status);
+        },
+        error: () => {
+          this.diagnosticsPublishStatus.set('failed');
+          this.diagnosticsPublishMessage.set(this.language() === 'th'
+            ? 'อ่านสถานะการส่ง Log ไม่สำเร็จ กด Retry ได้'
+            : 'Could not read publishing status. You can retry.');
+        },
+      });
+  }
+
   private pollDiagnosticsPublish(): void {
     this.diagnosticsPublishBusy.set(true);
     timer(0, 1000).pipe(
       switchMap(() => defer(() => this.chatApi.getDiagnosticsPublishStatus())),
       takeWhile((status) => status.status === 'running', true),
       take(180),
-      finalize(() => this.diagnosticsPublishBusy.set(false)),
+      finalize(() => {
+        this.diagnosticsPublishBusy.set(false);
+        if (this.diagnosticsPublishStatus() === 'running') {
+          this.diagnosticsPublishStatus.set('failed');
+          this.diagnosticsPublishMessage.set(this.language() === 'th'
+            ? 'รอผลการส่ง Log นานเกินไป ตรวจสอบอีกครั้งหรือกด Retry'
+            : 'Log publishing took too long. Check again or retry.');
+        }
+      }),
     ).subscribe({
       next: (status) => this.applyDiagnosticsPublishStatus(status),
       error: () => {
@@ -581,7 +606,10 @@ export class App implements AfterViewChecked {
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
           this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
-          if (session.authenticated) this.refreshDiagnosticsMode();
+          if (session.authenticated) {
+            this.refreshDiagnosticsMode();
+            this.refreshDiagnosticsPublishStatus();
+          }
           this.logAuthenticatorUiState("auth-session-loaded");
         },
         error: () => {
