@@ -77,7 +77,7 @@ export class GeminiSettingsComponent {
     this.api.getGeminiStatus().subscribe({
       next: (result) => {
         this.configured.set(result.configured);
-        this.models.set(result.models);
+        this.models.set(result.models?.length ? result.models : [result.model]);
         this.selectedModel.set(result.model);
       },
       error: () => this.message.set('อ่านสถานะการตั้งค่าไม่ได้'),
