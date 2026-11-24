@@ -6,6 +6,7 @@ import json
 import pytest
 
 from agent_backend.software_discovery import (
+    DBeaverGitHubReleaseVerifier,
     DiscoveryNotFound,
     DiscoveryUnavailable,
     WinGetManifestRepository,
@@ -129,6 +130,35 @@ class FakeSource:
                 )
             payload = {"encoding": "base64", "content": encoded}
         return FakeResponse(payload)
+
+
+def test_official_release_listing_paginates_until_twenty_stable_versions():
+    versions = [f"26.{index}.0" for index in range(20)]
+    calls = []
+
+    def paginated_get(url, **kwargs):
+        page = int(kwargs["params"]["page"])
+        calls.append(page)
+        start = (page - 1) * 10
+        releases = [
+            {
+                "tag_name": version,
+                "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{version}",
+                "draft": False,
+                "prerelease": False,
+            }
+            for version in versions[start:start + 10]
+        ]
+        return FakeResponse(releases)
+
+    listed = DBeaverGitHubReleaseVerifier(http_get=paginated_get).list_official_versions(
+        PACKAGE_ID
+    )
+
+    assert listed is not None
+    assert len(listed) == 20
+    assert set(listed) == set(versions)
+    assert calls == [1, 2]
 
 
 def test_discovery_reads_source_and_returns_conditional_candidate_only():
