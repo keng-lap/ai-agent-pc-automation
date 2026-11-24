@@ -38,7 +38,7 @@ def _run_publisher(run_id: str) -> None:
             [
                 "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
                 "-ExecutionPolicy", "Bypass", "-File", str(script),
-                "-RepoRoot", str(REPO_ROOT),
+                "-RepoRoot", str(REPO_ROOT), "-RunId", run_id,
             ],
             cwd=str(REPO_ROOT),
             capture_output=True,
