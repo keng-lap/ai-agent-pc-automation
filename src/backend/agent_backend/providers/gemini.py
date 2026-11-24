@@ -14,6 +14,27 @@ from google import genai
 from google.genai import errors, types
 
 MODEL_NAME = "gemini-3.1-flash-lite"
+SUPPORTED_MODELS = (MODEL_NAME, "gemini-2.5-flash", "gemini-2.5-pro")
+_model_name = MODEL_NAME
+
+
+def get_model_name() -> str:
+    with _lock:
+        return _model_name
+
+
+def validate_model_name(model: str) -> str:
+    value = model.strip()
+    if value not in SUPPORTED_MODELS:
+        raise ValueError("Unsupported Gemini model")
+    return value
+
+
+def save_model_name(model: str) -> None:
+    value = validate_model_name(model)
+    with _lock:
+        global _model_name
+        _model_name = value
 
 # Backend-owned instruction is supplied on every chat generation request.
 CHAT_SYSTEM_INSTRUCTION = """You are the concise assistant in a local Windows PC automation application.
@@ -94,9 +115,12 @@ def _safe_sdk_trace(exc: Exception) -> list[str]:
 def _generate_content(
     contents: str | list[types.Content],
     config: types.GenerateContentConfig | None = None,
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> types.GenerateContentResponse:
     try:
-        client = _client()
+        client = _client(api_key=api_key)
     except RuntimeError as exc:
         if str(exc) == "Could not resolve API token from the environment":
             raise GeminiProviderError("google_cloud_auth_missing") from None
@@ -109,7 +133,7 @@ def _generate_content(
 
     try:
         return client.models.generate_content(
-            model=MODEL_NAME,
+            model=model or get_model_name(),
             contents=contents,
             config=config,
         )
@@ -157,8 +181,14 @@ def _response_text(response: types.GenerateContentResponse) -> str:
     return reply
 
 
-def test_connection() -> None:
-    _response_text(_generate_content("Reply with the single word OK."))
+def test_connection(model: str | None = None, api_key: str | None = None) -> None:
+    _response_text(
+        _generate_content(
+            "Reply with the single word OK.",
+            model=model,
+            api_key=api_key,
+        )
+    )
 
 
 def generate_reply(contents: str | list[types.Content]) -> str:
