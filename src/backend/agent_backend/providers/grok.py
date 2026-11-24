@@ -21,6 +21,9 @@ class GrokProviderError(RuntimeError):
 
     def __init__(self, code: str) -> None:
         self.code = code
+        self.error_type: str | None = None
+        self.stage: str | None = None
+        self.trace: list[str] = []
         super().__init__(code)
 
 
