@@ -168,6 +168,53 @@ def _get_install_plan(plan_id: str, *, owner_id: str):
 
 
 @router.post(
+    "/api/software/install/proposals/{plan_id}/revoke",
+)
+def revoke_software_install_proposal(plan_id: str, request: Request) -> dict:
+    """Revoke an unused proposal and all pending approval state for a scope change."""
+    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
+    with _lock:
+        try:
+            revoked_approvals = _reservation_store(request).revoke_active_approvals_for_plan(
+                plan_id=plan_id,
+                owner_id=principal.owner_sub,
+            )
+        except ApprovalReservationConflict:
+            raise HTTPException(
+                status_code=409,
+                detail="This proposal already has a queued or consumed install and cannot be revoked.",
+            ) from None
+        except ApprovalReservationError:
+            raise HTTPException(
+                status_code=503,
+                detail="Proposal approval state could not be safely revoked.",
+            ) from None
+        _bindings.pop(plan_id, None)
+        services = getattr(request.app.state, "auth_services", None)
+        step_up = getattr(services, "step_up", None)
+        if step_up is not None:
+            step_up.invalidate_plan(
+                owner_sub=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan_id,
+            )
+        software_evidence_registry.revoke(plan.evidence_id)
+        try:
+            software_install_plan_store.revoke(plan_id, owner_id=principal.owner_sub)
+        except InstallPlanNotFound:
+            raise HTTPException(status_code=404, detail="Install proposal not found or expired.") from None
+    emit_event(
+        event_code="INSTALL_PROPOSAL_REVOKED",
+        component="install",
+        stage="proposal_revocation",
+        correlation=getattr(getattr(request, "state", None), "correlation_id", "unknown"),
+        fields={"revoked_approvals": revoked_approvals},
+    )
+    return {"revoked": True, "revoked_approvals": revoked_approvals}
+
+
+@router.post(
     "/api/plans/{plan_id}/software-approval",
     response_model=SoftwareApprovalChallengeResponse,
 )
@@ -204,6 +251,11 @@ def create_software_approval_challenge(
 
     with _lock:
         _prune_bindings()
+        # Serialize challenge creation with proposal revocation. A challenge must
+        # never be persisted after its proposal has been revoked.
+        current_plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
+        if current_plan.plan_digest != plan.plan_digest:
+            raise HTTPException(status_code=409, detail="Install proposal changed; rediscovery is required.")
         if plan_id in _consumed_bindings:
             raise HTTPException(status_code=409, detail="This software approval has already been consumed.")
         existing = _bindings.get(plan_id)
@@ -215,29 +267,31 @@ def create_software_approval_challenge(
             raise HTTPException(status_code=409, detail="Plan already has a different approval binding.")
         if existing is None and len(_bindings) >= MAX_BINDINGS:
             raise HTTPException(status_code=503, detail="Software approval capacity reached.")
-        _bindings[plan_id] = (principal.owner_sub, principal.session_id, binding)
-
-    challenge = services.step_up.create(
-        owner_sub=principal.owner_sub,
-        session_id=principal.session_id,
-        plan_id=plan.plan_id,
-        action_digest=binding.approval_digest,
-        risk_class="high",
-    )
-    try:
-        _reservation_store(request).create_approval(
-            approval_id=challenge.challenge_id,
-            owner_id=principal.owner_sub,
+        challenge = services.step_up.create(
+            owner_sub=principal.owner_sub,
             session_id=principal.session_id,
             plan_id=plan.plan_id,
-            plan_digest=plan.plan_digest,
             action_digest=binding.approval_digest,
-            evidence_expires_at=binding.evidence.expires_at,
+            risk_class="high",
         )
-    except ApprovalReservationError:
-        with _lock:
-            _bindings.pop(plan_id, None)
-        raise HTTPException(status_code=503, detail="Could not persist the install approval.") from None
+        try:
+            _reservation_store(request).create_approval(
+                approval_id=challenge.challenge_id,
+                owner_id=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan.plan_id,
+                plan_digest=plan.plan_digest,
+                action_digest=binding.approval_digest,
+                evidence_expires_at=binding.evidence.expires_at,
+            )
+        except ApprovalReservationError:
+            services.step_up.invalidate_plan(
+                owner_sub=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan_id,
+            )
+            raise HTTPException(status_code=503, detail="Could not persist the install approval.") from None
+        _bindings[plan_id] = (principal.owner_sub, principal.session_id, binding)
     emit_event(
         event_code="APPROVAL_CHALLENGE_CREATED",
         component="approval",
