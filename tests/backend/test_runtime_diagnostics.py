@@ -271,3 +271,50 @@ def test_disabling_diagnostics_starts_async_log_publish(monkeypatch):
     assert response == {"enabled": False, "storage_available": True}
     assert calls == ["diagnostics_disabled"]
     assert diagnostics.is_enabled() is False
+
+def test_version_choices_are_retained_as_bounded_safe_diagnostic_field(caplog):
+    diagnostics.set_enabled(True)
+    try:
+        with caplog.at_level(logging.INFO, logger="agent_backend.runtime_diagnostics"):
+            diagnostics.emit_event(
+                event_code="MANIFEST_VERSION_REQUIRED",
+                component="manifest",
+                stage="manifest_validation",
+                correlation="6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+                fields={
+                    "available_version_count": 3,
+                    "available_versions": ["7.3.5", "26.1.0", "26.2.5"],
+                    "latest_available_version": "26.2.5",
+                    "selected_version": None,
+                    "authorization": "must-not-appear",
+                },
+            )
+
+        payload = json.loads(caplog.records[-1].message)
+        assert payload["fields"]["available_versions"] == [
+            "7.3.5", "26.1.0", "26.2.5"
+        ]
+        assert payload["fields"]["latest_available_version"] == "26.2.5"
+        assert "authorization" not in payload["fields"]
+    finally:
+        diagnostics.set_enabled(False)
+
+
+def test_version_choices_over_limit_are_not_recorded(caplog):
+    diagnostics.set_enabled(True)
+    try:
+        with caplog.at_level(logging.INFO, logger="agent_backend.runtime_diagnostics"):
+            diagnostics.emit_event(
+                event_code="MANIFEST_VERSION_REQUIRED",
+                component="manifest",
+                stage="manifest_validation",
+                correlation="6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+                fields={
+                    "available_versions": [f"{index}.0.0" for index in range(21)]
+                },
+            )
+
+        payload = json.loads(caplog.records[-1].message)
+        assert "available_versions" not in payload["fields"]
+    finally:
+        diagnostics.set_enabled(False)
