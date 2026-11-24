@@ -200,6 +200,8 @@ def emit_exception(
     fields: dict[str, Any] | None = None,
 ) -> None:
     """Record exception type and bounded frame locations, never exception text."""
+    if not is_enabled():
+        return
     frames = traceback.extract_tb(error.__traceback__)
     safe_stack = " | ".join(
         f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}"
