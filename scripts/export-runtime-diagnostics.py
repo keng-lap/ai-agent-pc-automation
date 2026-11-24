@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -64,7 +65,7 @@ def sanitize_event(event: dict[str, Any]) -> dict[str, Any]:
                     isinstance(item, str)
                     and len(item) <= 80
                     and item
-                    and all(character.isalnum() or character in "._+!-" for character in item)
+                    and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}", item)
                     for item in value
                 )
             ):
