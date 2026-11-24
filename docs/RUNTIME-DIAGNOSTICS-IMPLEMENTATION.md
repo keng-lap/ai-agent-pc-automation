@@ -26,9 +26,10 @@ Diagnostics is observability only. It does not enable or alter Approval, TOTP, P
 
 ## Remaining validation
 
-- CI and CodeRabbit review results must be checked against the latest PR head.
-- Verify the Windows secure diagnostics SQLite directory on the nominated Windows 11 Home target.
-- Run one browser Manifest failure with Diagnostics ON, then OFF; inspect the exported/published event chain and verify basic errors and Security Audit remain active.
+- CI passed on commit `4924d0327a121c8f2c5f90e50c184c0c90fc16ea`: CI, Windows Process Containment, Windows Authenticator DPAPI, Windows Generic Publisher Trust, Windows Real Install Frontend, and AI PR Diff Trigger.
+- Windows Process Containment passed 223 tests (7 skipped); this includes the protected diagnostics SQLite persistence test and publisher script parser/lint checks.
+- Verify the secure diagnostics SQLite directory and live ON/OFF behavior on the nominated Windows 11 Home target.
+- Run one browser Manifest failure with Diagnostics ON, then OFF; publish the sanitized event chain and verify basic errors and Security Audit remain active.
 - Confirm no secrets appear in the published JSONL.
 
 ## Operator commands
