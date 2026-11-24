@@ -24,7 +24,15 @@ from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
-from .runtime_diagnostics import close_store, configure_store, correlation_id, emit_event, emit_exception
+from .runtime_diagnostics import (
+    close_store,
+    configure_store,
+    correlation_id,
+    emit_event,
+    emit_exception,
+    reset_workflow_context,
+    set_workflow_context,
+)
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
@@ -97,39 +105,46 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     @application.middleware("http")
     async def runtime_diagnostics_middleware(request: Request, call_next):
         request_id = correlation_id(request.headers.get("x-correlation-id"))
+        workflow_id = correlation_id(request.headers.get("x-workflow-id"))
         request.state.correlation_id = request_id
+        request.state.workflow_id = workflow_id
+        workflow_token = set_workflow_context(workflow_id)
         started = time.perf_counter()
         try:
-            response = await call_next(request)
-        except Exception as exc:
-            emit_exception(
-                event_code="REQUEST_EXCEPTION",
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                emit_exception(
+                    event_code="REQUEST_EXCEPTION",
+                    component="backend",
+                    stage="request",
+                    correlation=request_id,
+                    error=exc,
+                    fields={"route": getattr(request.scope.get("route"), "path", "unmatched")},
+                )
+                raise
+            response.headers["X-Correlation-ID"] = request_id
+            response.headers["X-Workflow-ID"] = workflow_id
+            emit_event(
+                event_code="REQUEST_COMPLETED",
                 component="backend",
                 stage="request",
                 correlation=request_id,
-                error=exc,
-                fields={"route": getattr(request.scope.get("route"), "path", "unmatched")},
+                severity=(
+                    "ERROR" if response.status_code >= 500
+                    else "WARNING" if response.status_code >= 400
+                    else "INFO"
+                ),
+                fields={
+                    "route": getattr(request.scope.get("route"), "path", "unmatched"),
+                    "method": request.method,
+                    "status_code": response.status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                },
             )
-            raise
-        response.headers["X-Correlation-ID"] = request_id
-        emit_event(
-            event_code="REQUEST_COMPLETED",
-            component="backend",
-            stage="request",
-            correlation=request_id,
-            severity=(
-                "ERROR" if response.status_code >= 500
-                else "WARNING" if response.status_code >= 400
-                else "INFO"
-            ),
-            fields={
-                "route": getattr(request.scope.get("route"), "path", "unmatched"),
-                "method": request.method,
-                "status_code": response.status_code,
-                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-            },
-        )
-        return response
+            return response
+        finally:
+            reset_workflow_context(workflow_token)
 
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
