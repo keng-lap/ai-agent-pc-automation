@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from .auth_api import require_session
-from .runtime_diagnostics import is_enabled, set_enabled
+from .runtime_diagnostics import emit_event, is_enabled, set_enabled
 
 router = APIRouter(
     prefix="/api/diagnostics",
@@ -29,3 +31,30 @@ def get_diagnostics_mode() -> dict[str, bool]:
 def update_diagnostics_mode(payload: DiagnosticsModeRequest) -> dict[str, bool]:
     enabled = set_enabled(payload.enabled)
     return {"enabled": enabled}
+
+
+class BrowserDiagnosticEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    event_code: Literal[
+        "BROWSER_UNCAUGHT_ERROR",
+        "BROWSER_UNHANDLED_REJECTION",
+        "BROWSER_API_FAILURE",
+    ]
+    status_code: int | None = Field(default=None, ge=100, le=599)
+    component: Literal["browser", "api"] = "browser"
+
+
+@router.post("/browser-events")
+def record_browser_event(payload: BrowserDiagnosticEvent, request: Request) -> dict[str, bool]:
+    if not is_enabled():
+        raise HTTPException(status_code=409, detail="Detailed diagnostics are disabled.")
+    emit_event(
+        event_code=payload.event_code,
+        component=payload.component,
+        stage="browser_runtime" if payload.component == "browser" else "api_request",
+        correlation=getattr(request.state, "correlation_id", "unknown"),
+        severity="ERROR",
+        fields={"status_code": payload.status_code} if payload.status_code is not None else {},
+    )
+    return {"recorded": True}
