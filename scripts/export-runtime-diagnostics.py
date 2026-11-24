@@ -46,6 +46,7 @@ def sanitize_event(event: dict[str, Any]) -> dict[str, Any]:
         "component": str(event.get("component", "unknown"))[:64],
         "stage": str(event.get("stage", "unknown"))[:64],
         "correlation_id": str(event.get("correlation_id", ""))[:36],
+        "workflow_id": str(event.get("workflow_id", ""))[:36],
         "fields": safe_fields,
     }
 
