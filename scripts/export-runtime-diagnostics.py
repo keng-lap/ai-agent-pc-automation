@@ -28,6 +28,7 @@ ALLOWED_FIELDS = {
     "provider_error_code",
     "publisher_verification",
     "exception_type",
+    "error_type",
     "stack",
 }
 
