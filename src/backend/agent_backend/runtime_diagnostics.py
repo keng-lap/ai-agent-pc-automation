@@ -22,66 +22,77 @@ _store_lock = threading.RLock()
 _store: RuntimeDiagnosticsStore | None = None
 
 
-
 class RuntimeDiagnosticsStore:
-    """Append-only bounded event store protected by the platform storage adapter."""
+    """Append-only bounded event store protected for each database operation."""
 
     def __init__(self, path: Path) -> None:
-        self._lock = threading.RLock()
         self._path = path
-        self._protection = create_platform_secure_storage().protect_database(path)
-        self._lease = self._protection.__enter__()
-        try:
-            self._connection = sqlite3.connect(path, check_same_thread=False)
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS diagnostic_events (
-                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                    occurred_at TEXT NOT NULL,
-                    correlation_id TEXT NOT NULL,
-                    event_json TEXT NOT NULL
-                )
-                """
+        self._adapter = create_platform_secure_storage()
+
+    def _initialize(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS diagnostic_events (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                occurred_at TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                event_json TEXT NOT NULL
             )
-            self._connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_diagnostic_correlation "
-                "ON diagnostic_events(correlation_id, sequence)"
-            )
-            self._connection.commit()
-            self._lease.verify()
-        except Exception:
-            self._protection.__exit__(*sys.exc_info())
-            raise
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_diagnostic_correlation "
+            "ON diagnostic_events(correlation_id, sequence)"
+        )
+
+    def initialize(self) -> None:
+        with self._adapter.protect_database(self._path) as lease:
+            connection = sqlite3.connect(self._path)
+            try:
+                self._initialize(connection)
+                connection.commit()
+                lease.verify()
+            finally:
+                connection.close()
 
     def append(self, record: dict[str, Any]) -> None:
         serialized = json.dumps(record, ensure_ascii=True, separators=(",", ":"))
-        with self._lock:
-            self._lease.verify()
-            self._connection.execute(
-                "INSERT INTO diagnostic_events(occurred_at, correlation_id, event_json) VALUES (?, ?, ?)",
-                (record["timestamp"], record["correlation_id"], serialized),
-            )
-            self._connection.execute(
-                "DELETE FROM diagnostic_events WHERE sequence NOT IN "
-                "(SELECT sequence FROM diagnostic_events ORDER BY sequence DESC LIMIT 20000)"
-            )
-            self._connection.commit()
-            self._lease.verify()
+        with self._adapter.protect_database(self._path) as lease:
+            connection = sqlite3.connect(self._path)
+            try:
+                self._initialize(connection)
+                connection.execute(
+                    "INSERT INTO diagnostic_events(occurred_at, correlation_id, event_json) "
+                    "VALUES (?, ?, ?)",
+                    (record["timestamp"], record["correlation_id"], serialized),
+                )
+                connection.execute(
+                    "DELETE FROM diagnostic_events WHERE sequence NOT IN "
+                    "(SELECT sequence FROM diagnostic_events ORDER BY sequence DESC LIMIT 20000)"
+                )
+                connection.commit()
+                lease.verify()
+            finally:
+                connection.close()
 
     def export_recent(self, limit: int = 5000) -> list[dict[str, Any]]:
         bounded_limit = max(1, min(limit, 20000))
-        with self._lock:
-            self._lease.verify()
-            rows = self._connection.execute(
-                "SELECT event_json FROM diagnostic_events ORDER BY sequence DESC LIMIT ?",
-                (bounded_limit,),
-            ).fetchall()
+        with self._adapter.protect_database(self._path) as lease:
+            connection = sqlite3.connect(self._path)
+            try:
+                self._initialize(connection)
+                rows = connection.execute(
+                    "SELECT event_json FROM diagnostic_events "
+                    "ORDER BY sequence DESC LIMIT ?",
+                    (bounded_limit,),
+                ).fetchall()
+                lease.verify()
+            finally:
+                connection.close()
         return [json.loads(row[0]) for row in reversed(rows)]
 
     def close(self) -> None:
-        with self._lock:
-            self._connection.close()
-            self._protection.__exit__(None, None, None)
+        """Compatibility no-op; each operation releases its protection lease."""
 
 
 def configure_store(path: Path) -> None:
@@ -93,6 +104,7 @@ def configure_store(path: Path) -> None:
             _store = None
         try:
             _store = RuntimeDiagnosticsStore(path)
+            _store.initialize()
         except Exception as exc:
             logger.warning(
                 "Runtime diagnostics persistence unavailable error_type=%s",
