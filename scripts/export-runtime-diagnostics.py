@@ -23,6 +23,11 @@ ALLOWED_FIELDS = {
     "method",
     "candidate_count",
     "available_version_count",
+    "available_versions",
+    "latest_available_version",
+    "selected_version",
+    "version_limit",
+    "version_sort_strategy",
     "package_id",
     "version",
     "architecture",
@@ -44,12 +49,26 @@ ALLOWED_FIELDS = {
 def sanitize_event(event: dict[str, Any]) -> dict[str, Any]:
     """Apply a second allowlist pass before any event leaves the local machine."""
     fields = event.get("fields")
-    safe_fields = {
-        key: value
-        for key, value in fields.items()
-        if key in ALLOWED_FIELDS
-        and isinstance(value, (str, int, float, bool))
-    } if isinstance(fields, dict) else {}
+    safe_fields = {}
+    if isinstance(fields, dict):
+        for key, value in fields.items():
+            if key not in ALLOWED_FIELDS:
+                continue
+            if isinstance(value, (str, int, float, bool)):
+                safe_fields[key] = value
+            elif (
+                key == "available_versions"
+                and isinstance(value, list)
+                and len(value) <= 20
+                and all(
+                    isinstance(item, str)
+                    and len(item) <= 80
+                    and item
+                    and all(character.isalnum() or character in "._+!-" for character in item)
+                    for item in value
+                )
+            ):
+                safe_fields[key] = value
     return {
         "timestamp": str(event.get("timestamp", ""))[:40],
         "severity": event.get("severity") if event.get("severity") in {"DEBUG", "INFO", "WARNING", "ERROR"} else "INFO",
