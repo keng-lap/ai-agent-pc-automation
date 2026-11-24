@@ -533,25 +533,42 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
 
 
 def test_discovery_accepts_manifest_filenames_containing_plus_signs():
+    plus_package_id = PACKAGE_ID.replace("DBeaver", "DBeaver++")
+
     class PlusFilenameSource(FakeSource):
         def __init__(self):
             super().__init__()
             self.documents = {
-                name.replace("DBeaver", "DBeaver++"): document
+                name.replace("DBeaver", "DBeaver++"): {
+                    **document,
+                    "PackageIdentifier": plus_package_id,
+                }
                 for name, document in self.documents.items()
             }
+
+        def get(self, url, **kwargs):
+            path = request_path(url).replace(
+                "/DBeaver++/DBeaver++/Community",
+                "/DBeaver/DBeaver/Community",
+            )
+            if path != request_path(url):
+                url = url.replace(
+                    "/DBeaver++/DBeaver++/Community",
+                    "/DBeaver/DBeaver/Community",
+                )
+            return super().get(url, **kwargs)
 
     result = WinGetManifestRepository(
         http_get=PlusFilenameSource().get
     ).discover(
-        package_id=PACKAGE_ID,
+        package_id=plus_package_id,
         version=VERSION,
         architecture="x64",
     )
 
     assert result.status == "CONDITIONAL"
     assert result.candidate is not None
-    assert result.candidate.package_id == PACKAGE_ID
+    assert result.candidate.package_id == plus_package_id
 
 
 def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata():
