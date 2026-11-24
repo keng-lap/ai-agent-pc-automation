@@ -172,7 +172,7 @@ def _get_install_plan(plan_id: str, *, owner_id: str):
 )
 def revoke_software_install_proposal(plan_id: str, request: Request) -> dict:
     """Revoke an unused proposal and all pending approval state for a scope change."""
-    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    services, principal, _secret = _authenticated_context(request, require_enrolled=False)
     plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
     with _lock:
         try:
@@ -191,14 +191,11 @@ def revoke_software_install_proposal(plan_id: str, request: Request) -> dict:
                 detail="Proposal approval state could not be safely revoked.",
             ) from None
         _bindings.pop(plan_id, None)
-        services = getattr(request.app.state, "auth_services", None)
-        step_up = getattr(services, "step_up", None)
-        if step_up is not None:
-            step_up.invalidate_plan(
-                owner_sub=principal.owner_sub,
-                session_id=principal.session_id,
-                plan_id=plan_id,
-            )
+        services.step_up.invalidate_plan(
+            owner_sub=principal.owner_sub,
+            session_id=principal.session_id,
+            plan_id=plan_id,
+        )
         software_evidence_registry.revoke(plan.evidence_id)
         try:
             software_install_plan_store.revoke(plan_id, owner_id=principal.owner_sub)
