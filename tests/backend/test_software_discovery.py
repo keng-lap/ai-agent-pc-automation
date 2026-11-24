@@ -332,7 +332,6 @@ def test_discovery_requires_explicit_version_and_never_guesses_latest():
 @pytest.mark.parametrize(
     "source",
     [
-        FakeSource(bad_scope=True),
         FakeSource(bad_hash=True),
         FakeSource(bad_url=True),
     ],
@@ -694,4 +693,16 @@ def test_discovery_can_explicitly_enumerate_machine_scope_without_authorizing_in
     assert result.available_scopes == ("machine",)
     assert result.candidate is not None
     assert result.candidate.scope == "machine"
+
+def test_discovery_returns_available_scope_choices_when_user_scope_is_missing():
+    source = FakeSource(bad_scope=True)
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "SCOPE_REQUIRED"
+    assert result.candidate is None
+    assert result.available_scopes == ("machine",)
 
