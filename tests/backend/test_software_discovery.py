@@ -680,3 +680,18 @@ def test_discovery_rejects_manifest_listing_with_no_safe_yaml_files():
     assert captured.value.failure_code == "manifest_file_set_empty"
     assert captured.value.diagnostic_fields["manifest_listing_item_count"] == 3
     assert captured.value.diagnostic_fields["manifest_yaml_file_count"] == 0
+
+def test_discovery_can_explicitly_enumerate_machine_scope_without_authorizing_installation():
+    source = FakeSource(bad_scope=True)
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+        scope="machine",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.available_scopes == ("machine",)
+    assert result.candidate is not None
+    assert result.candidate.scope == "machine"
+
