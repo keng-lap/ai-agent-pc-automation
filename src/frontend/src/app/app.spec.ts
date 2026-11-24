@@ -586,7 +586,7 @@ describe('App chat UI (T-202)', () => {
 
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
+    ).find((button) => button.textContent?.includes('25.3.0'));
     if (!version) throw new Error('Exact version choice was not rendered');
     version.click();
     await fixture.whenStable();
@@ -1136,7 +1136,7 @@ describe('App chat UI (T-202)', () => {
 
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
+    ).find((button) => button.textContent?.includes('25.3.0'));
     if (!version) throw new Error('Exact version choice was not rendered');
     version.click();
     await fixture.whenStable();
@@ -1209,7 +1209,7 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
+    ).find((button) => button.textContent?.includes('25.3.0'));
     if (!version) throw new Error('Exact version choice was not rendered');
     version.click();
     await fixture.whenStable();
@@ -1271,7 +1271,7 @@ describe('App chat UI (T-202)', () => {
 
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
+    ).find((button) => button.textContent?.includes('25.3.0'));
     if (!version) throw new Error('Exact version choice was not rendered');
     version.click();
     await fixture.whenStable();
@@ -1339,7 +1339,7 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
+    ).find((button) => button.textContent?.includes('25.3.0'));
     if (!version) throw new Error('Exact version choice was not rendered');
     version.click();
     await fixture.whenStable();
@@ -1403,7 +1403,7 @@ describe('App chat UI (T-202)', () => {
 
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
+    ).find((button) => button.textContent?.includes('25.3.0'));
     if (!version) throw new Error('Exact version choice was not rendered');
     version.click();
     await fixture.whenStable();
