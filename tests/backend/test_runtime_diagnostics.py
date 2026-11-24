@@ -283,7 +283,9 @@ def test_version_choices_are_retained_as_bounded_safe_diagnostic_field(caplog):
                 correlation="6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
                 fields={
                     "available_version_count": 3,
-                    "available_versions": ["7.3.5", "26.1.0", "26.2.5"],
+                    "available_versions": ["26.1.0", "26.2.5"],
+                    "manifest_versions": ["7.3.5", "26.1.0", "26.2.5"],
+                    "selectable_versions": ["26.1.0", "26.2.5"],
                     "official_versions": ["26.1.0", "26.2.5"],
                     "latest_available_version": "26.2.5",
                     "selected_version": None,
@@ -292,9 +294,9 @@ def test_version_choices_are_retained_as_bounded_safe_diagnostic_field(caplog):
             )
 
         payload = json.loads(caplog.records[-1].message)
-        assert payload["fields"]["available_versions"] == [
-            "7.3.5", "26.1.0", "26.2.5"
-        ]
+        assert payload["fields"]["available_versions"] == ["26.1.0", "26.2.5"]
+        assert payload["fields"]["manifest_versions"] == ["7.3.5", "26.1.0", "26.2.5"]
+        assert payload["fields"]["selectable_versions"] == ["26.1.0", "26.2.5"]
         assert payload["fields"]["latest_available_version"] == "26.2.5"
         assert payload["fields"]["official_versions"] == ["26.1.0", "26.2.5"]
         assert "authorization" not in payload["fields"]
