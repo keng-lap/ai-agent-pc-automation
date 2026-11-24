@@ -367,3 +367,70 @@ def test_export_sanitizer_includes_only_bounded_version_options():
         "latest_available_version": "26.2.5",
         "selected_version": "26.2.5",
     }
+
+
+
+def test_capture_session_id_changes_on_each_diagnostics_enable():
+    diagnostics.set_enabled(False)
+    diagnostics.set_enabled(True)
+    first_session = diagnostics.current_capture_session_id()
+    diagnostics.set_enabled(False)
+    diagnostics.set_enabled(True)
+    second_session = diagnostics.current_capture_session_id()
+    diagnostics.set_enabled(False)
+
+    assert first_session is not None
+    assert second_session is not None
+    assert first_session != second_session
+
+
+def test_export_recent_events_filters_to_requested_capture_session(monkeypatch):
+    class FakeStore:
+        def export_recent(self, limit):
+            return [
+                {"capture_session_id": "old-session", "event_code": "OLD"},
+                {"capture_session_id": "current-session", "event_code": "CURRENT"},
+            ]
+
+    monkeypatch.setattr(diagnostics, "_store", FakeStore())
+
+    assert diagnostics.export_recent_events(session_id="current-session") == [
+        {"capture_session_id": "current-session", "event_code": "CURRENT"}
+    ]
+
+
+def test_store_archives_events_older_than_seven_days(tmp_path):
+    import sqlite3
+    from datetime import UTC, datetime, timedelta
+
+    database = tmp_path / "diagnostics" / "runtime.sqlite3"
+    store = diagnostics.RuntimeDiagnosticsStore(database)
+    store.initialize()
+    old_timestamp = (datetime.now(UTC) - timedelta(days=8)).isoformat()
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO diagnostic_events(occurred_at, correlation_id, event_json) VALUES (?, ?, ?)",
+            (
+                old_timestamp,
+                "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+                json.dumps({"timestamp": old_timestamp, "event_code": "OLD_EVENT"}),
+            ),
+        )
+
+    store.append({
+        "timestamp": datetime.now(UTC).isoformat(),
+        "correlation_id": "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+        "capture_session_id": "current-session",
+        "event_code": "CURRENT_EVENT",
+    })
+
+    with sqlite3.connect(database) as connection:
+        active_count = connection.execute(
+            "SELECT COUNT(*) FROM diagnostic_events WHERE event_json LIKE '%OLD_EVENT%'"
+        ).fetchone()[0]
+        archived_count = connection.execute(
+            "SELECT COUNT(*) FROM diagnostic_events_archive WHERE event_json LIKE '%OLD_EVENT%'"
+        ).fetchone()[0]
+
+    assert active_count == 0
+    assert archived_count == 1
