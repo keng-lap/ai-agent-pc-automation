@@ -163,6 +163,13 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             "latest_available_version": (
                 result.available_versions[-1] if result.available_versions else None
             ),
+            "official_version_count": (
+                len(result.official_versions) if result.official_versions is not None else None
+            ),
+            "official_versions": (
+                list(result.official_versions) if result.official_versions is not None else None
+            ),
+            "official_release_check_available": result.official_versions is not None,
             "version_limit": 20,
             "version_sort_strategy": "numeric-natural-v1",
             "selected_version": payload.version,
