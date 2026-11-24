@@ -129,3 +129,26 @@ def test_browser_event_api_is_disabled_by_default_and_accepts_allowlisted_events
         assert event["fields"] == {"status_code": 503}
     finally:
         diagnostics.set_enabled(False)
+
+
+def test_exception_events_include_safe_stack_without_exception_message(caplog):
+    diagnostics.set_enabled(True)
+    try:
+        try:
+            raise ValueError("private message containing a secret")
+        except ValueError as error:
+            with caplog.at_level(logging.ERROR, logger="agent_backend.runtime_diagnostics"):
+                diagnostics.emit_exception(
+                    event_code="TEST_EXCEPTION",
+                    component="backend",
+                    stage="test",
+                    correlation="6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+                    error=error,
+                )
+
+        payload = json.loads(caplog.records[-1].message)
+        assert payload["fields"]["exception_type"] == "ValueError"
+        assert "test_exception_events_include_safe_stack" in payload["fields"]["stack"]
+        assert "private message" not in caplog.records[-1].message
+    finally:
+        diagnostics.set_enabled(False)
