@@ -21,7 +21,9 @@ _lock = threading.RLock()
 _enabled = False
 _store_lock = threading.RLock()
 _store: RuntimeDiagnosticsStore | None = None
-_workflow_context: ContextVar[str] = ContextVar("runtime_diagnostics_workflow_id", default="unknown")
+_workflow_context: ContextVar[str] = ContextVar(
+    "runtime_diagnostics_workflow_id", default="unknown"
+)
 
 
 class RuntimeDiagnosticsStore:
@@ -176,7 +178,8 @@ def emit_event(
         if any(marker in normalized_key for marker in sensitive_markers):
             continue
         if isinstance(value, (str, int, float, bool)) or value is None:
-            safe_fields[key[:64]] = str(value)[:256] if isinstance(value, str) else value
+            value_limit = 1024 if key == "stack" else 256
+            safe_fields[key[:64]] = str(value)[:value_limit] if isinstance(value, str) else value
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "severity": severity if severity in {"DEBUG", "INFO", "WARNING", "ERROR"} else "INFO",
