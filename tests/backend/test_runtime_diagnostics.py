@@ -64,28 +64,29 @@ def test_enabled_events_are_structured_and_exclude_sensitive_fields(caplog):
         diagnostics.set_enabled(False)
 
 
-def test_diagnostics_control_api_changes_mode_immediately():
+def test_diagnostics_control_api_changes_mode_immediately(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
     from agent_backend.auth_api import require_session
-    from agent_backend.diagnostics_api import router
+    from agent_backend import diagnostics_api
 
+    monkeypatch.setattr(diagnostics_api, "store_available", lambda: True)
     diagnostics.set_enabled(False)
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[require_session] = lambda: object()
     client = TestClient(app)
 
-    assert client.get("/api/diagnostics").json() == {"enabled": False}
+    assert client.get("/api/diagnostics").json() == {"enabled": False, "storage_available": True}
     enabled = client.put("/api/diagnostics", json={"enabled": True})
     assert enabled.status_code == 200
-    assert enabled.json() == {"enabled": True}
-    assert client.get("/api/diagnostics").json() == {"enabled": True}
+    assert enabled.json() == {"enabled": True, "storage_available": True}
+    assert client.get("/api/diagnostics").json() == {"enabled": True, "storage_available": True}
 
     disabled = client.put("/api/diagnostics", json={"enabled": False})
     assert disabled.status_code == 200
-    assert disabled.json() == {"enabled": False}
+    assert disabled.json() == {"enabled": False, "storage_available": True}
     assert client.get("/api/diagnostics").json() == {"enabled": False}
 
 
@@ -195,6 +196,7 @@ def test_diagnostics_export_returns_ndjson_without_enabling_collection(monkeypat
         "fields": {"status_code": 503},
     }]
     monkeypatch.setattr(diagnostics_api, "export_recent_events", lambda limit: sample)
+    monkeypatch.setattr(diagnostics_api, "store_available", lambda: True)
     app = FastAPI()
     app.include_router(diagnostics_api.router)
     app.dependency_overrides[require_session] = lambda: object()
