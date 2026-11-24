@@ -9,12 +9,13 @@ from threading import RLock
 from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from agent_backend.conversation_contract import UniversalConversationResponse
 from agent_backend.providers import gemini
+from agent_backend.runtime_diagnostics import emit_event, emit_exception
 
 router = APIRouter()
 _ERROR_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
@@ -142,22 +143,61 @@ def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
 
 
 @router.post("/api/settings/gemini/test")
-def test_gemini_connection() -> dict[str, object]:
+def test_gemini_connection(request: Request) -> dict[str, object]:
     if not gemini.is_configured():
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
+    started = time.perf_counter()
+    correlation = getattr(request.state, "correlation_id", "unknown")
+    emit_event(
+        event_code="GEMINI_CONNECTION_TEST_STARTED",
+        component="gemini",
+        stage="provider_connection",
+        correlation=correlation,
+    )
     try:
         gemini.test_connection()
     except gemini.GeminiProviderError as exc:
+        emit_exception(
+            event_code="GEMINI_CONNECTION_TEST_FAILED",
+            component="gemini",
+            stage="provider_connection",
+            correlation=correlation,
+            error=exc,
+            fields={"provider_error_code": exc.code},
+        )
         raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
     except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
+        emit_exception(
+            event_code="GEMINI_CONNECTION_TEST_FAILED",
+            component="gemini",
+            stage="provider_connection",
+            correlation=correlation,
+            error=exc,
+        )
         raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
+    emit_event(
+        event_code="GEMINI_CONNECTION_TEST_SUCCEEDED",
+        component="gemini",
+        stage="provider_connection",
+        correlation=correlation,
+        fields={"duration_ms": round((time.perf_counter() - started) * 1000, 2)},
+    )
     return {"connected": True, "model": gemini.MODEL_NAME}
 
 
 @router.post("/api/chat")
-def chat(payload: ChatRequest) -> dict[str, object]:
+def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
     if not gemini.is_configured():
         raise HTTPException(status_code=409, detail="Configure Gemini API key first.")
+    started = time.perf_counter()
+    correlation = getattr(request.state, "correlation_id", "unknown")
+    emit_event(
+        event_code="GEMINI_REQUEST_STARTED",
+        component="gemini",
+        stage="provider_generation",
+        correlation=correlation,
+        fields={"model": gemini.MODEL_NAME},
+    )
     conversation = _conversation_store.get_or_create(payload.conversation_id)
     with conversation.lock:
         contents: list[types.Content] = []
@@ -187,6 +227,13 @@ def chat(payload: ChatRequest) -> dict[str, object]:
             try:
                 structured = UniversalConversationResponse.model_validate_json(raw_response)
             except ValidationError:
+                emit_event(
+                    event_code="GEMINI_STRUCTURED_RESPONSE_REPAIR_ATTEMPTED",
+                    component="gemini",
+                    stage="structured_response_validation",
+                    correlation=correlation,
+                    severity="WARNING",
+                )
                 # One bounded correction attempt. The malformed output remains untrusted
                 # and is never returned as a valid plan or saved into conversation history.
                 repair_contents = [
@@ -214,10 +261,35 @@ def chat(payload: ChatRequest) -> dict[str, object]:
                 except ValidationError:
                     raise gemini.GeminiProviderError("invalid_response") from None
         except gemini.GeminiProviderError as exc:
+            emit_exception(
+                event_code="GEMINI_REQUEST_FAILED",
+                component="gemini",
+                stage=exc.stage or "provider_generation",
+                correlation=correlation,
+                error=exc,
+                fields={"provider_error_code": exc.code},
+            )
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
         except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
+            emit_exception(
+                event_code="GEMINI_REQUEST_FAILED",
+                component="gemini",
+                stage="provider_generation",
+                correlation=correlation,
+                error=exc,
+            )
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
 
+        emit_event(
+            event_code="GEMINI_RESPONSE_VALIDATED",
+            component="gemini",
+            stage="structured_response_validation",
+            correlation=correlation,
+            fields={
+                "response_bytes": len(raw_response.encode("utf-8")),
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
         request_id = str(uuid4())
         normalized = structured.model_dump(mode="json")
         conversation.turns.append((payload.message, structured.message))
