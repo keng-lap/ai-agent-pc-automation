@@ -358,8 +358,8 @@ class FakeChatApi {
     return of(undefined);
   }
 
-  getGeminiStatus(): Observable<{ configured: boolean; model: string }> {
-    return of({ configured: this.configured, model: 'gemini-3.1-flash-lite' });
+  getGeminiStatus(): Observable<{ configured: boolean; model: string; models: string[] }> {
+    return of({ configured: this.configured, model: 'gemini-3.1-flash-lite', models: ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'] });
   }
 
   saveGeminiKey(_apiKey: string): Observable<{ configured: boolean; model: string }> {
@@ -367,7 +367,7 @@ class FakeChatApi {
     return of({ configured: true, model: 'gemini-3.1-flash-lite' });
   }
 
-  testGeminiConnection(): Observable<{ connected: boolean; model: string }> {
+  testGeminiConnection(_model: string, _apiKey: string): Observable<{ connected: boolean; model: string }> {
     if (this.testError !== undefined) return throwError(() => this.testError);
     return of({ connected: true, model: 'gemini-3.1-flash-lite' });
   }
