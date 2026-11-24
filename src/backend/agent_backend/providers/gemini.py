@@ -222,13 +222,20 @@ def _response_text(response: types.GenerateContentResponse) -> str:
 
 
 def test_connection(model: str | None = None, api_key: str | None = None) -> None:
-    _response_text(
-        _generate_content(
-            "Reply with the single word OK.",
-            model=model,
-            api_key=api_key,
-        )
+    # Exercise the exact structured-output path used by /api/chat. A plain-text
+    # ping can pass while the selected model rejects the chat JSON schema.
+    from agent_backend.conversation_contract import UniversalConversationResponse
+
+    raw_response = generate_universal_response(
+        "สวัสดี ทดสอบการสนทนาและตอบกลับตามรูปแบบที่กำหนด",
+        UniversalConversationResponse,
+        model=model,
+        api_key=api_key,
     )
+    try:
+        UniversalConversationResponse.model_validate_json(raw_response)
+    except Exception as exc:
+        raise GeminiProviderError("invalid_response") from None
 
 
 def generate_reply(contents: str | list[types.Content]) -> str:
@@ -263,6 +270,9 @@ Data rules:
 def generate_universal_response(
     contents: str | list[types.Content],
     response_schema: type,
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> str:
     """Generate schema-constrained JSON under the universal conversation instruction."""
     config = types.GenerateContentConfig(
@@ -270,7 +280,9 @@ def generate_universal_response(
         response_mime_type="application/json",
         response_json_schema=response_schema.model_json_schema(),
     )
-    return _response_text(_generate_content(contents, config=config))
+    return _response_text(
+        _generate_content(contents, config=config, model=model, api_key=api_key)
+    )
 
 
 def generate_structured_plan(
