@@ -40,9 +40,24 @@ class DiscoveryError(RuntimeError):
 class DiscoveryNotFound(DiscoveryError):
     """The requested package or version is not present in the source."""
 
+    def __init__(self, message: str, *, upstream_status: int | None = None) -> None:
+        super().__init__(message)
+        self.upstream_status = upstream_status
+
 
 class DiscoveryUnavailable(DiscoveryError):
     """The approved source could not be reached or parsed safely."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        upstream_status: int | None = None,
+        failure_code: str = "source_unavailable",
+    ) -> None:
+        super().__init__(message)
+        self.upstream_status = upstream_status
+        self.failure_code = failure_code
 
 
 class InstallerCandidate(BaseModel):
@@ -546,12 +561,19 @@ class WinGetManifestRepository:
                     stream=True,
                 )
                 if response.status_code == 404:
-                    raise DiscoveryNotFound("package or manifest was not found in the approved source")
+                    raise DiscoveryNotFound(
+                        "package or manifest was not found in the approved source",
+                        upstream_status=404,
+                    )
                 if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
                     time.sleep(0.25 * (attempt + 1))
                     continue
                 if response.status_code != 200:
-                    raise DiscoveryUnavailable("approved package source returned an unsuccessful response")
+                    raise DiscoveryUnavailable(
+                        "approved package source returned an unsuccessful response",
+                        upstream_status=response.status_code,
+                        failure_code="upstream_http_error",
+                    )
                 chunks: list[bytes] = []
                 total = 0
                 for chunk in response.iter_content(chunk_size=65536):
@@ -559,7 +581,11 @@ class WinGetManifestRepository:
                         continue
                     total += len(chunk)
                     if total > MAX_RESPONSE_BYTES:
-                        raise DiscoveryUnavailable("approved source response exceeded its size limit")
+                        raise DiscoveryUnavailable(
+                            "approved source response exceeded its size limit",
+                            upstream_status=response.status_code,
+                            failure_code="response_too_large",
+                        )
                     chunks.append(chunk)
                 return json.loads(b"".join(chunks))
             except (DiscoveryNotFound, DiscoveryUnavailable):
