@@ -8,7 +8,7 @@ import sqlite3
 import threading
 import traceback
 from contextvars import ContextVar, Token
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -109,7 +109,7 @@ def configure_store(path: Path) -> None:
             configured_store = RuntimeDiagnosticsStore(path)
             configured_store.initialize()
             _store = configured_store
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - storage must fail closed without blocking app startup
             _store = None
             logger.warning(
                 "Runtime diagnostics persistence unavailable error_type=%s",
@@ -180,7 +180,7 @@ def emit_event(
             value_limit = 1024 if key == "stack" else 256
             safe_fields[key[:64]] = str(value)[:value_limit] if isinstance(value, str) else value
     record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "severity": severity if severity in {"DEBUG", "INFO", "WARNING", "ERROR"} else "INFO",
         "event_code": event_code[:64],
         "component": component[:64],
@@ -195,7 +195,7 @@ def emit_event(
         if _store is not None:
             try:
                 _store.append(record)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - keep basic error logging if diagnostics persistence fails
                 logger.error(
                     "Runtime diagnostics persistence failed error_type=%s",
                     type(exc).__name__,
