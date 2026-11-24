@@ -69,7 +69,7 @@ export class GeminiSettingsComponent {
   protected readonly configured = signal(false);
   protected readonly busy = signal(false);
   protected readonly message = signal('');
-  protected readonly models = signal<string[]>(['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']);
+  protected readonly models = signal<string[]>(['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-4-neon', 'gemini-4-carbon']);
   protected readonly selectedModel = signal('gemini-3.1-flash-lite');
   protected readonly testedModel = signal<string | null>(null);
   protected readonly testPassed = signal(false);
