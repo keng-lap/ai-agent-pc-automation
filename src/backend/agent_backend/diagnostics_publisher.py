@@ -34,6 +34,9 @@ def _run_publisher(run_id: str) -> None:
     try:
         if not script.is_file():
             raise FileNotFoundError("publisher_script_missing")
+        process_environment = dict(__import__("os").environ)
+        process_environment["GIT_TERMINAL_PROMPT"] = "0"
+        process_environment["GCM_INTERACTIVE"] = "never"
         completed = subprocess.run(
             [
                 "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
@@ -44,6 +47,7 @@ def _run_publisher(run_id: str) -> None:
             capture_output=True,
             text=True,
             timeout=180,
+            env=process_environment,
             check=False,
         )
         output = completed.stdout or ""
