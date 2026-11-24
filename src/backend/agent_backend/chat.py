@@ -349,7 +349,7 @@ def select_provider(payload: ProviderSelectionRequest) -> dict[str, object]:
 
 def _provider_messages(contents: list[types.Content]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": grok.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION}
+        {"role": "system", "content": gemini.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION}
     ]
     for item in contents:
         role = "assistant" if item.role == "model" else "user"
