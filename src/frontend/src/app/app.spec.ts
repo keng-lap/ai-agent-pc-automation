@@ -612,6 +612,7 @@ describe('App chat UI (T-202)', () => {
       packageId: 'DBeaver.DBeaver.Community',
       version: '25.3.0',
       architecture: 'x64',
+      scope: 'user',
     }]);
     expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition');
 
