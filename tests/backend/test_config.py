@@ -43,7 +43,7 @@ def test_defaults_are_loopback_only():
     assert settings.backend_port == 8000
     assert settings.frontend_port == 4200
     assert settings.app_env == "development"
-    assert settings.job_store_path == REPO_ROOT / ".agent-state" / "jobs" / "jobs.sqlite3"
+    assert settings.job_store_path == REPO_ROOT / ".agent-state-Jobs" / "jobs.sqlite3"
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "::", "example.com", ""])
@@ -130,7 +130,7 @@ def test_windows_user_state_defaults_to_local_app_data(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     assert default_state_directory() == tmp_path / "Local" / "AI-Agent-PC-Automation"
     settings = load_settings(load_env_file=False)
-    assert settings.job_store_path == default_state_directory() / "jobs" / "jobs.sqlite3"
+    assert settings.job_store_path == default_state_directory().with_name(default_state_directory().name + "-Jobs") / "jobs.sqlite3"
 
 
 def test_explicit_job_store_path_override_is_preserved(monkeypatch, tmp_path):
