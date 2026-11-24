@@ -569,6 +569,18 @@
                       <span>Repository commit: {{ candidate.repository_commit }}</span>
                       <a [href]="candidate.manifest_source_url" target="_blank" rel="noopener noreferrer">{{ language() === 'th' ? 'เปิด Manifest ต้นทาง' : 'Open source manifest' }}</a>
                     </div>
+                    @if (discovery.result?.available_scopes?.length) {
+                      <div class="software-version-list" aria-label="Installer scope selection">
+                        @for (scope of discovery.result.available_scopes; track scope) {
+                          <button class="software-version" type="button" [disabled]="planning() || scope === candidate.scope"
+                            [attr.aria-pressed]="scope === candidate.scope"
+                            (click)="selectSoftwareScope(entry.id, scope)">
+                            <strong>{{ scope === 'user' ? 'User Scope' : 'Machine Scope' }}</strong>
+                            <small>{{ scope === candidate.scope ? (language() === 'th' ? 'กำลังเลือกอยู่' : 'Selected') : (language() === 'th' ? 'เลือกขอบเขตนี้' : 'Select this scope') }}</small>
+                          </button>
+                        }
+                      </div>
+                    }
                     <div class="tool-preview installer-actions--blocked" role="status">
                       @if (discovery.status === 'source_mismatch') {
                         <strong>{{ language() === 'th' ? 'บล็อก: Manifest ไม่ตรงกับ Release ทางการ' : 'Blocked: manifest does not match the official release' }}</strong>
@@ -590,7 +602,12 @@
                     </div>
                   }
                   @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
-                    @if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
+                    @if (installCandidate.scope === 'machine') {
+                      <div class="tool-preview installer-actions--blocked" role="status">
+                        <strong>{{ language() === 'th' ? 'พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง' : 'Machine Scope discovered but installation is disabled' }}</strong>
+                        <span>{{ language() === 'th' ? 'ระบบแสดงรายการจาก Manifest ได้ แต่ยังไม่มี Signed Elevated Helper และการตรวจสอบ UAC/Process Containment จึงไม่สามารถสร้าง Approval หรือติดตั้งได้' : 'Discovery is informational only. A signed elevated helper and verified UAC/process containment are not available, so proposal, approval, and installation are blocked.' }}</span>
+                      </div>
+                    } @else if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
                       <section class="tool-preview installer-actions" aria-label="Real WinGet install">
                         <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
                         @if (discovery.readinessChecking) {
