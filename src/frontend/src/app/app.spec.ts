@@ -573,6 +573,56 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
 
+  it('requires an explicit Machine Scope choice and keeps Machine installation blocked', async () => {
+    const originalDiscoveryResponder = api.discoveryResponder;
+    api.discoveryResponder = (packageId, version, scope = 'user') => originalDiscoveryResponder(packageId, version, scope).pipe(
+      map((result) => result.candidate ? {
+        ...result,
+        available_scopes: ['user', 'machine'],
+        candidate: { ...result.candidate, scope },
+      } : result),
+    );
+    await render();
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('25.3.0'));
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const machineScope = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('Machine Scope'));
+    if (!machineScope) throw new Error('Machine Scope option was not rendered');
+    machineScope.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.discoveryCalls[2]).toEqual({
+      packageId: 'DBeaver.DBeaver.Community',
+      version: '25.3.0',
+      architecture: 'x64',
+    });
+    expect(fixture.nativeElement.textContent).toContain('Machine Scope discovered but installation is disabled');
+    expect(fixture.nativeElement.textContent).toContain('signed elevated helper');
+    expect(api.proposalCalls).toEqual([]);
+    expect(Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+      .some((button) => button.textContent?.includes('Verify installer and prepare approval'))).toBe(false);
+  });
+
   it('queues a verified real install only after exact TOTP approval', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     // Generic publisher trust does not depend on a per-package certificate pin or allowlist.
