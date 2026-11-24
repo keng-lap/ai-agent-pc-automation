@@ -314,6 +314,7 @@ def test_readiness_exposes_generic_authenticode_publisher_policy_without_package
     request.app.state.real_install_enabled = False
     request.app.state.real_install_release_authorization = None
     ready = api.get_software_install_readiness(request)
+    assert ready["notice"] == "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT"
     assert ready["publisher_identity_policy_available"] is True
     assert ready["publisher_trust_configured"] is True
     assert ready["package_allowlist_enabled"] is False
