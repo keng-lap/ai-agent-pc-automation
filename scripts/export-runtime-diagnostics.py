@@ -55,9 +55,7 @@ def sanitize_event(event: dict[str, Any]) -> dict[str, Any]:
         for key, value in fields.items():
             if key not in ALLOWED_FIELDS:
                 continue
-            if isinstance(value, (str, int, float, bool)):
-                safe_fields[key] = value
-            elif (
+            if isinstance(value, (str, int, float, bool)) or (
                 key == "available_versions"
                 and isinstance(value, list)
                 and len(value) <= 20
