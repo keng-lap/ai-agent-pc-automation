@@ -409,7 +409,7 @@ class WinGetManifestRepository:
             for item in files
             if isinstance(item, dict)
             and isinstance(item.get("name"), str)
-            and re.fullmatch(r"[A-Za-z0-9._-]{1,200}\.ya?ml", item["name"], re.IGNORECASE)
+            and re.fullmatch(r"[A-Za-z0-9.+_-]{1,200}\.ya?ml", item["name"], re.IGNORECASE)
         ]
         # GitHub's Contents API normally returns type="file". A missing type
         # is incomplete metadata, not proof that a safe YAML filename is not
