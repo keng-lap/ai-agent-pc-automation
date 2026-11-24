@@ -629,7 +629,7 @@ class WinGetManifestRepository:
 
 def _version_sort_key(value: str) -> tuple[tuple[int, int | str], ...]:
     """Sort dotted/alphanumeric versions by numeric components, not lexically."""
-    parts = re.split(r"(\\d+)", value.casefold())
+    parts = re.split(r"(\d+)", value.casefold())
     return tuple(
         (0, int(part)) if part.isdigit() else (1, part)
         for part in parts
