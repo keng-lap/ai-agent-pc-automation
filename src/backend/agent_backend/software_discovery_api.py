@@ -122,7 +122,11 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             stage="manifest_validation",
             correlation=getattr(request.state, "correlation_id", "unknown"),
             error=exc,
-            fields={"status_code": 503},
+            fields={
+                "status_code": 503,
+                "upstream_status": exc.upstream_status,
+                "failure_code": exc.failure_code,
+            },
         )
         raise HTTPException(status_code=503, detail="Approved package source is unavailable or its data failed validation.") from None
     except ValueError:
