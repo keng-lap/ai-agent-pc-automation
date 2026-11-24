@@ -529,3 +529,52 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
         architecture="x64",
     )
     assert selected.available_versions == result.manifest_versions
+
+
+
+def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata():
+    class IncompleteMetadataSource(FakeSource):
+        def get(self, url, **kwargs):
+            response = super().get(url, **kwargs)
+            if request_path(url).endswith(f"/{VERSION}"):
+                entries = json.loads(response._body)
+                for entry in entries:
+                    entry.pop("type", None)
+                response._body = json.dumps(entries).encode()
+            return response
+
+    result = WinGetManifestRepository(
+        http_get=IncompleteMetadataSource().get
+    ).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.candidate is not None
+    assert result.candidate.package_id == PACKAGE_ID
+
+
+def test_discovery_rejects_manifest_listing_with_no_safe_yaml_files():
+    class UnsafeListingSource(FakeSource):
+        def get(self, url, **kwargs):
+            if request_path(url).endswith(f"/{VERSION}"):
+                return FakeResponse([
+                    {"name": "../manifest.yaml", "type": "file"},
+                    {"name": "manifest.txt", "type": "file"},
+                    {"name": "directory.yaml", "type": "dir"},
+                ])
+            return super().get(url, **kwargs)
+
+    with pytest.raises(DiscoveryUnavailable) as captured:
+        WinGetManifestRepository(
+            http_get=UnsafeListingSource().get
+        ).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+    assert captured.value.failure_code == "manifest_file_set_empty"
+    assert captured.value.diagnostic_fields["manifest_listing_item_count"] == 3
+    assert captured.value.diagnostic_fields["manifest_yaml_file_count"] == 0
