@@ -26,7 +26,7 @@ from .oidc import (
     SessionPrincipal,
 )
 from .step_up import StepUpChallengeStore
-from .totp import TotpReplayGuard
+from .totp import TOTP_WINDOW_STEPS, TotpReplayGuard
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
         # high-risk requests independently load the secret and fail closed.
         replay_guard.block_through_current_step(
             owner_key=settings.master_google_sub,
-            future_steps=1,
+            future_steps=TOTP_WINDOW_STEPS,
         )
     else:
         # Do not block the first enrollment's current TOTP step when no secret
@@ -112,7 +112,7 @@ def build_auth_services(settings: Settings) -> AuthServices | None:
         if stored_secret is not None:
             replay_guard.block_through_current_step(
             owner_key=settings.master_google_sub,
-            future_steps=1,
+            future_steps=TOTP_WINDOW_STEPS,
         )
     return AuthServices(
         oidc=GoogleOidcClient(
