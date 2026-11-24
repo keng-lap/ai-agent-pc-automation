@@ -25,7 +25,6 @@ from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
-from .runtime_privilege import enforce_backend_not_elevated
 from .runtime_diagnostics import (
     close_store,
     configure_store,
@@ -36,6 +35,7 @@ from .runtime_diagnostics import (
     reset_workflow_context,
     set_workflow_context,
 )
+from .runtime_privilege import enforce_backend_not_elevated
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
