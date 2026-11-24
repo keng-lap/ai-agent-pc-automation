@@ -88,8 +88,13 @@ try {
 }
 finally {
     if (Test-Path -LiteralPath $worktree) {
-        & git -C $RepoRoot worktree remove --force $worktree 2>$null
-        & git -C $RepoRoot worktree prune
+        try {
+            $null = Invoke-GitChecked -GitArguments @("-C", $RepoRoot, "worktree", "remove", "--force", $worktree)
+            $null = Invoke-GitChecked -GitArguments @("-C", $RepoRoot, "worktree", "prune")
+        }
+        catch {
+            Write-Warning "Could not fully clean the temporary diagnostics worktree."
+        }
     }
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force
