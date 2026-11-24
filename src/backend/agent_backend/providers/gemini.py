@@ -15,7 +15,15 @@ from google import genai
 from google.genai import errors, types
 
 MODEL_NAME = "gemini-3.1-flash-lite"
-SUPPORTED_MODELS = (MODEL_NAME, "gemini-2.5-flash", "gemini-2.5-pro")
+SUPPORTED_MODELS = (
+    MODEL_NAME,
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-4-hydrogen",
+    "gemini-4-argon",
+    "gemini-4-neon",
+    "gemini-4-carbon",
+)
 _model_name = MODEL_NAME
 _tested_configuration: tuple[str, str] | None = None
 
