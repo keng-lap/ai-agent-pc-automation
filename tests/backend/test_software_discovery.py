@@ -400,7 +400,7 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
     ]
     assert all(call[1]["params"]["ref"] == COMMIT for call in pinned_manifest_calls)
     assert any(
-        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=100"
+        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=10"
         for call in source.calls
     )
     assert any(
