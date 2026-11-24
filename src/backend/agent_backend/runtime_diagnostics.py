@@ -180,7 +180,7 @@ def emit_event(
         if isinstance(value, (str, int, float, bool)) or value is None:
             value_limit = 1024 if key == "stack" else 256
             safe_fields[key[:64]] = str(value)[:value_limit] if isinstance(value, str) else value
-        elif key in {"available_versions", "official_versions"} and isinstance(value, (list, tuple)):
+        elif key in {"available_versions", "official_versions", "manifest_versions", "selectable_versions"} and isinstance(value, (list, tuple)):
             versions = [
                 item[:80]
                 for item in value[:20]
