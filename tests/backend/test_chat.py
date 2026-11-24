@@ -131,6 +131,34 @@ def test_test_connection_uses_selected_model_and_candidate_key_without_saving(mo
     assert gemini.get_model_name() == "gemini-3.1-flash-lite"
 
 
+def test_failed_retest_invalidates_previous_successful_test(monkeypatch):
+    attempts = []
+
+    def test_connection(**_kwargs):
+        attempts.append(True)
+        if len(attempts) == 2:
+            raise gemini.GeminiProviderError("quota_exceeded")
+
+    monkeypatch.setattr(gemini, "test_connection", test_connection)
+    candidate_key = "candidate-gemini-api-key-123456"
+    first = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.5-flash-lite", "api_key": candidate_key},
+    )
+    assert first.status_code == 200
+    second = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.8-flash", "api_key": candidate_key},
+    )
+    assert second.status_code == 502
+    save = client.put(
+        "/api/settings/gemini",
+        json={"model": "gemini-3.5-flash-lite", "api_key": candidate_key},
+    )
+    assert save.status_code == 409
+    assert not gemini.is_configured()
+
+
 def test_chat_generation_uses_saved_selected_model(monkeypatch):
     calls = []
 
