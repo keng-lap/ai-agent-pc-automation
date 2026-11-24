@@ -84,7 +84,7 @@ class RuntimeDiagnosticsStore:
                 )
                 connection.execute(
                     "DELETE FROM diagnostic_events WHERE occurred_at < ?",
-                    ((datetime.now(UTC) - __import__("datetime").timedelta(days=7)).isoformat(),),
+                    ((datetime.now(UTC) - timedelta(days=7)).isoformat(),),
                 )
                 connection.execute(
                     "DELETE FROM diagnostic_events WHERE sequence NOT IN "
