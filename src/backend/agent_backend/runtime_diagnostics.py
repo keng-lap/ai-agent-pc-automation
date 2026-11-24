@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import traceback
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -69,4 +71,33 @@ def emit_event(
         getattr(logging, record["severity"]),
         "%s",
         json.dumps(record, ensure_ascii=True, separators=(",", ":")),
+    )
+
+
+def emit_exception(
+    *,
+    event_code: str,
+    component: str,
+    stage: str,
+    correlation: str,
+    error: BaseException,
+    severity: str = "ERROR",
+    fields: dict[str, Any] | None = None,
+) -> None:
+    """Record exception type and bounded frame locations, never exception text."""
+    frames = traceback.extract_tb(error.__traceback__)
+    safe_stack = " | ".join(
+        f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}"
+        for frame in frames[-12:]
+    )
+    safe_fields = dict(fields or {})
+    safe_fields["exception_type"] = type(error).__name__
+    safe_fields["stack"] = safe_stack
+    emit_event(
+        event_code=event_code,
+        component=component,
+        stage=stage,
+        correlation=correlation,
+        severity=severity,
+        fields=safe_fields,
     )
