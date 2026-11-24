@@ -569,7 +569,7 @@ class SQLiteApprovalReservationStore:
                         """
                         INSERT INTO approval_audit_events (
                             approval_id, event_type, outcome, occurred_at, reason
-                        ) VALUES (?, 'approval.revoked', 'success', ?, 'proposal_scope_changed')
+                        ) VALUES (?, 'approval.revoked', 'success', ?, 'owner_revoked')
                         """,
                         (approval_id, timestamp),
                     )
