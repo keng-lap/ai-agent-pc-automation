@@ -140,7 +140,7 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && ['NOT_CHECKED', 'VERIFIED', 'MISMATCH', 'UNAVAILABLE'].includes(String(candidate['publisher_verification']))
     && (typeof candidate['official_version'] === 'string' || candidate['official_version'] === null)
     && (typeof candidate['official_release_url'] === 'string' || candidate['official_release_url'] === null)
-    && (candidate['official_release_url'] === null || candidate['official_release_url'].startsWith('https://github.com/dbeaver/dbeaver/releases/tag/'))
+    && (candidate['official_release_url'] === null || candidate['official_release_url'].startsWith('https://'))
     && (typeof candidate['official_asset_sha256'] === 'string' || candidate['official_asset_sha256'] === null)
     && (candidate['official_asset_sha256'] === null || /^[0-9a-f]{64}$/i.test(candidate['official_asset_sha256']))
     && Array.isArray(candidate['limitations'])
@@ -926,19 +926,6 @@ export class App implements AfterViewChecked {
     return result.available_versions.some((version) => this.isOfficialReleaseMatch(result, version));
   }
 
-  protected isOfficialReleaseMatch(result: SoftwareDiscoveryResponse, version: string): boolean {
-    return result.official_versions?.includes(version) === true;
-  }
-
-  protected latestOfficialReleaseVersion(result: SoftwareDiscoveryResponse): string {
-    const versions = result.official_versions ?? [];
-    return versions.length ? versions[versions.length - 1] : (this.language() === 'th' ? 'ไม่พบ Release' : 'No releases found');
-  }
-
-  protected hasMatchingOfficialVersion(result: SoftwareDiscoveryResponse): boolean {
-    return result.available_versions.some((version) => this.isOfficialReleaseMatch(result, version));
-  }
-
   protected selectSoftwareVersion(entryId: number, version: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
     const packageId = entry?.discovery?.packageId;
@@ -1035,7 +1022,9 @@ export class App implements AfterViewChecked {
       || discovery.readiness.authenticode_verification_available !== true
       || discovery.readiness.publisher_identity_policy_available !== true
       || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
-      || !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
+      || candidate.publisher_verification !== 'VERIFIED'
+      || candidate.official_version !== candidate.version
+      || candidate.official_asset_sha256 !== candidate.installer_sha256
       || this.planning()
     ) return;
 
