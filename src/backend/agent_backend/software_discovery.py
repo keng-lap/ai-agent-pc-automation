@@ -163,7 +163,9 @@ class DBeaverGitHubReleaseVerifier:
                 if page > MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE:
                     # A full final permitted page means the source may have
                     # been truncated; never expose an incomplete intersection.
-                    return None if releases else tuple(sorted(set(versions), key=_version_sort_key))
+                    if releases:
+                        return None
+                    return tuple(sorted(set(versions), key=_version_sort_key))
                 for release in releases:
                     if not isinstance(release, dict):
                         return None
@@ -693,7 +695,11 @@ class WinGetManifestRepository:
         return DiscoveryResponse(
             status=response_status,
             package_id=normalized_id,
-            available_versions=(versions if normalized_id == "DBeaver.DBeaver.Community" else versions[-MAX_AVAILABLE_VERSIONS:]),
+            available_versions=(
+                versions
+                if normalized_id == "DBeaver.DBeaver.Community"
+                else versions[-MAX_AVAILABLE_VERSIONS:]
+            ),
             candidate=candidate,
         )
 
