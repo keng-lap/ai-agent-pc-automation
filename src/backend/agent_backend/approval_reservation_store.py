@@ -534,6 +534,54 @@ class SQLiteApprovalReservationStore:
             raise ApprovalReservationExpired("approval evidence expired before reservation")
         raise ApprovalReservationUnavailable("Reservation did not reach a stable state.")
 
+    def revoke_active_approvals_for_plan(
+        self, *, plan_id: str, owner_id: str, now: datetime | None = None
+    ) -> int:
+        """Revoke all unused approvals for a proposal, never touching queued jobs."""
+        _identity(owner_id, "owner_id")
+        _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
+                reservations = connection.execute(
+                    "SELECT 1 FROM job_reservations WHERE plan_id=? AND owner_id=? LIMIT 1",
+                    (plan_id, owner_id),
+                ).fetchone()
+                if reservations is not None:
+                    raise ApprovalReservationConflict("proposal already has a queued install reservation")
+                rows = connection.execute(
+                    "SELECT approval_id, state FROM approval_records WHERE plan_id=? AND owner_id=?",
+                    (plan_id, owner_id),
+                ).fetchall()
+                if any(row["state"] != "ACTIVE" for row in rows):
+                    raise ApprovalReservationConflict("proposal approval is no longer revocable")
+                approval_ids = [row["approval_id"] for row in rows]
+                for approval_id in approval_ids:
+                    connection.execute(
+                        """
+                        UPDATE approval_records SET state='REVOKED', version=version+1
+                        WHERE approval_id=? AND owner_id=? AND state='ACTIVE'
+                        """,
+                        (approval_id, owner_id),
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO approval_audit_events (
+                            approval_id, event_type, outcome, occurred_at, reason
+                        ) VALUES (?, 'approval.revoked', 'success', ?, 'proposal_scope_changed')
+                        """,
+                        (approval_id, timestamp),
+                    )
+                connection.commit()
+                return len(approval_ids)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable(
+                "Proposal approval revocation could not be persisted."
+            ) from None
+
     def revoke(self, *, approval_id: str, owner_id: str, now: datetime | None = None) -> None:
         """Revoke an unused approval; reservation and revocation serialize in SQLite."""
         _identity(approval_id, "approval_id")
