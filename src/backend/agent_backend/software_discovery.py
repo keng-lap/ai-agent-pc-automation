@@ -132,7 +132,7 @@ class DBeaverGitHubReleaseVerifier:
             return None
         versions: list[str] = []
         total_bytes = 0
-        for page in range(1, (MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE) + 1):
+        for page in range(1, (MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE) + 2):
             response = None
             try:
                 response = self._http_get(
@@ -160,6 +160,10 @@ class DBeaverGitHubReleaseVerifier:
                 releases = json.loads(b"".join(chunks))
                 if not isinstance(releases, list) or len(releases) > self.RELEASES_PAGE_SIZE:
                     return None
+                if page > MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE:
+                    # A full final permitted page means the source may have
+                    # been truncated; never expose an incomplete intersection.
+                    return None if releases else tuple(sorted(set(versions), key=_version_sort_key))
                 for release in releases:
                     if not isinstance(release, dict):
                         return None
