@@ -119,12 +119,12 @@ def test_test_connection_uses_selected_model_and_candidate_key_without_saving(mo
     )
     response = client.post(
         "/api/settings/gemini/test",
-        json={"model": "gemini-2.5-flash", "api_key": "candidate-gemini-api-key-123456"},
+        json={"model": "gemini-3.5-flash-lite", "api_key": "candidate-gemini-api-key-123456"},
     )
     assert response.status_code == 200
-    assert response.json() == {"connected": True, "model": "gemini-2.5-flash"}
+    assert response.json() == {"connected": True, "model": "gemini-3.5-flash-lite"}
     assert calls == [{
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.5-flash-lite",
         "api_key": "candidate-gemini-api-key-123456",
     }]
     assert not gemini.is_configured()
@@ -146,21 +146,21 @@ def test_chat_generation_uses_saved_selected_model(monkeypatch):
         models = Models()
 
     gemini.save_api_key("test-gemini-api-key-123456789")
-    gemini.save_model_name("gemini-2.5-flash")
+    gemini.save_model_name("gemini-3.5-flash-lite")
     monkeypatch.setattr(gemini, "_client", lambda: Client())
     assert gemini.generate_universal_response("hello", type(
         "Schema",
         (),
         {"model_json_schema": classmethod(lambda _cls: {"type": "OBJECT", "properties": {"message": {"type": "STRING"}}})},
     )) == Response.text
-    assert calls[0]["model"] == "gemini-2.5-flash"
+    assert calls[0]["model"] == "gemini-3.5-flash-lite"
 
 
 def test_save_is_rejected_until_matching_model_test_succeeds():
     gemini.save_api_key("existing-gemini-api-key-123456")
     response = client.put(
         "/api/settings/gemini",
-        json={"model": "gemini-2.5-flash"},
+        json={"model": "gemini-3.5-flash-lite"},
     )
     assert response.status_code == 409
     assert gemini.get_model_name() == "gemini-3.1-flash-lite"
@@ -169,14 +169,14 @@ def test_save_is_rejected_until_matching_model_test_succeeds():
 def test_save_model_without_replacing_existing_key(monkeypatch):
     gemini.save_api_key("existing-gemini-api-key-123456")
     monkeypatch.setattr(gemini, "test_connection", lambda **_kwargs: None)
-    tested = client.post("/api/settings/gemini/test", json={"model": "gemini-2.5-pro"})
+    tested = client.post("/api/settings/gemini/test", json={"model": "gemini-4-hydrogen"})
     assert tested.status_code == 200
     response = client.put(
         "/api/settings/gemini",
-        json={"model": "gemini-2.5-pro"},
+        json={"model": "gemini-4-hydrogen"},
     )
     assert response.status_code == 200
-    assert response.json()["model"] == "gemini-2.5-pro"
+    assert response.json()["model"] == "gemini-4-hydrogen"
     assert gemini.is_configured()
 
 
