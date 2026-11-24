@@ -425,7 +425,7 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
         def get(self, url, **kwargs):
             if request_path(url).endswith("/DBeaver/DBeaver/Community"):
                 versions = [f"{major}.0.0" for major in range(1, 26)]
-                versions.extend(["26.0.0", "26.1.0", "26.2.5"])
+                versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5"])
                 return FakeResponse([
                     {"name": version, "type": "dir"} for version in versions
                 ])
@@ -443,3 +443,12 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     assert len(result.available_versions) == 20
     assert result.available_versions[-3:] == ("26.0.0", "26.1.0", "26.2.5")
     assert "7.0.0" not in result.available_versions
+
+    selected = WinGetManifestRepository(
+        http_get=VersionListingSource().get
+    ).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert selected.available_versions == result.available_versions
