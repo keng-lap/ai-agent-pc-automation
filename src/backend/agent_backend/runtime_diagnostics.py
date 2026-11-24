@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import sys
 import threading
 import traceback
 from datetime import datetime, timezone
@@ -49,7 +50,7 @@ class RuntimeDiagnosticsStore:
             self._connection.commit()
             self._lease.verify()
         except Exception:
-            self._protection.__exit__(*__import__("sys").exc_info())
+            self._protection.__exit__(*sys.exc_info())
             raise
 
     def append(self, record: dict[str, Any]) -> None:
