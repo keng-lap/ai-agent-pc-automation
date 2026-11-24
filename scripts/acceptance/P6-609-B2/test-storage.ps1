@@ -6,6 +6,10 @@ $python = Join-Path $RepoRoot ".venv\\Scripts\\python.exe"
 $log = Join-Path ([System.IO.Path]::GetTempPath()) ("P6-609-B2-storage-" + [guid]::NewGuid().ToString("N") + ".log")
 $stdout = "$log.stdout"
 $stderr = "$log.stderr"
+# Avoid pytest's shared %TEMP%\\pytest-of-<user> directory, which may have
+# stale restrictive ACLs from an earlier run. Use a fresh per-run directory.
+$pytestTempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("P6-609-B2-pytest-" + [guid]::NewGuid().ToString("N"))
+$null = New-Item -ItemType Directory -Path $pytestTempRoot -Force
 
 Push-Location $RepoRoot
 try {
@@ -24,7 +28,7 @@ try {
 
     # Capture native stdout/stderr as files. This avoids PowerShell 7's
     # NativeCommandError promotion when Python emits warnings on stderr.
-    $process = Start-Process -FilePath $python -ArgumentList @("-m","pytest","../../tests/backend/test_platform_storage.py","../../tests/backend/test_job_store.py","-q") -WorkingDirectory (Join-Path $RepoRoot 'src\\backend') -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $process = Start-Process -FilePath $python -ArgumentList @("-m","pytest","--basetemp=$pytestTempRoot","../../tests/backend/test_platform_storage.py","../../tests/backend/test_job_store.py","-q") -WorkingDirectory (Join-Path $RepoRoot 'src\\backend') -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $outText = if (Test-Path $stdout) { [System.IO.File]::ReadAllText($stdout) } else { "" }
     $errText = if (Test-Path $stderr) { [System.IO.File]::ReadAllText($stderr) } else { "" }
     if ($outText) { Add-Content -LiteralPath $log -Value $outText -NoNewline; Write-Host $outText -NoNewline }
@@ -39,5 +43,6 @@ finally {
     foreach ($file in @($stdout, $stderr, $log)) {
         if (Test-Path $file) { Remove-Item -LiteralPath $file -Force }
     }
+    if (Test-Path $pytestTempRoot) { Remove-Item -LiteralPath $pytestTempRoot -Recurse -Force -ErrorAction SilentlyContinue }
     Pop-Location
 }
