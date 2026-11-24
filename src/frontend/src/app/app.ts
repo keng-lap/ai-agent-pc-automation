@@ -3,6 +3,7 @@ import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } fr
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
 import {
   AuthSession,
+  BrowserDiagnosticCode,
   DiagnosticsMode,
   ChatApi,
   ConversationHistory,
@@ -414,6 +415,9 @@ export class App implements AfterViewChecked {
 
   constructor() {
     this.document.documentElement.lang = this.language();
+    const browserWindow = this.document.defaultView;
+    browserWindow?.addEventListener('error', () => this.reportBrowserDiagnostic('BROWSER_UNCAUGHT_ERROR'));
+    browserWindow?.addEventListener('unhandledrejection', () => this.reportBrowserDiagnostic('BROWSER_UNHANDLED_REJECTION'));
     this.refreshAuthSession();
     this.refreshDiagnosticsMode();
     const storedConversationId = readStoredConversationId();
@@ -431,6 +435,12 @@ export class App implements AfterViewChecked {
     if (log) log.scrollTop = log.scrollHeight;
   }
 
+
+  private reportBrowserDiagnostic(eventCode: BrowserDiagnosticCode): void {
+    defer(() => this.chatApi.recordBrowserDiagnostic(eventCode))
+      .pipe(take(1))
+      .subscribe({ error: () => undefined });
+  }
 
   protected refreshDiagnosticsMode(): void {
     defer(() => this.chatApi.getDiagnosticsMode())
