@@ -203,6 +203,7 @@ def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_
         "package_id": candidate.package_id,
         "version": candidate.version,
         "architecture": "x64",
+        "scope": "user",
     }]
     assert stage_calls == []
 
