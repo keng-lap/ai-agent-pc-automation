@@ -74,7 +74,7 @@ export interface SoftwareInstallerCandidate {
   publisher: string;
   version: string;
   architecture: 'x86' | 'x64' | 'arm64';
-  scope: 'user';
+  scope: 'user' | 'machine';
   installer_type: string;
   installer_url: string;
   installer_domain: string;
@@ -98,6 +98,7 @@ export interface SoftwareDiscoveryResponse {
   manifest_versions: string[];
   official_versions: string[] | null;
   candidate: SoftwareInstallerCandidate | null;
+  available_scopes: Array<'user' | 'machine'>;
   source: 'winget-community-repository';
 }
 
