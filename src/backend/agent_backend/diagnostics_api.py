@@ -67,12 +67,12 @@ def export_diagnostics_events(
     limit: int = Query(default=5000, ge=1, le=20000),
 ) -> PlainTextResponse:
     events = export_recent_events(limit)
-    content = "\\n".join(
+    content = "\n".join(
         json.dumps(event, ensure_ascii=True, separators=(",", ":"))
         for event in events
     )
     return PlainTextResponse(
-        content=content + ("\\n" if content else ""),
+        content=content + ("\n" if content else ""),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-store"},
     )
