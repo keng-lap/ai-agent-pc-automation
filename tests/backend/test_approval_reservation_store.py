@@ -120,6 +120,55 @@ def reserve(store, *, approval_id="approval-1", key="request-1", now=NOW):
     )
 
 
+def test_scope_change_revokes_all_active_approvals_for_exact_plan(tmp_path):
+    store = make_store(tmp_path)
+    create_approval(store, approval_id="approval-scope-change")
+
+    revoked = store.revoke_active_approvals_for_plan(
+        plan_id=PLAN_ID,
+        owner_id=OWNER,
+        now=NOW,
+    )
+
+    assert revoked == 1
+    with sqlite3.connect(store.path) as connection:
+        state = connection.execute(
+            "SELECT state FROM approval_records WHERE approval_id=?",
+            ("approval-scope-change",),
+        ).fetchone()[0]
+        audit = connection.execute(
+            "SELECT event_type, reason FROM approval_audit_events WHERE approval_id=? ORDER BY rowid DESC LIMIT 1",
+            ("approval-scope-change",),
+        ).fetchone()
+    assert state == "REVOKED"
+    assert audit == ("approval.revoked", "proposal_scope_changed")
+
+
+def test_scope_change_cannot_revoke_approval_after_install_is_queued(tmp_path):
+    store = make_store(tmp_path)
+    create_approval(store, approval_id="approval-scope-change")
+    reserve(store, approval_id="approval-scope-change")
+
+    with pytest.raises(ApprovalReservationConflict):
+        store.revoke_active_approvals_for_plan(
+            plan_id=PLAN_ID,
+            owner_id=OWNER,
+            now=NOW,
+        )
+
+    with sqlite3.connect(store.path) as connection:
+        state = connection.execute(
+            "SELECT state FROM approval_records WHERE approval_id=?",
+            ("approval-scope-change",),
+        ).fetchone()[0]
+        reservation_count = connection.execute(
+            "SELECT COUNT(*) FROM job_reservations WHERE plan_id=?",
+            (PLAN_ID,),
+        ).fetchone()[0]
+    assert state == "RESERVED"
+    assert reservation_count == 1
+
+
 def test_reservation_is_durable_and_exactly_idempotent(tmp_path):
     store = make_store(tmp_path)
     create_approval(store)
