@@ -74,7 +74,7 @@ def test_diagnostics_control_api_changes_mode_immediately(monkeypatch):
     monkeypatch.setattr(diagnostics_api, "store_available", lambda: True)
     diagnostics.set_enabled(False)
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(diagnostics_api.router)
     app.dependency_overrides[require_session] = lambda: object()
     client = TestClient(app)
 
@@ -87,7 +87,7 @@ def test_diagnostics_control_api_changes_mode_immediately(monkeypatch):
     disabled = client.put("/api/diagnostics", json={"enabled": False})
     assert disabled.status_code == 200
     assert disabled.json() == {"enabled": False, "storage_available": True}
-    assert client.get("/api/diagnostics").json() == {"enabled": False}
+    assert client.get("/api/diagnostics").json() == {"enabled": False, "storage_available": True}
 
 
 def test_browser_event_api_is_disabled_by_default_and_accepts_allowlisted_events(caplog):
