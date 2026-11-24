@@ -120,12 +120,14 @@ class ChatRequest(BaseModel):
 class GeminiKeyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    api_key: str
+    api_key: str | None = None
     model: str | None = None
 
     @field_validator("api_key")
     @classmethod
-    def validate_api_key(cls, value: str) -> str:
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         value = value.strip()
         if not 20 <= len(value) <= 512:
             raise ValueError("API key length is invalid")
@@ -143,7 +145,10 @@ def gemini_status() -> dict[str, object]:
 
 @router.put("/api/settings/gemini")
 def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
-    gemini.save_api_key(payload.api_key)
+    if payload.api_key is not None:
+        gemini.save_api_key(payload.api_key)
+    elif not gemini.is_configured():
+        raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     if payload.model is not None:
         try:
             gemini.save_model_name(payload.model)
@@ -159,7 +164,7 @@ def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
 class GeminiTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    model: str
+    model: str | None = None
     api_key: str | None = None
 
     @field_validator("api_key")
@@ -176,7 +181,7 @@ class GeminiTestRequest(BaseModel):
 @router.post("/api/settings/gemini/test")
 def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict[str, object]:
     try:
-        selected_model = gemini.validate_model_name(payload.model)
+        selected_model = gemini.validate_model_name(payload.model or gemini.get_model_name())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
     if not payload.api_key and not gemini.is_configured():
