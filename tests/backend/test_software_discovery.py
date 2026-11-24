@@ -30,9 +30,13 @@ def request_path(url):
 
 
 class FakeSource:
-    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False, official_version=VERSION, wrap_base64=False):
+    def __init__(
+        self, *, bad_scope=False, bad_hash=False, bad_url=False,
+        official_version=VERSION, official_versions=None, wrap_base64=False,
+    ):
         self.calls = []
         self.official_version = official_version
+        self.official_versions = official_versions if official_versions is not None else [VERSION, official_version]
         self.wrap_base64 = wrap_base64
         installer = {
             "Architecture": "x64",
@@ -76,16 +80,29 @@ class FakeSource:
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
         path = request_path(url)
-        if path == "repos/dbeaver/dbeaver/releases/latest":
-            official_asset = f"dbeaver-ce-{self.official_version}-windows-x86_64.exe"
+        if path == "repos/dbeaver/dbeaver/releases":
+            payload = [
+                {
+                    "tag_name": version,
+                    "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{version}",
+                    "draft": False,
+                    "prerelease": False,
+                }
+                for version in self.official_versions
+            ]
+        elif path.startswith("repos/dbeaver/dbeaver/releases/tags/"):
+            requested = path.rsplit("/", 1)[-1]
+            if requested not in self.official_versions:
+                return FakeResponse({}, status_code=404)
+            official_asset = f"dbeaver-ce-{requested}-windows-x86_64.exe"
             payload = {
-                "tag_name": self.official_version,
-                "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{self.official_version}",
+                "tag_name": requested,
+                "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{requested}",
                 "assets": [{
                     "id": 12345,
                     "name": official_asset,
-                    "browser_download_url": f"https://github.com/dbeaver/dbeaver/releases/download/{self.official_version}/{official_asset}",
-                    "digest": "sha256:" + ("b" * 64 if self.official_version == VERSION else "c" * 64),
+                    "browser_download_url": f"https://github.com/dbeaver/dbeaver/releases/download/{requested}/{official_asset}",
+                    "digest": "sha256:" + ("b" * 64 if requested == VERSION else "c" * 64),
                 }],
             }
         elif path.endswith("/commits/master"):
@@ -164,8 +181,8 @@ def test_discovery_accepts_whitespace_wrapped_github_base64_manifest_content():
     assert result.candidate.package_id == PACKAGE_ID
 
 
-def test_discovery_blocks_manifest_when_official_release_is_newer():
-    source = FakeSource(official_version="26.2.4")
+def test_discovery_blocks_manifest_when_selected_version_is_absent_from_official_releases():
+    source = FakeSource(official_version="26.2.4", official_versions=["26.2.4"])
     result = WinGetManifestRepository(http_get=source.get).discover(
         package_id=PACKAGE_ID,
         version=VERSION,
@@ -178,8 +195,24 @@ def test_discovery_blocks_manifest_when_official_release_is_newer():
     assert result.candidate.version == VERSION
     assert result.candidate.official_version == "26.2.4"
     assert result.candidate.official_release_url == "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
-    assert result.candidate.official_asset_sha256 == "c" * 64
     assert "publisher_official_release_mismatch" in result.candidate.limitations
+
+
+def test_discovery_accepts_a_matching_non_latest_official_release():
+    source = FakeSource(
+        official_version="26.2.4",
+        official_versions=[VERSION, "26.2.4"],
+    )
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "VERIFIED"
+    assert result.candidate.official_version == VERSION
 
 
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
@@ -193,6 +226,7 @@ def test_discovery_requires_explicit_version_and_never_guesses_latest():
     assert result.status == "VERSION_REQUIRED"
     assert result.candidate is None
     assert result.available_versions == (VERSION,)
+    assert result.official_versions == (VERSION,)
 
 
 @pytest.mark.parametrize(
@@ -328,7 +362,11 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
     ]
     assert all(call[1]["params"]["ref"] == COMMIT for call in pinned_manifest_calls)
     assert any(
-        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
+        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=100"
+        for call in source.calls
+    )
+    assert any(
+        call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/" + VERSION
         for call in source.calls
     )
 
