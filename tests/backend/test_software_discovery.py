@@ -398,3 +398,24 @@ def test_discovery_not_found_preserves_upstream_404(monkeypatch):
         repository._get_json("/repos/microsoft/winget-pkgs/commits/master")
 
     assert captured.value.upstream_status == 404
+
+
+
+def test_discovery_reports_safe_installer_selection_facts_without_relaxing_scope():
+    source = FakeSource(bad_scope=True)
+
+    with pytest.raises(DiscoveryUnavailable) as captured:
+        WinGetManifestRepository(http_get=source.get).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+    assert captured.value.failure_code == "installer_selection_not_unique"
+    assert captured.value.diagnostic_fields == {
+        "requested_architecture": "x64",
+        "requested_scope": "user",
+        "installer_matching_count": 0,
+        "installer_architectures": "x64",
+        "installer_scopes": "machine",
+    }
