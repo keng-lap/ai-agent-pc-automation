@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 import traceback
@@ -179,6 +180,15 @@ def emit_event(
         if isinstance(value, (str, int, float, bool)) or value is None:
             value_limit = 1024 if key == "stack" else 256
             safe_fields[key[:64]] = str(value)[:value_limit] if isinstance(value, str) else value
+        elif key == "available_versions" and isinstance(value, (list, tuple)):
+            versions = [
+                item[:80]
+                for item in value[:20]
+                if isinstance(item, str)
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}", item)
+            ]
+            if len(versions) == len(value) and len(value) <= 20:
+                safe_fields["available_versions"] = versions
     record = {
         "timestamp": datetime.now(UTC).isoformat(),
         "severity": severity if severity in {"DEBUG", "INFO", "WARNING", "ERROR"} else "INFO",
