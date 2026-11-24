@@ -616,11 +616,11 @@ describe('App chat UI (T-202)', () => {
       version: '25.3.0',
       architecture: 'x64',
     });
-    expect(fixture.nativeElement.textContent).toContain('Machine Scope discovered but installation is disabled');
-    expect(fixture.nativeElement.textContent).toContain('signed elevated helper');
+    expect(fixture.nativeElement.textContent).toContain('พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง');
+    expect(fixture.nativeElement.textContent).toContain('Signed Elevated Helper');
     expect(api.proposalCalls).toEqual([]);
     expect(Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
-      .some((button) => button.textContent?.includes('Verify installer and prepare approval'))).toBe(false);
+      .some((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'))).toBe(false);
   });
 
   it('queues a verified real install only after exact TOTP approval', async () => {
