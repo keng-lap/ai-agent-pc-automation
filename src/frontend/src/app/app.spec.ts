@@ -724,7 +724,7 @@ describe('App chat UI (T-202)', () => {
     api.testError = { status: 502, error: { detail: { code: 'quota_exceeded' } } };
     await render();
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
-    buttons.find((button) => button.textContent?.includes('ทดสอบการเชื่อมต่อ'))?.click();
+    buttons.find((button) => button.textContent?.includes('ทดสอบ Model ที่เลือก'))?.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('โควตา Gemini เต็มหรือเกินขีดจำกัด');
   });
