@@ -21,7 +21,11 @@ _state: dict[str, Any] = {
     "error_code": None,
 }
 _publisher_thread: threading.Thread | None = None
-_URL_PATTERN = re.compile(r"LOG PUSHED: (https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/tree/diagnostics/runtime-logs/runs/[A-Za-z0-9_.-]+)")
+_URL_PATTERN = re.compile(
+    r"LOG PUSHED: (https://github\.com/"
+    r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/tree/diagnostics/runtime-logs/runs/"
+    r"[A-Za-z0-9_.-]+)"
+)
 
 
 def get_publish_status() -> dict[str, Any]:
