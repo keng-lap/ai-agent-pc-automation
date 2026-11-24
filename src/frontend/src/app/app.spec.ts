@@ -371,6 +371,50 @@ class FakeChatApi {
     if (this.testError !== undefined) return throwError(() => this.testError);
     return of({ connected: true, model: 'gemini-3.1-flash-lite' });
   }
+
+  getGrokStatus(): Observable<{ configured: boolean; model: string; models: string[] }> {
+    return of({ configured: false, model: 'grok-4.7', models: ['grok-4.7'] });
+  }
+
+  saveGrokKey(_apiKey: string, model: string): Observable<{ configured: boolean; model: string; models: string[] }> {
+    return of({ configured: true, model, models: ['grok-4.7'] });
+  }
+
+  testGrokConnection(model: string, _apiKey: string): Observable<{ connected: boolean; model: string }> {
+    return of({ connected: true, model });
+  }
+
+  getProviderStatus(): Observable<{
+    active: 'gemini' | 'grok';
+    gemini_configured: boolean;
+    grok_configured: boolean;
+    gemini_model: string;
+    grok_model: string;
+  }> {
+    return of({
+      active: 'gemini',
+      gemini_configured: this.configured,
+      grok_configured: false,
+      gemini_model: 'gemini-3.1-flash-lite',
+      grok_model: 'grok-4.7',
+    });
+  }
+
+  setActiveProvider(provider: 'gemini' | 'grok'): Observable<{
+    active: 'gemini' | 'grok';
+    gemini_configured: boolean;
+    grok_configured: boolean;
+    gemini_model: string;
+    grok_model: string;
+  }> {
+    return of({
+      active: provider,
+      gemini_configured: this.configured,
+      grok_configured: provider === 'grok',
+      gemini_model: 'gemini-3.1-flash-lite',
+      grok_model: 'grok-4.7',
+    });
+  }
 }
 
 describe('App baseline', () => {
