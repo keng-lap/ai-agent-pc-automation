@@ -206,3 +206,22 @@ def test_diagnostics_export_returns_ndjson_without_enabling_collection(monkeypat
     assert response.headers["content-type"].startswith("application/x-ndjson")
     assert response.text.count("MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID") == 1
     assert '"status_code":503' in response.text
+
+
+def test_diagnostics_cannot_be_enabled_without_persistent_storage(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from agent_backend.auth_api import require_session
+    from agent_backend import diagnostics_api
+
+    monkeypatch.setattr(diagnostics_api, "store_available", lambda: False)
+    diagnostics.set_enabled(False)
+    app = FastAPI()
+    app.include_router(diagnostics_api.router)
+    app.dependency_overrides[require_session] = lambda: object()
+
+    response = TestClient(app).put("/api/diagnostics", json={"enabled": True})
+
+    assert response.status_code == 503
+    assert diagnostics.is_enabled() is False
