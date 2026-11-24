@@ -51,7 +51,8 @@ class FakeChatApi {
       ? {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
-        available_versions: ['25.2.0', '25.3.0'],
+        available_versions: ['25.3.0'],
+        manifest_versions: ['25.2.0', '25.3.0'],
         official_versions: ['25.3.0'],
         candidate: null,
         source: 'winget-community-repository',
@@ -60,6 +61,7 @@ class FakeChatApi {
         status: 'CONDITIONAL',
         package_id: packageId,
         available_versions: ['25.2.0', '25.3.0'],
+        manifest_versions: ['25.2.0', '25.3.0'],
         official_versions: null,
         candidate: {
           package_id: packageId,
@@ -656,7 +658,8 @@ describe('App chat UI (T-202)', () => {
       ? {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
-        available_versions: ['7.3.5'],
+        available_versions: [],
+        manifest_versions: ['7.3.5'],
         official_versions: ['26.2.4'],
         candidate: null,
         source: 'winget-community-repository',
@@ -664,7 +667,8 @@ describe('App chat UI (T-202)', () => {
       : {
       status: 'SOURCE_MISMATCH',
       package_id: packageId,
-      available_versions: ['7.3.5'],
+      available_versions: [],
+      manifest_versions: ['7.3.5'],
       official_versions: null,
       source: 'winget-community-repository',
       candidate: {
