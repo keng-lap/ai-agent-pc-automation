@@ -192,3 +192,18 @@ app-job-monitor .jm-metadata dd{font-weight:700;text-align:right;overflow-wrap:a
 app-job-monitor .jm-safety-note{font-size:9px;line-height:1.5;color:#829188;margin-top:12px}
 app-job-monitor .jm-no-selection{display:grid;place-items:center;min-height:180px;color:#829188;font-size:11px}
 @media(prefers-color-scheme:dark){app-job-monitor .jm-connection{background:#382f1e;border-color:#5d4a28;color:#e8d7ad}app-job-monitor .jm-head>b.connected{background:#203a2b;border-color:#355d42;color:#bfe0c8}}
+
+/* Runtime Diagnostics publish status banner */
+.diagnostics-status-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 30px 18px; padding: 13px 16px; border: 1px solid var(--line-strong); border-left: 4px solid #777; border-radius: 12px; background: var(--surface); color: var(--ink); }
+.diagnostics-status-banner--running { border-left-color: #b78322; }
+.diagnostics-status-banner--success { border-left-color: #27865a; }
+.diagnostics-status-banner--error { border-left-color: #c44c55; }
+.diagnostics-status-copy { display: grid; gap: 3px; min-width: 0; }
+.diagnostics-status-copy strong { font-size: 12px; }
+.diagnostics-status-copy span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.diagnostics-status-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.diagnostics-github-link { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 600px) {
+  .diagnostics-status-banner { align-items: stretch; flex-direction: column; margin: 0 11px 14px; padding: 12px; }
+  .diagnostics-status-actions { flex-wrap: wrap; }
+}
