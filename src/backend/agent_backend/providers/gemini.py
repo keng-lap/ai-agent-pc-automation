@@ -42,13 +42,13 @@ def get_api_key() -> str | None:
 
 def save_tested_configuration(model: str, api_key: str | None) -> bool:
     """Atomically consume matching test evidence and activate the tested pair."""
+    global _tested_configuration, _api_key, _model_name
     selected_model = validate_model_name(model)
     with _lock:
         key = api_key if api_key is not None else _api_key
         if not key:
             return False
         fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
-        global _tested_configuration, _api_key, _model_name
         if _tested_configuration != (selected_model, fingerprint):
             return False
         if api_key is not None:
