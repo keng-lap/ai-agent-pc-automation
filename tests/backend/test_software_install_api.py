@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from agent_backend import software_install_api as api
 from agent_backend.software_approval import VerifiedPackageEvidence
@@ -390,7 +391,7 @@ def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypat
     assert stage_calls == []
 
 def test_proposal_request_rejects_machine_scope_until_elevated_helper_is_available():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         api.SoftwareInstallProposalRequest(
             package_id="DBeaver.DBeaver.Community",
             version="26.2.5",
