@@ -259,6 +259,9 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/authenticator/status",
         "/api/diagnostics",
         "/api/diagnostics/export",
+        "/api/diagnostics/publish",
+        "/api/diagnostics/publish/retry",
+        "/api/diagnostics/publish/status",
         "/auth/google/callback",
     }
     assert set(paths["/api/chat"]) == {"post"}
