@@ -871,9 +871,9 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
       { error: { status: 502, error: { detail: { code: 'key_or_access' } } }, thai: 'AI Provider ปฏิเสธ API Key', english: 'The AI provider rejected the API key' },
       { error: { status: 502, error: { detail: { code: 'quota_exceeded' } } }, thai: 'Quota หรือ Rate Limit ของ AI Provider เต็ม', english: 'The AI provider quota or rate limit was exceeded' },
-      { error: { status: 502, error: { detail: { code: 'model_unavailable' } } }, thai: 'ไม่พบโมเดล Gemini', english: 'configured Gemini model is unavailable' },
+      { error: { status: 502, error: { detail: { code: 'model_unavailable' } } }, thai: 'ไม่พบ Model ที่กำหนด', english: 'configured model is unavailable' },
       { error: { status: 502, error: { detail: { code: 'provider_unavailable' } } }, thai: 'บริการ AI Provider ขัดข้อง', english: 'The AI provider is temporarily unavailable' },
-      { error: { status: 409 }, thai: 'กรุณาตั้งค่า Gemini API Key', english: 'configure your Gemini API key' },
+      { error: { status: 409 }, thai: 'กรุณาตั้งค่า AI Provider และ API Key', english: 'configure an AI provider and API key' },
       { error: { status: 503 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 504 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 500 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
@@ -1134,7 +1134,7 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 200, malformed: true }, thai: 'รูปแบบที่ไม่คาดคิด', english: 'unexpected response' },
       { error: { status: 413 }, thai: 'ข้อความมีขนาดใหญ่เกินไป', english: 'message is too large' },
       { error: { status: 404 }, thai: 'HTTP 404', english: 'HTTP 404' },
-      { error: { status: 409 }, thai: 'กรุณาตั้งค่า Gemini API Key', english: 'configure your Gemini API key' },
+      { error: { status: 409 }, thai: 'กรุณาตั้งค่า AI Provider และ API Key', english: 'configure an AI provider and API key' },
       { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
     ];
     for (const item of cases) {
