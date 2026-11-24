@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import subprocess
@@ -10,6 +11,7 @@ import uuid
 from typing import Any
 
 from .config import REPO_ROOT
+from .process_containment import WindowsJobObject
 
 _lock = threading.RLock()
 _state: dict[str, Any] = {
@@ -41,22 +43,55 @@ def _run_publisher(run_id: str) -> None:
         process_environment = os.environ.copy()
         process_environment["GIT_TERMINAL_PROMPT"] = "0"
         process_environment["GCM_INTERACTIVE"] = "never"
-        completed = subprocess.run(
-            [
-                "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
-                "-ExecutionPolicy", "Bypass", "-File", str(script),
-                "-RepoRoot", str(REPO_ROOT), "-RunId", run_id,
-            ],
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=180,
-            env=process_environment,
-            check=False,
-        )
-        output = completed.stdout or ""
+        command = [
+            "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+            "-ExecutionPolicy", "Bypass", "-File", str(script),
+            "-RepoRoot", str(REPO_ROOT), "-RunId", run_id,
+        ]
+        # Start suspended, assign to a kill-on-close Job Object, then resume.
+        # This prevents Git descendants from escaping the timeout boundary.
+        with WindowsJobObject() as job:
+            process = subprocess.Popen(
+                command,
+                cwd=str(REPO_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=process_environment,
+                creationflags=0x00000004,  # CREATE_SUSPENDED
+            )
+            try:
+                job.assign_suspended_process(int(process._handle))
+                ntdll = ctypes.WinDLL("ntdll")
+                resume_process = ntdll.NtResumeProcess
+                resume_process.argtypes = [ctypes.c_void_p]
+                resume_process.restype = ctypes.c_long
+                if resume_process(int(process._handle)) != 0:
+                    raise RuntimeError("publisher_process_resume_failed")
+                try:
+                    stdout, stderr = process.communicate(timeout=180)
+                except subprocess.TimeoutExpired:
+                    job.terminate()
+                    try:
+                        stdout, stderr = process.communicate(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        stdout, stderr = process.communicate()
+                    job.wait_for_empty(timeout_ms=10_000)
+                    raise
+                job.wait_for_empty(timeout_ms=10_000)
+            except Exception:
+                if process.poll() is None:
+                    job.terminate()
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                raise
+        output = stdout or ""
         match = _URL_PATTERN.search(output)
-        if completed.returncode == 0 and match:
+        if process.returncode == 0 and match:
             with _lock:
                 _state.update(status="succeeded", url=match.group(1), error_code=None)
         else:
@@ -64,7 +99,7 @@ def _run_publisher(run_id: str) -> None:
                 _state.update(
                     status="failed",
                     url=None,
-                    error_code="no_events" if "No diagnostic events" in (completed.stderr or "") else "publish_failed",
+                    error_code="no_events" if "No diagnostic events" in (stderr or "") else "publish_failed",
                 )
     except subprocess.TimeoutExpired:
         with _lock:
