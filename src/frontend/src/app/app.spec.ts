@@ -52,6 +52,7 @@ class FakeChatApi {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
         available_versions: ['25.2.0', '25.3.0'],
+        official_versions: ['25.3.0'],
         candidate: null,
         source: 'winget-community-repository',
       }
@@ -59,6 +60,7 @@ class FakeChatApi {
         status: 'CONDITIONAL',
         package_id: packageId,
         available_versions: ['25.2.0', '25.3.0'],
+        official_versions: null,
         candidate: {
           package_id: packageId,
           package_name: 'DBeaver Community Edition',
@@ -650,6 +652,7 @@ describe('App chat UI (T-202)', () => {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
         available_versions: ['7.3.5'],
+        official_versions: ['26.2.4'],
         candidate: null,
         source: 'winget-community-repository',
       }
@@ -657,6 +660,7 @@ describe('App chat UI (T-202)', () => {
       status: 'SOURCE_MISMATCH',
       package_id: packageId,
       available_versions: ['7.3.5'],
+      official_versions: null,
       source: 'winget-community-repository',
       candidate: {
         package_id: packageId,
@@ -692,16 +696,12 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
     const versionButton = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '7.3.5');
+    ).find((button) => button.textContent?.includes('7.3.5'));
     if (!versionButton) throw new Error('Stale manifest version was not rendered');
-    versionButton.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('SOURCE MISMATCH');
+    expect(versionButton.disabled).toBe(true);
     expect(fixture.nativeElement.textContent).toContain('7.3.5');
     expect(fixture.nativeElement.textContent).toContain('26.2.4');
-    expect(fixture.nativeElement.textContent).toContain('บล็อก: Manifest ไม่ตรงกับ Release ทางการ');
+    expect(fixture.nativeElement.textContent).toContain('ไม่มีเวอร์ชันจาก WinGet ที่ตรงกับ Release ทางการ');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
 
