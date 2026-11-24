@@ -322,6 +322,7 @@ class DiscoveryResponse(BaseModel):
     status: Literal["VERSION_REQUIRED", "CONDITIONAL", "SOURCE_MISMATCH", "SOURCE_CHECK_UNAVAILABLE"]
     package_id: str
     available_versions: tuple[str, ...]
+    manifest_versions: tuple[str, ...] = ()
     official_versions: tuple[str, ...] | None = None
     candidate: InstallerCandidate | None = None
     source: Literal["winget-community-repository"] = "winget-community-repository"
@@ -379,10 +380,18 @@ class WinGetManifestRepository:
         if version is None:
             list_versions = getattr(self._publisher_verifier, "list_official_versions", None)
             official_versions = list_versions(normalized_id) if callable(list_versions) else None
+            manifest_versions = versions[-MAX_AVAILABLE_VERSIONS:]
+            selectable_versions = manifest_versions
+            if normalized_id == "DBeaver.DBeaver.Community":
+                selectable_versions = (
+                    tuple(v for v in manifest_versions if v in set(official_versions))
+                    if official_versions is not None else ()
+                )
             return DiscoveryResponse(
                 status="VERSION_REQUIRED",
                 package_id=normalized_id,
-                available_versions=versions[-MAX_AVAILABLE_VERSIONS:],
+                available_versions=selectable_versions,
+                manifest_versions=manifest_versions,
                 official_versions=official_versions,
             )
         if version not in versions:
