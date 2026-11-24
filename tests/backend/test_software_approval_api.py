@@ -46,10 +46,15 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         def __init__(self):
             self.created = []
             self.verified = []
+            self.invalidated = []
 
         def create(self, **kwargs):
             self.created.append(kwargs)
             return SimpleNamespace(challenge_id="f" * 32, expires_at=NOW.timestamp() + 120)
+
+        def invalidate_plan(self, **kwargs):
+            self.invalidated.append(kwargs)
+            return 1
 
         def verify_and_consume(self, **kwargs):
             self.verified.append(kwargs)
@@ -77,9 +82,18 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         def __init__(self):
             self.created = []
             self.reserved = []
+            self.revoked = []
+            self.revoke_conflict = False
 
         def create_approval(self, **kwargs):
             self.created.append(kwargs)
+
+        def revoke_active_approvals_for_plan(self, **kwargs):
+            self.revoked.append(kwargs)
+            if self.revoke_conflict:
+                from agent_backend.approval_reservation_store import ApprovalReservationConflict
+                raise ApprovalReservationConflict("already queued")
+            return 1
 
         def reserve(self, **kwargs):
             self.reserved.append(kwargs)
@@ -114,6 +128,52 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
     api._bindings.clear()
     api._consumed_bindings.clear()
     return step_up, principal, reservation_store
+
+
+def test_scope_change_revokes_pending_approval_evidence_and_plan(monkeypatch):
+    step_up, principal, reservation_store = setup_context(monkeypatch)
+    revoked_evidence = []
+    revoked_plans = []
+    monkeypatch.setattr(api.software_evidence_registry, "revoke", revoked_evidence.append)
+    monkeypatch.setattr(
+        api.software_install_plan_store,
+        "revoke",
+        lambda plan_id, **kwargs: revoked_plans.append((plan_id, kwargs["owner_id"])),
+    )
+
+    response = api.revoke_software_install_proposal(PLAN_ID, request=object())
+
+    assert response == {"revoked": True, "revoked_approvals": 1}
+    assert reservation_store.revoked == [{"plan_id": PLAN_ID, "owner_id": principal.owner_sub}]
+    assert step_up.invalidated == [{
+        "owner_sub": principal.owner_sub,
+        "session_id": principal.session_id,
+        "plan_id": PLAN_ID,
+    }]
+    assert revoked_evidence == ["e" * 32]
+    assert revoked_plans == [(PLAN_ID, principal.owner_sub)]
+    assert PLAN_ID not in api._bindings
+
+
+def test_scope_change_refuses_to_revoke_proposal_after_install_is_queued(monkeypatch):
+    _step_up, _principal, reservation_store = setup_context(monkeypatch)
+    reservation_store.revoke_conflict = True
+    revoked_evidence = []
+    revoked_plans = []
+    monkeypatch.setattr(api.software_evidence_registry, "revoke", revoked_evidence.append)
+    monkeypatch.setattr(
+        api.software_install_plan_store,
+        "revoke",
+        lambda *args, **kwargs: revoked_plans.append(args),
+    )
+
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as captured:
+        api.revoke_software_install_proposal(PLAN_ID, request=object())
+
+    assert captured.value.status_code == 409
+    assert revoked_evidence == []
+    assert revoked_plans == []
 
 
 def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypatch):
