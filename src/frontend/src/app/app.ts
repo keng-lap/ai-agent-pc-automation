@@ -419,8 +419,8 @@ export class App implements AfterViewChecked {
   constructor() {
     this.document.documentElement.lang = this.language();
     const browserWindow = this.document.defaultView;
-    browserWindow?.addEventListener('error', () => this.reportBrowserDiagnostic('BROWSER_UNCAUGHT_ERROR'));
-    browserWindow?.addEventListener('unhandledrejection', () => this.reportBrowserDiagnostic('BROWSER_UNHANDLED_REJECTION'));
+    browserWindow?.addEventListener('error', (event: ErrorEvent) => this.reportBrowserDiagnostic('BROWSER_UNCAUGHT_ERROR', event.error));
+    browserWindow?.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => this.reportBrowserDiagnostic('BROWSER_UNHANDLED_REJECTION', event.reason));
     this.refreshAuthSession();
     const storedConversationId = readStoredConversationId();
     const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
@@ -438,9 +438,20 @@ export class App implements AfterViewChecked {
   }
 
 
-  private reportBrowserDiagnostic(eventCode: BrowserDiagnosticCode): void {
+  private reportBrowserDiagnostic(eventCode: BrowserDiagnosticCode, error: unknown): void {
     if (!this.diagnosticsState.enabled) return;
-    defer(() => this.chatApi.recordBrowserDiagnostic(eventCode))
+    const errorType = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
+      ? error.name
+      : undefined;
+    const stack = error instanceof Error && typeof error.stack === 'string'
+      ? error.stack.split('\\n').slice(1, 9)
+        .map((frame) => frame.match(/:(\\d+):(\\d+)\\)?$/))
+        .filter((match): match is RegExpMatchArray => match !== null)
+        .map((match) => `${match[1]}:${match[2]}`)
+        .join('|')
+        .slice(0, 1024)
+      : undefined;
+    defer(() => this.chatApi.recordBrowserDiagnostic(eventCode, errorType, stack))
       .pipe(take(1))
       .subscribe({ error: () => undefined });
   }
