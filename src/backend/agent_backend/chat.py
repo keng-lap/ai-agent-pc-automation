@@ -190,6 +190,7 @@ def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict
         selected_model = gemini.validate_model_name(payload.model or gemini.get_model_name())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    gemini.clear_successful_test()
     if not payload.api_key and not gemini.is_configured():
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     started = time.perf_counter()
