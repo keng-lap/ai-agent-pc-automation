@@ -954,7 +954,7 @@ export class App implements AfterViewChecked {
         return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
       }
       loadReadiness = value.status === 'CONDITIONAL'
-        && value.candidate?.publisher_verification === 'VERIFIED';
+        && ['VERIFIED', 'NOT_CHECKED'].includes(value.candidate?.publisher_verification ?? '');
       return {
         ...entry,
         discovery: {
@@ -1022,9 +1022,18 @@ export class App implements AfterViewChecked {
       || discovery.readiness.authenticode_verification_available !== true
       || discovery.readiness.publisher_identity_policy_available !== true
       || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
-      || candidate.publisher_verification !== 'VERIFIED'
-      || candidate.official_version !== candidate.version
-      || candidate.official_asset_sha256 !== candidate.installer_sha256
+      || (
+        candidate.package_id === 'DBeaver.DBeaver.Community'
+        && (
+          candidate.publisher_verification !== 'VERIFIED'
+          || candidate.official_version !== candidate.version
+          || candidate.official_asset_sha256 !== candidate.installer_sha256
+        )
+      )
+      || (
+        candidate.package_id !== 'DBeaver.DBeaver.Community'
+        && !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
+      )
       || this.planning()
     ) return;
 
