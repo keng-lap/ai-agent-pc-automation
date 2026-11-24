@@ -512,7 +512,11 @@ describe('App chat UI (T-202)', () => {
     expect(api.approvalCalls).toEqual([]);
   });
 
-  it('uses Gemini to understand install requests while Backend independently resolves Package IDs', async () => {
+  it('lets the user select an older WinGet version when it matches an official release', async () => {
+    const originalDiscoveryResponder = api.discoveryResponder;
+    api.discoveryResponder = (packageId, version) => originalDiscoveryResponder(packageId, version).pipe(
+      map((result) => version === null ? { ...result, official_versions: ['25.2.0', '25.3.0'] } : result),
+    );
     await render();
 
     send('ติดตั้ง DBeaver Community Edition');
@@ -541,15 +545,16 @@ describe('App chat UI (T-202)', () => {
 
     const version = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
+    ).find((button) => button.textContent?.includes('25.2.0'));
+    if (!version) throw new Error('Matching historical version choice was not rendered');
+    expect(version.disabled).toBe(false);
     version.click();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(api.discoveryCalls[1]).toEqual({
       packageId: 'DBeaver.DBeaver.Community',
-      version: '25.3.0',
+      version: '25.2.0',
       architecture: 'x64',
     });
     expect(fixture.nativeElement.textContent).toContain('CONDITIONAL');
