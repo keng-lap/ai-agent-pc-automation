@@ -513,22 +513,22 @@
                     } @else {
                       <p class="detail-meta">
                         {{ language() === 'th' ? 'Release ทางการล่าสุดที่ตรวจพบ' : 'Latest verified official release' }}:
-                        {{ discovery.result.official_versions.length ? discovery.result.official_versions[discovery.result.official_versions.length - 1] : (language() === 'th' ? 'ไม่พบ Release' : 'No releases found') }}
+                        {{ latestOfficialReleaseVersion(discovery.result) }}
                       </p>
                       <div class="software-version-list">
                         @for (version of discovery.result.available_versions; track version) {
                           <button class="software-version" type="button"
-                            [disabled]="planning() || !discovery.result.official_versions.includes(version)"
-                            [attr.aria-disabled]="!discovery.result.official_versions.includes(version)"
+                            [disabled]="planning() || !isOfficialReleaseMatch(discovery.result, version)"
+                            [attr.aria-disabled]="!isOfficialReleaseMatch(discovery.result, version)"
                             (click)="selectSoftwareVersion(entry.id, version)">
                             <strong>{{ version }}</strong>
-                            <small>{{ discovery.result.official_versions.includes(version)
+                            <small>{{ isOfficialReleaseMatch(discovery.result, version)
                               ? (language() === 'th' ? 'ตรงกับ Release ทางการ · เลือกได้' : 'Matches official release · selectable')
                               : (language() === 'th' ? 'ไม่พบ Release ทางการเวอร์ชันนี้ · ถูกบล็อก' : 'No matching official release · blocked') }}</small>
                           </button>
                         }
                       </div>
-                      @if (!discovery.result.available_versions.some(version => discovery.result?.official_versions?.includes(version))) {
+                      @if (!hasMatchingOfficialVersion(discovery.result)) {
                         <div class="tool-preview installer-actions--blocked" role="alert">
                           {{ language() === 'th' ? 'ไม่มีเวอร์ชันจาก WinGet ที่ตรงกับ Release ทางการ จึงไม่สามารถดำเนินการต่อได้' : 'No WinGet version matches an official release. The workflow cannot continue.' }}
                         </div>
