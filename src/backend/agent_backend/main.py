@@ -1,5 +1,6 @@
 """FastAPI application for local Gemini chat without PC automation."""
 
+import asyncio
 import logging
 import os
 import re
@@ -30,6 +31,7 @@ from .runtime_diagnostics import (
     correlation_id,
     emit_event,
     emit_exception,
+    is_enabled,
     reset_workflow_context,
     set_workflow_context,
 )
@@ -114,19 +116,23 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
             try:
                 response = await call_next(request)
             except Exception as exc:
-                emit_exception(
-                    event_code="REQUEST_EXCEPTION",
+                if is_enabled():
+                    await asyncio.to_thread(
+                        emit_exception,
+                        event_code="REQUEST_EXCEPTION",
                     component="backend",
                     stage="request",
                     correlation=request_id,
                     error=exc,
-                    fields={"route": getattr(request.scope.get("route"), "path", "unmatched")},
-                )
+                        fields={"route": getattr(request.scope.get("route"), "path", "unmatched")},
+                    )
                 raise
             response.headers["X-Correlation-ID"] = request_id
             response.headers["X-Workflow-ID"] = workflow_id
-            emit_event(
-                event_code="REQUEST_COMPLETED",
+            if is_enabled():
+                await asyncio.to_thread(
+                    emit_event,
+                    event_code="REQUEST_COMPLETED",
                 component="backend",
                 stage="request",
                 correlation=request_id,
@@ -140,8 +146,8 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
                     "method": request.method,
                     "status_code": response.status_code,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-                },
-            )
+                    },
+                )
             return response
         finally:
             reset_workflow_context(workflow_token)
