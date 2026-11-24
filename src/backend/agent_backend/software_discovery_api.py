@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent_backend.runtime_diagnostics import emit_event
-
 from agent_backend.software_catalog import CatalogUnavailable, MicrosoftWinGetCatalogIndex
 from agent_backend.software_discovery import (
     DiscoveryNotFound,
@@ -60,15 +59,35 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
     try:
         result = _catalog.search(payload.query, limit=payload.limit)
     except CatalogUnavailable:
-        emit_event(event_code="CATALOG_SOURCE_UNAVAILABLE", component="catalog", stage="catalog_lookup", correlation=getattr(request.state, "correlation_id", "unknown"), severity="ERROR", fields={"status_code": 503})
+        emit_event(
+            event_code="CATALOG_SOURCE_UNAVAILABLE",
+            component="catalog",
+            stage="catalog_lookup",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="ERROR",
+            fields={"status_code": 503},
+        )
         raise HTTPException(
             status_code=503,
             detail="Microsoft WinGet catalog is unavailable or failed trust validation.",
         ) from None
     except ValueError:
-        emit_event(event_code="CATALOG_QUERY_INVALID", component="catalog", stage="catalog_lookup", correlation=getattr(request.state, "correlation_id", "unknown"), severity="WARNING", fields={"status_code": 422})
+        emit_event(
+            event_code="CATALOG_QUERY_INVALID",
+            component="catalog",
+            stage="catalog_lookup",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="WARNING",
+            fields={"status_code": 422},
+        )
         raise HTTPException(status_code=422, detail="Catalog search parameters are invalid.") from None
-    emit_event(event_code="CATALOG_LOOKUP_COMPLETED", component="catalog", stage="catalog_lookup", correlation=getattr(request.state, "correlation_id", "unknown"), fields={"candidate_count": len(result.candidates), "status_code": 200})
+    emit_event(
+        event_code="CATALOG_LOOKUP_COMPLETED",
+        component="catalog",
+        stage="catalog_lookup",
+        correlation=getattr(request.state, "correlation_id", "unknown"),
+        fields={"candidate_count": len(result.candidates), "status_code": 200},
+    )
     return result.model_dump(mode="json")
 
 
@@ -82,13 +101,40 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             architecture=payload.architecture,
         )
     except DiscoveryNotFound:
-        emit_event(event_code="MANIFEST_NOT_FOUND", component="manifest", stage="manifest_discovery", correlation=getattr(request.state, "correlation_id", "unknown"), severity="WARNING", fields={"status_code": 404})
+        emit_event(
+            event_code="MANIFEST_NOT_FOUND",
+            component="manifest",
+            stage="manifest_discovery",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="WARNING",
+            fields={"status_code": 404},
+        )
         raise HTTPException(status_code=404, detail="Package or version not found in the approved source.") from None
     except DiscoveryUnavailable:
-        emit_event(event_code="MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID", component="manifest", stage="manifest_validation", correlation=getattr(request.state, "correlation_id", "unknown"), severity="ERROR", fields={"status_code": 503})
+        emit_event(
+            event_code="MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID",
+            component="manifest",
+            stage="manifest_validation",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="ERROR",
+            fields={"status_code": 503},
+        )
         raise HTTPException(status_code=503, detail="Approved package source is unavailable or its data failed validation.") from None
     except ValueError:
-        emit_event(event_code="MANIFEST_LOOKUP_PARAMETERS_INVALID", component="manifest", stage="manifest_discovery", correlation=getattr(request.state, "correlation_id", "unknown"), severity="WARNING", fields={"status_code": 422})
+        emit_event(
+            event_code="MANIFEST_LOOKUP_PARAMETERS_INVALID",
+            component="manifest",
+            stage="manifest_discovery",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="WARNING",
+            fields={"status_code": 422},
+        )
         raise HTTPException(status_code=422, detail="Package lookup parameters are invalid.") from None
-    emit_event(event_code="MANIFEST_" + result.status, component="manifest", stage="manifest_validation", correlation=getattr(request.state, "correlation_id", "unknown"), fields={"status_code": 200, "available_version_count": len(result.available_versions)})
+    emit_event(
+        event_code="MANIFEST_" + result.status,
+        component="manifest",
+        stage="manifest_validation",
+        correlation=getattr(request.state, "correlation_id", "unknown"),
+        fields={"status_code": 200, "available_version_count": len(result.available_versions)},
+    )
     return result.model_dump(mode="json")
