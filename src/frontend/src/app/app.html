@@ -573,7 +573,7 @@
                         <strong>{{ language() === 'th' ? 'ยังไม่ใช่หลักฐานอนุญาตติดตั้ง' : 'Not installation authorization evidence' }}</strong>
                       }
                       @if (discovery.status === 'source_mismatch') {
-                        <span>{{ language() === 'th' ? 'เวอร์ชันจาก WinGet ไม่ตรงกับ Release ล่าสุดจากผู้ผลิต จึงห้ามนำรายการนี้ไปอนุมัติหรือติดตั้ง' : 'The WinGet manifest version differs from the vendor latest release. This candidate must not be approved or installed.' }}</span>
+                        <span>{{ language() === 'th' ? 'เวอร์ชันจาก WinGet ไม่พบ Release ทางการที่ตรงกัน จึงห้ามนำรายการนี้ไปอนุมัติหรือติดตั้ง' : 'The WinGet manifest version has no matching official vendor release. This candidate must not be approved or installed.' }}</span>
                       } @else if (discovery.status === 'source_check_unavailable') {
                         <span>{{ language() === 'th' ? 'ระบบตรวจสอบแหล่ง Release ทางการไม่ได้ จึงปฏิเสธการยืนยันความน่าเชื่อถือในครั้งนี้' : 'The official release source could not be verified, so this candidate remains blocked.' }}</span>
                       } @else {
@@ -585,7 +585,7 @@
                     </div>
                   }
                   @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
-                    @if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
+                    @if (installCandidate.publisher_verification === 'VERIFIED' && installCandidate.official_version === installCandidate.version && installCandidate.official_asset_sha256 === installCandidate.installer_sha256) {
                       <section class="tool-preview installer-actions" aria-label="Real WinGet install">
                         <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
                         @if (discovery.readinessChecking) {
