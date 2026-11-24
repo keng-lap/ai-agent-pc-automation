@@ -90,7 +90,7 @@ def get_software_install_readiness(request: Request) -> dict:
         "publisher_trust_mode": "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH",
         "package_allowlist_enabled": False,
         "supported_package_ids": [],
-        "notice": "REAL_INSTALL_REQUIRES_WINDOWS_AND_EXPLICIT_AI_AGENT_ENABLE_REAL_INSTALL_1",
+        "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
     }
 
 
