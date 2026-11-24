@@ -238,6 +238,20 @@ def test_discovery_does_not_offer_versions_when_official_release_source_is_unava
     assert result.manifest_versions == (VERSION,)
 
 
+def test_dbeaver_version_choices_include_only_exact_official_release_matches():
+    source = FakeSource(official_version="26.2.4", official_versions=["26.2.4"])
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=None,
+        architecture="x64",
+    )
+
+    assert result.status == "VERSION_REQUIRED"
+    assert result.manifest_versions == (VERSION,)
+    assert result.official_versions == ("26.2.4",)
+    assert result.available_versions == ()
+
+
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
     source = FakeSource()
     result = WinGetManifestRepository(http_get=source.get).discover(
