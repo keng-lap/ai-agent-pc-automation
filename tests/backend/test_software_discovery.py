@@ -149,7 +149,7 @@ def test_official_release_listing_reads_all_pages_and_ignores_non_version_tags()
             }
             for version in versions[start:start + 10]
         ]
-        if page == 1:
+        if page == 3:
             releases.append({
                 "tag_name": "CN",
                 "html_url": "https://github.com/dbeaver/dbeaver/releases/tag/CN",
