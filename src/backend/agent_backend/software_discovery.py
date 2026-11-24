@@ -32,6 +32,7 @@ MAX_AVAILABLE_VERSIONS = 20
 MAX_OFFICIAL_RELEASES = 100
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
+DBEAVER_VERSION_PATTERN = re.compile(r"^\\d+(?:\\.\\d+){1,4}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
@@ -121,10 +122,11 @@ class DBeaverGitHubReleaseVerifier:
         self._http_get = http_get or requests.get
 
     def list_official_versions(self, package_id: str) -> tuple[str, ...] | None:
-        """Return up to 20 stable releases using bounded pagination.
+        """Return every valid stable release within the bounded API response.
 
-        Each page is small, the combined payload has a strict byte limit, and
-        pagination stops as soon as enough stable versions are collected.
+        Pagination is bounded by MAX_OFFICIAL_RELEASES and MAX_RESPONSE_BYTES;
+        the UI intersection must not truncate either source to its newest 20
+        entries before comparing versions.
         """
         if package_id != "DBeaver.DBeaver.Community":
             return None
@@ -171,14 +173,15 @@ class DBeaverGitHubReleaseVerifier:
                     url = release.get("html_url")
                     if (
                         not isinstance(tag, str)
-                        or not VERSION_PATTERN.fullmatch(tag)
-                        or url != self.RELEASE_PAGE_PREFIX + tag
+                        or not DBEAVER_VERSION_PATTERN.fullmatch(tag)
                     ):
+                        # Ignore non-version release tags (for example "CN");
+                        # they are not selectable software versions.
+                        continue
+                    if url != self.RELEASE_PAGE_PREFIX + tag:
                         return None
                     versions.append(tag)
                 if len(releases) < self.RELEASES_PAGE_SIZE:
-                    break
-                if len(set(versions)) >= MAX_AVAILABLE_VERSIONS:
                     break
             except (requests.RequestException, ValueError, TypeError, KeyError):
                 return None
@@ -187,7 +190,7 @@ class DBeaverGitHubReleaseVerifier:
                     close = getattr(response, "close", None)
                     if callable(close):
                         close()
-        return tuple(sorted(set(versions), key=_version_sort_key)[-MAX_AVAILABLE_VERSIONS:])
+        return tuple(sorted(set(versions), key=_version_sort_key))
 
     def verify(
         self,
@@ -364,6 +367,11 @@ class WinGetManifestRepository:
         if not isinstance(version_entries, list):
             raise DiscoveryUnavailable("package version listing was invalid")
 
+        version_pattern = (
+            DBEAVER_VERSION_PATTERN
+            if normalized_id == "DBeaver.DBeaver.Community"
+            else VERSION_PATTERN
+        )
         versions = tuple(
             sorted(
                 {
@@ -372,7 +380,7 @@ class WinGetManifestRepository:
                     if isinstance(item, dict)
                     and item.get("type") == "dir"
                     and isinstance(item.get("name"), str)
-                    and VERSION_PATTERN.fullmatch(item["name"])
+                    and version_pattern.fullmatch(item["name"])
                 },
                 key=_version_sort_key,
             )
@@ -382,9 +390,12 @@ class WinGetManifestRepository:
         if version is None:
             list_versions = getattr(self._publisher_verifier, "list_official_versions", None)
             official_versions = list_versions(normalized_id) if callable(list_versions) else None
-            manifest_versions = versions[-MAX_AVAILABLE_VERSIONS:]
+            is_dbeaver = normalized_id == "DBeaver.DBeaver.Community"
+            # DBeaver must compare the complete valid source sets. Applying the
+            # generic UI cap before intersection can hide an older exact match.
+            manifest_versions = versions if is_dbeaver else versions[-MAX_AVAILABLE_VERSIONS:]
             selectable_versions = manifest_versions
-            if normalized_id == "DBeaver.DBeaver.Community":
+            if is_dbeaver:
                 selectable_versions = (
                     tuple(v for v in manifest_versions if v in set(official_versions))
                     if official_versions is not None else ()
