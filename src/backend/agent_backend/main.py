@@ -24,7 +24,7 @@ from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
-from .runtime_diagnostics import close_store, configure_store, correlation_id, emit_event
+from .runtime_diagnostics import close_store, configure_store, correlation_id, emit_event, emit_exception
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
@@ -102,22 +102,13 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
         try:
             response = await call_next(request)
         except Exception as exc:
-            frames = traceback.extract_tb(exc.__traceback__)
-            safe_stack = " | ".join(
-                f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}"
-                for frame in frames[-12:]
-            )
-            emit_event(
+            emit_exception(
                 event_code="REQUEST_EXCEPTION",
                 component="backend",
                 stage="request",
                 correlation=request_id,
-                severity="ERROR",
-                fields={
-                    "route": getattr(request.scope.get("route"), "path", "unmatched"),
-                    "exception_type": type(exc).__name__,
-                    "stack": safe_stack,
-                },
+                error=exc,
+                fields={"route": getattr(request.scope.get("route"), "path", "unmatched")},
             )
             raise
         response.headers["X-Correlation-ID"] = request_id
