@@ -5,6 +5,7 @@ import { EMPTY, catchError, throwError } from 'rxjs';
 const BROWSER_EVENT_PATH = '/api/diagnostics/browser-events';
 
 export const runtimeDiagnosticsInterceptor: HttpInterceptorFn = (request, next) => {
+  const http = inject(HttpClient);
   const correlationId = request.headers.get('X-Correlation-ID') ?? globalThis.crypto.randomUUID();
   const correlatedRequest = request.clone({
     setHeaders: { 'X-Correlation-ID': correlationId },
@@ -16,7 +17,7 @@ export const runtimeDiagnosticsInterceptor: HttpInterceptorFn = (request, next) 
         const statusCode = error instanceof HttpErrorResponse && error.status > 0
           ? error.status
           : null;
-        inject(HttpClient).post(
+        http.post(
           BROWSER_EVENT_PATH,
           {
             event_code: 'BROWSER_API_FAILURE',
