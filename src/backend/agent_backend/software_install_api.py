@@ -10,6 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent_backend.runtime_diagnostics import emit_event, emit_exception
 from agent_backend.software_discovery import DiscoveryNotFound, DiscoveryUnavailable
 from agent_backend.software_discovery_api import _repository
 from agent_backend.software_evidence import EvidenceRejected, software_evidence_registry
@@ -70,6 +71,13 @@ def get_software_install_readiness(request: Request) -> dict:
     )
     if not authorization_is_current:
         release_authorization = None
+    emit_event(
+        event_code="INSTALL_READINESS_CHECKED",
+        component="install",
+        stage="install_readiness",
+        correlation=getattr(request.state, "correlation_id", "unknown"),
+        fields={"real_install_enabled": sys.platform == "win32" and authorization_is_current},
+    )
     return {
         "platform_supported": sys.platform == "win32",
         "real_install_enabled": sys.platform == "win32" and authorization_is_current,
@@ -95,7 +103,23 @@ def create_software_install_proposal(
     request: Request,
 ) -> SoftwareInstallProposalResponse:
     """Rediscover, stage, hash and Authenticode-check the exact package before approval."""
+    correlation = getattr(request.state, "correlation_id", "unknown")
+    started = datetime.now(UTC)
+    emit_event(
+        event_code="INSTALL_PROPOSAL_STARTED",
+        component="install",
+        stage="proposal_verification",
+        correlation=correlation,
+    )
     if sys.platform != "win32":
+        emit_event(
+            event_code="INSTALL_PROPOSAL_BLOCKED_PLATFORM",
+            component="install",
+            stage="proposal_verification",
+            correlation=correlation,
+            severity="WARNING",
+            fields={"status_code": 503},
+        )
         raise HTTPException(
             status_code=503,
             detail="Installer Authenticode verification is available only on Windows.",
@@ -114,9 +138,26 @@ def create_software_install_proposal(
             version=payload.version,
             architecture=payload.architecture,
         )
-    except DiscoveryNotFound:
+    except DiscoveryNotFound as exc:
+        emit_exception(
+            event_code="INSTALL_PROPOSAL_MANIFEST_NOT_FOUND",
+            component="install",
+            stage="proposal_manifest_discovery",
+            correlation=correlation,
+            error=exc,
+            severity="WARNING",
+            fields={"status_code": 404},
+        )
         raise HTTPException(status_code=404, detail="Package or version not found.") from None
-    except DiscoveryUnavailable:
+    except DiscoveryUnavailable as exc:
+        emit_exception(
+            event_code="INSTALL_PROPOSAL_MANIFEST_UNAVAILABLE",
+            component="install",
+            stage="proposal_manifest_discovery",
+            correlation=correlation,
+            error=exc,
+            fields={"status_code": 503},
+        )
         raise HTTPException(status_code=503, detail="Approved package source is unavailable.") from None
     except ValueError:
         raise HTTPException(status_code=422, detail="Package lookup parameters are invalid.") from None
@@ -167,12 +208,30 @@ def create_software_install_proposal(
             staged=staged,
         )
         plan = software_install_plan_store.create(evidence, owner_id=principal.owner_sub)
-    except InstallerStageError:
+    except InstallerStageError as exc:
+        emit_exception(
+            event_code="INSTALLER_STAGING_FAILED",
+            component="install",
+            stage="installer_staging",
+            correlation=correlation,
+            error=exc,
+            severity="ERROR",
+            fields={"status_code": 409},
+        )
         raise HTTPException(
             status_code=409,
             detail="Installer download, hash, or Authenticode verification did not pass.",
         ) from None
-    except EvidenceRejected:
+    except EvidenceRejected as exc:
+        emit_exception(
+            event_code="INSTALLER_PUBLISHER_EVIDENCE_REJECTED",
+            component="install",
+            stage="publisher_evidence",
+            correlation=correlation,
+            error=exc,
+            severity="ERROR",
+            fields={"status_code": 409},
+        )
         raise HTTPException(
             status_code=409,
             detail="Authenticode signer identity does not match the WinGet manifest Publisher.",
@@ -188,6 +247,16 @@ def create_software_install_proposal(
             except OSError:
                 pass
 
+    emit_event(
+        event_code="INSTALL_PROPOSAL_CREATED",
+        component="install",
+        stage="proposal_verification",
+        correlation=correlation,
+        fields={
+            "duration_ms": round((datetime.now(UTC) - started).total_seconds() * 1000, 2),
+            "publisher_verification": candidate.publisher_verification,
+        },
+    )
     return SoftwareInstallProposalResponse(
         plan_id=plan.plan_id,
         evidence_id=evidence.evidence_id,
