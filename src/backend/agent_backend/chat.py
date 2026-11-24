@@ -151,15 +151,11 @@ def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
         selected_model = gemini.validate_model_name(payload.model or gemini.get_model_name())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
-    if not gemini.consume_successful_test(selected_model, payload.api_key):
+    if not gemini.save_tested_configuration(selected_model, payload.api_key):
         raise HTTPException(
             status_code=409,
             detail="Test the selected Gemini model and API key successfully before saving.",
         )
-    if payload.api_key is not None:
-        gemini.save_api_key(payload.api_key)
-    if payload.model is not None:
-        gemini.save_model_name(selected_model)
     return {
         "configured": True,
         "model": gemini.get_model_name(),
@@ -191,7 +187,8 @@ def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
     gemini.clear_successful_test()
-    if not payload.api_key and not gemini.is_configured():
+    effective_api_key = payload.api_key if payload.api_key is not None else gemini.get_api_key()
+    if not effective_api_key:
         raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     started = time.perf_counter()
     correlation = getattr(request.state, "correlation_id", "unknown")
@@ -202,8 +199,8 @@ def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict
         correlation=correlation,
     )
     try:
-        gemini.test_connection(model=selected_model, api_key=payload.api_key)
-        gemini.record_successful_test(selected_model, payload.api_key)
+        gemini.test_connection(model=selected_model, api_key=effective_api_key)
+        gemini.record_successful_test(selected_model, effective_api_key)
     except gemini.GeminiProviderError as exc:
         emit_exception(
             event_code="GEMINI_CONNECTION_TEST_FAILED",
