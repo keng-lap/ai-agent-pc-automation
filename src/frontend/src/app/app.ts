@@ -932,6 +932,26 @@ export class App implements AfterViewChecked {
     return result.available_versions.some((version) => this.isOfficialReleaseMatch(result, version));
   }
 
+  protected selectSoftwareScope(entryId: number, scope: 'user' | 'machine'): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const candidate = discovery?.result?.candidate;
+    if (!discovery?.packageId || !candidate || this.planning() || candidate.scope === scope) return;
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, status: 'verifying_manifest', proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: '', reservationId: undefined, error: undefined } }
+      : item));
+    this.planning.set(true);
+    defer(() => this.chatApi.discoverSoftware(discovery.packageId!, candidate.version, candidate.architecture, scope))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
+        error: () => this.setSoftwareDiscoveryError(entryId),
+      });
+  }
+
   protected selectSoftwareVersion(entryId: number, version: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
     const packageId = entry?.discovery?.packageId;
@@ -1024,6 +1044,7 @@ export class App implements AfterViewChecked {
     if (
       !discovery
       || !candidate
+      || candidate.scope !== 'user'
       || discovery.readiness?.platform_supported !== true
       || discovery.readiness.authenticode_verification_available !== true
       || discovery.readiness.publisher_identity_policy_available !== true
