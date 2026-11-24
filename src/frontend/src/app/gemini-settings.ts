@@ -39,7 +39,7 @@ import { ChatApi } from './chat/chat-api';
         <p class="message" role="status">{{ message() }}</p>
       }
       <p class="note">ต้องทดสอบ Model ที่เลือกให้ผ่านก่อนจึงจะบันทึกได้ หากเปลี่ยน Model หรือ Key ต้องทดสอบใหม่ ค่าเดิมจะยังใช้งานอยู่จนกว่าจะบันทึกสำเร็จ</p>
-      <p class="note">Key เก็บในหน่วยความจำของ Backend เท่านั้น และจะถูกล้างเมื่อปิดหรือเริ่ม Backend ใหม่</p>
+      <p class="note">Key และ Model เก็บในหน่วยความจำของ Backend เท่านั้น เมื่อปิดหรือเริ่ม Backend ใหม่จะต้องตั้งค่าและทดสอบใหม่</p>
     </section>
   `,
   styles: [`
