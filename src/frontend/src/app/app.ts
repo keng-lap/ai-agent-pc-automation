@@ -19,6 +19,7 @@ import {
   UiLanguage,
 } from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
+import { ProviderSettingsComponent } from './provider-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 import { JobMonitorComponent } from './job-monitor/job-monitor';
 import { RuntimeDiagnosticsState } from './runtime-diagnostics.state';
@@ -378,7 +379,7 @@ function writeStoredConversationId(conversationId: string): void {
 
 @Component({
   selector: 'app-root',
-  imports: [GeminiSettingsComponent, WorkflowBuilderComponent, JobMonitorComponent],
+  imports: [GeminiSettingsComponent, ProviderSettingsComponent, WorkflowBuilderComponent, JobMonitorComponent],
   styleUrls: ['./app.css', './dry-run-flow.css', './software-discovery.css'],
   templateUrl: './app.html',
 })
