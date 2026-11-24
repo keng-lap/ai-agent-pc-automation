@@ -10,7 +10,13 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth_api import require_session
-from .runtime_diagnostics import emit_event, export_recent_events, is_enabled, set_enabled
+from .runtime_diagnostics import (
+    emit_event,
+    export_recent_events,
+    is_enabled,
+    set_enabled,
+    store_available,
+)
 
 router = APIRouter(
     prefix="/api/diagnostics",
@@ -26,13 +32,15 @@ class DiagnosticsModeRequest(BaseModel):
 
 @router.get("")
 def get_diagnostics_mode() -> dict[str, bool]:
-    return {"enabled": is_enabled()}
+    return {"enabled": is_enabled(), "storage_available": store_available()}
 
 
 @router.put("")
 def update_diagnostics_mode(payload: DiagnosticsModeRequest) -> dict[str, bool]:
+    if payload.enabled and not store_available():
+        raise HTTPException(status_code=503, detail="Diagnostics storage is unavailable.")
     enabled = set_enabled(payload.enabled)
-    return {"enabled": enabled}
+    return {"enabled": enabled, "storage_available": store_available()}
 
 
 class BrowserDiagnosticEvent(BaseModel):
@@ -66,6 +74,8 @@ def record_browser_event(payload: BrowserDiagnosticEvent, request: Request) -> d
 def export_diagnostics_events(
     limit: int = Query(default=5000, ge=1, le=20000),
 ) -> PlainTextResponse:
+    if not store_available():
+        raise HTTPException(status_code=503, detail="Diagnostics storage is unavailable.")
     events = export_recent_events(limit)
     content = "\n".join(
         json.dumps(event, ensure_ascii=True, separators=(",", ":"))
