@@ -780,7 +780,7 @@ describe('App chat UI (T-202)', () => {
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
     buttons.find((button) => button.textContent?.includes('ทดสอบ Model ที่เลือก'))?.click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Quota หรือ Rate Limit ของ AI Provider เต็ม');
+    expect(fixture.nativeElement.textContent).toContain('โควตา Gemini เต็มหรือเกินขีดจำกัด');
   });
 
   it('shows only the safe error type for an unclassified Gemini failure', async () => {
