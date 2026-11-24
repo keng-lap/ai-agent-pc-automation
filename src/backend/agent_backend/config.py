@@ -269,7 +269,7 @@ def load_settings(*, load_env_file: bool = True) -> Settings:
         real_install_enabled=release_authorization is not None,
         real_install_release_authorization=release_authorization,
         job_store_path=Path(
-            os.environ.get("JOB_STORE_PATH", str(default_state_directory() / "jobs.sqlite3"))
+            os.environ.get("JOB_STORE_PATH", str(default_state_directory() / "jobs" / "jobs.sqlite3"))
         ).expanduser(),
         **auth_settings,
     )
