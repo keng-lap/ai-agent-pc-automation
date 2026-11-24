@@ -21,17 +21,6 @@
           {{ !diagnosticsStorageAvailable() ? 'Diagnostics: UNAVAILABLE' : (diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF')) }}
         </button>
         @if (diagnosticsError()) { <small role="alert">{{ diagnosticsError() }}</small> }
-        <button type="button" class="rail-link" [disabled]="diagnosticsPublishBusy() || !diagnosticsStorageAvailable()" (click)="publishDiagnostics()">
-          {{ diagnosticsPublishBusy() ? (language() === 'th' ? 'กำลังส่ง Log...' : 'Publishing logs...') : (diagnosticsPublishStatus() === 'failed' ? (language() === 'th' ? 'Retry ส่ง Log' : 'Retry log upload') : (language() === 'th' ? 'ส่ง Log ตอนนี้' : 'Send logs now')) }}
-        </button>
-        @if (diagnosticsPublishMessage()) {
-          <small [attr.role]="diagnosticsPublishStatus() === 'failed' ? 'alert' : 'status'">{{ diagnosticsPublishMessage() }}</small>
-        }
-        @if (diagnosticsPublishUrl()) {
-          <a class="rail-link" [href]="diagnosticsPublishUrl()" target="_blank" rel="noopener noreferrer">
-            {{ language() === 'th' ? 'เปิด Log บน GitHub' : 'Open logs on GitHub' }}
-          </a>
-        }
       }
       <span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span>
     </div>
@@ -50,6 +39,43 @@
       <button type="button" [class.active]="language() === 'en'" [attr.aria-pressed]="language() === 'en'" (click)="setLanguage('en')">EN</button>
     </div>
   </header>
+
+  @if (authReady() && authEnabled() && authenticated() && (diagnosticsPublishMessage() || diagnosticsPublishBusy() || diagnosticsError())) {
+    <section class="diagnostics-status-banner"
+      [class.diagnostics-status-banner--running]="diagnosticsPublishStatus() === 'running'"
+      [class.diagnostics-status-banner--success]="diagnosticsPublishStatus() === 'succeeded'"
+      [class.diagnostics-status-banner--error]="diagnosticsPublishStatus() === 'failed' || !!diagnosticsError()"
+      [attr.role]="diagnosticsPublishStatus() === 'failed' || !!diagnosticsError() ? 'alert' : 'status'"
+      aria-live="polite" aria-atomic="true">
+      <div class="diagnostics-status-copy">
+        <strong>{{ diagnosticsPublishStatus() === 'running'
+          ? (language() === 'th' ? 'กำลังส่ง Diagnostics Log' : 'Publishing diagnostics logs')
+          : diagnosticsPublishStatus() === 'succeeded'
+            ? (language() === 'th' ? 'ส่ง Diagnostics Log สำเร็จ' : 'Diagnostics logs published')
+            : diagnosticsPublishStatus() === 'failed'
+              ? (language() === 'th' ? 'ส่ง Diagnostics Log ไม่สำเร็จ' : 'Diagnostics log publishing failed')
+              : 'Diagnostics' }}</strong>
+        <span>{{ diagnosticsError() || diagnosticsPublishMessage() }}</span>
+      </div>
+      <div class="diagnostics-status-actions">
+        @if (diagnosticsPublishStatus() === 'failed') {
+          <button type="button" class="new-chat-button" [disabled]="diagnosticsPublishBusy()" (click)="publishDiagnostics()">
+            {{ language() === 'th' ? 'ลองส่งอีกครั้ง' : 'Retry' }}
+          </button>
+        }
+        @if (diagnosticsPublishStatus() === 'succeeded' && diagnosticsPublishUrl()) {
+          <a class="new-chat-button diagnostics-github-link" [href]="diagnosticsPublishUrl()" target="_blank" rel="noopener noreferrer">
+            {{ language() === 'th' ? 'เปิด Log บน GitHub' : 'View logs on GitHub' }}
+          </a>
+        }
+        @if (!diagnosticsPublishBusy() && diagnosticsPublishStatus() !== 'running' && diagnosticsPublishStatus() !== 'succeeded') {
+          <button type="button" class="new-chat-button" [disabled]="!diagnosticsStorageAvailable()" (click)="publishDiagnostics()">
+            {{ language() === 'th' ? 'ส่ง Log ตอนนี้' : 'Send logs now' }}
+          </button>
+        }
+      </div>
+    </section>
+  }
 
   <div class="content-stage">
   @if (!authReady()) {
