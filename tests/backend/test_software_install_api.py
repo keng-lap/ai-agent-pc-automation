@@ -182,6 +182,7 @@ def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_
             "package_id": candidate.package_id,
             "version": candidate.version,
             "architecture": "x64",
+            "scope": "user",
         }
         return SimpleNamespace(status="CONDITIONAL", candidate=candidate)
 
@@ -371,6 +372,7 @@ def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypat
             "package_id": candidate.package_id,
             "version": candidate.version,
             "architecture": "x64",
+            "scope": "user",
         }
         return SimpleNamespace(status="CONDITIONAL", candidate=candidate)
 
@@ -385,3 +387,13 @@ def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypat
 
     assert getattr(error.value, "status_code", None) == 409
     assert stage_calls == []
+
+def test_proposal_request_rejects_machine_scope_until_elevated_helper_is_available():
+    with pytest.raises(Exception):
+        api.SoftwareInstallProposalRequest(
+            package_id="DBeaver.DBeaver.Community",
+            version="26.2.5",
+            architecture="x64",
+            scope="machine",
+        )
+
