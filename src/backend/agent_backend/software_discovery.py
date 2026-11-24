@@ -635,7 +635,6 @@ class WinGetManifestRepository:
         response_status = {
             "MISMATCH": "SOURCE_MISMATCH",
             "UNAVAILABLE": "SOURCE_CHECK_UNAVAILABLE",
-            "NOT_CHECKED": "SOURCE_CHECK_UNAVAILABLE",
         }.get(publisher_check.status, "CONDITIONAL")
         return DiscoveryResponse(
             status=response_status,
