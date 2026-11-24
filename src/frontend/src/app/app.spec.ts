@@ -629,6 +629,54 @@ describe('App chat UI (T-202)', () => {
       .some((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'))).toBe(false);
   });
 
+  it('revokes the previous verified proposal before changing its scope', async () => {
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('25.3.0'));
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.proposalCalls).toHaveLength(1);
+
+    const machineScope = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('Machine Scope'));
+    if (!machineScope) throw new Error('Machine Scope option was not rendered');
+    machineScope.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.revokeProposalCalls).toEqual(['f'.repeat(32)]);
+    expect(fixture.nativeElement.textContent).toContain('พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง');
+    expect(api.proposalCalls).toHaveLength(1);
+    expect(api.approvalChallengeCalls).toEqual([]);
+  });
+
   it('queues a verified real install only after exact TOTP approval', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     // Generic publisher trust does not depend on a per-package certificate pin or allowlist.
