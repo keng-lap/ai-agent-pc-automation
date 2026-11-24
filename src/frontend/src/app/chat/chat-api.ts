@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 export type UiLanguage = 'th' | 'en';
 export interface GeminiStatus { configured: boolean; model: string; }
-export interface DiagnosticsMode { enabled: boolean; }
+export interface DiagnosticsMode { enabled: boolean; storage_available: boolean; }
 export type BrowserDiagnosticCode = 'BROWSER_UNCAUGHT_ERROR' | 'BROWSER_UNHANDLED_REJECTION';
 export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
