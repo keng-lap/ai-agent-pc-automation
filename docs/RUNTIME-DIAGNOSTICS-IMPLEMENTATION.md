@@ -17,7 +17,8 @@
 - No request bodies, user chat text, cookies, authorization headers, TOTP codes, passwords, API keys, or exception messages are written to detailed diagnostics.
 - Exception telemetry records exception type and bounded frame locations only.
 - Export applies a strict field allowlist: status, duration, route template, method, candidate/version counts, exception type, and stack frame locations.
-- Publishing is explicit; no automatic GitHub upload occurs.
+- Publishing is available from the authenticated UI and starts asynchronously; switching Diagnostics OFF also triggers one publish after detailed capture stops. No upload occurs per event.
+- Publish status exposes only a bounded state, Run ID, safe error category, and the validated GitHub run URL. Failed publishes can be retried from the UI; source events remain in the bounded local SQLite store until retention eviction.
 - Basic application error logging and Security Audit are not gated by Diagnostics mode.
 
 ## Safety boundary
