@@ -132,8 +132,8 @@ class FakeSource:
         return FakeResponse(payload)
 
 
-def test_official_release_listing_paginates_until_twenty_stable_versions():
-    versions = [f"26.{index}.0" for index in range(20)]
+def test_official_release_listing_reads_all_pages_and_ignores_non_version_tags():
+    versions = [f"26.{index}.0" for index in range(25)]
     calls = []
 
     def paginated_get(url, **kwargs):
@@ -149,6 +149,13 @@ def test_official_release_listing_paginates_until_twenty_stable_versions():
             }
             for version in versions[start:start + 10]
         ]
+        if page == 1:
+            releases.append({
+                "tag_name": "CN",
+                "html_url": "https://github.com/dbeaver/dbeaver/releases/tag/CN",
+                "draft": False,
+                "prerelease": False,
+            })
         return FakeResponse(releases)
 
     listed = DBeaverGitHubReleaseVerifier(http_get=paginated_get).list_official_versions(
@@ -156,9 +163,10 @@ def test_official_release_listing_paginates_until_twenty_stable_versions():
     )
 
     assert listed is not None
-    assert len(listed) == 20
+    assert len(listed) == 25
     assert set(listed) == set(versions)
-    assert calls == [1, 2]
+    assert "CN" not in listed
+    assert calls == [1, 2, 3]
 
 
 def test_discovery_reads_source_and_returns_conditional_candidate_only():
@@ -552,7 +560,7 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
         def get(self, url, **kwargs):
             if request_path(url).endswith("/DBeaver/DBeaver/Community"):
                 versions = [f"{major}.0.0" for major in range(1, 26)]
-                versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5"])
+                versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5", "CN"])
                 return FakeResponse([
                     {"name": version, "type": "dir"} for version in versions
                 ])
@@ -567,10 +575,11 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     )
 
     assert result.status == "VERSION_REQUIRED"
-    assert len(result.manifest_versions) == 20
+    assert len(result.manifest_versions) == 28
     assert result.manifest_versions[-3:] == ("26.0.0", "26.1.0", "26.2.5")
     assert result.available_versions == (VERSION,)
-    assert "7.0.0" not in result.manifest_versions
+    assert "7.0.0" in result.manifest_versions
+    assert "CN" not in result.manifest_versions
 
     selected = WinGetManifestRepository(
         http_get=VersionListingSource().get
