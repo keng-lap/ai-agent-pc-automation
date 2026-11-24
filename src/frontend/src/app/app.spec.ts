@@ -38,6 +38,7 @@ class FakeChatApi {
     notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
   };
   proposalCalls: Array<{ packageId: string; version: string; architecture: string; scope: string }> = [];
+  revokeProposalCalls: string[] = [];
   approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
   softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
   approvalErrorStatus: number | null = null;
@@ -186,6 +187,11 @@ class FakeChatApi {
   getSoftwareInstallJobForPlan(planId: string): Observable<unknown> {
     this.reservationRecoveryCalls.push(planId);
     return this.reservationRecoveryResponder(planId);
+  }
+
+  revokeSoftwareInstallProposal(planId: string): Observable<{ revoked: boolean; revoked_approvals: number }> {
+    this.revokeProposalCalls.push(planId);
+    return of({ revoked: true, revoked_approvals: 1 });
   }
 
   createSoftwareInstallProposal(packageId: string, version: string, architecture: string, scope: 'user'): Observable<unknown> {
