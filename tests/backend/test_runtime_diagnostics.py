@@ -156,12 +156,6 @@ def test_exception_events_include_safe_stack_without_exception_message(caplog):
 
 
 def test_diagnostics_store_persists_and_exports_bounded_structured_events(tmp_path):
-    import os
-
-    import pytest
-
-    if os.name == "nt":
-        pytest.skip("Windows diagnostics ACL behavior is covered by native storage integration.")
     store = diagnostics.RuntimeDiagnosticsStore(tmp_path / "diagnostics" / "runtime.sqlite3")
     try:
         event = {
