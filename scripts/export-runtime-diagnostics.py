@@ -16,6 +16,8 @@ from agent_backend.runtime_diagnostics import RuntimeDiagnosticsStore  # noqa: E
 
 ALLOWED_FIELDS = {
     "status_code",
+    "upstream_status",
+    "failure_code",
     "duration_ms",
     "route",
     "method",
