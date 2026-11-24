@@ -4,9 +4,12 @@ import { Observable } from 'rxjs';
 
 export type UiLanguage = 'th' | 'en';
 export interface GeminiStatus { configured: boolean; model: string; models: string[]; }
+export interface GrokStatus { configured: boolean; model: string; models: string[]; }
+export interface ProviderStatus { active: 'gemini' | 'grok'; gemini_configured: boolean; grok_configured: boolean; gemini_model: string; grok_model: string; }
 export interface DiagnosticsMode { enabled: boolean; storage_available: boolean; }
 export type BrowserDiagnosticCode = 'BROWSER_UNCAUGHT_ERROR' | 'BROWSER_UNHANDLED_REJECTION';
 export interface GeminiTestResult { connected: boolean; model: string; }
+export interface ProviderTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
 
@@ -40,7 +43,7 @@ export interface GeminiChatResponse {
   request_id: string;
   gemini_response: GeminiConversationResponse;
   gemini_raw_json: string;
-  provider: 'gemini';
+  provider: 'gemini' | 'grok';
   model: string;
   provider_connected: true;
 }
@@ -384,6 +387,30 @@ export class ChatApi {
     const payload: { model: string; api_key?: string } = { model };
     if (apiKey.trim()) payload.api_key = apiKey.trim();
     return this.http.post<GeminiTestResult>('/api/settings/gemini/test', payload);
+  }
+
+  getGrokStatus(): Observable<GrokStatus> {
+    return this.http.get<GrokStatus>('/api/settings/grok');
+  }
+
+  saveGrokKey(apiKey: string, model: string): Observable<GrokStatus> {
+    const payload: { api_key?: string; model: string } = { model };
+    if (apiKey.trim()) payload.api_key = apiKey.trim();
+    return this.http.put<GrokStatus>('/api/settings/grok', payload);
+  }
+
+  testGrokConnection(model: string, apiKey: string): Observable<ProviderTestResult> {
+    const payload: { model: string; api_key?: string } = { model };
+    if (apiKey.trim()) payload.api_key = apiKey.trim();
+    return this.http.post<ProviderTestResult>('/api/settings/grok/test', payload);
+  }
+
+  getProviderStatus(): Observable<ProviderStatus> {
+    return this.http.get<ProviderStatus>('/api/settings/provider');
+  }
+
+  setActiveProvider(provider: 'gemini' | 'grok'): Observable<ProviderStatus> {
+    return this.http.put<ProviderStatus>('/api/settings/provider', { provider });
   }
 
   recordBrowserDiagnostic(
