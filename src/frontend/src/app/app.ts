@@ -935,39 +935,76 @@ export class App implements AfterViewChecked {
   protected selectSoftwareScope(entryId: number, scope: 'user' | 'machine'): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const candidate = discovery?.result?.candidate;
-    if (!discovery?.packageId || !candidate || this.planning() || candidate.scope === scope) return;
-    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
-      ? { ...item, discovery: { ...item.discovery, status: 'verifying_manifest', proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: '', reservationId: undefined, error: undefined } }
-      : item));
-    this.planning.set(true);
-    defer(() => this.chatApi.discoverSoftware(discovery.packageId!, candidate.version, candidate.architecture, scope))
-      .pipe(
-        timeout({ first: REQUEST_TIMEOUT_MS }),
-        take(1),
-        finalize(() => this.planning.set(false)),
-      )
-      .subscribe({
-        next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
-        error: () => this.setSoftwareDiscoveryError(entryId),
-      });
+    if (!candidate || candidate.scope === scope) return;
+    this.changeSoftwareScope(entryId, candidate.version, candidate.architecture, scope);
   }
 
   protected selectSoftwareScopeForVersion(entryId: number, version: string, scope: 'user' | 'machine'): void {
+    this.changeSoftwareScope(entryId, version, 'x64', scope);
+  }
+
+  private changeSoftwareScope(
+    entryId: number,
+    version: string,
+    architecture: 'x86' | 'x64' | 'arm64',
+    scope: 'user' | 'machine',
+  ): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
-    if (!discovery?.packageId || this.planning()) return;
-    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
-      ? { ...item, discovery: { ...item.discovery, status: 'verifying_manifest', proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: '', reservationId: undefined, error: undefined } }
-      : item));
+    if (!discovery?.packageId || this.planning() || discovery.reservationId) return;
+
+    const beginDiscovery = (): void => {
+      this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+        ? {
+            ...item,
+            discovery: {
+              ...item.discovery,
+              status: 'verifying_manifest',
+              proposal: undefined,
+              proposalStatus: undefined,
+              proposalError: undefined,
+              approvalChallenge: undefined,
+              totpCode: '',
+              reservationId: undefined,
+              error: undefined,
+            },
+          }
+        : item));
+      defer(() => this.chatApi.discoverSoftware(discovery.packageId!, version, architecture, scope))
+        .pipe(
+          timeout({ first: REQUEST_TIMEOUT_MS }),
+          take(1),
+          finalize(() => this.planning.set(false)),
+        )
+        .subscribe({
+          next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
+          error: () => this.setSoftwareDiscoveryError(entryId),
+        });
+    };
+
     this.planning.set(true);
-    defer(() => this.chatApi.discoverSoftware(discovery.packageId!, version, 'x64', scope))
-      .pipe(
-        timeout({ first: REQUEST_TIMEOUT_MS }),
-        take(1),
-        finalize(() => this.planning.set(false)),
-      )
+    if (!discovery.proposal) {
+      beginDiscovery();
+      return;
+    }
+    defer(() => this.chatApi.revokeSoftwareInstallProposal(discovery.proposal!.plan_id))
+      .pipe(timeout({ first: REQUEST_TIMEOUT_MS }), take(1))
       .subscribe({
-        next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
-        error: () => this.setSoftwareDiscoveryError(entryId),
+        next: (result) => {
+          if (!result || result.revoked !== true) {
+            this.planning.set(false);
+            this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+              ? { ...item, discovery: { ...item.discovery, proposalError: this.language() === 'th' ? 'ยกเลิกข้อเสนอเดิมไม่สำเร็จ จึงยังเปลี่ยน Scope ไม่ได้' : 'The previous proposal was not revoked; Scope was not changed.' } }
+              : item));
+            return;
+          }
+          beginDiscovery();
+        },
+        error: () => {
+          this.planning.set(false);
+          this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, proposalError: this.language() === 'th' ? 'ยกเลิกข้อเสนอเดิมไม่สำเร็จ จึงยังเปลี่ยน Scope ไม่ได้' : 'Could not revoke the previous proposal; Scope was not changed.' } }
+            : item));
+        },
       });
   }
 
