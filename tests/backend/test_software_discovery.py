@@ -532,6 +532,28 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
 
 
 
+def test_discovery_accepts_manifest_filenames_containing_plus_signs():
+    class PlusFilenameSource(FakeSource):
+        def __init__(self):
+            super().__init__()
+            self.documents = {
+                name.replace("DBeaver", "DBeaver++"): document
+                for name, document in self.documents.items()
+            }
+
+    result = WinGetManifestRepository(
+        http_get=PlusFilenameSource().get
+    ).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.package_id == PACKAGE_ID
+
+
 def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata():
     class IncompleteMetadataSource(FakeSource):
         def get(self, url, **kwargs):
