@@ -34,6 +34,30 @@ def get_model_name() -> str:
         return _model_name
 
 
+def get_api_key() -> str | None:
+    """Return the configured key to trusted backend code under the provider lock."""
+    with _lock:
+        return _api_key
+
+
+def save_tested_configuration(model: str, api_key: str | None) -> bool:
+    """Atomically consume matching test evidence and activate the tested pair."""
+    selected_model = validate_model_name(model)
+    with _lock:
+        key = api_key if api_key is not None else _api_key
+        if not key:
+            return False
+        fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        global _tested_configuration, _api_key, _model_name
+        if _tested_configuration != (selected_model, fingerprint):
+            return False
+        if api_key is not None:
+            _api_key = api_key
+        _model_name = selected_model
+        _tested_configuration = None
+        return True
+
+
 def validate_model_name(model: str) -> str:
     value = model.strip()
     if value not in SUPPORTED_MODELS:
