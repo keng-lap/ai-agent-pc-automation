@@ -125,6 +125,16 @@ def start_publish(reason: str = "manual") -> dict[str, Any]:
             return dict(_state)
         run_id = str(uuid.uuid4())
         session_id = _state.get("session_id") if reason == "retry" else current_capture_session_id()
+        if not session_id:
+            _state.update(
+                status="failed",
+                run_id=str(uuid.uuid4()),
+                session_id=None,
+                reason=reason if reason in {"manual", "diagnostics_disabled", "retry"} else "manual",
+                url=None,
+                error_code="no_events",
+            )
+            return dict(_state)
         _state.update(
             status="running",
             run_id=run_id,
