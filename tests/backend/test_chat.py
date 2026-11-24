@@ -24,6 +24,7 @@ client = TestClient(
 def clear_provider_key(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", None)
     monkeypatch.setattr(gemini, "_model_name", gemini.MODEL_NAME)
+    monkeypatch.setattr(gemini, "_tested_configuration", None)
     chat_module._conversation_store.clear()
 
 
@@ -60,6 +61,12 @@ def test_status_does_not_expose_api_key():
 
 
 def test_save_key_keeps_it_out_of_response(monkeypatch):
+    monkeypatch.setattr(gemini, "test_connection", lambda **_kwargs: None)
+    test_response = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.1-flash-lite", "api_key": "test-gemini-api-key-123456789"},
+    )
+    assert test_response.status_code == 200
     response = client.put(
         "/api/settings/gemini",
         json={"api_key": "test-gemini-api-key-123456789"},
@@ -149,8 +156,11 @@ def test_chat_generation_uses_saved_selected_model(monkeypatch):
     assert calls[0]["model"] == "gemini-2.5-flash"
 
 
-def test_save_model_without_replacing_existing_key():
+def test_save_model_without_replacing_existing_key(monkeypatch):
     gemini.save_api_key("existing-gemini-api-key-123456")
+    monkeypatch.setattr(gemini, "test_connection", lambda **_kwargs: None)
+    tested = client.post("/api/settings/gemini/test", json={"model": "gemini-2.5-pro"})
+    assert tested.status_code == 200
     response = client.put(
         "/api/settings/gemini",
         json={"model": "gemini-2.5-pro"},
