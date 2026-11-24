@@ -518,14 +518,10 @@
                         </p>
                         <div class="software-version-list">
                           @for (version of discovery.result.available_versions; track version) {
-                            <button class="software-version" type="button"
-                              [disabled]="planning() || !isOfficialReleaseMatch(discovery.result, version)"
-                              [attr.aria-disabled]="!isOfficialReleaseMatch(discovery.result, version)"
+                            <button class="software-version" type="button" [disabled]="planning()"
                               (click)="selectSoftwareVersion(entry.id, version)">
                               <strong>{{ version }}</strong>
-                              <small>{{ isOfficialReleaseMatch(discovery.result, version)
-                                ? (language() === 'th' ? 'ตรงกับ Release ทางการ · เลือกได้' : 'Matches official release · selectable')
-                                : (language() === 'th' ? 'ไม่พบ Release ทางการเวอร์ชันนี้ · ถูกบล็อก' : 'No matching official release · blocked') }}</small>
+                              <small>{{ language() === 'th' ? 'ตรงกับ Release ทางการ · เลือกได้' : 'Matches official release · selectable' }}</small>
                             </button>
                           }
                         </div>
