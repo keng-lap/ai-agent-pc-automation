@@ -10,6 +10,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth_api import require_session
+from .diagnostics_publisher import get_publish_status, start_publish
 from .runtime_diagnostics import (
     emit_event,
     export_recent_events,
@@ -40,6 +41,10 @@ def update_diagnostics_mode(payload: DiagnosticsModeRequest) -> dict[str, bool]:
     if payload.enabled and not store_available():
         raise HTTPException(status_code=503, detail="Diagnostics storage is unavailable.")
     enabled = set_enabled(payload.enabled)
+    if not enabled:
+        # Start publishing only after detailed capture has stopped. The daemon thread
+        # keeps the OFF response immediate; failures remain retryable from the UI.
+        start_publish("diagnostics_disabled")
     return {"enabled": enabled, "storage_available": store_available()}
 
 
@@ -96,3 +101,23 @@ def export_diagnostics_events(
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@router.post("/publish")
+def publish_diagnostics() -> dict[str, object]:
+    """Start an explicit sanitized log publish without blocking the request."""
+    return start_publish("manual")
+
+
+@router.post("/publish/retry")
+def retry_diagnostics_publish() -> dict[str, object]:
+    """Retry publishing the retained local diagnostics event store."""
+    status = get_publish_status()
+    if status["status"] == "running":
+        return status
+    return start_publish("retry")
+
+
+@router.get("/publish/status")
+def diagnostics_publish_status() -> dict[str, object]:
+    return get_publish_status()
