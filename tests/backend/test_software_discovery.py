@@ -363,3 +363,38 @@ def test_manifest_source_retries_transient_server_errors_and_uses_actions_token(
         call[1]["headers"]["Authorization"] == "Bearer read-only-actions-token"
         for call in manifest_calls
     )
+
+
+def test_discovery_unavailable_preserves_upstream_http_status(monkeypatch):
+    monkeypatch.setattr("agent_backend.software_discovery.time.sleep", lambda _delay: None)
+
+    class UnavailableResponse(FakeResponse):
+        def __init__(self, status_code):
+            super().__init__({}, status_code=status_code)
+
+    repository = WinGetManifestRepository(
+        http_get=lambda *_args, **_kwargs: UnavailableResponse(503)
+    )
+
+    with pytest.raises(DiscoveryUnavailable) as captured:
+        repository._get_json("/repos/microsoft/winget-pkgs/commits/master")
+
+    assert captured.value.upstream_status == 503
+    assert captured.value.failure_code == "upstream_http_error"
+
+
+def test_discovery_not_found_preserves_upstream_404(monkeypatch):
+    monkeypatch.setattr("agent_backend.software_discovery.time.sleep", lambda _delay: None)
+
+    class NotFoundResponse(FakeResponse):
+        def __init__(self):
+            super().__init__({}, status_code=404)
+
+    repository = WinGetManifestRepository(
+        http_get=lambda *_args, **_kwargs: NotFoundResponse()
+    )
+
+    with pytest.raises(DiscoveryNotFound) as captured:
+        repository._get_json("/repos/microsoft/winget-pkgs/commits/master")
+
+    assert captured.value.upstream_status == 404
