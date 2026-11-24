@@ -95,6 +95,7 @@ export interface SoftwareDiscoveryResponse {
   status: 'VERSION_REQUIRED' | 'CONDITIONAL' | 'SOURCE_MISMATCH' | 'SOURCE_CHECK_UNAVAILABLE';
   package_id: string;
   available_versions: string[];
+  official_versions: string[] | null;
   candidate: SoftwareInstallerCandidate | null;
   source: 'winget-community-repository';
 }
