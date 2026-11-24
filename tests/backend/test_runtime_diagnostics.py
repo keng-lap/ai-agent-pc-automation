@@ -249,3 +249,25 @@ def test_browser_event_api_rejects_raw_stack_paths_and_messages():
     diagnostics.set_enabled(False)
 
     assert response.status_code == 422
+
+
+
+def test_disabling_diagnostics_starts_async_log_publish(monkeypatch):
+    from agent_backend import diagnostics_api
+
+    calls = []
+    monkeypatch.setattr(diagnostics_api, "store_available", lambda: True)
+    monkeypatch.setattr(
+        diagnostics_api,
+        "start_publish",
+        lambda reason: calls.append(reason) or {"status": "running"},
+    )
+    diagnostics.set_enabled(True)
+
+    response = diagnostics_api.update_diagnostics_mode(
+        diagnostics_api.DiagnosticsModeRequest(enabled=False)
+    )
+
+    assert response == {"enabled": False, "storage_available": True}
+    assert calls == ["diagnostics_disabled"]
+    assert diagnostics.is_enabled() is False
