@@ -52,7 +52,7 @@ boundary.
   Agent security boundary.
 - Diagnostic mode must not expose stack traces to the browser response; detailed traces stay in
   local diagnostic logs.
-- Publishing is an explicit operator action. Sanitize again before pushing to a dedicated branch;
+- Publishing is available through an authenticated UI action and is also triggered asynchronously when Diagnostics is switched OFF. Sanitize again before pushing to a dedicated branch;
   never auto-publish on every event.
 
 ## Log destinations and publishing
@@ -74,15 +74,14 @@ boundary.
 - Secret-redaction tests cover headers, cookies, query strings, exception text, and structured fields.
 - Tests prove diagnostic mode cannot affect Real Install, Approval, TOTP, Publisher verification,
   or WinGet source trust decisions.
-- Logs can be explicitly published to `diagnostics/runtime-logs` and inspected from GitHub without
-  asking the operator to upload files or screenshots.
+- Logs can be published from the UI to `diagnostics/runtime-logs`, automatically after Diagnostics is switched OFF, and retried after a failure. The UI reports the Run ID and GitHub link without asking the operator to upload files or screenshots.
 - No live installation is performed as part of diagnostics implementation or testing.
 
 ## Explicit exclusions
 
 - No log viewer/dashboard in this initial scope.
 - No mobile remote control, multi-machine management, or Phase 6 work.
-- No automatic GitHub uploads on each event.
+- No automatic GitHub uploads on each event; publishing occurs only on an explicit send or when Diagnostics is switched OFF.
 - No independent native security review.
 - No two-Windows-logon-session coordination tests.
 - No changes to Real Install approval policy or execution semantics.
