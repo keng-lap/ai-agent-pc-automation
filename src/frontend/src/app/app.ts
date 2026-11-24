@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { defer, finalize, switchMap, take, takeWhile, timeout, TimeoutError, timer } from 'rxjs';
+import { defer, exhaustMap, finalize, take, takeUntil, takeWhile, timeout, TimeoutError, timer } from 'rxjs';
 import {
   AuthSession,
   BrowserDiagnosticCode,
@@ -562,9 +562,11 @@ export class App implements AfterViewChecked {
       ? 'กำลังส่ง Log ไปยัง GitHub...'
       : 'Publishing logs to GitHub...');
     timer(0, 1000).pipe(
-      switchMap(() => defer(() => this.chatApi.getDiagnosticsPublishStatus())),
+      exhaustMap(() => defer(() => this.chatApi.getDiagnosticsPublishStatus()).pipe(
+        timeout({ first: 5000 }),
+      )),
       takeWhile((status) => status.status === 'running', true),
-      take(180),
+      takeUntil(timer(180_000)),
       finalize(() => {
         this.diagnosticsPublishBusy.set(false);
         if (this.diagnosticsPublishStatus() === 'running') {
