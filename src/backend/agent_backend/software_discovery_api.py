@@ -138,4 +138,19 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
         correlation=getattr(request.state, "correlation_id", "unknown"),
         fields={"status_code": 200, "available_version_count": len(result.available_versions)},
     )
+    if result.candidate is not None:
+        emit_event(
+            event_code="PUBLISHER_" + result.candidate.publisher_verification,
+            component="publisher",
+            stage="publisher_verification",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity=(
+                "ERROR" if result.candidate.publisher_verification in {"MISMATCH", "UNAVAILABLE"}
+                else "INFO"
+            ),
+            fields={
+                "official_version": result.candidate.official_version,
+                "status_code": 200,
+            },
+        )
     return result.model_dump(mode="json")
