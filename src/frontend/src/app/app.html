@@ -15,7 +15,13 @@
       <p>การติดตั้งจริงต้องตรวจสอบแหล่งที่มาและ Publisher พร้อมยืนยัน TOTP ก่อน Worker ทำงานบนเครื่องนี้</p>
       <span class="safety-mode">APPROVAL GATED</span>
     </section>
-    <div class="rail-bottom"><span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span></div>
+    <div class="rail-bottom">
+      <button type="button" class="rail-link" [disabled]="diagnosticsBusy()" [attr.aria-pressed]="diagnosticsEnabled()" (click)="toggleDiagnostics()">
+        {{ diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF') }}
+      </button>
+      @if (diagnosticsError()) { <small role="alert">{{ diagnosticsError() }}</small> }
+      <span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span>
+    </div>
   </aside>
   <div class="main-column" id="top">
   <header class="topbar">
