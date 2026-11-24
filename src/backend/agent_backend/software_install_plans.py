@@ -158,6 +158,21 @@ class SoftwareInstallPlanStore:
             self._plans[plan.plan_id] = plan
         return plan
 
+    def revoke(self, plan_id: str, *, owner_id: str) -> SoftwareInstallPlan:
+        """Remove one unconsumed owner-scoped proposal from the active registry."""
+        if not isinstance(plan_id, str) or len(plan_id) != 32:
+            raise InstallPlanNotFound("install plan not found")
+        if not isinstance(owner_id, str) or not owner_id.strip():
+            raise InstallPlanNotFound("install plan not found")
+        owner_digest = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()
+        now = self._now()
+        with self._lock:
+            plan = self._plans.get(plan_id)
+            if plan is None or plan.owner_digest != owner_digest or now >= plan.expires_at:
+                raise InstallPlanNotFound("install plan not found")
+            self._plans.pop(plan_id, None)
+            return plan
+
     def get(self, plan_id: str, *, owner_id: str) -> SoftwareInstallPlan:
         if not isinstance(plan_id, str) or len(plan_id) != 32:
             raise InstallPlanNotFound("install plan not found")
