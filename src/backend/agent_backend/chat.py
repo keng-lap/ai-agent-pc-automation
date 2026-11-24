@@ -7,7 +7,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from google.genai import types
@@ -264,7 +264,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
             emit_exception(
                 event_code="GEMINI_REQUEST_FAILED",
                 component="gemini",
-                stage=exc.stage or "provider_generation",
+                stage="provider_generation",
                 correlation=correlation,
                 error=exc,
                 fields={"provider_error_code": exc.code},
@@ -290,7 +290,7 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
                 "duration_ms": round((time.perf_counter() - started) * 1000, 2),
             },
         )
-        request_id = str(uuid4())
+        request_id = correlation
         normalized = structured.model_dump(mode="json")
         conversation.turns.append((payload.message, structured.message))
         del conversation.turns[:-MAX_CONTEXT_PAIRS]
