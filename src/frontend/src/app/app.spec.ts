@@ -780,7 +780,7 @@ describe('App chat UI (T-202)', () => {
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
     buttons.find((button) => button.textContent?.includes('ทดสอบ Model ที่เลือก'))?.click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('โควตา Gemini เต็มหรือเกินขีดจำกัด');
+    expect(fixture.nativeElement.textContent).toContain('Quota หรือ Rate Limit ของ AI Provider เต็ม');
   });
 
   it('shows only the safe error type for an unclassified Gemini failure', async () => {
@@ -869,10 +869,10 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 501, error: { detail: 'internal' } }, thai: 'Backend', english: 'internal error' },
       { error: { status: 500, error: { detail: 42 } }, thai: 'Backend', english: 'Cannot reach the backend' },
       { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
-      { error: { status: 502, error: { detail: { code: 'key_or_access' } } }, thai: 'AI Provider ปฏิเสธ API Key', english: 'Gemini rejected the API key' },
-      { error: { status: 502, error: { detail: { code: 'quota_exceeded' } } }, thai: 'โควตา Gemini เต็ม', english: 'Gemini quota is exhausted' },
+      { error: { status: 502, error: { detail: { code: 'key_or_access' } } }, thai: 'AI Provider ปฏิเสธ API Key', english: 'The AI provider rejected the API key' },
+      { error: { status: 502, error: { detail: { code: 'quota_exceeded' } } }, thai: 'Quota หรือ Rate Limit ของ AI Provider เต็ม', english: 'The AI provider quota or rate limit was exceeded' },
       { error: { status: 502, error: { detail: { code: 'model_unavailable' } } }, thai: 'ไม่พบโมเดล Gemini', english: 'configured Gemini model is unavailable' },
-      { error: { status: 502, error: { detail: { code: 'provider_unavailable' } } }, thai: 'บริการ Gemini ขัดข้อง', english: 'Gemini is temporarily unavailable' },
+      { error: { status: 502, error: { detail: { code: 'provider_unavailable' } } }, thai: 'บริการ AI Provider ขัดข้อง', english: 'The AI provider is temporarily unavailable' },
       { error: { status: 409 }, thai: 'กรุณาตั้งค่า Gemini API Key', english: 'configure your Gemini API key' },
       { error: { status: 503 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
       { error: { status: 504 }, thai: 'เชื่อมต่อ Backend ไม่ได้', english: 'Cannot reach the backend' },
