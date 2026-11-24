@@ -67,6 +67,8 @@ try {
     # Move published bundles older than RetentionDays to archive/runs; do not delete them.
     $cutoff = (Get-Date).ToUniversalTime().AddDays(-$RetentionDays)
     $runsRoot = Join-Path $worktree "runs"
+    $archiveRoot = Join-Path $worktree "archive\\runs"
+    New-Item -ItemType Directory -Force -Path $archiveRoot | Out-Null
     if (Test-Path -LiteralPath $runsRoot) {
         foreach ($oldRun in Get-ChildItem -LiteralPath $runsRoot -Directory) {
             $oldSummary = Join-Path $oldRun.FullName "SUMMARY.md"
