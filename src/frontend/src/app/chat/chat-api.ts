@@ -92,7 +92,7 @@ export interface SoftwareInstallerCandidate {
 }
 
 export interface SoftwareDiscoveryResponse {
-  status: 'VERSION_REQUIRED' | 'CONDITIONAL' | 'SOURCE_MISMATCH' | 'SOURCE_CHECK_UNAVAILABLE';
+  status: 'VERSION_REQUIRED' | 'SCOPE_REQUIRED' | 'CONDITIONAL' | 'SOURCE_MISMATCH' | 'SOURCE_CHECK_UNAVAILABLE';
   package_id: string;
   available_versions: string[];
   manifest_versions: string[];
