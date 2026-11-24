@@ -3,6 +3,7 @@ import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } fr
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
 import {
   AuthSession,
+  DiagnosticsMode,
   ChatApi,
   ConversationHistory,
   GeminiChatResponse,
@@ -397,6 +398,9 @@ export class App implements AfterViewChecked {
   protected readonly clearing = signal(false);
   protected readonly conversationNotice = signal('');
   private readonly conversationId = signal('');
+  protected readonly diagnosticsEnabled = signal(false);
+  protected readonly diagnosticsBusy = signal(false);
+  protected readonly diagnosticsError = signal('');
   protected readonly authReady = signal(false);
   protected readonly authEnabled = signal(false);
   protected readonly authenticated = signal(false);
@@ -411,6 +415,7 @@ export class App implements AfterViewChecked {
   constructor() {
     this.document.documentElement.lang = this.language();
     this.refreshAuthSession();
+    this.refreshDiagnosticsMode();
     const storedConversationId = readStoredConversationId();
     const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
     this.conversationId.set(conversationId);
@@ -426,6 +431,36 @@ export class App implements AfterViewChecked {
     if (log) log.scrollTop = log.scrollHeight;
   }
 
+
+  protected refreshDiagnosticsMode(): void {
+    defer(() => this.chatApi.getDiagnosticsMode())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (mode: DiagnosticsMode) => this.diagnosticsEnabled.set(mode.enabled),
+        error: () => this.diagnosticsError.set(
+          this.language() === 'th' ? 'อ่านสถานะ Diagnostics ไม่สำเร็จ' : 'Could not read diagnostics status.',
+        ),
+      });
+  }
+
+  protected toggleDiagnostics(): void {
+    if (this.diagnosticsBusy()) return;
+    const nextValue = !this.diagnosticsEnabled();
+    this.diagnosticsBusy.set(true);
+    this.diagnosticsError.set('');
+    defer(() => this.chatApi.setDiagnosticsMode(nextValue))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        finalize(() => this.diagnosticsBusy.set(false)),
+      )
+      .subscribe({
+        next: (mode: DiagnosticsMode) => this.diagnosticsEnabled.set(mode.enabled),
+        error: () => this.diagnosticsError.set(
+          this.language() === 'th' ? 'เปลี่ยนโหมด Diagnostics ไม่สำเร็จ' : 'Could not change diagnostics mode.',
+        ),
+      });
+  }
 
   protected refreshAuthSession(): void {
     defer(() => this.chatApi.getAuthSession())
