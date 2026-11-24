@@ -453,7 +453,6 @@ export class App implements AfterViewChecked {
           this.diagnosticsStorageAvailable.set(mode.storage_available);
           this.diagnosticsEnabled.set(mode.enabled);
           this.diagnosticsState.setEnabled(mode.enabled);
-          this.diagnosticsState.setEnabled(mode.enabled);
           if (!mode.storage_available) {
             this.diagnosticsError.set(this.language() === 'th'
               ? 'พื้นที่จัดเก็บ Diagnostics ไม่พร้อมใช้งาน'
@@ -481,6 +480,7 @@ export class App implements AfterViewChecked {
         next: (mode: DiagnosticsMode) => {
           this.diagnosticsStorageAvailable.set(mode.storage_available);
           this.diagnosticsEnabled.set(mode.enabled);
+          this.diagnosticsState.setEnabled(mode.enabled);
         },
         error: () => this.diagnosticsError.set(
           this.language() === 'th' ? 'เปลี่ยนโหมด Diagnostics ไม่สำเร็จ' : 'Could not change diagnostics mode.',
