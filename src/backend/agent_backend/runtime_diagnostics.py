@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import threading
 import traceback
+from contextvars import ContextVar, Token
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ _lock = threading.RLock()
 _enabled = False
 _store_lock = threading.RLock()
 _store: RuntimeDiagnosticsStore | None = None
+_workflow_context: ContextVar[str] = ContextVar("runtime_diagnostics_workflow_id", default="unknown")
 
 
 class RuntimeDiagnosticsStore:
@@ -122,6 +124,14 @@ def close_store() -> None:
             _store = None
 
 
+def set_workflow_context(workflow_id: str) -> Token[str]:
+    return _workflow_context.set(workflow_id[:36])
+
+
+def reset_workflow_context(token: Token[str]) -> None:
+    _workflow_context.reset(token)
+
+
 def is_enabled() -> bool:
     with _lock:
         return _enabled
@@ -174,6 +184,7 @@ def emit_event(
         "component": component[:64],
         "stage": stage[:64],
         "correlation_id": correlation[:36],
+        "workflow_id": _workflow_context.get(),
         "fields": safe_fields,
     }
     serialized = json.dumps(record, ensure_ascii=True, separators=(",", ":"))
