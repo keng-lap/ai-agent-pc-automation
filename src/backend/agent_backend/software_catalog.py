@@ -343,7 +343,7 @@ class MicrosoftWinGetCatalogIndex:
             # package ID, or moniker. This supports natural-language product names
             # such as "DBeaver Community" while keeping package identity catalog-owned.
             search_terms = tuple(
-                dict.fromkeys(re.findall(r"[^\\W_]+", normalized.casefold()))
+                dict.fromkeys(re.findall(r"[^\W_]+", normalized.casefold()))
             ) or (normalized.casefold(),)
             term_predicate = " AND ".join(
                 "("
