@@ -113,6 +113,8 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     || !(value['official_versions'] === null
       || (Array.isArray(value['official_versions'])
         && value['official_versions'].every((version) => typeof version === 'string')))
+    || !Array.isArray(value['available_scopes'])
+    || !value['available_scopes'].every((scope) => scope === 'user' || scope === 'machine')
   ) return false;
   if (value['status'] === 'VERSION_REQUIRED') {
     return value['candidate'] === null;
@@ -125,7 +127,7 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && typeof candidate['publisher'] === 'string'
     && typeof candidate['version'] === 'string'
     && ['x86', 'x64', 'arm64'].includes(String(candidate['architecture']))
-    && candidate['scope'] === 'user'
+    && (candidate['scope'] === 'user' || candidate['scope'] === 'machine')
     && typeof candidate['installer_type'] === 'string'
     && typeof candidate['installer_url'] === 'string'
     && candidate['installer_url'].startsWith('https://')
