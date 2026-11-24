@@ -505,12 +505,35 @@
                   }
                   @if (discovery.status === 'version_required' && discovery.result) {
                     <div class="detail-heading">{{ language() === 'th' ? 'เลือกเวอร์ชันที่ต้องการ' : 'Choose an exact version' }}</div>
-                    <p class="detail-meta">{{ discovery.packageId }} — {{ language() === 'th' ? 'ไม่มีการเลือกเวอร์ชันล่าสุดให้อัตโนมัติ' : 'No version is selected automatically.' }}</p>
-                    <div class="software-version-list">
-                      @for (version of discovery.result.available_versions; track version) {
-                        <button class="software-version" type="button" [disabled]="planning()" (click)="selectSoftwareVersion(entry.id, version)">{{ version }}</button>
+                    <p class="detail-meta">{{ discovery.packageId }} — {{ language() === 'th' ? 'เปรียบเทียบเวอร์ชันจาก WinGet กับ Release ทางการก่อนเลือก' : 'Compare WinGet versions with official releases before choosing.' }}</p>
+                    @if (discovery.result.official_versions === null) {
+                      <div class="tool-preview installer-actions--blocked" role="alert">
+                        {{ language() === 'th' ? 'ตรวจสอบรายการ Release ทางการไม่ได้ จึงยังเลือกเวอร์ชันหรืออนุมัติติดตั้งไม่ได้' : 'Official releases could not be verified. Version selection and installation approval are blocked.' }}
+                      </div>
+                    } @else {
+                      <p class="detail-meta">
+                        {{ language() === 'th' ? 'Release ทางการล่าสุดที่ตรวจพบ' : 'Latest verified official release' }}:
+                        {{ discovery.result.official_versions.length ? discovery.result.official_versions[discovery.result.official_versions.length - 1] : (language() === 'th' ? 'ไม่พบ Release' : 'No releases found') }}
+                      </p>
+                      <div class="software-version-list">
+                        @for (version of discovery.result.available_versions; track version) {
+                          <button class="software-version" type="button"
+                            [disabled]="planning() || !discovery.result.official_versions.includes(version)"
+                            [attr.aria-disabled]="!discovery.result.official_versions.includes(version)"
+                            (click)="selectSoftwareVersion(entry.id, version)">
+                            <strong>{{ version }}</strong>
+                            <small>{{ discovery.result.official_versions.includes(version)
+                              ? (language() === 'th' ? 'ตรงกับ Release ทางการ · เลือกได้' : 'Matches official release · selectable')
+                              : (language() === 'th' ? 'ไม่พบ Release ทางการเวอร์ชันนี้ · ถูกบล็อก' : 'No matching official release · blocked') }}</small>
+                          </button>
+                        }
+                      </div>
+                      @if (!discovery.result.available_versions.some(version => discovery.result?.official_versions?.includes(version))) {
+                        <div class="tool-preview installer-actions--blocked" role="alert">
+                          {{ language() === 'th' ? 'ไม่มีเวอร์ชันจาก WinGet ที่ตรงกับ Release ทางการ จึงไม่สามารถดำเนินการต่อได้' : 'No WinGet version matches an official release. The workflow cannot continue.' }}
+                        </div>
                       }
-                    </div>
+                    }
                   }
                   @if (discovery.status === 'verifying_manifest') {
                     <p class="detail-meta" role="status">{{ language() === 'th' ? 'กำลังตรวจสอบ Manifest ของเวอร์ชันที่เลือก...' : 'Verifying the selected version manifest...' }}</p>
