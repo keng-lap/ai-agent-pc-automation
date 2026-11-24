@@ -15,6 +15,22 @@ test.beforeEach(async ({ page }) => {
     contentType: 'application/json',
     body: JSON.stringify({ configured: false, model: 'test-model' }),
   }));
+  await page.route('**/api/settings/provider', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      active: 'gemini',
+      gemini_configured: false,
+      grok_configured: false,
+      gemini_model: 'test-model',
+      grok_model: 'grok-4.7',
+    }),
+  }));
+  await page.route('**/api/settings/grok', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ configured: false, model: 'grok-4.7', models: ['grok-4.7'] }),
+  }));
 });
 
 
@@ -71,5 +87,5 @@ test('mobile dashboard keeps the primary navigation available', async ({ page })
 
   await expect(page.getByRole('navigation', { name: 'นำทาง' })).toBeVisible();
   await expect(page.getByRole('link', { name: /สนทนากับ Agent/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: /ตั้งค่า Gemini/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /ตั้งค่า AI Provider/ })).toBeVisible();
 });
