@@ -25,6 +25,7 @@ from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
+from .runtime_privilege import enforce_backend_not_elevated
 from .runtime_diagnostics import (
     close_store,
     configure_store,
@@ -81,6 +82,9 @@ def enforce_single_worker(*, environ=None, argv=None) -> None:
 
 
 def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
+    # Backend and its in-process Agent must never inherit an elevated token.
+    # UAC is reserved for a separately signed Elevated Installer Helper.
+    enforce_backend_not_elevated()
     enforce_single_worker()
     validate_policy_configuration()
     settings = settings or load_settings()
