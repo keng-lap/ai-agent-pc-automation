@@ -141,7 +141,7 @@ def test_scope_change_revokes_all_active_approvals_for_exact_plan(tmp_path):
             ("approval-scope-change",),
         ).fetchone()
     assert state == "REVOKED"
-    assert audit == ("approval.revoked", "proposal_scope_changed")
+    assert audit == ("approval.revoked", "owner_revoked")
 
 
 def test_scope_change_cannot_revoke_approval_after_install_is_queued(tmp_path):
