@@ -28,6 +28,7 @@ GITHUB_API_ORIGIN = "https://api.github.com"
 USER_AGENT = "ai-agent-pc-automation-trusted-discovery/1.0"
 MAX_RESPONSE_BYTES = 1_000_000
 MAX_MANIFEST_FILES = 12
+MAX_AVAILABLE_VERSIONS = 20
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -287,7 +288,8 @@ class WinGetManifestRepository:
                     and item.get("type") == "dir"
                     and isinstance(item.get("name"), str)
                     and VERSION_PATTERN.fullmatch(item["name"])
-                }
+                },
+                key=_version_sort_key,
             )
         )
         if not versions:
@@ -296,7 +298,7 @@ class WinGetManifestRepository:
             return DiscoveryResponse(
                 status="VERSION_REQUIRED",
                 package_id=normalized_id,
-                available_versions=versions[-20:],
+                available_versions=versions[-MAX_AVAILABLE_VERSIONS:],
             )
         if version not in versions:
             raise DiscoveryNotFound("requested package version was not found")
@@ -623,6 +625,16 @@ class WinGetManifestRepository:
                     if callable(close):
                         close()
         raise DiscoveryUnavailable("approved package source could not be read safely")
+
+
+def _version_sort_key(value: str) -> tuple[tuple[int, int | str], ...]:
+    """Sort dotted/alphanumeric versions by numeric components, not lexically."""
+    parts = re.split(r"(\\d+)", value.casefold())
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part)
+        for part in parts
+        if part
+    )
 
 
 def _manifest_package_path(package_id: str) -> str:
