@@ -444,8 +444,8 @@ export class App implements AfterViewChecked {
       ? error.name
       : undefined;
     const stack = error instanceof Error && typeof error.stack === 'string'
-      ? error.stack.split('\\n').slice(1, 9)
-        .map((frame) => frame.match(/:(\\d+):(\\d+)\\)?$/))
+      ? error.stack.split('\n').slice(1, 9)
+        .map((frame) => frame.match(/:(\d+):(\d+)\)?$/))
         .filter((match): match is RegExpMatchArray => match !== null)
         .map((match) => `${match[1]}:${match[2]}`)
         .join('|')
