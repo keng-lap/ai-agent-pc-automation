@@ -64,6 +64,17 @@ def _matches_expected_publisher_subject(subject: str) -> bool:
 class CatalogUnavailable(RuntimeError):
     """The signed Microsoft catalog could not be loaded or trusted."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        upstream_status: int | None = None,
+        failure_code: str = "catalog_unavailable",
+    ) -> None:
+        super().__init__(message)
+        self.upstream_status = upstream_status
+        self.failure_code = failure_code
+
 
 class CatalogCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
@@ -420,7 +431,11 @@ class MicrosoftWinGetCatalogIndex:
                 )
                 try:
                     if response.status_code != 200:
-                        raise CatalogUnavailable("Microsoft catalog download was unsuccessful")
+                        raise CatalogUnavailable(
+                            "Microsoft catalog download was unsuccessful",
+                            upstream_status=response.status_code,
+                            failure_code="upstream_http_error",
+                        )
                     content_length = response.headers.get("Content-Length")
                     if content_length and int(content_length) > MAX_MSIX_BYTES:
                         raise CatalogUnavailable("Microsoft catalog exceeded its size limit")
