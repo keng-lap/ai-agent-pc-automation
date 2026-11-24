@@ -362,9 +362,9 @@ class FakeChatApi {
     return of({ configured: this.configured, model: 'gemini-3.1-flash-lite', models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-4-neon', 'gemini-4-carbon'] });
   }
 
-  saveGeminiKey(_apiKey: string): Observable<{ configured: boolean; model: string }> {
+  saveGeminiKey(_apiKey: string, _model: string): Observable<{ configured: boolean; model: string; models: string[] }> {
     this.configured = true;
-    return of({ configured: true, model: 'gemini-3.1-flash-lite' });
+    return of({ configured: true, model: 'gemini-3.1-flash-lite', models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-4-neon', 'gemini-4-carbon'] });
   }
 
   testGeminiConnection(_model: string, _apiKey: string): Observable<{ connected: boolean; model: string }> {
