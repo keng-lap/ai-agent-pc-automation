@@ -23,6 +23,7 @@ client = TestClient(
 @pytest.fixture(autouse=True)
 def clear_provider_key(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", None)
+    monkeypatch.setattr(gemini, "_model_name", gemini.MODEL_NAME)
     chat_module._conversation_store.clear()
 
 
@@ -121,6 +122,31 @@ def test_test_connection_uses_selected_model_and_candidate_key_without_saving(mo
     }]
     assert not gemini.is_configured()
     assert gemini.get_model_name() == "gemini-3.1-flash-lite"
+
+
+def test_chat_generation_uses_saved_selected_model(monkeypatch):
+    calls = []
+
+    class Response:
+        text = _response_json("model selected")
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    gemini.save_model_name("gemini-2.5-flash")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+    assert gemini.generate_universal_response("hello", type(
+        "Schema",
+        (),
+        {"model_json_schema": classmethod(lambda _cls: {"type": "OBJECT", "properties": {"message": {"type": "STRING"}}})},
+    )) == Response.text
+    assert calls[0]["model"] == "gemini-2.5-flash"
 
 
 def test_save_model_without_replacing_existing_key():
