@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import threading
@@ -34,7 +35,7 @@ def _run_publisher(run_id: str) -> None:
     try:
         if not script.is_file():
             raise FileNotFoundError("publisher_script_missing")
-        process_environment = dict(__import__("os").environ)
+        process_environment = os.environ.copy()
         process_environment["GIT_TERMINAL_PROMPT"] = "0"
         process_environment["GCM_INTERACTIVE"] = "never"
         completed = subprocess.run(
