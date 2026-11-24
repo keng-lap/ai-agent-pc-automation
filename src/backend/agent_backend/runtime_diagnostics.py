@@ -19,6 +19,7 @@ from .platform_storage import create_platform_secure_storage
 logger = logging.getLogger("agent_backend.runtime_diagnostics")
 _lock = threading.RLock()
 _enabled = False
+_capture_session_id: str | None = None
 _store_lock = threading.RLock()
 _store: RuntimeDiagnosticsStore | None = None
 _workflow_context: ContextVar[str] = ContextVar(
@@ -45,6 +46,11 @@ class RuntimeDiagnosticsStore:
             """
         )
         connection.execute(
+            "CREATE TABLE IF NOT EXISTS diagnostic_events_archive "
+            "(sequence INTEGER PRIMARY KEY, occurred_at TEXT NOT NULL, "
+            "correlation_id TEXT NOT NULL, event_json TEXT NOT NULL)"
+        )
+        connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_diagnostic_correlation "
             "ON diagnostic_events(correlation_id, sequence)"
         )
@@ -69,6 +75,16 @@ class RuntimeDiagnosticsStore:
                     "INSERT INTO diagnostic_events(occurred_at, correlation_id, event_json) "
                     "VALUES (?, ?, ?)",
                     (record["timestamp"], record["correlation_id"], serialized),
+                )
+                connection.execute(
+                    "INSERT OR IGNORE INTO diagnostic_events_archive "
+                    "SELECT sequence, occurred_at, correlation_id, event_json "
+                    "FROM diagnostic_events WHERE occurred_at < ?",
+                    ((datetime.now(UTC) - __import__("datetime").timedelta(days=7)).isoformat(),),
+                )
+                connection.execute(
+                    "DELETE FROM diagnostic_events WHERE occurred_at < ?",
+                    ((datetime.now(UTC) - __import__("datetime").timedelta(days=7)).isoformat(),),
                 )
                 connection.execute(
                     "DELETE FROM diagnostic_events WHERE sequence NOT IN "
@@ -140,10 +156,18 @@ def is_enabled() -> bool:
 
 
 def set_enabled(enabled: bool) -> bool:
-    global _enabled
+    global _enabled, _capture_session_id
     with _lock:
-        _enabled = bool(enabled)
+        requested = bool(enabled)
+        if requested and not _enabled:
+            _capture_session_id = str(uuid4())
+        _enabled = requested
         return _enabled
+
+
+def current_capture_session_id() -> str | None:
+    with _lock:
+        return _capture_session_id
 
 
 def correlation_id(candidate: str | None = None) -> str:
@@ -197,6 +221,7 @@ def emit_event(
         "stage": stage[:64],
         "correlation_id": correlation[:36],
         "workflow_id": _workflow_context.get(),
+        "capture_session_id": current_capture_session_id(),
         "fields": safe_fields,
     }
     serialized = json.dumps(record, ensure_ascii=True, separators=(",", ":"))
@@ -243,11 +268,14 @@ def emit_exception(
     )
 
 
-def export_recent_events(limit: int = 5000) -> list[dict[str, Any]]:
+def export_recent_events(limit: int = 5000, session_id: str | None = None) -> list[dict[str, Any]]:
     with _store_lock:
         if _store is None:
             return []
-        return _store.export_recent(limit)
+        events = _store.export_recent(limit)
+    if session_id is None:
+        return events
+    return [event for event in events if event.get("capture_session_id") == session_id]
 
 
 def store_available() -> bool:
