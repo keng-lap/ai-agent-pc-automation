@@ -160,6 +160,10 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             "status_code": 200,
             "available_version_count": len(result.available_versions),
             "available_versions": list(result.available_versions),
+            "selectable_version_count": len(result.available_versions),
+            "selectable_versions": list(result.available_versions),
+            "manifest_version_count": len(result.manifest_versions or result.available_versions),
+            "manifest_versions": list(result.manifest_versions or result.available_versions),
             "latest_available_version": (
                 result.available_versions[-1] if result.available_versions else None
             ),
