@@ -579,8 +579,8 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
 
     assert result.status == "VERSION_REQUIRED"
     assert len(result.manifest_versions) == 28
-    assert result.manifest_versions[-3:] == ("26.0.0", "26.1.0", "26.2.5")
-    assert result.available_versions == ("1.0.0", VERSION)
+    assert result.manifest_versions[:3] == ("26.2.5", "26.1.0", "26.0.0")
+    assert result.available_versions == (VERSION, "1.0.0")
     assert "7.0.0" in result.manifest_versions
     assert "CN" not in result.manifest_versions
 
