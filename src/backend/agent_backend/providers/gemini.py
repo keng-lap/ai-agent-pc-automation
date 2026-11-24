@@ -46,6 +46,12 @@ def save_model_name(model: str) -> None:
         global _model_name
         _model_name = value
 
+def clear_successful_test() -> None:
+    with _lock:
+        global _tested_configuration
+        _tested_configuration = None
+
+
 def record_successful_test(model: str, api_key: str | None = None) -> None:
     selected_model = validate_model_name(model)
     with _lock:
