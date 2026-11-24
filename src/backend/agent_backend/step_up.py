@@ -262,6 +262,25 @@ class StepUpChallengeStore:
             self._replace(challenge, status="consumed")
             return True
 
+    def invalidate_plan(self, *, owner_sub: str, session_id: str, plan_id: str) -> int:
+        """Invalidate every active step-up challenge bound to one exact plan."""
+        if not self._valid_identity(owner_sub, session_id):
+            return 0
+        if not isinstance(plan_id, str) or not PLAN_ID_PATTERN.fullmatch(plan_id):
+            return 0
+        invalidated = 0
+        with self._lock:
+            for challenge in tuple(self._challenges.values()):
+                if (
+                    challenge.owner_sub == owner_sub
+                    and challenge.session_id == session_id
+                    and challenge.plan_id == plan_id
+                    and challenge.status == "active"
+                ):
+                    self._replace(challenge, status="invalidated")
+                    invalidated += 1
+        return invalidated
+
     def get(self, challenge_id: str) -> StepUpChallenge | None:
         """Return an internal immutable snapshot for trusted service/tests only."""
         with self._lock:
