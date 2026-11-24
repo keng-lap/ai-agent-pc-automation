@@ -21,6 +21,17 @@
           {{ !diagnosticsStorageAvailable() ? 'Diagnostics: UNAVAILABLE' : (diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF')) }}
         </button>
         @if (diagnosticsError()) { <small role="alert">{{ diagnosticsError() }}</small> }
+        <button type="button" class="rail-link" [disabled]="diagnosticsPublishBusy()" (click)="publishDiagnostics()">
+          {{ diagnosticsPublishBusy() ? (language() === 'th' ? 'กำลังส่ง Log...' : 'Publishing logs...') : (diagnosticsPublishStatus() === 'failed' ? (language() === 'th' ? 'Retry ส่ง Log' : 'Retry log upload') : (language() === 'th' ? 'ส่ง Log ตอนนี้' : 'Send logs now')) }}
+        </button>
+        @if (diagnosticsPublishMessage()) {
+          <small [attr.role]="diagnosticsPublishStatus() === 'failed' ? 'alert' : 'status'">{{ diagnosticsPublishMessage() }}</small>
+        }
+        @if (diagnosticsPublishUrl()) {
+          <a class="rail-link" [href]="diagnosticsPublishUrl()" target="_blank" rel="noopener noreferrer">
+            {{ language() === 'th' ? 'เปิด Log บน GitHub' : 'Open logs on GitHub' }}
+          </a>
+        }
       }
       <span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span>
     </div>
