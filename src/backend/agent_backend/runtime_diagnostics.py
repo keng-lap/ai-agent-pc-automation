@@ -103,9 +103,11 @@ def configure_store(path: Path) -> None:
             _store.close()
             _store = None
         try:
-            _store = RuntimeDiagnosticsStore(path)
-            _store.initialize()
+            configured_store = RuntimeDiagnosticsStore(path)
+            configured_store.initialize()
+            _store = configured_store
         except Exception as exc:
+            _store = None
             logger.warning(
                 "Runtime diagnostics persistence unavailable error_type=%s",
                 type(exc).__name__,
@@ -157,7 +159,10 @@ def emit_event(
     safe_fields: dict[str, Any] = {}
     for key, value in (fields or {}).items():
         normalized_key = key.casefold().replace("-", "_")
-        sensitive_markers = ("authorization", "cookie", "password", "token", "api_key", "secret", "totp", "body")
+        sensitive_markers = (
+            "authorization", "cookie", "password", "token", "api_key",
+            "secret", "totp", "body",
+        )
         if any(marker in normalized_key for marker in sensitive_markers):
             continue
         if isinstance(value, (str, int, float, bool)) or value is None:
@@ -211,3 +216,10 @@ def emit_exception(
         severity=severity,
         fields=safe_fields,
     )
+
+
+def export_recent_events(limit: int = 5000) -> list[dict[str, Any]]:
+    with _store_lock:
+        if _store is None:
+            return []
+        return _store.export_recent(limit)
