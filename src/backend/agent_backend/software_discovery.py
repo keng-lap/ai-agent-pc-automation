@@ -189,6 +189,20 @@ class DBeaverGitHubReleaseVerifier:
         if publisher.strip().casefold() != "dbeaver corp":
             return PublisherVerification(status="MISMATCH")
 
+        official_versions = self.list_official_versions(package_id)
+        if official_versions is None:
+            return PublisherVerification(status="UNAVAILABLE")
+        if version not in official_versions:
+            latest_official = official_versions[-1] if official_versions else None
+            return PublisherVerification(
+                status="MISMATCH",
+                official_version=latest_official,
+                official_release_url=(
+                    self.RELEASE_PAGE_PREFIX + latest_official
+                    if latest_official is not None else None
+                ),
+            )
+
         response = None
         try:
             response = self._http_get(
