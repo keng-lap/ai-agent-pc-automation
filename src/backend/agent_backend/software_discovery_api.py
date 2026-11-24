@@ -43,6 +43,7 @@ class SoftwareDiscoveryRequest(BaseModel):
     package_id: str = Field(min_length=3, max_length=160)
     version: str | None = Field(default=None, min_length=1, max_length=80)
     architecture: Literal["x86", "x64", "arm64"] = "x64"
+    scope: Literal["user", "machine"] = "user"
 
     @field_validator("package_id")
     @classmethod
@@ -103,6 +104,7 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
             package_id=payload.package_id,
             version=payload.version,
             architecture=payload.architecture,
+            scope=payload.scope,
         )
     except DiscoveryNotFound as exc:
         emit_exception(
