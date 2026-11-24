@@ -14,7 +14,7 @@ from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from agent_backend.conversation_contract import UniversalConversationResponse
-from agent_backend.providers import gemini
+from agent_backend.providers import gemini, grok
 from agent_backend.runtime_diagnostics import emit_event, emit_exception
 
 router = APIRouter()
@@ -81,10 +81,11 @@ class _ConversationStore:
 
 
 _conversation_store = _ConversationStore()
+_active_provider = "gemini"
 
 
 def _provider_error_detail(exc: Exception) -> dict[str, str]:
-    if isinstance(exc, gemini.GeminiProviderError):
+    if isinstance(exc, (gemini.GeminiProviderError, grok.GrokProviderError)):
         detail = {"code": exc.code}
         if exc.error_type:
             detail["error_type"] = exc.error_type
@@ -97,7 +98,7 @@ def _provider_error_detail(exc: Exception) -> dict[str, str]:
     error_type = type(exc).__name__
     if not _ERROR_TYPE_PATTERN.fullmatch(error_type):
         error_type = "Exception"
-    logging.getLogger(__name__).warning("Gemini request failed (%s)", error_type)
+    logging.getLogger(__name__).warning("AI provider request failed (%s)", error_type)
     return {"code": "unknown", "error_type": error_type, "stage": "provider"}
 
 
@@ -233,18 +234,158 @@ def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict
     return {"connected": True, "model": selected_model}
 
 
+
+
+class GrokKeyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    api_key: str | None = None
+    model: str | None = None
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not 20 <= len(value) <= 512:
+            raise ValueError("API key length is invalid")
+        return value
+
+
+class GrokTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    model: str | None = None
+    api_key: str | None = None
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_optional_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not 20 <= len(value) <= 512:
+            raise ValueError("API key length is invalid")
+        return value
+
+
+class ProviderSelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    provider: Literal["gemini", "grok"]
+
+
+@router.get("/api/settings/grok")
+def grok_status() -> dict[str, object]:
+    return {"configured": grok.is_configured(), "model": grok.get_model_name(),
+            "models": list(grok.SUPPORTED_MODELS)}
+
+
+@router.post("/api/settings/grok/test")
+def test_grok_connection(payload: GrokTestRequest, request: Request) -> dict[str, object]:
+    try:
+        selected_model = grok.validate_model_name(payload.model or grok.get_model_name())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported Grok model") from exc
+    grok.clear_successful_test()
+    if not payload.api_key and not grok.is_configured():
+        raise HTTPException(status_code=409, detail="Grok API key is not configured.")
+    started = time.perf_counter()
+    correlation = getattr(request.state, "correlation_id", "unknown")
+    emit_event(event_code="GROK_CONNECTION_TEST_STARTED", component="grok",
+               stage="provider_connection", correlation=correlation)
+    try:
+        grok.test_connection(model=selected_model, api_key=payload.api_key)
+        grok.record_successful_test(selected_model, payload.api_key)
+    except grok.GrokProviderError as exc:
+        emit_exception(event_code="GROK_CONNECTION_TEST_FAILED", component="grok",
+                       stage="provider_connection", correlation=correlation, error=exc,
+                       fields={"provider_error_code": exc.code})
+        raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
+    except Exception as exc:  # noqa: BLE001 - sanitize SDK and transport errors
+        emit_exception(event_code="GROK_CONNECTION_TEST_FAILED", component="grok",
+                       stage="provider_connection", correlation=correlation, error=exc)
+        raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
+    emit_event(event_code="GROK_CONNECTION_TEST_SUCCEEDED", component="grok",
+               stage="provider_connection", correlation=correlation,
+               fields={"duration_ms": round((time.perf_counter() - started) * 1000, 2)})
+    return {"connected": True, "model": selected_model}
+
+
+@router.put("/api/settings/grok")
+def save_grok_key(payload: GrokKeyRequest) -> dict[str, object]:
+    if payload.api_key is None and payload.model is None:
+        raise HTTPException(status_code=422, detail="Provide a Grok API key or model.")
+    try:
+        selected_model = grok.validate_model_name(payload.model or grok.get_model_name())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported Grok model") from exc
+    if not grok.consume_successful_test(selected_model, payload.api_key):
+        raise HTTPException(status_code=409,
+            detail="Test the selected Grok model and API key successfully before saving.")
+    if payload.api_key is not None:
+        grok.save_api_key(payload.api_key)
+    if payload.model is not None:
+        grok.save_model_name(selected_model)
+    return {"configured": True, "model": grok.get_model_name(),
+            "models": list(grok.SUPPORTED_MODELS)}
+
+
+@router.get("/api/settings/provider")
+def provider_status() -> dict[str, object]:
+    return {"active": _active_provider, "gemini_configured": gemini.is_configured(),
+            "grok_configured": grok.is_configured(), "gemini_model": gemini.get_model_name(),
+            "grok_model": grok.get_model_name()}
+
+
+@router.put("/api/settings/provider")
+def select_provider(payload: ProviderSelectionRequest) -> dict[str, object]:
+    global _active_provider
+    configured = gemini.is_configured() if payload.provider == "gemini" else grok.is_configured()
+    if not configured:
+        raise HTTPException(status_code=409,
+            detail=f"{payload.provider.title()} API key is not configured and tested.")
+    _active_provider = payload.provider
+    return provider_status()
+
+
+def _provider_messages(contents: list[types.Content]) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": grok.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION}
+    ]
+    for item in contents:
+        role = "assistant" if item.role == "model" else "user"
+        content = "".join(part.text for part in (item.parts or []) if isinstance(part.text, str))
+        messages.append({"role": role, "content": content})
+    return messages
+
+
+def _generate_universal_response(provider: str, contents: list[types.Content],
+                                 response_schema: type) -> str:
+    if provider == "grok":
+        return grok.generate_universal_response(_provider_messages(contents), response_schema)
+    return gemini.generate_universal_response(contents, response_schema)
+
+
+def _provider_configured(provider: str) -> bool:
+    return grok.is_configured() if provider == "grok" else gemini.is_configured()
+
+
+def _provider_model(provider: str) -> str:
+    return grok.get_model_name() if provider == "grok" else gemini.get_model_name()
+
+
 @router.post("/api/chat")
 def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
-    if not gemini.is_configured():
-        raise HTTPException(status_code=409, detail="Configure Gemini API key first.")
+    provider = _active_provider
+    if not _provider_configured(provider):
+        raise HTTPException(status_code=409, detail=f"Configure {provider.title()} API key first.")
     started = time.perf_counter()
     correlation = getattr(request.state, "correlation_id", "unknown")
     emit_event(
-        event_code="GEMINI_REQUEST_STARTED",
-        component="gemini",
+        event_code=f"{provider.upper()}_REQUEST_STARTED",
+        component=provider,
         stage="provider_generation",
         correlation=correlation,
-        fields={"model": gemini.get_model_name()},
+        fields={"model": _provider_model(provider)},
     )
     conversation = _conversation_store.get_or_create(payload.conversation_id)
     with conversation.lock:
@@ -266,9 +407,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
             types.Content(role="user", parts=[types.Part.from_text(text=payload.message)])
         )
         try:
-            raw_response = gemini.generate_universal_response(
-                contents,
-                UniversalConversationResponse,
+            raw_response = _generate_universal_response(
+                provider, contents, UniversalConversationResponse,
             )
             if len(raw_response) > 16000:
                 raise gemini.GeminiProviderError("invalid_response")
@@ -276,8 +416,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
                 structured = UniversalConversationResponse.model_validate_json(raw_response)
             except ValidationError:
                 emit_event(
-                    event_code="GEMINI_STRUCTURED_RESPONSE_REPAIR_ATTEMPTED",
-                    component="gemini",
+                    event_code=f"{provider.upper()}_STRUCTURED_RESPONSE_REPAIR_ATTEMPTED",
+                    component=provider,
                     stage="structured_response_validation",
                     correlation=correlation,
                     severity="WARNING",
@@ -298,9 +438,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
                         )],
                     ),
                 ]
-                raw_response = gemini.generate_universal_response(
-                    repair_contents,
-                    UniversalConversationResponse,
+                raw_response = _generate_universal_response(
+                    provider, repair_contents, UniversalConversationResponse,
                 )
                 if len(raw_response) > 16000:
                     raise gemini.GeminiProviderError("invalid_response")
@@ -308,10 +447,10 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
                     structured = UniversalConversationResponse.model_validate_json(raw_response)
                 except ValidationError:
                     raise gemini.GeminiProviderError("invalid_response") from None
-        except gemini.GeminiProviderError as exc:
+        except (gemini.GeminiProviderError, grok.GrokProviderError) as exc:
             emit_exception(
-                event_code="GEMINI_REQUEST_FAILED",
-                component="gemini",
+                event_code=f"{provider.upper()}_REQUEST_FAILED",
+                component=provider,
                 stage="provider_generation",
                 correlation=correlation,
                 error=exc,
@@ -320,8 +459,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
         except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
             emit_exception(
-                event_code="GEMINI_REQUEST_FAILED",
-                component="gemini",
+                event_code=f"{provider.upper()}_REQUEST_FAILED",
+                component=provider,
                 stage="provider_generation",
                 correlation=correlation,
                 error=exc,
@@ -329,8 +468,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
 
         emit_event(
-            event_code="GEMINI_RESPONSE_VALIDATED",
-            component="gemini",
+            event_code=f"{provider.upper()}_RESPONSE_VALIDATED",
+            component=provider,
             stage="structured_response_validation",
             correlation=correlation,
             fields={
@@ -347,8 +486,8 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
         "request_id": request_id,
         "gemini_response": normalized,
         "gemini_raw_json": raw_response,
-        "provider": "gemini",
-        "model": gemini.get_model_name(),
+        "provider": provider,
+        "model": _provider_model(provider),
         "provider_connected": True,
     }
 
