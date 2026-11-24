@@ -120,14 +120,19 @@ def test_browser_event_api_is_disabled_by_default_and_accepts_allowlisted_events
         with caplog.at_level(logging.ERROR, logger="agent_backend.runtime_diagnostics"):
             response = client.post(
                 "/api/diagnostics/browser-events",
-                json={"event_code": "BROWSER_API_FAILURE", "component": "api", "status_code": 503},
+                json={
+                    "event_code": "BROWSER_UNCAUGHT_ERROR",
+                    "component": "browser",
+                    "error_type": "TypeError",
+                    "stack": "120:8|124:12",
+                },
             )
         assert response.status_code == 200
         assert response.json() == {"recorded": True}
         event = json.loads(caplog.records[-1].message)
         assert event["correlation_id"] == "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21"
-        assert event["event_code"] == "BROWSER_API_FAILURE"
-        assert event["fields"] == {"status_code": 503}
+        assert event["event_code"] == "BROWSER_UNCAUGHT_ERROR"
+        assert event["fields"] == {"error_type": "TypeError", "stack": "120:8|124:12"}
     finally:
         diagnostics.set_enabled(False)
 
@@ -219,3 +224,28 @@ def test_diagnostics_cannot_be_enabled_without_persistent_storage(monkeypatch):
 
     assert response.status_code == 503
     assert diagnostics.is_enabled() is False
+
+
+def test_browser_event_api_rejects_raw_stack_paths_and_messages():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from agent_backend.auth_api import require_session
+    from agent_backend.diagnostics_api import router
+
+    diagnostics.set_enabled(True)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[require_session] = lambda: object()
+    response = TestClient(app).post(
+        "/api/diagnostics/browser-events",
+        json={
+            "event_code": "BROWSER_UNCAUGHT_ERROR",
+            "component": "browser",
+            "error_type": "TypeError",
+            "stack": "https://example.test/main.js?token=secret",
+        },
+    )
+    diagnostics.set_enabled(False)
+
+    assert response.status_code == 422
