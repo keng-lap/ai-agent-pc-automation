@@ -87,3 +87,45 @@ def test_diagnostics_control_api_changes_mode_immediately():
     assert disabled.status_code == 200
     assert disabled.json() == {"enabled": False}
     assert client.get("/api/diagnostics").json() == {"enabled": False}
+
+
+def test_browser_event_api_is_disabled_by_default_and_accepts_allowlisted_events(caplog):
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+
+    from agent_backend.auth_api import require_session
+    from agent_backend.diagnostics_api import router
+
+    diagnostics.set_enabled(False)
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def add_correlation(request: Request, call_next):
+        request.state.correlation_id = "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21"
+        return await call_next(request)
+
+    app.include_router(router)
+    app.dependency_overrides[require_session] = lambda: object()
+    client = TestClient(app)
+
+    disabled = client.post(
+        "/api/diagnostics/browser-events",
+        json={"event_code": "BROWSER_API_FAILURE", "component": "api", "status_code": 503},
+    )
+    assert disabled.status_code == 409
+
+    diagnostics.set_enabled(True)
+    try:
+        with caplog.at_level(logging.ERROR, logger="agent_backend.runtime_diagnostics"):
+            response = client.post(
+                "/api/diagnostics/browser-events",
+                json={"event_code": "BROWSER_API_FAILURE", "component": "api", "status_code": 503},
+            )
+        assert response.status_code == 200
+        assert response.json() == {"recorded": True}
+        event = json.loads(caplog.records[-1].message)
+        assert event["correlation_id"] == "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21"
+        assert event["event_code"] == "BROWSER_API_FAILURE"
+        assert event["fields"] == {"status_code": 503}
+    finally:
+        diagnostics.set_enabled(False)
