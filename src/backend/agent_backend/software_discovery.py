@@ -112,6 +112,7 @@ class DBeaverGitHubReleaseVerifier:
     """Cross-check DBeaver Community manifests against its official GitHub release."""
 
     RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=10"
+    RELEASES_PAGE_SIZE = 10
     RELEASE_TAG_API_PREFIX = "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/"
     RELEASE_PAGE_PREFIX = "https://github.com/dbeaver/dbeaver/releases/tag/"
     ASSET_PREFIX = "https://github.com/dbeaver/dbeaver/releases/download/"
@@ -120,63 +121,75 @@ class DBeaverGitHubReleaseVerifier:
         self._http_get = http_get or requests.get
 
     def list_official_versions(self, package_id: str) -> tuple[str, ...] | None:
-        """Return bounded stable vendor releases; None means the source could not be verified."""
+        """Return up to 20 stable releases using bounded pagination.
+
+        Each page is small, the combined payload has a strict byte limit, and
+        pagination stops as soon as enough stable versions are collected.
+        """
         if package_id != "DBeaver.DBeaver.Community":
             return None
-        response = None
-        try:
-            response = self._http_get(
-                self.RELEASES_API_URL,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": USER_AGENT,
-                },
-                timeout=(3.05, 10),
-                allow_redirects=False,
-                stream=True,
-            )
-            if response.status_code != 200:
+        versions: list[str] = []
+        total_bytes = 0
+        for page in range(1, (MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE) + 1):
+            response = None
+            try:
+                response = self._http_get(
+                    self.RELEASES_API_URL,
+                    params={"page": str(page)},
+                    headers={
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                        "User-Agent": USER_AGENT,
+                    },
+                    timeout=(3.05, 10),
+                    allow_redirects=False,
+                    stream=True,
+                )
+                if response.status_code != 200:
+                    return None
+                chunks: list[bytes] = []
+                page_bytes = 0
+                for chunk in response.iter_content(chunk_size=65536):
+                    if not chunk:
+                        continue
+                    page_bytes += len(chunk)
+                    total_bytes += len(chunk)
+                    if total_bytes > MAX_RESPONSE_BYTES:
+                        return None
+                    chunks.append(chunk)
+                releases = json.loads(b"".join(chunks))
+                if not isinstance(releases, list) or len(releases) > self.RELEASES_PAGE_SIZE:
+                    return None
+                for release in releases:
+                    if not isinstance(release, dict):
+                        return None
+                    draft = release.get("draft")
+                    prerelease = release.get("prerelease")
+                    if type(draft) is not bool or type(prerelease) is not bool:
+                        return None
+                    if draft or prerelease:
+                        continue
+                    tag = release.get("tag_name")
+                    url = release.get("html_url")
+                    if (
+                        not isinstance(tag, str)
+                        or not VERSION_PATTERN.fullmatch(tag)
+                        or url != self.RELEASE_PAGE_PREFIX + tag
+                    ):
+                        return None
+                    versions.append(tag)
+                if len(releases) < self.RELEASES_PAGE_SIZE:
+                    break
+                if len(set(versions)) >= MAX_AVAILABLE_VERSIONS:
+                    break
+            except (requests.RequestException, ValueError, TypeError, KeyError):
                 return None
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in response.iter_content(chunk_size=65536):
-                if not chunk:
-                    continue
-                total += len(chunk)
-                if total > MAX_RESPONSE_BYTES:
-                    return None
-                chunks.append(chunk)
-            releases = json.loads(b"".join(chunks))
-            if not isinstance(releases, list) or len(releases) > MAX_OFFICIAL_RELEASES:
-                return None
-            versions: list[str] = []
-            for release in releases:
-                if not isinstance(release, dict):
-                    return None
-                draft = release.get("draft")
-                prerelease = release.get("prerelease")
-                if type(draft) is not bool or type(prerelease) is not bool:
-                    return None
-                if draft or prerelease:
-                    continue
-                tag = release.get("tag_name")
-                url = release.get("html_url")
-                if (
-                    not isinstance(tag, str)
-                    or not VERSION_PATTERN.fullmatch(tag)
-                    or url != self.RELEASE_PAGE_PREFIX + tag
-                ):
-                    return None
-                versions.append(tag)
-            return tuple(sorted(set(versions), key=_version_sort_key)[-MAX_AVAILABLE_VERSIONS:])
-        except (requests.RequestException, ValueError, TypeError, KeyError):
-            return None
-        finally:
-            if response is not None:
-                close = getattr(response, "close", None)
-                if callable(close):
-                    close()
+            finally:
+                if response is not None:
+                    close = getattr(response, "close", None)
+                    if callable(close):
+                        close()
+        return tuple(sorted(set(versions), key=_version_sort_key)[-MAX_AVAILABLE_VERSIONS:])
 
     def verify(
         self,
@@ -193,20 +206,9 @@ class DBeaverGitHubReleaseVerifier:
         if publisher.strip().casefold() != "dbeaver corp":
             return PublisherVerification(status="MISMATCH")
 
-        official_versions = self.list_official_versions(package_id)
-        if official_versions is None:
-            return PublisherVerification(status="UNAVAILABLE")
-        if version not in official_versions:
-            latest_official = official_versions[-1] if official_versions else None
-            return PublisherVerification(
-                status="MISMATCH",
-                official_version=latest_official,
-                official_release_url=(
-                    self.RELEASE_PAGE_PREFIX + latest_official
-                    if latest_official is not None else None
-                ),
-            )
-
+        # Verify the exact selected tag directly. The version-list endpoint is
+        # only for UI choices; pagination/truncation must never substitute the
+        # latest release for the operator's selected version.
         response = None
         try:
             response = self._http_get(
@@ -220,6 +222,8 @@ class DBeaverGitHubReleaseVerifier:
                 allow_redirects=False,
                 stream=True,
             )
+            if response.status_code == 404:
+                return PublisherVerification(status="MISMATCH")
             if response.status_code != 200:
                 return PublisherVerification(status="UNAVAILABLE")
             chunks: list[bytes] = []
