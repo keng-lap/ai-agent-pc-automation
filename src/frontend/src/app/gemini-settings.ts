@@ -10,27 +10,34 @@ import { ChatApi } from './chat/chat-api';
         <div>
           <p class="eyebrow">AI PROVIDER</p>
           <h2 id="gemini-settings-title">ตั้งค่า Google Gemini</h2>
-          <p class="model">Model: gemini-3.1-flash-lite</p>
+          <p class="model">เลือก Model ที่ต้องการใช้งาน</p>
         </div>
         <span class="state" [class.ready]="configured()">{{ configured() ? 'บันทึกแล้ว' : 'ยังไม่ตั้งค่า' }}</span>
       </div>
-      <label for="gemini-key">Gemini API Key</label>
+      <label for="gemini-model">Gemini Model</label>
+      <select id="gemini-model" [value]="selectedModel()" (change)="selectModel($any($event.target).value)" [disabled]="busy()">
+        @for (model of models(); track model) {
+          <option [value]="model">{{ model }}</option>
+        }
+      </select>
+      <label for="gemini-key">Gemini API Key (กรอกเฉพาะเมื่อต้องการเปลี่ยน Key)</label>
       <input
         id="gemini-key"
         type="password"
         autocomplete="off"
         spellcheck="false"
         [value]="apiKey()"
-        (input)="apiKey.set($any($event.target).value)"
+        (input)="onApiKeyChanged($any($event.target).value)"
         placeholder="วาง API Key ที่นี่"
       />
       <div class="actions">
-        <button type="button" [disabled]="busy() || !apiKey().trim()" (click)="save()">บันทึก Key</button>
-        <button type="button" class="secondary" [disabled]="busy() || !configured()" (click)="test()">ทดสอบการเชื่อมต่อ</button>
+        <button type="button" [disabled]="busy() || !testPassed()" (click)="save()">บันทึก Model และ Key</button>
+        <button type="button" class="secondary" [disabled]="busy() || (!configured() && !apiKey().trim())" (click)="test()">ทดสอบ Model ที่เลือก</button>
       </div>
       @if (message()) {
         <p class="message" role="status">{{ message() }}</p>
       }
+      <p class="note">ต้องทดสอบ Model ที่เลือกให้ผ่านก่อนจึงจะบันทึกได้ หากเปลี่ยน Model หรือ Key ต้องทดสอบใหม่ ค่าเดิมจะยังใช้งานอยู่จนกว่าจะบันทึกสำเร็จ</p>
       <p class="note">Key เก็บในหน่วยความจำของ Backend เท่านั้น และจะถูกล้างเมื่อปิดหรือเริ่ม Backend ใหม่</p>
     </section>
   `,
@@ -44,6 +51,7 @@ import { ChatApi } from './chat/chat-api';
     .state { padding:5px 9px; border-radius:99px; background:#f3f1e9; color:#827044; font-size:10px; white-space:nowrap; }
     .state.ready { background:#eaf6ef; color:#26784b; }
     label { display:block; margin-bottom:7px; font-size:12px; font-weight:700; }
+    select { box-sizing:border-box; width:100%; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line-strong,#e0e0eb); border-radius:10px; background:var(--surface,#fff); color:var(--ink,#22253a); font:inherit; font-size:12px; }
     input { box-sizing:border-box; width:100%; padding:11px 12px; border:1px solid var(--line-strong,#e0e0eb); border-radius:10px; background:var(--surface,#fff); color:var(--ink,#22253a); font:inherit; font-size:12px; }
     input:focus { outline:2px solid #8175df55; border-color:#8175df; }
     .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -60,43 +68,79 @@ export class GeminiSettingsComponent {
   protected readonly configured = signal(false);
   protected readonly busy = signal(false);
   protected readonly message = signal('');
+  protected readonly models = signal<string[]>(['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']);
+  protected readonly selectedModel = signal('gemini-3.1-flash-lite');
+  protected readonly testedModel = signal<string | null>(null);
+  protected readonly testPassed = signal(false);
 
   constructor() {
     this.api.getGeminiStatus().subscribe({
-      next: (result) => this.configured.set(result.configured),
+      next: (result) => {
+        this.configured.set(result.configured);
+        this.models.set(result.models);
+        this.selectedModel.set(result.model);
+      },
       error: () => this.message.set('อ่านสถานะการตั้งค่าไม่ได้'),
     });
   }
 
+  protected selectModel(model: string): void {
+    this.selectedModel.set(model);
+    this.testedModel.set(null);
+    this.testPassed.set(false);
+    this.message.set('Model เปลี่ยนแล้ว กรุณาทดสอบใหม่ก่อนบันทึก');
+  }
+
+  protected onApiKeyChanged(value: string): void {
+    this.apiKey.set(value);
+    this.testedModel.set(null);
+    this.testPassed.set(false);
+    this.message.set('Key เปลี่ยนแล้ว กรุณาทดสอบใหม่ก่อนบันทึก');
+  }
+
   protected save(): void {
-    const key = this.apiKey().trim();
-    if (!key || this.busy()) return;
+    if (this.busy() || !this.testPassed() || this.testedModel() !== this.selectedModel()) return;
     this.busy.set(true);
-    this.message.set('');
-    this.api.saveGeminiKey(key).subscribe({
-      next: () => {
-        this.configured.set(true);
+    this.message.set('กำลังบันทึกการตั้งค่า Gemini...');
+    this.api.saveGeminiKey(this.apiKey(), this.selectedModel()).subscribe({
+      next: (result) => {
+        this.configured.set(result.configured);
+        this.selectedModel.set(result.model);
         this.apiKey.set('');
-        this.message.set('บันทึก Key ใน Backend แล้ว');
+        this.testedModel.set(null);
+        this.testPassed.set(false);
+        this.message.set('บันทึก Model สำเร็จ การสนทนาครั้งถัดไปจะใช้ Model นี้');
         this.busy.set(false);
       },
       error: () => {
-        this.message.set('บันทึก Key ไม่สำเร็จ');
+        this.message.set('บันทึกไม่สำเร็จ ค่า Model เดิมยังคงใช้งานอยู่');
         this.busy.set(false);
       },
     });
   }
 
   protected test(): void {
-    if (this.busy() || !this.configured()) return;
+    if (this.busy() || (!this.configured() && !this.apiKey().trim())) return;
+    const model = this.selectedModel();
     this.busy.set(true);
-    this.message.set('กำลังทดสอบ Gemini API...');
-    this.api.testGeminiConnection().subscribe({
-      next: () => {
-        this.message.set('เชื่อมต่อ Gemini สำเร็จ พร้อมใช้งาน Chat');
+    this.testPassed.set(false);
+    this.testedModel.set(null);
+    this.message.set(`กำลังทดสอบ ${model}...`);
+    this.api.testGeminiConnection(model, this.apiKey()).subscribe({
+      next: (result) => {
+        if (result.model !== model) {
+          this.message.set('ผลทดสอบไม่ตรงกับ Model ที่เลือก กรุณาทดสอบใหม่');
+          this.busy.set(false);
+          return;
+        }
+        this.testedModel.set(model);
+        this.testPassed.set(true);
+        this.message.set(`ทดสอบ ${model} ผ่านแล้ว กดบันทึกเพื่อใช้งาน Model นี้`);
         this.busy.set(false);
       },
       error: (error: unknown) => {
+        this.testPassed.set(false);
+        this.testedModel.set(null);
         this.message.set(this.testErrorMessage(error));
         this.busy.set(false);
       },
