@@ -29,7 +29,7 @@ type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08'
 
 interface SoftwareDiscoveryUiState {
   query: string;
-  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'verifying_manifest' | 'conditional' | 'source_mismatch' | 'source_check_unavailable' | 'error';
+  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'scope_required' | 'verifying_manifest' | 'conditional' | 'source_mismatch' | 'source_check_unavailable' | 'error';
   catalog?: SoftwareCatalogSearchResponse;
   packageId?: string;
   result?: SoftwareDiscoveryResponse;
@@ -103,7 +103,7 @@ function isSoftwareCatalogSearchResponse(value: unknown): value is SoftwareCatal
 function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscoveryResponse {
   if (
     !isRecord(value)
-    || !['VERSION_REQUIRED', 'CONDITIONAL', 'SOURCE_MISMATCH', 'SOURCE_CHECK_UNAVAILABLE'].includes(String(value['status']))
+    || !['VERSION_REQUIRED', 'SCOPE_REQUIRED', 'CONDITIONAL', 'SOURCE_MISMATCH', 'SOURCE_CHECK_UNAVAILABLE'].includes(String(value['status']))
     || value['source'] !== 'winget-community-repository'
     || typeof value['package_id'] !== 'string'
     || !Array.isArray(value['available_versions'])
@@ -116,7 +116,7 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     || !Array.isArray(value['available_scopes'])
     || !value['available_scopes'].every((scope) => scope === 'user' || scope === 'machine')
   ) return false;
-  if (value['status'] === 'VERSION_REQUIRED') {
+  if (value['status'] === 'VERSION_REQUIRED' || value['status'] === 'SCOPE_REQUIRED') {
     return value['candidate'] === null;
   }
   const candidate = value['candidate'];
@@ -952,6 +952,25 @@ export class App implements AfterViewChecked {
       });
   }
 
+  protected selectSoftwareScopeForVersion(entryId: number, version: string, scope: 'user' | 'machine'): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    if (!discovery?.packageId || this.planning()) return;
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, status: 'verifying_manifest', proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: '', reservationId: undefined, error: undefined } }
+      : item));
+    this.planning.set(true);
+    defer(() => this.chatApi.discoverSoftware(discovery.packageId!, version, 'x64', scope))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
+        error: () => this.setSoftwareDiscoveryError(entryId),
+      });
+  }
+
   protected selectSoftwareVersion(entryId: number, version: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
     const packageId = entry?.discovery?.packageId;
@@ -987,7 +1006,9 @@ export class App implements AfterViewChecked {
           ...entry.discovery,
           status: value.status === 'VERSION_REQUIRED'
             ? 'version_required'
-            : value.status === 'SOURCE_MISMATCH'
+            : value.status === 'SCOPE_REQUIRED'
+              ? 'scope_required'
+              : value.status === 'SOURCE_MISMATCH'
               ? 'source_mismatch'
               : value.status === 'SOURCE_CHECK_UNAVAILABLE'
                 ? 'source_check_unavailable'
