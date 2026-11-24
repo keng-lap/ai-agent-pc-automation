@@ -121,7 +121,7 @@ def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file
 
 
 
-def test_generic_package_proposal_is_blocked_without_official_release_evidence(monkeypatch, tmp_path):
+def test_generic_package_proposal_keeps_existing_publisher_trust_path(monkeypatch, tmp_path):
     candidate = make_candidate(
         package_id="Acme.Editor",
         package_name="Acme Editor",
@@ -134,19 +134,40 @@ def test_generic_package_proposal_is_blocked_without_official_release_evidence(m
         official_asset_sha256=None,
         official_asset_id=None,
     )
+    staged_path = tmp_path / "generic-installer.exe"
+    staged_path.write_bytes(b"verified installer")
+    staged = StagedInstaller(
+        package_id=candidate.package_id,
+        version=candidate.version,
+        architecture=candidate.architecture,
+        file_path=str(staged_path),
+        file_size=18,
+        sha256="a" * 64,
+        authenticode_valid=True,
+        signature_subject="CN=Acme Editor, O=Acme Inc",
+        signature_sha256="d" * 64,
+        official_release_url=None,
+        staged_at=NOW.isoformat(),
+    )
+    evidence = make_evidence().model_copy(update={
+        "package_id": "Acme.Editor",
+        "package_name": "Acme Editor",
+        "publisher": "Acme Inc",
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "official_release_url": None,
+    })
     stage_calls = []
     monkeypatch.setattr(api.sys, "platform", "win32")
     monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
-    monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: stage_calls.append(args))
-
-    with pytest.raises(Exception) as error:
-        api.create_software_install_proposal(
-            api.SoftwareInstallProposalRequest(package_id="Acme.Editor", version=candidate.version),
-            request=make_request(tmp_path),
-        )
-
-    assert getattr(error.value, "status_code", None) == 409
-    assert stage_calls == []
+    monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: (stage_calls.append(args) or staged))
+    monkeypatch.setattr(api.software_evidence_registry, "register_staged_candidate", lambda **_kwargs: evidence)
+    response = api.create_software_install_proposal(
+        api.SoftwareInstallProposalRequest(package_id="Acme.Editor", version=candidate.version),
+        request=make_request(tmp_path),
+    )
+    assert response.package_id == "Acme.Editor"
+    assert stage_calls
+    assert not staged_path.exists()
 
 
 def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_path):
