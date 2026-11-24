@@ -7,7 +7,7 @@ from google.genai import errors
 
 from agent_backend import chat as chat_module
 from agent_backend.main import app
-from agent_backend.providers import gemini
+from agent_backend.providers import gemini, grok
 
 CONVERSATION_ID = "123e4567-e89b-42d3-a456-426614174000"
 client = TestClient(
@@ -25,6 +25,10 @@ def clear_provider_key(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", None)
     monkeypatch.setattr(gemini, "_model_name", gemini.MODEL_NAME)
     monkeypatch.setattr(gemini, "_tested_configuration", None)
+    monkeypatch.setattr(grok, "_api_key", None)
+    monkeypatch.setattr(grok, "_model_name", grok.MODEL_NAME)
+    monkeypatch.setattr(grok, "_tested_configuration", None)
+    monkeypatch.setattr(chat_module, "_active_provider", "gemini")
     chat_module._conversation_store.clear()
 
 
@@ -780,3 +784,68 @@ def test_idle_conversation_expires(monkeypatch):
     monkeypatch.setattr(gemini, "generate_universal_response", lambda _contents, _schema: _response_json("answer"))
     assert client.post("/api/chat", json=_chat_payload()).status_code == 200
     assert client.get(f"/api/chat/{CONVERSATION_ID}").status_code == 404
+
+
+def test_grok_status_does_not_expose_api_key():
+    response = client.get("/api/settings/grok")
+    assert response.status_code == 200
+    assert response.json() == {
+        "configured": False,
+        "model": "grok-4.7",
+        "models": ["grok-4.7"],
+    }
+
+
+def test_grok_key_requires_successful_structured_test_before_save(monkeypatch):
+    monkeypatch.setattr(grok, "test_connection", lambda **_kwargs: None)
+    api_key = "xai-test-api-key-123456789012"
+    test_response = client.post(
+        "/api/settings/grok/test",
+        json={"model": "grok-4.7", "api_key": api_key},
+    )
+    assert test_response.status_code == 200
+    assert test_response.json() == {"connected": True, "model": "grok-4.7"}
+    response = client.put("/api/settings/grok", json={"api_key": api_key, "model": "grok-4.7"})
+    assert response.status_code == 200
+    assert response.json()["configured"] is True
+    assert "api_key" not in response.json()
+    assert grok.is_configured()
+
+
+def test_grok_key_cannot_be_saved_without_successful_test():
+    response = client.put(
+        "/api/settings/grok",
+        json={"api_key": "xai-test-api-key-123456789012", "model": "grok-4.7"},
+    )
+    assert response.status_code == 409
+    assert not grok.is_configured()
+
+
+def test_active_provider_requires_configuration_and_can_switch_after_save(monkeypatch):
+    rejected = client.put("/api/settings/provider", json={"provider": "grok"})
+    assert rejected.status_code == 409
+    grok.save_api_key("xai-test-api-key-123456789012")
+    selected = client.put("/api/settings/provider", json={"provider": "grok"})
+    assert selected.status_code == 200
+    assert selected.json()["active"] == "grok"
+
+
+def test_chat_dispatches_to_grok_and_keeps_backend_contract_validation(monkeypatch):
+    grok.save_api_key("xai-test-api-key-123456789012")
+    chat_module._active_provider = "grok"
+    calls = []
+
+    def generate(messages, schema):
+        calls.append((messages, schema))
+        return _response_json("Grok reply")
+
+    monkeypatch.setattr(grok, "generate_universal_response", generate)
+    response = client.post("/api/chat", json=_chat_payload("สวัสดี", language="th"))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "grok"
+    assert body["model"] == "grok-4.7"
+    assert body["gemini_response"]["message"] == "Grok reply"
+    assert calls[0][1].__name__ == "UniversalConversationResponse"
+    assert calls[0][0][0]["role"] == "system"
+    assert "Return ONLY one JSON object" in calls[0][0][0]["content"]
