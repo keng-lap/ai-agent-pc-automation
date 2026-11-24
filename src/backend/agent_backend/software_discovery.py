@@ -404,16 +404,45 @@ class WinGetManifestRepository:
         )
         if not isinstance(files, list):
             raise DiscoveryUnavailable("manifest file listing was invalid")
-        yaml_files = [
+        valid_named_files = [
             item
             for item in files
             if isinstance(item, dict)
-            and item.get("type") == "file"
             and isinstance(item.get("name"), str)
-            and re.fullmatch(r"[A-Za-z0-9._-]{1,200}\.ya?ml", item["name"], re.IGNORECASE)
+            and re.fullmatch(r"[A-Za-z0-9._-]{1,200}\\.ya?ml", item["name"], re.IGNORECASE)
         ]
-        if not yaml_files or len(yaml_files) > MAX_MANIFEST_FILES:
-            raise DiscoveryUnavailable("manifest file set was empty or exceeded its limit")
+        # GitHub's Contents API normally returns type="file". A missing type
+        # is incomplete metadata, not proof that a safe YAML filename is not
+        # a file; the pinned Contents request below still validates base64
+        # content and the parsed manifest schema before use.
+        yaml_files = [
+            item for item in valid_named_files
+            if item.get("type") is None
+            or (isinstance(item.get("type"), str) and item["type"].casefold() == "file")
+        ]
+        listing_summary = ";".join(
+            f"{str(item.get('type', 'missing'))[:12]}:{item['name'][:200]}"
+            for item in files[:8]
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        )[:240]
+        listing_fields = {
+            "manifest_listing_item_count": len(files),
+            "manifest_named_yaml_count": len(valid_named_files),
+            "manifest_yaml_file_count": len(yaml_files),
+            "manifest_listing_summary": listing_summary,
+        }
+        if not yaml_files:
+            raise DiscoveryUnavailable(
+                "manifest file listing contained no acceptable YAML files",
+                failure_code="manifest_file_set_empty",
+                diagnostic_fields=listing_fields,
+            )
+        if len(yaml_files) > MAX_MANIFEST_FILES:
+            raise DiscoveryUnavailable(
+                "manifest file listing exceeded its safety limit",
+                failure_code="manifest_file_set_exceeds_limit",
+                diagnostic_fields=listing_fields,
+            )
 
         documents: list[tuple[str, bytes, dict[str, Any]]] = []
         for item in sorted(yaml_files, key=lambda value: value["name"]):
