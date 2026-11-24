@@ -330,7 +330,7 @@ class DiscoveryResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    status: Literal["VERSION_REQUIRED", "CONDITIONAL", "SOURCE_MISMATCH", "SOURCE_CHECK_UNAVAILABLE"]
+    status: Literal["VERSION_REQUIRED", "SCOPE_REQUIRED", "CONDITIONAL", "SOURCE_MISMATCH", "SOURCE_CHECK_UNAVAILABLE"]
     package_id: str
     available_versions: tuple[str, ...]
     manifest_versions: tuple[str, ...] = ()
@@ -609,6 +609,15 @@ class WinGetManifestRepository:
             and isinstance(item.get("Scope", installer_doc.get("Scope")), str)
             and item.get("Scope", installer_doc.get("Scope")).lower() == scope
         ]
+        if not matching and available_scopes:
+            return DiscoveryResponse(
+                status="SCOPE_REQUIRED",
+                package_id=normalized_id,
+                available_versions=(version,),
+                manifest_versions=(version,),
+                candidate=None,
+                available_scopes=available_scopes,
+            )
         if len(matching) != 1:
             available_architectures = sorted({
                 item.get("Architecture")
