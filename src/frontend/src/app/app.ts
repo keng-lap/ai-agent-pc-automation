@@ -21,6 +21,7 @@ import {
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 import { JobMonitorComponent } from './job-monitor/job-monitor';
+import { RuntimeDiagnosticsState } from './runtime-diagnostics.state';
 
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11' | 'MSG-12' | 'MSG-13' | 'MSG-14' | 'MSG-15' | 'MSG-16' | 'MSG-17' | 'MSG-18' | 'MSG-19' | 'MSG-20' | 'MSG-21' | 'MSG-22' | 'MSG-23';
@@ -384,6 +385,7 @@ function writeStoredConversationId(conversationId: string): void {
 export class App implements AfterViewChecked {
   private readonly document = inject(DOCUMENT);
   private readonly chatApi = inject(ChatApi);
+  private readonly diagnosticsState = inject(RuntimeDiagnosticsState);
   private nextEntryId = 0;
 
   @ViewChild('messageLog') private messageLog?: ElementRef<HTMLElement>;
@@ -437,6 +439,7 @@ export class App implements AfterViewChecked {
 
 
   private reportBrowserDiagnostic(eventCode: BrowserDiagnosticCode): void {
+    if (!this.diagnosticsState.enabled) return;
     defer(() => this.chatApi.recordBrowserDiagnostic(eventCode))
       .pipe(take(1))
       .subscribe({ error: () => undefined });
@@ -449,6 +452,8 @@ export class App implements AfterViewChecked {
         next: (mode: DiagnosticsMode) => {
           this.diagnosticsStorageAvailable.set(mode.storage_available);
           this.diagnosticsEnabled.set(mode.enabled);
+          this.diagnosticsState.setEnabled(mode.enabled);
+          this.diagnosticsState.setEnabled(mode.enabled);
           if (!mode.storage_available) {
             this.diagnosticsError.set(this.language() === 'th'
               ? 'พื้นที่จัดเก็บ Diagnostics ไม่พร้อมใช้งาน'
