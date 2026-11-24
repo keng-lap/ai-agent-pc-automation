@@ -419,7 +419,6 @@ export class App implements AfterViewChecked {
     browserWindow?.addEventListener('error', () => this.reportBrowserDiagnostic('BROWSER_UNCAUGHT_ERROR'));
     browserWindow?.addEventListener('unhandledrejection', () => this.reportBrowserDiagnostic('BROWSER_UNHANDLED_REJECTION'));
     this.refreshAuthSession();
-    this.refreshDiagnosticsMode();
     const storedConversationId = readStoredConversationId();
     const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
     this.conversationId.set(conversationId);
@@ -482,6 +481,7 @@ export class App implements AfterViewChecked {
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
           this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
+          if (session.authenticated) this.refreshDiagnosticsMode();
           this.logAuthenticatorUiState("auth-session-loaded");
         },
         error: () => {
