@@ -17,8 +17,8 @@
     </section>
     <div class="rail-bottom">
       @if (authReady() && authEnabled() && authenticated()) {
-        <button type="button" class="rail-link" [disabled]="diagnosticsBusy()" [attr.aria-pressed]="diagnosticsEnabled()" (click)="toggleDiagnostics()">
-          {{ diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF') }}
+        <button type="button" class="rail-link" [disabled]="diagnosticsBusy() || !diagnosticsStorageAvailable()" [attr.aria-pressed]="diagnosticsEnabled()" (click)="toggleDiagnostics()">
+          {{ !diagnosticsStorageAvailable() ? 'Diagnostics: UNAVAILABLE' : (diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF')) }}
         </button>
         @if (diagnosticsError()) { <small role="alert">{{ diagnosticsError() }}</small> }
       }
