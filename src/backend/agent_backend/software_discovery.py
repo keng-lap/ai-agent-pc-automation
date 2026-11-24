@@ -75,7 +75,7 @@ class InstallerCandidate(BaseModel):
     publisher: str
     version: str
     architecture: Literal["x86", "x64", "arm64"]
-    scope: Literal["user"]
+    scope: Literal["user", "machine"]
     installer_type: str
     installer_silent_switch: str | None = None
     installer_url: str
@@ -336,6 +336,7 @@ class DiscoveryResponse(BaseModel):
     manifest_versions: tuple[str, ...] = ()
     official_versions: tuple[str, ...] | None = None
     candidate: InstallerCandidate | None = None
+    available_scopes: tuple[Literal["user", "machine"], ...] = ()
     source: Literal["winget-community-repository"] = "winget-community-repository"
 
 
@@ -353,6 +354,7 @@ class WinGetManifestRepository:
         package_id: str,
         version: str | None,
         architecture: Literal["x86", "x64", "arm64"],
+        scope: Literal["user", "machine"] = "user",
     ) -> DiscoveryResponse:
         normalized_id = _validate_package_id(package_id)
         if version is not None and not VERSION_PATTERN.fullmatch(version):
@@ -592,12 +594,20 @@ class WinGetManifestRepository:
         installer_facts = [
             item for item in installers if isinstance(item, dict)
         ]
+        available_scopes = tuple(sorted({
+            raw_scope.lower()
+            for item in installer_facts
+            for raw_scope in [item.get("Scope", installer_doc.get("Scope"))]
+            if isinstance(raw_scope, str)
+            and raw_scope.lower() in {"user", "machine"}
+            and item.get("Architecture") == architecture
+        }))
         matching = [
             item
             for item in installer_facts
             if item.get("Architecture") == architecture
             and isinstance(item.get("Scope", installer_doc.get("Scope")), str)
-            and item.get("Scope", installer_doc.get("Scope")).lower() == "user"
+            and item.get("Scope", installer_doc.get("Scope")).lower() == scope
         ]
         if len(matching) != 1:
             available_architectures = sorted({
@@ -611,11 +621,11 @@ class WinGetManifestRepository:
                 if isinstance(item.get("Scope", installer_doc.get("Scope")), str)
             })
             raise DiscoveryUnavailable(
-                "manifest does not contain exactly one installer for the requested architecture and user scope",
+                "manifest does not contain exactly one installer for the requested architecture and scope",
                 failure_code="installer_selection_not_unique",
                 diagnostic_fields={
                     "requested_architecture": architecture,
-                    "requested_scope": "user",
+                    "requested_scope": scope,
                     "installer_matching_count": len(matching),
                     "installer_architectures": ",".join(available_architectures),
                     "installer_scopes": ",".join(available_scopes),
@@ -672,7 +682,7 @@ class WinGetManifestRepository:
             publisher=publisher,
             version=version,
             architecture=architecture,
-            scope="user",
+            scope=scope,
             installer_type=installer_type.strip().casefold(),
             installer_silent_switch=silent_switch,
             installer_url=installer_url,
@@ -702,6 +712,7 @@ class WinGetManifestRepository:
                 else versions[-MAX_AVAILABLE_VERSIONS:]
             ),
             candidate=candidate,
+            available_scopes=available_scopes,
         )
 
     def _get_json(self, path: str, *, params: dict[str, str] | None = None) -> Any:
