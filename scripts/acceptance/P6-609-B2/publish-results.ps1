@@ -67,7 +67,10 @@ The accompanying log is sanitized for the current user's profile path and common
 "@
     Set-Content -LiteralPath (Join-Path $target "SUMMARY.md") -Value $summary -Encoding utf8
 
-    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "add", "acceptance-results/P6-609-B2/$runId")
+    # Repository-wide .gitignore excludes *.log; explicitly force-add this
+    # sanitized acceptance log so the failure evidence is actually published.
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "add", "-f", "acceptance-results/P6-609-B2/$runId/$SuiteName.log")
+    $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "add", "acceptance-results/P6-609-B2/$runId/SUMMARY.md")
     $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "-c", "user.name=Acceptance Reporter", "-c", "user.email=acceptance-reporter@users.noreply.github.com", "commit", "-m", "test: record $SuiteName acceptance $status")
     $null = Invoke-GitChecked -GitArguments @("-C", $worktree, "push", $remote, "HEAD:refs/heads/$resultsBranch")
 
