@@ -145,17 +145,21 @@ def gemini_status() -> dict[str, object]:
 
 @router.put("/api/settings/gemini")
 def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
-    if payload.model is not None:
-        try:
-            gemini.validate_model_name(payload.model)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    if payload.api_key is None and payload.model is None:
+        raise HTTPException(status_code=422, detail="Provide a Gemini API key or model.")
+    try:
+        selected_model = gemini.validate_model_name(payload.model or gemini.get_model_name())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    if not gemini.consume_successful_test(selected_model, payload.api_key):
+        raise HTTPException(
+            status_code=409,
+            detail="Test the selected Gemini model and API key successfully before saving.",
+        )
     if payload.api_key is not None:
         gemini.save_api_key(payload.api_key)
-    elif not gemini.is_configured():
-        raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
     if payload.model is not None:
-        gemini.save_model_name(payload.model)
+        gemini.save_model_name(selected_model)
     return {
         "configured": True,
         "model": gemini.get_model_name(),
@@ -198,6 +202,7 @@ def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict
     )
     try:
         gemini.test_connection(model=selected_model, api_key=payload.api_key)
+        gemini.record_successful_test(selected_model, payload.api_key)
     except gemini.GeminiProviderError as exc:
         emit_exception(
             event_code="GEMINI_CONNECTION_TEST_FAILED",
