@@ -29,6 +29,7 @@ USER_AGENT = "ai-agent-pc-automation-trusted-discovery/1.0"
 MAX_RESPONSE_BYTES = 1_000_000
 MAX_MANIFEST_FILES = 12
 MAX_AVAILABLE_VERSIONS = 20
+MAX_OFFICIAL_RELEASES = 100
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -110,12 +111,68 @@ class PublisherVerification(BaseModel):
 class DBeaverGitHubReleaseVerifier:
     """Cross-check DBeaver Community manifests against its official GitHub release."""
 
-    RELEASE_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
+    RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=100"
+    RELEASE_TAG_API_PREFIX = "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/"
     RELEASE_PAGE_PREFIX = "https://github.com/dbeaver/dbeaver/releases/tag/"
     ASSET_PREFIX = "https://github.com/dbeaver/dbeaver/releases/download/"
 
     def __init__(self, *, http_get=None) -> None:
         self._http_get = http_get or requests.get
+
+    def list_official_versions(self, package_id: str) -> tuple[str, ...] | None:
+        """Return bounded stable vendor releases; None means the source could not be verified."""
+        if package_id != "DBeaver.DBeaver.Community":
+            return None
+        response = None
+        try:
+            response = self._http_get(
+                self.RELEASES_API_URL,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": USER_AGENT,
+                },
+                timeout=(3.05, 10),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code != 200:
+                return None
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > MAX_RESPONSE_BYTES:
+                    return None
+                chunks.append(chunk)
+            releases = json.loads(b"".join(chunks))
+            if not isinstance(releases, list) or len(releases) > MAX_OFFICIAL_RELEASES:
+                return None
+            versions: list[str] = []
+            for release in releases:
+                if not isinstance(release, dict):
+                    return None
+                if release.get("draft") is True or release.get("prerelease") is True:
+                    continue
+                tag = release.get("tag_name")
+                url = release.get("html_url")
+                if (
+                    not isinstance(tag, str)
+                    or not VERSION_PATTERN.fullmatch(tag)
+                    or url != self.RELEASE_PAGE_PREFIX + tag
+                ):
+                    return None
+                versions.append(tag)
+            return tuple(sorted(set(versions), key=_version_sort_key)[-MAX_AVAILABLE_VERSIONS:])
+        except (requests.RequestException, ValueError, TypeError, KeyError):
+            return None
+        finally:
+            if response is not None:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
 
     def verify(
         self,
@@ -135,7 +192,7 @@ class DBeaverGitHubReleaseVerifier:
         response = None
         try:
             response = self._http_get(
-                self.RELEASE_API_URL,
+                self.RELEASE_TAG_API_PREFIX + version,
                 headers={
                     "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28",
@@ -241,6 +298,7 @@ class DiscoveryResponse(BaseModel):
     status: Literal["VERSION_REQUIRED", "CONDITIONAL", "SOURCE_MISMATCH", "SOURCE_CHECK_UNAVAILABLE"]
     package_id: str
     available_versions: tuple[str, ...]
+    official_versions: tuple[str, ...] | None = None
     candidate: InstallerCandidate | None = None
     source: Literal["winget-community-repository"] = "winget-community-repository"
 
@@ -295,10 +353,12 @@ class WinGetManifestRepository:
         if not versions:
             raise DiscoveryNotFound("package has no published manifest versions")
         if version is None:
+            official_versions = self._publisher_verifier.list_official_versions(normalized_id)
             return DiscoveryResponse(
                 status="VERSION_REQUIRED",
                 package_id=normalized_id,
                 available_versions=versions[-MAX_AVAILABLE_VERSIONS:],
+                official_versions=official_versions,
             )
         if version not in versions:
             raise DiscoveryNotFound("requested package version was not found")
