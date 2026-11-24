@@ -50,7 +50,8 @@ def emit_event(
         return
     safe_fields: dict[str, Any] = {}
     for key, value in (fields or {}).items():
-        if key.lower() in {"authorization", "cookie", "password", "token", "api_key", "totp_code", "body"}:
+        normalized_key = key.casefold().replace("-", "_")
+        if any(marker in normalized_key for marker in ("authorization", "cookie", "password", "token", "api_key", "secret", "totp", "body")):
             continue
         if isinstance(value, (str, int, float, bool)) or value is None:
             safe_fields[key[:64]] = str(value)[:256] if isinstance(value, str) else value
