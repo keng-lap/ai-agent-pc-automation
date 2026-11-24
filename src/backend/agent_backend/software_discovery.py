@@ -421,9 +421,8 @@ class WinGetManifestRepository:
             or (isinstance(item.get("type"), str) and item["type"].casefold() == "file")
         ]
         listing_summary = ";".join(
-            f"{str(item.get('type', 'missing'))[:12]}:{item['name'][:200]}"
-            for item in files[:8]
-            if isinstance(item, dict) and isinstance(item.get("name"), str)
+            f"{'file' if item.get('type') is not None else 'missing'}:{item['name'][:200]}"
+            for item in yaml_files[:8]
         )[:240]
         listing_fields = {
             "manifest_listing_item_count": len(files),
