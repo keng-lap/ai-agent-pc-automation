@@ -633,6 +633,14 @@ describe('App chat UI (T-202)', () => {
     api.readiness.publisher_identity_policy_available = true;
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
+    const originalDiscoveryResponder = api.discoveryResponder;
+    api.discoveryResponder = (packageId, version, scope = 'user') => originalDiscoveryResponder(packageId, version, scope).pipe(
+      map((result) => result.candidate ? {
+        ...result,
+        available_scopes: ['user', 'machine'],
+        candidate: { ...result.candidate, scope },
+      } : result),
+    );
     await render();
 
     send('install DBeaver Community Edition');
