@@ -107,7 +107,7 @@ def test_test_connection_uses_saved_key(monkeypatch):
         "connected": True,
         "model": "gemini-3.1-flash-lite",
     }
-    assert calls == [{"model": "gemini-3.1-flash-lite", "api_key": None}]
+    assert calls == [{"model": "gemini-3.1-flash-lite", "api_key": "test-gemini-api-key-123456789"}]
 
 
 def test_test_connection_uses_selected_model_and_candidate_key_without_saving(monkeypatch):
