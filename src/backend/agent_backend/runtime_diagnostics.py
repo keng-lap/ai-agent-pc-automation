@@ -4,16 +4,107 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import threading
 import traceback
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
+
+from .platform_storage import create_platform_secure_storage
 
 logger = logging.getLogger("agent_backend.runtime_diagnostics")
 _lock = threading.RLock()
 _enabled = False
+_store_lock = threading.RLock()
+_store: RuntimeDiagnosticsStore | None = None
+
+
+
+class RuntimeDiagnosticsStore:
+    """Append-only bounded event store protected by the platform storage adapter."""
+
+    def __init__(self, path: Path) -> None:
+        self._lock = threading.RLock()
+        self._path = path
+        self._protection = create_platform_secure_storage().protect_database(path)
+        self._lease = self._protection.__enter__()
+        try:
+            self._connection = sqlite3.connect(path, check_same_thread=False)
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS diagnostic_events (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    occurred_at TEXT NOT NULL,
+                    correlation_id TEXT NOT NULL,
+                    event_json TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_diagnostic_correlation "
+                "ON diagnostic_events(correlation_id, sequence)"
+            )
+            self._connection.commit()
+            self._lease.verify()
+        except Exception:
+            self._protection.__exit__(*__import__("sys").exc_info())
+            raise
+
+    def append(self, record: dict[str, Any]) -> None:
+        serialized = json.dumps(record, ensure_ascii=True, separators=(",", ":"))
+        with self._lock:
+            self._lease.verify()
+            self._connection.execute(
+                "INSERT INTO diagnostic_events(occurred_at, correlation_id, event_json) VALUES (?, ?, ?)",
+                (record["timestamp"], record["correlation_id"], serialized),
+            )
+            self._connection.execute(
+                "DELETE FROM diagnostic_events WHERE sequence NOT IN "
+                "(SELECT sequence FROM diagnostic_events ORDER BY sequence DESC LIMIT 20000)"
+            )
+            self._connection.commit()
+            self._lease.verify()
+
+    def export_recent(self, limit: int = 5000) -> list[dict[str, Any]]:
+        bounded_limit = max(1, min(limit, 20000))
+        with self._lock:
+            self._lease.verify()
+            rows = self._connection.execute(
+                "SELECT event_json FROM diagnostic_events ORDER BY sequence DESC LIMIT ?",
+                (bounded_limit,),
+            ).fetchall()
+        return [json.loads(row[0]) for row in reversed(rows)]
+
+    def close(self) -> None:
+        with self._lock:
+            self._connection.close()
+            self._protection.__exit__(None, None, None)
+
+
+def configure_store(path: Path) -> None:
+    """Configure persistent diagnostics storage without making app startup fatal."""
+    global _store
+    with _store_lock:
+        if _store is not None:
+            _store.close()
+            _store = None
+        try:
+            _store = RuntimeDiagnosticsStore(path)
+        except Exception as exc:
+            logger.warning(
+                "Runtime diagnostics persistence unavailable error_type=%s",
+                type(exc).__name__,
+            )
+
+
+def close_store() -> None:
+    global _store
+    with _store_lock:
+        if _store is not None:
+            _store.close()
+            _store = None
 
 
 def is_enabled() -> bool:
@@ -67,11 +158,17 @@ def emit_event(
         "correlation_id": correlation[:36],
         "fields": safe_fields,
     }
-    logger.log(
-        getattr(logging, record["severity"]),
-        "%s",
-        json.dumps(record, ensure_ascii=True, separators=(",", ":")),
-    )
+    serialized = json.dumps(record, ensure_ascii=True, separators=(",", ":"))
+    logger.log(getattr(logging, record["severity"]), "%s", serialized)
+    with _store_lock:
+        if _store is not None:
+            try:
+                _store.append(record)
+            except Exception as exc:
+                logger.error(
+                    "Runtime diagnostics persistence failed error_type=%s",
+                    type(exc).__name__,
+                )
 
 
 def emit_exception(
