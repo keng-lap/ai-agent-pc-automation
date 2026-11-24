@@ -11,7 +11,7 @@ from typing import Any
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src" / "backend"))
 
-from agent_backend.config import load_settings  # noqa: E402
+from agent_backend.config import load_settings
 from agent_backend.runtime_diagnostics import RuntimeDiagnosticsStore  # noqa: E402
 
 ALLOWED_FIELDS = {
