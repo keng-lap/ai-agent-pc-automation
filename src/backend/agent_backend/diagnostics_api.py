@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .auth_api import require_session
-from .runtime_diagnostics import emit_event, is_enabled, set_enabled
+from .runtime_diagnostics import emit_event, export_recent_events, is_enabled, set_enabled
 
 router = APIRouter(
     prefix="/api/diagnostics",
@@ -58,3 +60,19 @@ def record_browser_event(payload: BrowserDiagnosticEvent, request: Request) -> d
         fields={"status_code": payload.status_code} if payload.status_code is not None else {},
     )
     return {"recorded": True}
+
+
+@router.get("/export", response_class=PlainTextResponse)
+def export_diagnostics_events(
+    limit: int = Query(default=5000, ge=1, le=20000),
+) -> PlainTextResponse:
+    events = export_recent_events(limit)
+    content = "\\n".join(
+        json.dumps(event, ensure_ascii=True, separators=(",", ":"))
+        for event in events
+    )
+    return PlainTextResponse(
+        content=content + ("\\n" if content else ""),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store"},
+    )
