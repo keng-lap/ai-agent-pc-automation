@@ -102,6 +102,48 @@ def test_test_connection_uses_saved_key(monkeypatch):
     assert calls == [{"model": "gemini-3.1-flash-lite", "api_key": None}]
 
 
+def test_test_connection_uses_selected_model_and_candidate_key_without_saving(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        gemini,
+        "test_connection",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    response = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-2.5-flash", "api_key": "candidate-gemini-api-key-123456"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "model": "gemini-2.5-flash"}
+    assert calls == [{
+        "model": "gemini-2.5-flash",
+        "api_key": "candidate-gemini-api-key-123456",
+    }]
+    assert not gemini.is_configured()
+    assert gemini.get_model_name() == "gemini-3.1-flash-lite"
+
+
+def test_save_model_without_replacing_existing_key():
+    gemini.save_api_key("existing-gemini-api-key-123456")
+    response = client.put(
+        "/api/settings/gemini",
+        json={"model": "gemini-2.5-pro"},
+    )
+    assert response.status_code == 200
+    assert response.json()["model"] == "gemini-2.5-pro"
+    assert gemini.is_configured()
+
+
+def test_unsupported_model_is_rejected_without_changing_configuration():
+    gemini.save_api_key("existing-gemini-api-key-123456")
+    response = client.put(
+        "/api/settings/gemini",
+        json={"api_key": "replacement-gemini-api-key-123456", "model": "not-a-gemini-model"},
+    )
+    assert response.status_code == 422
+    assert gemini.get_model_name() == "gemini-3.1-flash-lite"
+
+
 def test_test_connection_requires_saved_key():
     response = client.post("/api/settings/gemini/test", json={})
     assert response.status_code == 409
