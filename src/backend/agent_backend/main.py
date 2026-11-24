@@ -6,6 +6,7 @@ import re
 import shlex
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from .auth_api import build_auth_services, require_session
 from .auth_api import router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
+from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
@@ -27,6 +29,7 @@ from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
 from .software_install_api import router as software_install_router
 from .software_install_worker import SoftwareInstallWorker
+from .runtime_diagnostics import correlation_id, emit_event
 
 
 def enforce_single_worker(*, environ=None, argv=None) -> None:
@@ -90,8 +93,54 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.job_store_lock = threading.Lock()
     application.state.approval_reservation_store = None
     application.state.approval_reservation_store_lock = threading.Lock()
+
+    @application.middleware("http")
+    async def runtime_diagnostics_middleware(request: Request, call_next):
+        request_id = correlation_id(request.headers.get("x-correlation-id"))
+        request.state.correlation_id = request_id
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            frames = traceback.extract_tb(exc.__traceback__)
+            safe_stack = " | ".join(
+                f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}"
+                for frame in frames[-12:]
+            )
+            emit_event(
+                event_code="REQUEST_EXCEPTION",
+                component="backend",
+                stage="request",
+                correlation=request_id,
+                severity="ERROR",
+                fields={
+                    "route": getattr(request.scope.get("route"), "path", "unmatched"),
+                    "exception_type": type(exc).__name__,
+                    "stack": safe_stack,
+                },
+            )
+            raise
+        response.headers["X-Correlation-ID"] = request_id
+        emit_event(
+            event_code="REQUEST_COMPLETED",
+            component="backend",
+            stage="request",
+            correlation=request_id,
+            severity="ERROR" if response.status_code >= 500 else (
+                "WARNING" if response.status_code >= 400 else "INFO"
+            ),
+            fields={
+                "route": getattr(request.scope.get("route"), "path", "unmatched"),
+                "method": request.method,
+                "status_code": response.status_code,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
+        return response
+
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
+    application.include_router(diagnostics_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
