@@ -69,7 +69,6 @@ def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Re
                 "status_code": 503,
                 "upstream_status": exc.upstream_status,
                 "failure_code": exc.failure_code,
-                **exc.diagnostic_fields,
             },
         )
         raise HTTPException(
