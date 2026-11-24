@@ -24,12 +24,12 @@ from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
+from .runtime_diagnostics import correlation_id, emit_event
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
 from .software_install_api import router as software_install_router
 from .software_install_worker import SoftwareInstallWorker
-from .runtime_diagnostics import correlation_id, emit_event
 
 
 def enforce_single_worker(*, environ=None, argv=None) -> None:
@@ -126,8 +126,10 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
             component="backend",
             stage="request",
             correlation=request_id,
-            severity="ERROR" if response.status_code >= 500 else (
-                "WARNING" if response.status_code >= 400 else "INFO"
+            severity=(
+                "ERROR" if response.status_code >= 500
+                else "WARNING" if response.status_code >= 400
+                else "INFO"
             ),
             fields={
                 "route": getattr(request.scope.get("route"), "path", "unmatched"),
