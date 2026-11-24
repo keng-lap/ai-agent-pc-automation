@@ -225,3 +225,8 @@ def export_recent_events(limit: int = 5000) -> list[dict[str, Any]]:
         if _store is None:
             return []
         return _store.export_recent(limit)
+
+
+def store_available() -> bool:
+    with _store_lock:
+        return _store is not None
