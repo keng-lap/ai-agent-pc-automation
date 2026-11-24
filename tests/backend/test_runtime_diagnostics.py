@@ -152,3 +152,27 @@ def test_exception_events_include_safe_stack_without_exception_message(caplog):
         assert "private message" not in caplog.records[-1].message
     finally:
         diagnostics.set_enabled(False)
+
+
+def test_diagnostics_store_persists_and_exports_bounded_structured_events(tmp_path):
+    import os
+
+    import pytest
+
+    if os.name == "nt":
+        pytest.skip("Windows diagnostics ACL behavior is covered by native storage integration.")
+    store = diagnostics.RuntimeDiagnosticsStore(tmp_path / "diagnostics" / "runtime.sqlite3")
+    try:
+        event = {
+            "timestamp": "2026-11-24T00:00:00+00:00",
+            "severity": "ERROR",
+            "event_code": "MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID",
+            "component": "manifest",
+            "stage": "manifest_validation",
+            "correlation_id": "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+            "fields": {"status_code": 503},
+        }
+        store.append(event)
+        assert store.export_recent() == [event]
+    finally:
+        store.close()
