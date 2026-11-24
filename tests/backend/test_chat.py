@@ -314,6 +314,56 @@ def test_universal_response_generation_uses_json_schema_and_backend_instruction(
     assert "Return ONLY one JSON object" in calls[0]["config"].system_instruction
 
 
+def test_connection_exercises_chat_json_schema_with_candidate_model_and_key(monkeypatch):
+    calls = []
+
+    class Response:
+        text = _response_json("ทดสอบสำเร็จ")
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    client_kwargs = []
+    monkeypatch.setattr(
+        gemini,
+        "_client",
+        lambda **kwargs: client_kwargs.append(kwargs) or Client(),
+    )
+
+    candidate_key = "candidate-gemini-api-key-123456"
+    gemini.test_connection(model="gemini-3.8-flash", api_key=candidate_key)
+
+    assert client_kwargs == [{"api_key": candidate_key}]
+    assert calls[0]["model"] == "gemini-3.8-flash"
+    assert calls[0]["contents"] == "สวัสดี ทดสอบการสนทนาและตอบกลับตามรูปแบบที่กำหนด"
+    assert calls[0]["config"].response_mime_type == "application/json"
+    assert calls[0]["config"].response_json_schema == (
+        chat_module.UniversalConversationResponse.model_json_schema()
+    )
+    assert calls[0]["config"].system_instruction == gemini.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION
+
+
+def test_connection_rejects_invalid_chat_schema_response(monkeypatch):
+    class Response:
+        text = '{"message":"not a complete conversation response"}'
+
+    class Models:
+        def generate_content(self, **_kwargs):
+            return Response()
+
+    class Client:
+        models = Models()
+
+    monkeypatch.setattr(gemini, "_client", lambda **_kwargs: Client())
+    with pytest.raises(gemini.GeminiProviderError, match="invalid_response"):
+        gemini.test_connection(model="gemini-3.8-flash", api_key="candidate-gemini-api-key-123456")
+
+
 def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
     calls = []
 
