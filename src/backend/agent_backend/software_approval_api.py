@@ -24,6 +24,7 @@ from agent_backend.approval_reservation_store import (
 )
 from agent_backend.auth_audit import record_auth_audit_event
 from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
+from agent_backend.runtime_diagnostics import emit_event
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.software_evidence import (
     EvidenceNotFound,
@@ -34,7 +35,6 @@ from agent_backend.software_install_plans import (
     InstallPlanNotFound,
     software_install_plan_store,
 )
-from agent_backend.runtime_diagnostics import emit_event
 
 router = APIRouter()
 _lock = threading.RLock()
