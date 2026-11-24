@@ -54,6 +54,7 @@ def test_status_does_not_expose_api_key():
     assert response.json() == {
         "configured": False,
         "model": "gemini-3.1-flash-lite",
+        "models": ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"],
     }
 
 
@@ -90,7 +91,7 @@ def test_invalid_api_key_is_rejected(api_key):
 
 def test_test_connection_uses_saved_key(monkeypatch):
     calls = []
-    monkeypatch.setattr(gemini, "test_connection", lambda: calls.append("tested"))
+    monkeypatch.setattr(gemini, "test_connection", lambda **kwargs: calls.append(kwargs))
     gemini.save_api_key("test-gemini-api-key-123456789")
     response = client.post("/api/settings/gemini/test", json={})
     assert response.status_code == 200
@@ -98,7 +99,7 @@ def test_test_connection_uses_saved_key(monkeypatch):
         "connected": True,
         "model": "gemini-3.1-flash-lite",
     }
-    assert calls == ["tested"]
+    assert calls == [{"model": "gemini-3.1-flash-lite", "api_key": None}]
 
 
 def test_test_connection_requires_saved_key():
@@ -445,7 +446,7 @@ def test_connection_error_returns_safe_category(monkeypatch):
     monkeypatch.setattr(
         gemini,
         "test_connection",
-        lambda: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
+        lambda **_kwargs: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
     )
     response = client.post("/api/settings/gemini/test", json={})
     assert response.status_code == 502
@@ -457,7 +458,7 @@ def test_connection_error_returns_safe_stage_and_trace(monkeypatch):
     monkeypatch.setattr(
         gemini,
         "test_connection",
-        lambda: (_ for _ in ()).throw(
+        lambda **_kwargs: (_ for _ in ()).throw(
             gemini.GeminiProviderError(
                 "sdk_runtime_error",
                 "RuntimeError",
