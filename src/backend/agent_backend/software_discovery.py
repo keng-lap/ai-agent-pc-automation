@@ -32,7 +32,7 @@ MAX_AVAILABLE_VERSIONS = 20
 MAX_OFFICIAL_RELEASES = 100
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
-DBEAVER_VERSION_PATTERN = re.compile(r"^\\d+(?:\\.\\d+){1,4}$")
+DBEAVER_VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+){1,4}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
