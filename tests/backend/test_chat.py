@@ -156,6 +156,16 @@ def test_chat_generation_uses_saved_selected_model(monkeypatch):
     assert calls[0]["model"] == "gemini-2.5-flash"
 
 
+def test_save_is_rejected_until_matching_model_test_succeeds():
+    gemini.save_api_key("existing-gemini-api-key-123456")
+    response = client.put(
+        "/api/settings/gemini",
+        json={"model": "gemini-2.5-flash"},
+    )
+    assert response.status_code == 409
+    assert gemini.get_model_name() == "gemini-3.1-flash-lite"
+
+
 def test_save_model_without_replacing_existing_key(monkeypatch):
     gemini.save_api_key("existing-gemini-api-key-123456")
     monkeypatch.setattr(gemini, "test_connection", lambda **_kwargs: None)
