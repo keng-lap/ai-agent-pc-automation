@@ -2,7 +2,8 @@
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [ValidateRange(1, 20000)][int]$Limit = 5000,
-    [ValidatePattern('^[0-9a-f-]{36})
+    [ValidatePattern('^[0-9a-f-]{36}$')][string]$RunId = [guid]::NewGuid().ToString()
+)
 
 $ErrorActionPreference = "Stop"
 $resultsBranch = "diagnostics/runtime-logs"
