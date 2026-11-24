@@ -108,6 +108,8 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     || typeof value['package_id'] !== 'string'
     || !Array.isArray(value['available_versions'])
     || !value['available_versions'].every((version) => typeof version === 'string')
+    || !Array.isArray(value['manifest_versions'])
+    || !value['manifest_versions'].every((version) => typeof version === 'string')
     || !(value['official_versions'] === null
       || (Array.isArray(value['official_versions'])
         && value['official_versions'].every((version) => typeof version === 'string')))
