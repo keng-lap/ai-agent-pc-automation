@@ -37,7 +37,7 @@ class FakeChatApi {
     supported_package_ids: [] as string[],
     notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
   };
-  proposalCalls: Array<{ packageId: string; version: string; architecture: string }> = [];
+  proposalCalls: Array<{ packageId: string; version: string; architecture: string; scope: string }> = [];
   approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
   softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
   approvalErrorStatus: number | null = null;
@@ -55,6 +55,7 @@ class FakeChatApi {
         manifest_versions: ['25.2.0', '25.3.0'],
         official_versions: ['25.3.0'],
         candidate: null,
+        available_scopes: ['user'],
         source: 'winget-community-repository',
       }
       : {
@@ -85,6 +86,7 @@ class FakeChatApi {
           status: 'CONDITIONAL',
           limitations: ['installer_authenticode_signature_not_yet_verified'],
         },
+        available_scopes: ['user'],
         source: 'winget-community-repository',
       },
   );
@@ -171,7 +173,7 @@ class FakeChatApi {
     return this.catalogResponder(query);
   }
 
-  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64'): Observable<SoftwareDiscoveryResponse> {
+  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64', _scope: 'user' | 'machine' = 'user'): Observable<SoftwareDiscoveryResponse> {
     this.discoveryCalls.push({ packageId, version, architecture });
     return this.discoveryResponder(packageId, version);
   }
@@ -186,8 +188,8 @@ class FakeChatApi {
     return this.reservationRecoveryResponder(planId);
   }
 
-  createSoftwareInstallProposal(packageId: string, version: string, architecture: string): Observable<unknown> {
-    this.proposalCalls.push({ packageId, version, architecture });
+  createSoftwareInstallProposal(packageId: string, version: string, architecture: string, scope: 'user'): Observable<unknown> {
+    this.proposalCalls.push({ packageId, version, architecture, scope });
     return of({
       plan_id: 'f'.repeat(32),
       evidence_id: 'e'.repeat(32),
@@ -666,6 +668,7 @@ describe('App chat UI (T-202)', () => {
         manifest_versions: ['7.3.5'],
         official_versions: ['26.2.4'],
         candidate: null,
+        available_scopes: ['user'],
         source: 'winget-community-repository',
       }
       : {
@@ -674,7 +677,8 @@ describe('App chat UI (T-202)', () => {
       available_versions: [],
       manifest_versions: ['7.3.5'],
       official_versions: null,
-      source: 'winget-community-repository',
+      available_scopes: ['user'],
+        source: 'winget-community-repository',
       candidate: {
         package_id: packageId,
         package_name: 'DBeaver Community Edition',
