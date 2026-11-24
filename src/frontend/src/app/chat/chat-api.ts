@@ -382,10 +382,16 @@ export class ChatApi {
     return this.http.post<GeminiTestResult>('/api/settings/gemini/test', {});
   }
 
-  recordBrowserDiagnostic(eventCode: BrowserDiagnosticCode): Observable<{ recorded: boolean }> {
+  recordBrowserDiagnostic(
+    eventCode: BrowserDiagnosticCode,
+    errorType?: string,
+    stack?: string,
+  ): Observable<{ recorded: boolean }> {
     return this.http.post<{ recorded: boolean }>('/api/diagnostics/browser-events', {
       event_code: eventCode,
       component: 'browser',
+      error_type: errorType,
+      stack,
     });
   }
 
