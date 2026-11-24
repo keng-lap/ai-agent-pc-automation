@@ -474,6 +474,16 @@ describe('App chat UI (T-202)', () => {
       authRequest.flush({ enabled: false, authenticated: false, authenticator_enrolled: false });
       await fixture.whenStable();
       fixture.detectChanges();
+      const providerRequest = httpTestingController.expectOne('/api/settings/provider');
+      providerRequest.flush({
+        active: 'gemini',
+        gemini_configured: false,
+        grok_configured: false,
+        gemini_model: 'gemini-3.1-flash-lite',
+        grok_model: 'grok-4.7',
+      });
+      const grokRequest = httpTestingController.expectOne('/api/settings/grok');
+      grokRequest.flush({ configured: false, model: 'grok-4.7', models: ['grok-4.7'] });
       const statusRequest = httpTestingController.expectOne('/api/settings/gemini');
       statusRequest.flush({ configured: false, model: 'gemini-3.1-flash-lite' });
     }
@@ -859,7 +869,7 @@ describe('App chat UI (T-202)', () => {
       { error: { status: 501, error: { detail: 'internal' } }, thai: 'Backend', english: 'internal error' },
       { error: { status: 500, error: { detail: 42 } }, thai: 'Backend', english: 'Cannot reach the backend' },
       { error: { status: 502 }, thai: 'Backend พบข้อผิดพลาดภายใน', english: 'internal error' },
-      { error: { status: 502, error: { detail: { code: 'key_or_access' } } }, thai: 'Gemini ปฏิเสธ API Key', english: 'Gemini rejected the API key' },
+      { error: { status: 502, error: { detail: { code: 'key_or_access' } } }, thai: 'AI Provider ปฏิเสธ API Key', english: 'Gemini rejected the API key' },
       { error: { status: 502, error: { detail: { code: 'quota_exceeded' } } }, thai: 'โควตา Gemini เต็ม', english: 'Gemini quota is exhausted' },
       { error: { status: 502, error: { detail: { code: 'model_unavailable' } } }, thai: 'ไม่พบโมเดล Gemini', english: 'configured Gemini model is unavailable' },
       { error: { status: 502, error: { detail: { code: 'provider_unavailable' } } }, thai: 'บริการ Gemini ขัดข้อง', english: 'Gemini is temporarily unavailable' },
