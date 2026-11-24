@@ -53,6 +53,8 @@ class BrowserDiagnosticEvent(BaseModel):
     ]
     status_code: int | None = Field(default=None, ge=100, le=599)
     component: Literal["browser", "api"] = "browser"
+    error_type: str | None = Field(default=None, pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+    stack: str | None = Field(default=None, max_length=1024, pattern=r"^[0-9:|, -]*$")
 
 
 @router.post("/browser-events")
@@ -65,7 +67,15 @@ def record_browser_event(payload: BrowserDiagnosticEvent, request: Request) -> d
         stage="browser_runtime" if payload.component == "browser" else "api_request",
         correlation=getattr(request.state, "correlation_id", "unknown"),
         severity="ERROR",
-        fields={"status_code": payload.status_code} if payload.status_code is not None else {},
+        fields={
+            key: value
+            for key, value in {
+                "status_code": payload.status_code,
+                "error_type": payload.error_type,
+                "stack": payload.stack,
+            }.items()
+            if value is not None
+        },
     )
     return {"recorded": True}
 
