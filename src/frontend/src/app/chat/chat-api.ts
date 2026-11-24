@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 export type UiLanguage = 'th' | 'en';
 export interface GeminiStatus { configured: boolean; model: string; }
+export interface DiagnosticsMode { enabled: boolean; }
 export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
@@ -378,6 +379,14 @@ export class ChatApi {
 
   testGeminiConnection(): Observable<GeminiTestResult> {
     return this.http.post<GeminiTestResult>('/api/settings/gemini/test', {});
+  }
+
+  getDiagnosticsMode(): Observable<DiagnosticsMode> {
+    return this.http.get<DiagnosticsMode>('/api/diagnostics');
+  }
+
+  setDiagnosticsMode(enabled: boolean): Observable<DiagnosticsMode> {
+    return this.http.put<DiagnosticsMode>('/api/diagnostics', { enabled });
   }
 
   getAuthSession(): Observable<AuthSession> {
