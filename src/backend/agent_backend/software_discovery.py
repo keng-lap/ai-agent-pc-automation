@@ -693,7 +693,7 @@ class WinGetManifestRepository:
         return DiscoveryResponse(
             status=response_status,
             package_id=normalized_id,
-            available_versions=versions[-MAX_AVAILABLE_VERSIONS:],
+            available_versions=(versions if normalized_id == "DBeaver.DBeaver.Community" else versions[-MAX_AVAILABLE_VERSIONS:]),
             candidate=candidate,
         )
 
