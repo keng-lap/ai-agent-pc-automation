@@ -182,8 +182,8 @@ def test_diagnostics_export_returns_ndjson_without_enabling_collection(monkeypat
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from agent_backend.auth_api import require_session
     from agent_backend import diagnostics_api
+    from agent_backend.auth_api import require_session
 
     sample = [{
         "timestamp": "2026-11-24T00:00:00+00:00",
@@ -211,8 +211,8 @@ def test_diagnostics_cannot_be_enabled_without_persistent_storage(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from agent_backend.auth_api import require_session
     from agent_backend import diagnostics_api
+    from agent_backend.auth_api import require_session
 
     monkeypatch.setattr(diagnostics_api, "store_available", lambda: False)
     diagnostics.set_enabled(False)
