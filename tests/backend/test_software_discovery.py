@@ -215,6 +215,26 @@ def test_discovery_accepts_a_matching_non_latest_official_release():
     assert result.candidate.official_version == VERSION
 
 
+def test_discovery_does_not_offer_versions_when_official_release_source_is_unavailable():
+    source = FakeSource()
+    original_get = source.get
+
+    def unavailable_releases(url, **kwargs):
+        if request_path(url) == "repos/dbeaver/dbeaver/releases":
+            return FakeResponse({}, status_code=503)
+        return original_get(url, **kwargs)
+
+    result = WinGetManifestRepository(http_get=unavailable_releases).discover(
+        package_id=PACKAGE_ID,
+        version=None,
+        architecture="x64",
+    )
+
+    assert result.status == "VERSION_REQUIRED"
+    assert result.official_versions is None
+    assert result.available_versions == (VERSION,)
+
+
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
     source = FakeSource()
     result = WinGetManifestRepository(http_get=source.get).discover(
