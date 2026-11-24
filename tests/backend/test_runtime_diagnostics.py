@@ -318,3 +318,35 @@ def test_version_choices_over_limit_are_not_recorded(caplog):
         assert "available_versions" not in payload["fields"]
     finally:
         diagnostics.set_enabled(False)
+
+def test_export_sanitizer_includes_only_bounded_version_options():
+    import runpy
+    from pathlib import Path
+
+    exporter = Path(__file__).resolve().parents[2] / "scripts" / "export-runtime-diagnostics.py"
+    sanitize_event = runpy.run_path(str(exporter))["sanitize_event"]
+    event = {
+        "timestamp": "2026-11-25T00:00:00+00:00",
+        "severity": "INFO",
+        "event_code": "MANIFEST_VERSION_REQUIRED",
+        "component": "manifest",
+        "stage": "manifest_validation",
+        "correlation_id": "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+        "fields": {
+            "available_version_count": 2,
+            "available_versions": ["7.3.5", "26.2.5"],
+            "latest_available_version": "26.2.5",
+            "selected_version": "26.2.5",
+            "authorization": "secret",
+            "unbounded_versions": ["must-not-export"],
+        },
+    }
+
+    sanitized = sanitize_event(event)
+
+    assert sanitized["fields"] == {
+        "available_version_count": 2,
+        "available_versions": ["7.3.5", "26.2.5"],
+        "latest_available_version": "26.2.5",
+        "selected_version": "26.2.5",
+    }
