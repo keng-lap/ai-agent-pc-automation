@@ -108,6 +108,9 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     || typeof value['package_id'] !== 'string'
     || !Array.isArray(value['available_versions'])
     || !value['available_versions'].every((version) => typeof version === 'string')
+    || !(value['official_versions'] === null
+      || (Array.isArray(value['official_versions'])
+        && value['official_versions'].every((version) => typeof version === 'string')))
   ) return false;
   if (value['status'] === 'VERSION_REQUIRED') {
     return value['candidate'] === null;
@@ -938,7 +941,7 @@ export class App implements AfterViewChecked {
         return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
       }
       loadReadiness = value.status === 'CONDITIONAL'
-        && ['VERIFIED', 'NOT_CHECKED'].includes(value.candidate?.publisher_verification ?? '');
+        && value.candidate?.publisher_verification === 'VERIFIED';
       return {
         ...entry,
         discovery: {
