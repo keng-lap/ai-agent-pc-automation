@@ -40,7 +40,7 @@
     </div>
   </header>
 
-  @if (authReady() && authEnabled() && authenticated() && (diagnosticsPublishMessage() || diagnosticsPublishBusy() || diagnosticsError())) {
+  @if (authReady() && authEnabled() && authenticated()) {
     <section class="diagnostics-status-banner"
       [class.diagnostics-status-banner--running]="diagnosticsPublishStatus() === 'running'"
       [class.diagnostics-status-banner--success]="diagnosticsPublishStatus() === 'succeeded'"
@@ -55,7 +55,7 @@
             : diagnosticsPublishStatus() === 'failed'
               ? (language() === 'th' ? 'ส่ง Diagnostics Log ไม่สำเร็จ' : 'Diagnostics log publishing failed')
               : 'Diagnostics' }}</strong>
-        <span>{{ diagnosticsError() || diagnosticsPublishMessage() }}</span>
+        <span>{{ diagnosticsError() || diagnosticsPublishMessage() || (language() === 'th' ? 'ยังไม่มีสถานะการส่ง Log ในรอบนี้' : 'No log publishing activity in this session.') }}</span>
       </div>
       <div class="diagnostics-status-actions">
         @if (diagnosticsPublishStatus() === 'failed') {
