@@ -62,3 +62,28 @@ def test_enabled_events_are_structured_and_exclude_sensitive_fields(caplog):
         assert "must-not-be-recorded" not in caplog.records[-1].message
     finally:
         diagnostics.set_enabled(False)
+
+
+def test_diagnostics_control_api_changes_mode_immediately():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from agent_backend.auth_api import require_session
+    from agent_backend.diagnostics_api import router
+
+    diagnostics.set_enabled(False)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[require_session] = lambda: object()
+    client = TestClient(app)
+
+    assert client.get("/api/diagnostics").json() == {"enabled": False}
+    enabled = client.put("/api/diagnostics", json={"enabled": True})
+    assert enabled.status_code == 200
+    assert enabled.json() == {"enabled": True}
+    assert client.get("/api/diagnostics").json() == {"enabled": True}
+
+    disabled = client.put("/api/diagnostics", json={"enabled": False})
+    assert disabled.status_code == 200
+    assert disabled.json() == {"enabled": False}
+    assert client.get("/api/diagnostics").json() == {"enabled": False}
