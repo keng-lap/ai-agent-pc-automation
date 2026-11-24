@@ -21,7 +21,7 @@
           {{ !diagnosticsStorageAvailable() ? 'Diagnostics: UNAVAILABLE' : (diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF')) }}
         </button>
         @if (diagnosticsError()) { <small role="alert">{{ diagnosticsError() }}</small> }
-        <button type="button" class="rail-link" [disabled]="diagnosticsPublishBusy()" (click)="publishDiagnostics()">
+        <button type="button" class="rail-link" [disabled]="diagnosticsPublishBusy() || !diagnosticsStorageAvailable()" (click)="publishDiagnostics()">
           {{ diagnosticsPublishBusy() ? (language() === 'th' ? 'กำลังส่ง Log...' : 'Publishing logs...') : (diagnosticsPublishStatus() === 'failed' ? (language() === 'th' ? 'Retry ส่ง Log' : 'Retry log upload') : (language() === 'th' ? 'ส่ง Log ตอนนี้' : 'Send logs now')) }}
         </button>
         @if (diagnosticsPublishMessage()) {
