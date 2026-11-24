@@ -98,6 +98,8 @@ class FakeSource:
             payload = {
                 "tag_name": requested,
                 "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{requested}",
+                "draft": False,
+                "prerelease": False,
                 "assets": [{
                     "id": 12345,
                     "name": official_asset,
