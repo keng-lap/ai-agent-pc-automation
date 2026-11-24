@@ -1,5 +1,4 @@
 import pytest
-import requests
 
 from agent_backend.providers import grok
 
@@ -85,7 +84,7 @@ def test_http_errors_are_mapped_to_safe_categories(monkeypatch, status_code, exp
 
 def test_timeout_is_sanitized(monkeypatch):
     def timeout(*_args, **_kwargs):
-        raise requests.Timeout("sensitive upstream message")
+        raise grok.requests.Timeout("sensitive upstream message")
 
     monkeypatch.setattr(grok.requests, "post", timeout)
     grok.save_api_key("xai-test-api-key-123456789012")
