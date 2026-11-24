@@ -1,10 +1,11 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
+import { defer, finalize, switchMap, take, takeWhile, timeout, TimeoutError, timer } from 'rxjs';
 import {
   AuthSession,
   BrowserDiagnosticCode,
   DiagnosticsMode,
+  DiagnosticsPublishStatus,
   ChatApi,
   ConversationHistory,
   GeminiChatResponse,
@@ -405,6 +406,10 @@ export class App implements AfterViewChecked {
   protected readonly diagnosticsBusy = signal(false);
   protected readonly diagnosticsStorageAvailable = signal(false);
   protected readonly diagnosticsError = signal('');
+  protected readonly diagnosticsPublishStatus = signal<'idle' | 'running' | 'succeeded' | 'failed'>('idle');
+  protected readonly diagnosticsPublishMessage = signal('');
+  protected readonly diagnosticsPublishUrl = signal('');
+  protected readonly diagnosticsPublishBusy = signal(false);
   protected readonly authReady = signal(false);
   protected readonly authEnabled = signal(false);
   protected readonly authenticated = signal(false);
@@ -492,11 +497,78 @@ export class App implements AfterViewChecked {
           this.diagnosticsStorageAvailable.set(mode.storage_available);
           this.diagnosticsEnabled.set(mode.enabled);
           this.diagnosticsState.setEnabled(mode.enabled);
+          if (!mode.enabled) this.pollDiagnosticsPublish();
         },
         error: () => this.diagnosticsError.set(
           this.language() === 'th' ? 'เปลี่ยนโหมด Diagnostics ไม่สำเร็จ' : 'Could not change diagnostics mode.',
         ),
       });
+  }
+
+  protected publishDiagnostics(): void {
+    if (this.diagnosticsPublishBusy()) return;
+    this.diagnosticsPublishBusy.set(true);
+    this.diagnosticsPublishMessage.set('');
+    this.diagnosticsPublishUrl.set('');
+    defer(() => this.diagnosticsPublishStatus() === 'failed'
+      ? this.chatApi.retryDiagnosticsPublish()
+      : this.chatApi.publishDiagnostics())
+      .pipe(take(1))
+      .subscribe({
+        next: (status) => {
+          this.applyDiagnosticsPublishStatus(status);
+          if (status.status === 'running') this.pollDiagnosticsPublish();
+          else this.diagnosticsPublishBusy.set(false);
+        },
+        error: () => {
+          this.diagnosticsPublishStatus.set('failed');
+          this.diagnosticsPublishMessage.set(this.language() === 'th'
+            ? 'เริ่มส่ง Log ไม่สำเร็จ สามารถกด Retry ได้'
+            : 'Could not start log publishing. You can retry.');
+          this.diagnosticsPublishBusy.set(false);
+        },
+      });
+  }
+
+  private pollDiagnosticsPublish(): void {
+    this.diagnosticsPublishBusy.set(true);
+    timer(0, 1000).pipe(
+      switchMap(() => defer(() => this.chatApi.getDiagnosticsPublishStatus())),
+      takeWhile((status) => status.status === 'running', true),
+      take(180),
+      finalize(() => this.diagnosticsPublishBusy.set(false)),
+    ).subscribe({
+      next: (status) => this.applyDiagnosticsPublishStatus(status),
+      error: () => {
+        this.diagnosticsPublishStatus.set('failed');
+        this.diagnosticsPublishMessage.set(this.language() === 'th'
+          ? 'อ่านสถานะการส่ง Log ไม่สำเร็จ กด Retry ได้'
+          : 'Could not read publishing status. You can retry.');
+      },
+    });
+  }
+
+  private applyDiagnosticsPublishStatus(status: DiagnosticsPublishStatus): void {
+    this.diagnosticsPublishStatus.set(status.status);
+    this.diagnosticsPublishUrl.set(status.url ?? '');
+    if (status.status === 'succeeded') {
+      this.diagnosticsPublishMessage.set(this.language() === 'th'
+        ? `ส่ง Log สำเร็จ (Run ID: ${status.run_id ?? 'unknown'})`
+        : `Logs published (Run ID: ${status.run_id ?? 'unknown'})`);
+    } else if (status.status === 'failed') {
+      const messages: Record<string, [string, string]> = {
+        no_events: ['ยังไม่มี Log สำหรับส่ง', 'There are no diagnostic events to publish.'],
+        publisher_unavailable: ['ไม่พบตัวส่ง Log ในเครื่องนี้', 'The local log publisher is unavailable.'],
+        publish_timeout: ['ส่ง Log หมดเวลา กด Retry ได้', 'Log publishing timed out. You can retry.'],
+        publish_failed: ['ส่ง Log ไม่สำเร็จ ตรวจสอบ Git authentication แล้วกด Retry', 'Publishing failed. Check Git authentication and retry.'],
+      };
+      const message = messages[status.error_code ?? ''] ?? messages['publish_failed'];
+      this.diagnosticsPublishMessage.set(this.language() === 'th' ? message[0] : message[1]);
+    } else if (status.status === 'running') {
+      this.diagnosticsPublishMessage.set(this.language() === 'th'
+        ? 'กำลังส่ง Log ไปยัง GitHub...'
+        : 'Publishing logs to GitHub...');
+    }
   }
 
   protected refreshAuthSession(): void {
