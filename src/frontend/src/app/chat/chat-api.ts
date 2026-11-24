@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 export type UiLanguage = 'th' | 'en';
 export interface GeminiStatus { configured: boolean; model: string; }
 export interface DiagnosticsMode { enabled: boolean; }
+export type BrowserDiagnosticCode = 'BROWSER_UNCAUGHT_ERROR' | 'BROWSER_UNHANDLED_REJECTION';
 export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
@@ -379,6 +380,13 @@ export class ChatApi {
 
   testGeminiConnection(): Observable<GeminiTestResult> {
     return this.http.post<GeminiTestResult>('/api/settings/gemini/test', {});
+  }
+
+  recordBrowserDiagnostic(eventCode: BrowserDiagnosticCode): Observable<{ recorded: boolean }> {
+    return this.http.post<{ recorded: boolean }>('/api/diagnostics/browser-events', {
+      event_code: eventCode,
+      component: 'browser',
+    });
   }
 
   getDiagnosticsMode(): Observable<DiagnosticsMode> {
