@@ -95,6 +95,7 @@ export class ProviderSettingsComponent {
 
   protected changeProvider(provider: 'gemini' | 'grok'): void {
     if (this.busy()) return;
+    this.grokMessage.set('');
     this.busy.set(true);
     this.api.setActiveProvider(provider).subscribe({
       next: (result) => {
