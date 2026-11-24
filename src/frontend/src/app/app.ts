@@ -497,7 +497,7 @@ export class App implements AfterViewChecked {
           this.diagnosticsStorageAvailable.set(mode.storage_available);
           this.diagnosticsEnabled.set(mode.enabled);
           this.diagnosticsState.setEnabled(mode.enabled);
-          if (!mode.enabled) this.pollDiagnosticsPublish();
+          if (!mode.enabled) this.publishDiagnostics();
         },
         error: () => this.diagnosticsError.set(
           this.language() === 'th' ? 'เปลี่ยนโหมด Diagnostics ไม่สำเร็จ' : 'Could not change diagnostics mode.',
