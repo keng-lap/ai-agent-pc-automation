@@ -540,6 +540,20 @@
                       </div>
                     }
                   }
+                  @if (discovery.status === 'scope_required' && discovery.result) {
+                    <div class="tool-preview installer-actions--blocked" role="status">
+                      <strong>{{ language() === 'th' ? 'Manifest ไม่มี User Scope สำหรับ Architecture นี้' : 'No User Scope installer exists for this architecture' }}</strong>
+                      <span>{{ language() === 'th' ? 'พบ Scope ต่อไปนี้ใน Manifest โปรดเลือกเอง Machine Scope จะแสดงข้อมูลเท่านั้นและยังติดตั้งไม่ได้' : 'The manifest exposes these scopes. Select explicitly. Machine Scope is informational only and cannot be installed yet.' }}</span>
+                      @for (version of discovery.result.available_versions; track version) {
+                        @for (scope of discovery.result.available_scopes; track scope) {
+                          <button class="software-version" type="button" [disabled]="planning()"
+                            (click)="selectSoftwareScopeForVersion(entry.id, version, scope)">
+                            {{ scope === 'user' ? 'User Scope' : 'Machine Scope' }} · {{ version }}
+                          </button>
+                        }
+                      }
+                    </div>
+                  }
                   @if (discovery.status === 'verifying_manifest') {
                     <p class="detail-meta" role="status">{{ language() === 'th' ? 'กำลังตรวจสอบ Manifest ของเวอร์ชันที่เลือก...' : 'Verifying the selected version manifest...' }}</p>
                   }
