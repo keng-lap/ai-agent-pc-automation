@@ -22,6 +22,9 @@ ALLOWED_FIELDS = {
     "candidate_count",
     "available_version_count",
     "official_version",
+    "response_bytes",
+    "provider_error_code",
+    "publisher_verification",
     "exception_type",
     "stack",
 }
