@@ -849,3 +849,17 @@ def test_chat_dispatches_to_grok_and_keeps_backend_contract_validation(monkeypat
     assert calls[0][1].__name__ == "UniversalConversationResponse"
     assert calls[0][0][0]["role"] == "system"
     assert "Return ONLY one JSON object" in calls[0][0][0]["content"]
+
+
+
+def test_grok_provider_error_is_sanitized_in_chat_response(monkeypatch):
+    grok.save_api_key("xai-test-api-key-123456789012")
+    chat_module._active_provider = "grok"
+
+    def fail(_messages, _schema):
+        raise grok.GrokProviderError("quota_exceeded")
+
+    monkeypatch.setattr(grok, "generate_universal_response", fail)
+    response = client.post("/api/chat", json=_chat_payload("hello"))
+    assert response.status_code == 502
+    assert response.json()["detail"] == {"code": "quota_exceeded"}
