@@ -72,6 +72,7 @@ def test_diagnostics_control_api_changes_mode_immediately(monkeypatch):
     from agent_backend.auth_api import require_session
 
     monkeypatch.setattr(diagnostics_api, "store_available", lambda: True)
+    monkeypatch.setattr(diagnostics_api, "start_publish", lambda reason="manual": {})
     diagnostics.set_enabled(False)
     app = FastAPI()
     app.include_router(diagnostics_api.router)
