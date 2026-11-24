@@ -32,11 +32,12 @@ def request_path(url):
 class FakeSource:
     def __init__(
         self, *, bad_scope=False, bad_hash=False, bad_url=False,
-        official_version=VERSION, official_versions=None, wrap_base64=False,
+        official_version=VERSION, official_versions=None, tag_versions=None, wrap_base64=False,
     ):
         self.calls = []
         self.official_version = official_version
         self.official_versions = official_versions if official_versions is not None else [VERSION, official_version]
+        self.tag_versions = tag_versions if tag_versions is not None else self.official_versions
         self.wrap_base64 = wrap_base64
         installer = {
             "Architecture": "x64",
@@ -92,7 +93,7 @@ class FakeSource:
             ]
         elif path.startswith("repos/dbeaver/dbeaver/releases/tags/"):
             requested = path.rsplit("/", 1)[-1]
-            if requested not in self.official_versions:
+            if requested not in self.tag_versions:
                 return FakeResponse({}, status_code=404)
             official_asset = f"dbeaver-ce-{requested}-windows-x86_64.exe"
             payload = {
@@ -195,9 +196,32 @@ def test_discovery_blocks_manifest_when_selected_version_is_absent_from_official
     assert result.candidate is not None
     assert result.candidate.publisher_verification == "MISMATCH"
     assert result.candidate.version == VERSION
-    assert result.candidate.official_version == "26.2.4"
-    assert result.candidate.official_release_url == "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
+    # Never mislabel the newest release as the selected version's mismatch.
+    assert result.candidate.official_version is None
+    assert result.candidate.official_release_url is None
     assert "publisher_official_release_mismatch" in result.candidate.limitations
+
+
+def test_exact_selected_release_is_verified_even_when_omitted_from_first_release_page():
+    source = FakeSource(
+        official_version="26.2.5.2",
+        official_versions=["26.2.5.2"],
+        tag_versions=[VERSION, "26.2.5.2"],
+    )
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "VERIFIED"
+    assert result.candidate.official_version == VERSION
+    assert any(
+        call[0].endswith("/releases/tags/" + VERSION)
+        for call in source.calls
+    )
 
 
 def test_discovery_accepts_a_matching_non_latest_official_release():
@@ -401,6 +425,7 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
     assert all(call[1]["params"]["ref"] == COMMIT for call in pinned_manifest_calls)
     assert any(
         call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=10"
+        and call[1]["params"] == {"page": "1"}
         for call in source.calls
     )
     assert any(
