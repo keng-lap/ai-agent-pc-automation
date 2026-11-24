@@ -24,7 +24,7 @@ from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
-from .runtime_diagnostics import correlation_id, emit_event
+from .runtime_diagnostics import close_store, configure_store, correlation_id, emit_event
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
@@ -155,6 +155,12 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
 
     @application.on_event("startup")
     def start_local_install_worker() -> None:
+        if settings.app_env != "test":
+            job_state_directory = Path(settings.job_store_path).parent
+            diagnostics_directory = job_state_directory.with_name(
+                job_state_directory.name + "-Diagnostics"
+            )
+            configure_store(diagnostics_directory / "runtime.sqlite3")
         # Reconcile stale jobs on Windows even while live execution is disabled.
         # This path never claims queued work or starts WinGet.
         if os.name != "nt":
@@ -210,6 +216,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
             # Shutdown is not complete until the worker has observed the stop
             # signal and the contained WinGet process has exited.
             thread.join()
+        close_store()
 
     return application
 
