@@ -4,9 +4,9 @@
 
 - Authenticated `GET/PUT /api/diagnostics` control; mode is process-local and changes immediately without a restart.
 - Diagnostics default to OFF after backend process start.
-- Request correlation: browser HTTP interceptor sends a UUID in `X-Correlation-ID`; backend validates or replaces it and echoes it in the response header.
-- Browser telemetry: uncaught JavaScript errors, unhandled promise rejections, and failed API calls are reported using fixed event codes and HTTP status only.
-- Backend telemetry: request status/duration, unexpected exception frame locations, Catalog outcomes, Manifest outcomes, and sanitized exception frame locations.
+- Request/workflow correlation: browser HTTP interceptor sends a per-request UUID in `X-Correlation-ID` and a stable per-tab UUID in `X-Workflow-ID`; backend validates or replaces them, echoes both response headers, and stamps both IDs on structured events.
+- Browser telemetry: uncaught JavaScript errors and unhandled promise rejections report error type plus line/column-only stack frames; failed API calls report HTTP status. Raw messages, source paths, URLs, and response bodies are excluded.
+- Backend telemetry: request status/duration, Gemini generation/schema repair, Catalog outcomes and upstream HTTP status, Manifest outcomes and upstream HTTP status, Publisher verification, proposal staging, Approval challenge, release authorization, and TOTP queue outcomes. Exception details are frame locations and type only.
 - Local persistence: structured event rows in a bounded SQLite database (20,000-event cap), separate from Security Audit.
 - Storage: database uses the existing platform secure-storage adapter. The diagnostics directory is a dedicated sibling of the configured job-store directory with a `-Diagnostics` suffix.
 - Export: authenticated `GET /api/diagnostics/export` returns bounded NDJSON.
