@@ -15,6 +15,22 @@ test.beforeEach(async ({ page }) => {
     contentType: 'application/json',
     body: JSON.stringify({ configured: false, model: 'test-model' }),
   }));
+  await page.route('**/api/settings/provider', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      active: 'gemini',
+      gemini_configured: false,
+      grok_configured: false,
+      gemini_model: 'test-model',
+      grok_model: 'grok-4.7',
+    }),
+  }));
+  await page.route('**/api/settings/grok', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ configured: false, model: 'grok-4.7', models: ['grok-4.7'] }),
+  }));
 });
 
 
@@ -63,7 +79,7 @@ test('dashboard navigation links point to the existing workspace panels', async 
 
   await expect(page.getByRole('complementary', { name: 'เมนูหลัก' })).toBeVisible();
   await expect(page.getByRole('link', { name: /สนทนากับ Agent/ })).toHaveAttribute('href', '#workspace');
-  await expect(page.getByRole('link', { name: /ตั้งค่า Gemini/ })).toHaveAttribute('href', '#provider-settings');
+  await expect(page.getByRole('link', { name: /ตั้งค่า AI Provider/ })).toHaveAttribute('href', '#provider-settings');
   await expect(page.locator('#workspace')).toBeVisible();
   await expect(page.locator('#provider-settings')).toBeVisible();
 });
