@@ -85,12 +85,17 @@ static void RunAuthenticodeChecks()
 
     try
     {
-        Console.WriteLine("Authenticode: preparing test binary and certificate.");
+        Console.WriteLine("Authenticode: [1/10] copying test binary.");
         var currentAssembly = typeof(Program).Assembly.Location;
         File.Copy(currentAssembly, signedFile, overwrite: true);
+        Console.WriteLine("Authenticode: [1/10] test binary copied.");
 
-        using (var rsa = RSA.Create(2048))
+        Console.WriteLine("Authenticode: [2/10] creating RSA key.");
+        using var rsa = RSA.Create(2048);
+        Console.WriteLine("Authenticode: [2/10] RSA key created.");
+
         {
+            Console.WriteLine("Authenticode: [3/10] constructing certificate request.");
             var request = new CertificateRequest(
                 "CN=InstallerHelper Integration Test",
                 rsa,
@@ -100,22 +105,36 @@ static void RunAuthenticodeChecks()
             request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
             var eku = new OidCollection { new("1.3.6.1.5.5.7.3.3") };
             request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(eku, false));
+            Console.WriteLine("Authenticode: [3/10] certificate request ready.");
+            Console.WriteLine("Authenticode: [4/10] creating self-signed certificate.");
             using var created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(2));
+            Console.WriteLine("Authenticode: [4/10] self-signed certificate created.");
+            Console.WriteLine("Authenticode: [5/10] exporting and importing PFX.");
+            var pfxBytes = created.Export(X509ContentType.Pfx, password);
             certificateWithKey = new X509Certificate2(
-                created.Export(X509ContentType.Pfx, password),
+                pfxBytes,
                 password,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+            Console.WriteLine("Authenticode: [5/10] PFX imported.");
         }
 
         thumbprint = certificateWithKey.Thumbprint;
+        Console.WriteLine("Authenticode: [6/10] adding certificate to CurrentUser\\My.");
         AddCertificateToStore(certificateWithKey, StoreName.My);
+        Console.WriteLine("Authenticode: [6/10] certificate added to CurrentUser\\My.");
+        Console.WriteLine("Authenticode: [7/10] adding certificate to CurrentUser\\Root.");
         using (var rootCert = new X509Certificate2(certificateWithKey.RawData))
             AddCertificateToStore(rootCert, StoreName.Root);
+        Console.WriteLine("Authenticode: [7/10] certificate added to CurrentUser\\Root.");
+        Console.WriteLine("Authenticode: [8/10] adding certificate to CurrentUser\\TrustedPublisher.");
         using (var publisherCert = new X509Certificate2(certificateWithKey.RawData))
             AddCertificateToStore(publisherCert, StoreName.TrustedPublisher);
+        Console.WriteLine("Authenticode: [8/10] certificate added to CurrentUser\\TrustedPublisher.");
 
+        Console.WriteLine("Authenticode: [9/10] exporting PFX file.");
         File.WriteAllBytes(pfxFile, certificateWithKey.Export(X509ContentType.Pfx, password));
-        Console.WriteLine("Authenticode: locating Windows SDK SignTool.");
+        Console.WriteLine("Authenticode: [9/10] PFX file written.");
+        Console.WriteLine("Authenticode: [10/10] locating Windows SDK SignTool.");
         var signTool = FindSignTool();
         Console.WriteLine("Authenticode: signing test binary.");
         RunProcess(signTool, new[]
