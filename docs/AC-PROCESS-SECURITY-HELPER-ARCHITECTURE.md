@@ -57,13 +57,18 @@ The Launcher is a minimal, separately signed bootstrap component. It accepts no 
 7. Helper validates ticket MAC, expiry, nonce, one-time state, session binding, approval digest, and all immutable package fields. It does not accept caller-supplied executable paths or free-form installer arguments.
 8. Backend and Helper communicate over a local named pipe with a restrictive DACL for the expected logon SID. Both ends verify peer PID and token SID; message framing and maximum lengths are fixed. Disconnect or malformed message => UNKNOWN/stop, never assume success.
 
-## Helper signature policy
+## Local-first Helper signing and trust policy
 
-- Sign the Launcher and Helper with the project's release signing identity; do not treat a self-signed development build as production trusted.
-- Verify Authenticode trust with `WinVerifyTrust` and enforce an explicit publisher/certificate policy, not merely the presence of any valid signature.
-- Define certificate rotation and revocation handling before release. Unknown publisher, revoked/expired/untrusted chain, verification timeout/error, path replacement, or hash mismatch blocks launch.
-- Verify the exact installed Helper file immediately before launch and re-check from inside the Helper. Protect its install directory with appropriate Windows ACLs.
-- CI may build unsigned artifacts for tests, but unsigned artifacts must not be eligible for Machine Scope.
+The current product target is a locally installed Windows agent, not public software distribution. A paid public-CA Code Signing Certificate is **not a prerequisite**.
+
+- Use a project-controlled self-signed Code Signing certificate for the locally installed Launcher and Helper. Keep the private key out of the application install directory and out of the runtime account; restrict signing to the release/build operator.
+- During an explicit first-time machine setup, an administrator must enroll the certificate into the Windows trust stores required by Authenticode (Trusted Root Certification Authorities and Trusted Publishers). Explain the publisher identity and consequences before enrollment; do not silently add trust.
+- Pin the expected certificate identity (SHA-256 certificate thumbprint/public-key identity) in the Launcher/verification policy as an additional publisher constraint. A valid signature from an unrelated certificate is not sufficient.
+- Verify Authenticode trust with `WinVerifyTrust` and enforce the pinned project certificate identity. Verify the exact installed Helper immediately before UAC and again inside the Helper.
+- Install Launcher/Helper under an administrator-protected directory; ordinary users and the unelevated Backend must not be able to replace binaries or alter the trust policy.
+- If the certificate is missing, untrusted, expired, revoked, replaced, or cannot be verified; if the file changes; or if trust-store enrollment is incomplete, block Machine Scope. Do not fall back to unsigned execution.
+- Define certificate renewal/rotation and recovery before production rollout. The self-signed certificate is a local trust mechanism, not a way to obtain public Windows reputation or eliminate SmartScreen warnings.
+- CI may build unsigned artifacts for tests, but unsigned artifacts must never be eligible for Machine Scope.
 
 ## Installer Process Tree containment
 
