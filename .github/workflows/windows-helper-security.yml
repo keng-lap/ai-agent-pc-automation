@@ -27,4 +27,4 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Build Windows security core
-        run: dotnet build src/windows/InstallerHelper.Security/InstallerHelper.Security.csproj --configuration Release --no-restore
+        run: dotnet build src/windows/InstallerHelper.Security/InstallerHelper.Security.csproj --configuration Release
