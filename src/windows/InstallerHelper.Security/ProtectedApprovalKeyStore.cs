@@ -128,6 +128,31 @@ public sealed class ProtectedApprovalKeyStore
         }
     }
 
+    /// <summary>
+    /// Loads an already provisioned key without creating or rotating it. Elevated
+    /// runtime components must use this method so a missing setup-time key fails closed.
+    /// </summary>
+    public byte[] LoadExisting()
+    {
+        VerifyDirectory();
+        VerifyKeyFile();
+        var protectedBytes = File.ReadAllBytes(_keyPath);
+        try
+        {
+            var key = DpapiApprovalKeyProtector.Unprotect(protectedBytes);
+            if (key.Length != 32)
+            {
+                CryptographicOperations.ZeroMemory(key);
+                throw new CryptographicException("Provisioned approval key must be exactly 256 bits.");
+            }
+            return key;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(protectedBytes);
+        }
+    }
+
     private void VerifyDirectory()
     {
         var info = new DirectoryInfo(_directoryPath);
