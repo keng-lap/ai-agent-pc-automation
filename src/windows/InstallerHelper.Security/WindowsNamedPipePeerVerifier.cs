@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
 
@@ -66,6 +67,55 @@ public static class WindowsNamedPipePeerVerifier
             throw new UnauthorizedAccessException("Named-pipe client process token does not match the approved non-elevated requester session.");
 
         return identity;
+    }
+
+    /// <summary>
+    /// Verifies the connected pipe server is the pinned elevated Helper process.
+    /// Call this on the unelevated client end before sending an approval ticket or nonce.
+    /// </summary>
+    public static WindowsTokenIdentityInfo RequireServerIdentity(
+        SafePipeHandle clientPipeHandle,
+        string expectedRequesterSid,
+        string expectedAuthenticationId,
+        int expectedSessionId,
+        string expectedHelperImagePath,
+        string expectedCertificateSha256)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Windows named-pipe peer verification is Windows-only.");
+        if (clientPipeHandle is null || clientPipeHandle.IsInvalid || clientPipeHandle.IsClosed)
+            throw new ArgumentException("A connected client pipe handle is required.", nameof(clientPipeHandle));
+        if (string.IsNullOrWhiteSpace(expectedHelperImagePath) || string.IsNullOrWhiteSpace(expectedCertificateSha256))
+            throw new ArgumentException("Pinned Helper path and certificate SHA-256 are required.");
+        if (!Native.GetNamedPipeServerProcessId(clientPipeHandle, out var processId) || processId == 0)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not identify the named-pipe server process.");
+
+        var identity = ReadProcessIdentity(processId);
+        if (!StringComparer.Ordinal.Equals(identity.UserSid, expectedRequesterSid)
+            || !StringComparer.Ordinal.Equals(identity.AuthenticationId, expectedAuthenticationId)
+            || identity.SessionId != expectedSessionId
+            || !identity.IsElevated)
+            throw new UnauthorizedAccessException("Named-pipe server token does not match the expected elevated Helper identity.");
+
+        using var process = Native.OpenProcess(ProcessQueryLimitedInformation, false, processId);
+        if (process.IsInvalid)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open the named-pipe server process.");
+        var imagePath = QueryProcessImagePath(process);
+        var expectedPath = Path.GetFullPath(expectedHelperImagePath);
+        if (!StringComparer.OrdinalIgnoreCase.Equals(Path.GetFullPath(imagePath), expectedPath))
+            throw new UnauthorizedAccessException("Named-pipe server executable path does not match the installed Helper path.");
+
+        WindowsSecurity.RequireTrustedAuthenticodeSignature(imagePath, expectedCertificateSha256);
+        return identity;
+    }
+
+    private static string QueryProcessImagePath(SafeProcessHandle process)
+    {
+        var capacity = 32768;
+        var path = new StringBuilder(capacity);
+        if (!Native.QueryFullProcessImageName(process, 0, path, ref capacity) || capacity <= 0)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not query named-pipe server executable path.");
+        return path.ToString();
     }
 
     private static WindowsTokenIdentityInfo ReadProcessIdentity(uint processId)
@@ -183,6 +233,15 @@ public static class WindowsNamedPipePeerVerifier
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe, out uint clientProcessId);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true,
+            EntryPoint = "QueryFullProcessImageNameW")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool QueryFullProcessImageName(
+            SafeProcessHandle process, uint flags, StringBuilder imageName, ref int size);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
