@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
-using System.Security;
 using Microsoft.Win32.SafeHandles;
 
 namespace InstallerHelper.Security;
@@ -18,7 +17,6 @@ public static class WindowsSecureNamedPipeServer
     private const uint FileFlagOverlapped = 0x40000000;
     private const uint FileFlagFirstPipeInstance = 0x00080000;
     private const uint PipeRejectRemoteClients = 0x00000008;
-    private const uint PipeUnlimitedInstances = 255;
     private const uint BufferSize = 64 * 1024;
     private const uint SddlRevision1 = 1;
 
