@@ -13,6 +13,10 @@ public sealed class WindowsJobObject : IDisposable
     private const uint JobObjectExtendedLimitInformation = 9;
     private const uint JobObjectBasicAccountingInformation = 1;
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
+    private const uint CreateSuspended = 0x00000004;
+    private const uint CreateNoWindow = 0x08000000;
+    private const uint WaitObject0 = 0x00000000;
+    private const uint WaitFailed = 0xFFFFFFFF;
     private const uint JobObjectLimitDieOnUnhandledException = 0x00000400;
     private readonly SafeJobHandle _handle;
 
@@ -46,6 +50,86 @@ public sealed class WindowsJobObject : IDisposable
             throw new Win32Exception(
                 Marshal.GetLastWin32Error(),
                 "Could not contain the suspended installer process; it must not be resumed.");
+    }
+
+    /// <summary>
+    /// Creates a process suspended, assigns it to this Job Object, and resumes it
+    /// only after containment succeeds. The command line must be constructed from
+    /// a separately validated executable and argument set by the trusted caller.
+    /// </summary>
+    public uint RunSuspendedCommandLine(
+        string commandLine,
+        string? workingDirectory,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureOpen();
+        EnsureWindows();
+        if (string.IsNullOrWhiteSpace(commandLine) || commandLine.Length > 32767)
+            throw new ArgumentException("A bounded Windows command line is required.", nameof(commandLine));
+        if (timeout <= TimeSpan.Zero || timeout > TimeSpan.FromMinutes(30))
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+
+        var startup = new StartupInfo { Size = (uint)Marshal.SizeOf<StartupInfo>() };
+        var mutableCommandLine = new System.Text.StringBuilder(commandLine);
+        if (!NativeMethods.CreateProcessW(
+                null, mutableCommandLine, IntPtr.Zero, IntPtr.Zero, false,
+                CreateSuspended | CreateNoWindow, IntPtr.Zero,
+                workingDirectory is null ? null : Path.GetFullPath(workingDirectory),
+                ref startup, out var processInfo))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create suspended installer process.");
+
+        try
+        {
+            // This is the security boundary: do not call ResumeThread until the
+            // process has been assigned to the Helper-owned kill-on-close Job.
+            AssignSuspendedProcess(processInfo.Process);
+            var resumeResult = NativeMethods.ResumeThread(processInfo.Thread);
+            if (resumeResult == uint.MaxValue)
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the contained installer process.");
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var remaining = timeout - stopwatch.Elapsed;
+                if (remaining <= TimeSpan.Zero)
+                    throw new TimeoutException("Installer process tree exceeded its execution deadline.");
+
+                var waitMs = (uint)Math.Clamp((int)Math.Ceiling(Math.Min(remaining.TotalMilliseconds, 100)), 1, 100);
+                var wait = NativeMethods.WaitForSingleObject(processInfo.Process, waitMs);
+                if (wait == WaitObject0)
+                    break;
+                if (wait == WaitFailed)
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not wait for installer process.");
+            }
+
+            if (!NativeMethods.GetExitCodeProcess(processInfo.Process, out var exitCode))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not read installer process exit code.");
+
+            // The root process may exit while descendants remain in the Job.
+            while (GetActiveProcessCount() != 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (stopwatch.Elapsed >= timeout)
+                    throw new TimeoutException("Installer descendants remained active beyond the execution deadline.");
+                Thread.Sleep(50);
+            }
+            return exitCode;
+        }
+        catch
+        {
+            // Any failure after process creation is fail-closed: terminate every
+            // process already assigned to the Job before propagating the error.
+            try { Terminate(1); } catch { /* preserve the original failure */ }
+            try { WaitForEmpty(TimeSpan.FromSeconds(10)); } catch { /* caller records containment failure */ }
+            throw;
+        }
+        finally
+        {
+            _ = NativeMethods.CloseHandle(processInfo.Thread);
+            _ = NativeMethods.CloseHandle(processInfo.Process);
+        }
     }
 
     public void Terminate(uint exitCode = 1)
@@ -103,6 +187,27 @@ public sealed class WindowsJobObject : IDisposable
     }
 
     public void Dispose() => _handle.Dispose();
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct StartupInfo
+    {
+        public uint Size;
+        public string? Reserved;
+        public string? Desktop;
+        public string? Title;
+        public uint X, Y, XSize, YSize, XCountChars, YCountChars, FillAttribute, Flags;
+        public ushort ShowWindow, Reserved2;
+        public IntPtr Reserved2Pointer, StdInput, StdOutput, StdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessInformation
+    {
+        public IntPtr Process;
+        public IntPtr Thread;
+        public uint ProcessId;
+        public uint ThreadId;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BasicLimitInformation
@@ -163,6 +268,24 @@ public sealed class WindowsJobObject : IDisposable
     {
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         internal static extern SafeJobHandle CreateJobObjectW(IntPtr attributes, string? name);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "CreateProcessW")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool CreateProcessW(
+            string? applicationName, System.Text.StringBuilder commandLine,
+            IntPtr processAttributes, IntPtr threadAttributes,
+            [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags,
+            IntPtr environment, string? currentDirectory,
+            ref StartupInfo startupInfo, out ProcessInformation processInformation);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern uint ResumeThread(IntPtr thread);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
