@@ -85,6 +85,7 @@ static void RunAuthenticodeChecks()
     {
         var setupScript = $@"
 $ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
 Import-Module PKI -ErrorAction Stop
 $cert = New-SelfSignedCertificate -Subject 'CN=InstallerHelper Integration Test' -Type CodeSigningCert -CertStoreLocation 'Cert:\CurrentUser\My' -HashAlgorithm SHA256
 $root = Get-Item 'Cert:\CurrentUser\Root'
@@ -128,6 +129,7 @@ Set-Content -LiteralPath '{EscapePowerShell(thumbprintFile)}' -Value $cert.Thumb
         {
             var cleanup = $@"
 $ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
 Import-Module PKI -ErrorAction Stop
 $thumb = '{EscapePowerShell(thumbprint)}'
 foreach ($location in @('My', 'Root', 'TrustedPublisher')) {{
