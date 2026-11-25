@@ -82,6 +82,7 @@ def test_publisher_uses_run_id_and_returns_only_the_allowlisted_github_url(tmp_p
     scripts.mkdir()
     (scripts / "publish-runtime-diagnostics.ps1").write_text("param()", encoding="utf-8")
     monkeypatch.setattr(publisher, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(publisher, "_cleanup_publisher_artifacts", lambda _run_id: None)
     process = FakeProcess(
         stdout="LOG PUSHED: https://github.com/keng-lap/ai-agent-pc-automation/tree/diagnostics/runtime-logs/runs/1234-runtime\\n"
     )
@@ -107,6 +108,7 @@ def test_publisher_failure_does_not_expose_process_output_or_secrets(tmp_path, m
     scripts.mkdir()
     (scripts / "publish-runtime-diagnostics.ps1").write_text("param()", encoding="utf-8")
     monkeypatch.setattr(publisher, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(publisher, "_cleanup_publisher_artifacts", lambda _run_id: None)
     process = FakeProcess(stderr="fatal: authentication token=do-not-expose", returncode=1)
     job, _calls, _resume = install_process_fakes(monkeypatch, process)
 
@@ -117,3 +119,45 @@ def test_publisher_failure_does_not_expose_process_output_or_secrets(tmp_path, m
     assert status["error_code"] == "publish_failed"
     assert "do-not-expose" not in str(status)
     assert job.waited
+
+
+def test_publisher_cleanup_removes_worktree_registration_and_temp_artifacts(tmp_path, monkeypatch):
+    temp_root = tmp_path / "ai-agent-diagnostics-12345678123442348234123456789abc"
+    worktree = tmp_path / "ai-agent-diagnostics-worktree-12345678123442348234123456789abc"
+    temp_root.mkdir()
+    worktree.mkdir()
+    (temp_root / "events.jsonl").write_text("{}\\n", encoding="utf-8")
+    monkeypatch.setattr(publisher.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(publisher, "REPO_ROOT", tmp_path / "repo")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(publisher.subprocess, "run", fake_run)
+    publisher._cleanup_publisher_artifacts("12345678-1234-4234-8234-123456789abc")
+
+    assert [call[0][-2:] for call in calls] == [
+        ["remove", "--force", str(worktree)],
+        ["worktree", "prune"],
+    ] or calls[0][0][-3:] == ["--force", str(worktree)]
+    assert not temp_root.exists()
+    assert not worktree.exists()
+
+
+def test_publisher_cleanup_fails_closed_when_worktree_cannot_be_removed(tmp_path, monkeypatch):
+    worktree = tmp_path / "ai-agent-diagnostics-worktree-12345678123442348234123456789abc"
+    worktree.mkdir()
+    monkeypatch.setattr(publisher.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(publisher, "REPO_ROOT", tmp_path / "repo")
+    monkeypatch.setattr(
+        publisher.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1),
+    )
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="publisher_worktree_cleanup_failed"):
+        publisher._cleanup_publisher_artifacts("12345678-1234-4234-8234-123456789abc")
