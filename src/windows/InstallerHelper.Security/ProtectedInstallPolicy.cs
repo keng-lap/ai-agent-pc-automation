@@ -56,9 +56,19 @@ public sealed record ProtectedInstallPolicy(
             ?? throw new CryptographicException("Protected install policy is empty.");
 
         policy.ValidateValues();
+        policy.VerifyInstalledHelper();
         return policy;
     }
 
+    private void VerifyInstalledHelper()
+    {
+        var helperPath = Path.GetFullPath(HelperPath);
+        var helperDirectory = Path.GetDirectoryName(helperPath)
+            ?? throw new CryptographicException("Installed Helper directory is invalid.");
+        VerifyNotReparsePoint(helperDirectory, "Helper directory");
+        VerifyPolicyDirectory(helperDirectory);
+        VerifyPolicyFile(helperPath);
+    }
     private void ValidateValues()
     {
         if (!Path.IsPathFullyQualified(HelperPath)
