@@ -5,6 +5,8 @@ on:
     paths:
       - "src/windows/InstallerHelper.Security/**"
       - "src/windows/InstallerHelper.Security.IntegrationTests/**"
+      - "src/windows/InstallerHelper/**"
+      - "src/windows/InstallerLauncher/**"
       - ".github/workflows/windows-helper-security.yml"
   push:
     branches:
