@@ -82,9 +82,8 @@ def enforce_single_worker(*, environ=None, argv=None) -> None:
 
 
 def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
-    # Backend and its in-process Agent must never inherit an elevated token.
-    # UAC is reserved for a separately signed Elevated Installer Helper.
-    enforce_backend_not_elevated()
+    # The process privilege check runs at ASGI startup, not app construction.
+    # Importing the app for tooling/tests must not be confused with running it.
     enforce_single_worker()
     validate_policy_configuration()
     settings = settings or load_settings()
@@ -171,6 +170,10 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
 
     @application.on_event("startup")
     def start_local_install_worker() -> None:
+        # Backend and its in-process Agent must never inherit an elevated token.
+        # UAC is reserved for a separately signed Elevated Installer Helper.
+        # Check the effective token immediately before serving requests.
+        enforce_backend_not_elevated()
         if settings.app_env != "test":
             job_state_directory = Path(settings.job_store_path).parent
             diagnostics_directory = job_state_directory.with_name(
