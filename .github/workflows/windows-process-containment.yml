@@ -51,6 +51,7 @@ on:
       - "scripts/acceptance/P6-609-B2/**"
       - "scripts/acceptance/P6-609-C/**"
       - "src/backend/pyproject.toml"
+      - "src/windows/InstallerHelper.Security/**"
       - ".github/workflows/windows-process-containment.yml"
   push:
     branches:
@@ -96,6 +97,12 @@ jobs:
         run: python -m ruff check --select F src/backend/agent_backend tests/backend
       - name: Test Windows authenticator storage and DPAPI
         run: python -m pytest tests/backend/test_authenticator.py tests/backend/test_auth_api.py tests/backend/test_windows_secret_storage.py -q
+      - name: Set up .NET for Installer Helper security core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build Installer Helper security core
+        run: dotnet build src/windows/InstallerHelper.Security/InstallerHelper.Security.csproj --configuration Release
       - name: Validate B2 Windows acceptance scripts
         shell: pwsh
         run: |
