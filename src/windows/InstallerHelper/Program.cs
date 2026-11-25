@@ -42,7 +42,7 @@ try
         throw new CryptographicException("Ticket requester identity does not match the UAC request.");
 
     var keyStore = new ProtectedApprovalKeyStore(options.ProtectedStoreDirectory);
-    var key = keyStore.LoadOrCreate();
+    var key = keyStore.LoadExisting();
     try
     {
         var now = DateTimeOffset.UtcNow;
