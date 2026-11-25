@@ -12,6 +12,7 @@ namespace InstallerHelper.Security;
 /// </summary>
 public sealed record ProtectedInstallPolicy(
     string HelperPath,
+    string LauncherPath,
     string CertificateSha256,
     string ProtectedStoreDirectory,
     string NonceDirectory)
@@ -56,7 +57,7 @@ public sealed record ProtectedInstallPolicy(
             ?? throw new CryptographicException("Protected install policy is empty.");
 
         policy.ValidateValues();
-        policy.VerifyInstalledHelper();
+        policy.VerifyInstalledBinaries();
         return policy;
     }
 
@@ -77,9 +78,13 @@ public sealed record ProtectedInstallPolicy(
         policy.ValidateValues();
 
         var helperPath = Path.GetFullPath(policy.HelperPath);
-        if (!File.Exists(helperPath) || (File.GetAttributes(helperPath) & FileAttributes.ReparsePoint) != 0)
-            throw new CryptographicException("Signed Helper binary is missing or is a reparse point.");
-        WindowsSecurity.RequireTrustedAuthenticodeSignature(helperPath, policy.CertificateSha256);
+        var launcherPath = Path.GetFullPath(policy.LauncherPath);
+        foreach (var binaryPath in new[] { helperPath, launcherPath })
+        {
+            if (!File.Exists(binaryPath) || (File.GetAttributes(binaryPath) & FileAttributes.ReparsePoint) != 0)
+                throw new CryptographicException("Signed Launcher/Helper binary is missing or is a reparse point.");
+            WindowsSecurity.RequireTrustedAuthenticodeSignature(binaryPath, policy.CertificateSha256);
+        }
 
         var productRoot = Path.GetDirectoryName(Path.GetDirectoryName(FixedPolicyPath)!)!;
         var securityDirectory = Path.GetDirectoryName(FixedPolicyPath)!;
@@ -108,6 +113,8 @@ public sealed record ProtectedInstallPolicy(
                 stream.Flush(flushToDisk: true);
             }
             File.Move(temporary, destination);
+            ApplyFileAcl(helperPath);
+            ApplyFileAcl(launcherPath);
             VerifyPolicyDirectory(productRoot);
             VerifyPolicyDirectory(securityDirectory);
             VerifyPolicyFile(destination);
@@ -152,18 +159,21 @@ public sealed record ProtectedInstallPolicy(
         new FileInfo(path).SetAccessControl(security);
         VerifyPolicyFile(path);
     }
-    private void VerifyInstalledHelper()
+    private void VerifyInstalledBinaries()
     {
-        var helperPath = Path.GetFullPath(HelperPath);
-        var helperDirectory = Path.GetDirectoryName(helperPath)
-            ?? throw new CryptographicException("Installed Helper directory is invalid.");
-        VerifyNotReparsePoint(helperDirectory, "Helper directory");
-        VerifyPolicyDirectory(helperDirectory);
-        VerifyPolicyFile(helperPath);
+        foreach (var binaryPath in new[] { Path.GetFullPath(HelperPath), Path.GetFullPath(LauncherPath) })
+        {
+            var binaryDirectory = Path.GetDirectoryName(binaryPath)
+                ?? throw new CryptographicException("Installed Launcher/Helper directory is invalid.");
+            VerifyNotReparsePoint(binaryDirectory, "Launcher/Helper directory");
+            VerifyPolicyDirectory(binaryDirectory);
+            VerifyPolicyFile(binaryPath);
+        }
     }
     private void ValidateValues()
     {
         if (!Path.IsPathFullyQualified(HelperPath)
+            || !Path.IsPathFullyQualified(LauncherPath)
             || !Path.IsPathFullyQualified(ProtectedStoreDirectory)
             || !Path.IsPathFullyQualified(NonceDirectory))
             throw new CryptographicException("Protected install policy paths must be absolute.");
@@ -171,13 +181,17 @@ public sealed record ProtectedInstallPolicy(
         if (CertificateSha256.Length != 64 || CertificateSha256.Any(c => !Uri.IsHexDigit(c)))
             throw new CryptographicException("Protected install policy certificate pin is invalid.");
 
-        var helper = Path.GetFullPath(HelperPath);
         var expectedRoot = Path.GetFullPath(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             ProductDirectoryName)) + Path.DirectorySeparatorChar;
+        var helper = Path.GetFullPath(HelperPath);
+        var launcher = Path.GetFullPath(LauncherPath);
         if (!helper.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase)
-            || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(helper), "InstallerHelper.exe"))
-            throw new CryptographicException("Protected Helper path must be the installed product Helper under Program Files.");
+            || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(helper), "InstallerHelper.exe")
+            || !launcher.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase)
+            || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(launcher), "InstallerLauncher.exe")
+            || StringComparer.OrdinalIgnoreCase.Equals(helper, launcher))
+            throw new CryptographicException("Protected Launcher and Helper paths must be distinct installed binaries under Program Files.");
 
         if (!Path.GetFullPath(ProtectedStoreDirectory).StartsWith(
                 Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), ProductDirectoryName)) + Path.DirectorySeparatorChar,
