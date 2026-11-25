@@ -11,14 +11,15 @@ if (!OperatingSystem.IsWindows())
 try
 {
     var options = LauncherOptions.Parse(args);
+    var policy = ProtectedInstallPolicy.Load();
     var requester = WindowsTokenIdentity.GetCurrentProcessIdentity();
     if (requester.IsElevated)
         throw new UnauthorizedAccessException("Launcher must run with a non-elevated token.");
 
-    var helperPath = Path.GetFullPath(options.HelperPath);
+    var helperPath = Path.GetFullPath(policy.HelperPath);
     if (!File.Exists(helperPath))
         throw new FileNotFoundException("Installed Helper executable was not found.", helperPath);
-    WindowsSecurity.RequireTrustedAuthenticodeSignature(helperPath, options.CertificateSha256);
+    WindowsSecurity.RequireTrustedAuthenticodeSignature(helperPath, policy.CertificateSha256);
 
     var ticketBytes = await File.ReadAllBytesAsync(options.TicketFile);
     if (ticketBytes.Length is <= 0 or > InstallerHelperPipeProtocol.MaximumFrameBytes)
@@ -33,15 +34,12 @@ try
         || !StringComparer.Ordinal.Equals(ticket.TicketId, Path.GetFileNameWithoutExtension(options.TicketFile)))
         throw new CryptographicException("Approval ticket is not bound to the current Windows logon session.");
 
-    var protectedStore = Path.GetFullPath(options.ProtectedStoreDirectory);
     var helperArguments = string.Join(" ", new[]
     {
         "--ticket-id", Quote(ticket.TicketId),
         "--requester-sid", Quote(requester.UserSid),
         "--requester-logon-id", Quote(requester.AuthenticationId),
-        "--requester-session-id", requester.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        "--certificate-sha256", Quote(options.CertificateSha256),
-        "--protected-store", Quote(protectedStore)
+        "--requester-session-id", requester.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture)
     });
 
     // ShellExecute "runas" is the only elevation boundary. ERROR_CANCELLED (1223)
@@ -82,7 +80,7 @@ try
         requester.AuthenticationId,
         requester.SessionId,
         helperPath,
-        options.CertificateSha256);
+        policy.CertificateSha256);
 
     await InstallerHelperPipeProtocol.WriteFrameAsync(client, ticketBytes, timeout.Token);
     var responseBytes = await InstallerHelperPipeProtocol.ReadFrameAsync(client, timeout.Token);
@@ -113,29 +111,13 @@ static string Quote(string value) => "\"" + value.Replace("\\", "\\\\").Replace(
 internal sealed record LauncherRequest(InstallerApprovalTicket Ticket);
 internal sealed record LauncherResponse(string Status, string Reason);
 
-internal sealed record LauncherOptions(
-    string HelperPath,
-    string TicketFile,
-    string CertificateSha256,
-    string ProtectedStoreDirectory)
+internal sealed record LauncherOptions(string TicketFile)
 {
     public static LauncherOptions Parse(string[] args)
     {
-        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < args.Length; i += 2)
-        {
-            if (i + 1 >= args.Length || !args[i].StartsWith("--", StringComparison.Ordinal))
-                throw new ArgumentException("Invalid Launcher arguments.");
-            values.Add(args[i][2..], args[i + 1]);
-        }
-        string Required(string key) =>
-            values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
-                ? value
-                : throw new ArgumentException($"Missing --{key}.");
-        return new LauncherOptions(
-            Required("helper"),
-            Required("ticket-file"),
-            Required("certificate-sha256"),
-            Required("protected-store"));
+        if (args.Length != 2 || !StringComparer.Ordinal.Equals(args[0], "--ticket-file")
+            || string.IsNullOrWhiteSpace(args[1]))
+            throw new ArgumentException("Only --ticket-file is accepted; trust anchors come from protected policy.");
+        return new LauncherOptions(Path.GetFullPath(args[1]));
     }
 }
