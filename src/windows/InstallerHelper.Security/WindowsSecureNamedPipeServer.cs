@@ -110,7 +110,7 @@ public static class WindowsSecureNamedPipeServer
             string stringSecurityDescriptor, uint stringSDRevision,
             out IntPtr securityDescriptor, out uint securityDescriptorSize);
 
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true,
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true,
             EntryPoint = "CreateNamedPipeW")]
         internal static extern SafePipeHandle CreateNamedPipe(
             string name, uint openMode, uint pipeMode, uint maxInstances,
