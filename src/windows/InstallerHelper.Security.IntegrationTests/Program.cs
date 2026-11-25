@@ -75,6 +75,9 @@ static bool GetTokenElevation()
 
 static void RunAuthenticodeChecks()
 {
+    if (!GetTokenElevation())
+        throw new UnauthorizedAccessException("Authenticode integration checks require an elevated Windows runner to write LocalMachine trust stores.");
+
     var tempDirectory = Path.Combine(Path.GetTempPath(), "installer-helper-authenticode-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(tempDirectory);
     var signedFile = Path.Combine(tempDirectory, "signed-test.dll");
@@ -119,17 +122,24 @@ static void RunAuthenticodeChecks()
         }
 
         thumbprint = certificateWithKey.Thumbprint;
-        Console.WriteLine("Authenticode: [6/10] adding certificate to CurrentUser\\My.");
-        AddCertificateToStore(certificateWithKey, StoreName.My);
+        Console.WriteLine("Authenticode: [6/10] adding private certificate to CurrentUser\\My.");
+        AddCertificateToStore(certificateWithKey, StoreName.My, StoreLocation.CurrentUser);
         Console.WriteLine("Authenticode: [6/10] certificate added to CurrentUser\\My.");
-        Console.WriteLine("Authenticode: [7/10] adding certificate to CurrentUser\\Root.");
+
+        // Follow the established PowerToys signing-test layout: keep the private key
+        // in CurrentUser\\My, and trust only the public certificate in machine stores.
+        Console.WriteLine("Authenticode: [7/10] adding public certificate to LocalMachine\\Root.");
         using (var rootCert = new X509Certificate2(certificateWithKey.RawData))
-            AddCertificateToStore(rootCert, StoreName.Root);
-        Console.WriteLine("Authenticode: [7/10] certificate added to CurrentUser\\Root.");
-        Console.WriteLine("Authenticode: [8/10] adding certificate to CurrentUser\\TrustedPublisher.");
-        using (var publisherCert = new X509Certificate2(certificateWithKey.RawData))
-            AddCertificateToStore(publisherCert, StoreName.TrustedPublisher);
-        Console.WriteLine("Authenticode: [8/10] certificate added to CurrentUser\\TrustedPublisher.");
+            AddCertificateToStore(rootCert, StoreName.Root, StoreLocation.LocalMachine);
+        Console.WriteLine("Authenticode: [7/10] certificate added to LocalMachine\\Root.");
+
+        Console.WriteLine("Authenticode: [8/10] adding public certificate to LocalMachine\\TrustedPeople.");
+        using (var trustedPeopleCert = new X509Certificate2(certificateWithKey.RawData))
+            AddCertificateToStore(trustedPeopleCert, StoreName.TrustedPeople, StoreLocation.LocalMachine);
+        Console.WriteLine("Authenticode: [8/10] certificate added to LocalMachine\\TrustedPeople.");
+
+        using (var currentUserTrustedPeopleCert = new X509Certificate2(certificateWithKey.RawData))
+            AddCertificateToStore(currentUserTrustedPeopleCert, StoreName.TrustedPeople, StoreLocation.CurrentUser);
 
         Console.WriteLine("Authenticode: [9/10] exporting PFX file.");
         File.WriteAllBytes(pfxFile, certificateWithKey.Export(X509ContentType.Pfx, password));
@@ -161,9 +171,10 @@ static void RunAuthenticodeChecks()
         certificateWithKey?.Dispose();
         if (thumbprint is not null)
         {
-            RemoveCertificateFromStore(thumbprint, StoreName.My);
-            RemoveCertificateFromStore(thumbprint, StoreName.Root);
-            RemoveCertificateFromStore(thumbprint, StoreName.TrustedPublisher);
+            RemoveCertificateFromStore(thumbprint, StoreName.My, StoreLocation.CurrentUser);
+            RemoveCertificateFromStore(thumbprint, StoreName.Root, StoreLocation.LocalMachine);
+            RemoveCertificateFromStore(thumbprint, StoreName.TrustedPeople, StoreLocation.LocalMachine);
+            RemoveCertificateFromStore(thumbprint, StoreName.TrustedPeople, StoreLocation.CurrentUser);
         }
 
         if (Directory.Exists(tempDirectory))
@@ -171,19 +182,19 @@ static void RunAuthenticodeChecks()
     }
 }
 
-static void AddCertificateToStore(X509Certificate2 certificate, StoreName storeName)
+static void AddCertificateToStore(X509Certificate2 certificate, StoreName storeName, StoreLocation storeLocation)
 {
-    Console.WriteLine($"Authenticode: opening CurrentUser\\{storeName} store.");
-    using var store = new X509Store(storeName, StoreLocation.CurrentUser);
+    Console.WriteLine($"Authenticode: opening {storeLocation}\\{storeName} store.");
+    using var store = new X509Store(storeName, storeLocation);
     store.Open(OpenFlags.ReadWrite);
-    Console.WriteLine($"Authenticode: opened CurrentUser\\{storeName} store; adding certificate.");
+    Console.WriteLine($"Authenticode: opened {storeLocation}\\{storeName} store; adding certificate.");
     store.Add(certificate);
-    Console.WriteLine($"Authenticode: added certificate to CurrentUser\\{storeName} store.");
+    Console.WriteLine($"Authenticode: added certificate to {storeLocation}\\{storeName} store.");
 }
 
-static void RemoveCertificateFromStore(string thumbprint, StoreName storeName)
+static void RemoveCertificateFromStore(string thumbprint, StoreName storeName, StoreLocation storeLocation)
 {
-    using var store = new X509Store(storeName, StoreLocation.CurrentUser);
+    using var store = new X509Store(storeName, storeLocation);
     store.Open(OpenFlags.ReadWrite);
     var matches = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
     foreach (var certificate in matches)
