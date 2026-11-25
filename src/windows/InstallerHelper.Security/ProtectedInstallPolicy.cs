@@ -193,23 +193,19 @@ public sealed record ProtectedInstallPolicy(
         var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
         if (string.IsNullOrWhiteSpace(programFiles) || string.IsNullOrWhiteSpace(programData))
             throw new CryptographicException("Windows Program Files or ProgramData location is unavailable.");
-        var expectedRoot = Path.GetFullPath(Path.Combine(programFiles, ProductDirectoryName)) + Path.DirectorySeparatorChar;
+        var expectedRoot = Path.GetFullPath(Path.Combine(programFiles, ProductDirectoryName));
         var helper = Path.GetFullPath(HelperPath);
         var launcher = Path.GetFullPath(LauncherPath);
-        if (!helper.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase)
-            || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(helper), "InstallerHelper.exe")
-            || !launcher.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase)
-            || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(launcher), "InstallerLauncher.exe")
-            || StringComparer.OrdinalIgnoreCase.Equals(helper, launcher))
-            throw new CryptographicException("Protected Launcher and Helper paths must be distinct installed binaries under Program Files.");
+        if (!StringComparer.OrdinalIgnoreCase.Equals(helper, Path.Combine(expectedRoot, "InstallerHelper.exe"))
+            || !StringComparer.OrdinalIgnoreCase.Equals(launcher, Path.Combine(expectedRoot, "InstallerLauncher.exe")))
+            throw new CryptographicException("Launcher and Helper must use their fixed direct-child paths under the protected Program Files product directory.");
 
-        if (!Path.GetFullPath(ProtectedStoreDirectory).StartsWith(
-                Path.GetFullPath(Path.Combine(programData, ProductDirectoryName)) + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase)
-            || !Path.GetFullPath(NonceDirectory).StartsWith(
-                Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), ProductDirectoryName)) + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase))
-            throw new CryptographicException("Protected approval stores must be under the product ProgramData directory.");
+        var expectedDataRoot = Path.GetFullPath(Path.Combine(programData, ProductDirectoryName));
+        var protectedStore = Path.GetFullPath(ProtectedStoreDirectory);
+        var nonceStore = Path.GetFullPath(NonceDirectory);
+        if (!StringComparer.OrdinalIgnoreCase.Equals(Path.GetDirectoryName(protectedStore), expectedDataRoot)
+            || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetDirectoryName(nonceStore), expectedDataRoot))
+            throw new CryptographicException("Protected approval stores must be direct children of the product ProgramData directory.");
     }
 
     private static void VerifyNotReparsePoint(string path, string description)
