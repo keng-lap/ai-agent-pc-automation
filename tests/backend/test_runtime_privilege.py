@@ -47,3 +47,16 @@ def test_windows_process_token_query_matches_enforcement_behavior():
             runtime_privilege.enforce_backend_not_elevated()
     else:
         runtime_privilege.enforce_backend_not_elevated()
+
+
+def test_backend_app_checks_privilege_before_starting_worker(monkeypatch):
+    from agent_backend import main
+
+    def reject_elevated_startup():
+        raise runtime_privilege.BackendPrivilegeError("elevated startup rejected")
+
+    monkeypatch.setattr(main, "enforce_backend_not_elevated", reject_elevated_startup)
+    application = main.create_app(settings=main.settings, auth_services=object())
+
+    with pytest.raises(runtime_privilege.BackendPrivilegeError, match="elevated startup rejected"):
+        application.router.on_startup[0]()
