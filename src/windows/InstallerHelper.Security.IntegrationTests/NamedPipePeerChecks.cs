@@ -1,5 +1,4 @@
 using System.IO.Pipes;
-using System.Security.Cryptography;
 using InstallerHelper.Security;
 
 internal static class NamedPipePeerChecks
@@ -44,7 +43,6 @@ internal static class NamedPipePeerChecks
                 server.SafePipeHandle, identity.UserSid, identity.AuthenticationId, identity.SessionId));
         }
         Console.WriteLine("PASS: named-pipe peer PID is resolved to the actual process token; SID, logon LUID, session ID, and non-elevated policy are enforced.");
-        CryptographicOperations.ZeroMemory(System.Text.Encoding.UTF8.GetBytes(sddl));
     }
 
     private static void ExpectUnauthorized(Action action)
