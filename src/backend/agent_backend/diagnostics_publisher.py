@@ -5,7 +5,9 @@ from __future__ import annotations
 import ctypes
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import threading
 import uuid
 from typing import Any
@@ -34,6 +36,42 @@ _URL_PATTERN = re.compile(
 def get_publish_status() -> dict[str, Any]:
     with _lock:
         return dict(_state)
+
+
+def _cleanup_publisher_artifacts(run_id: str) -> None:
+    """Remove deterministic temp/worktree paths after the contained job exits."""
+    suffix = run_id.replace("-", "")
+    temp_root = Path(tempfile.gettempdir()) / f"ai-agent-diagnostics-{suffix}"
+    worktree = Path(tempfile.gettempdir()) / f"ai-agent-diagnostics-worktree-{suffix}"
+    environment = os.environ.copy()
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    environment["GCM_INTERACTIVE"] = "never"
+
+    if worktree.exists():
+        removed = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "worktree", "remove", "--force", str(worktree)],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=30,
+            env=environment,
+            check=False,
+        )
+        if removed.returncode != 0 and worktree.exists():
+            raise RuntimeError("publisher_worktree_cleanup_failed")
+
+    pruned = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "worktree", "prune"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        timeout=30,
+        env=environment,
+        check=False,
+    )
+    if pruned.returncode != 0:
+        raise RuntimeError("publisher_worktree_prune_failed")
+
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
 
 
 def _run_publisher(run_id: str) -> None:
@@ -114,8 +152,17 @@ def _run_publisher(run_id: str) -> None:
         with _lock:
             _state.update(status="failed", url=None, error_code="publish_failed")
     finally:
-        with _lock:
-            _publisher_thread = None
+        try:
+            # PowerShell's finally block is bypassed when the Job Object kills
+            # the timed-out publisher. Clean deterministic artifacts here,
+            # after the contained process tree has exited.
+            _cleanup_publisher_artifacts(run_id)
+        except Exception:  # noqa: BLE001 - cleanup details stay local
+            with _lock:
+                _state.update(status="failed", url=None, error_code="publish_failed")
+        finally:
+            with _lock:
+                _publisher_thread = None
 
 
 def start_publish(reason: str = "manual") -> dict[str, Any]:
