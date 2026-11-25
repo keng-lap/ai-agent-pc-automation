@@ -172,18 +172,28 @@ public sealed record ProtectedInstallPolicy(
     }
     private void ValidateValues()
     {
-        if (!Path.IsPathFullyQualified(HelperPath)
+        if (string.IsNullOrWhiteSpace(HelperPath)
+            || string.IsNullOrWhiteSpace(LauncherPath)
+            || string.IsNullOrWhiteSpace(CertificateSha256)
+            || string.IsNullOrWhiteSpace(ProtectedStoreDirectory)
+            || string.IsNullOrWhiteSpace(NonceDirectory)
+            || !Path.IsPathFullyQualified(HelperPath)
             || !Path.IsPathFullyQualified(LauncherPath)
             || !Path.IsPathFullyQualified(ProtectedStoreDirectory)
             || !Path.IsPathFullyQualified(NonceDirectory))
-            throw new CryptographicException("Protected install policy paths must be absolute.");
+            throw new CryptographicException("Protected install policy paths and certificate pin are required and must be absolute.");
 
         if (CertificateSha256.Length != 64 || CertificateSha256.Any(c => !Uri.IsHexDigit(c)))
             throw new CryptographicException("Protected install policy certificate pin is invalid.");
 
-        var expectedRoot = Path.GetFullPath(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            ProductDirectoryName)) + Path.DirectorySeparatorChar;
+        if (StringComparer.OrdinalIgnoreCase.Equals(Path.GetFullPath(ProtectedStoreDirectory), Path.GetFullPath(NonceDirectory)))
+            throw new CryptographicException("Approval key and nonce stores must use distinct directories.");
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        if (string.IsNullOrWhiteSpace(programFiles) || string.IsNullOrWhiteSpace(programData))
+            throw new CryptographicException("Windows Program Files or ProgramData location is unavailable.");
+        var expectedRoot = Path.GetFullPath(Path.Combine(programFiles, ProductDirectoryName)) + Path.DirectorySeparatorChar;
         var helper = Path.GetFullPath(HelperPath);
         var launcher = Path.GetFullPath(LauncherPath);
         if (!helper.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase)
@@ -194,7 +204,7 @@ public sealed record ProtectedInstallPolicy(
             throw new CryptographicException("Protected Launcher and Helper paths must be distinct installed binaries under Program Files.");
 
         if (!Path.GetFullPath(ProtectedStoreDirectory).StartsWith(
-                Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), ProductDirectoryName)) + Path.DirectorySeparatorChar,
+                Path.GetFullPath(Path.Combine(programData, ProductDirectoryName)) + Path.DirectorySeparatorChar,
                 StringComparison.OrdinalIgnoreCase)
             || !Path.GetFullPath(NonceDirectory).StartsWith(
                 Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), ProductDirectoryName)) + Path.DirectorySeparatorChar,
