@@ -14,6 +14,7 @@ RunTokenChecks();
 RunApprovalTicketChecks();
 RunDurableNonceStoreChecks();
 RunDpapiApprovalKeyChecks();
+ProtectedApprovalKeyStoreChecks.Run();
 RunAuthenticodeChecks();
 RunJobObjectChecks();
 Console.WriteLine("Windows Installer Helper security integration checks passed.");
