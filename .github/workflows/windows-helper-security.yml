@@ -30,4 +30,5 @@ jobs:
       - name: Build Windows security core
         run: dotnet build src/windows/InstallerHelper.Security/InstallerHelper.Security.csproj --configuration Release
       - name: Run Windows security integration checks
+        timeout-minutes: 5
         run: dotnet run --project src/windows/InstallerHelper.Security.IntegrationTests/InstallerHelper.Security.IntegrationTests.csproj --configuration Release
