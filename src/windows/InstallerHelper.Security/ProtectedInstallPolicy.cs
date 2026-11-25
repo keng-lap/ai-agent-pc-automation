@@ -60,6 +60,98 @@ public sealed record ProtectedInstallPolicy(
         return policy;
     }
 
+    /// <summary>
+    /// Performs first-install policy provisioning. Must be called by an explicitly
+    /// elevated setup process after the project certificate has been enrolled.
+    /// Existing policy is never silently replaced; rotation needs a separate reviewed path.
+    /// </summary>
+    public static void Provision(ProtectedInstallPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Protected install policy is Windows-only.");
+
+        using var identity = WindowsIdentity.GetCurrent();
+        var sid = identity.User?.Value ?? throw new UnauthorizedAccessException("Current Windows SID is unavailable.");
+        WindowsSecurity.RequireElevatedTokenForSid(sid);
+        policy.ValidateValues();
+
+        var helperPath = Path.GetFullPath(policy.HelperPath);
+        if (!File.Exists(helperPath) || (File.GetAttributes(helperPath) & FileAttributes.ReparsePoint) != 0)
+            throw new CryptographicException("Signed Helper binary is missing or is a reparse point.");
+        WindowsSecurity.RequireTrustedAuthenticodeSignature(helperPath, policy.CertificateSha256);
+
+        var productRoot = Path.GetDirectoryName(Path.GetDirectoryName(FixedPolicyPath)!)!;
+        var securityDirectory = Path.GetDirectoryName(FixedPolicyPath)!;
+        ProvisionDirectory(productRoot);
+        ProvisionDirectory(securityDirectory);
+
+        var programDataRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), ProductDirectoryName);
+        ProvisionDirectory(programDataRoot);
+        ProtectedApprovalKeyStore.ProvisionDirectory(policy.ProtectedStoreDirectory);
+        ProtectedApprovalKeyStore.ProvisionDirectory(policy.NonceDirectory);
+
+        var destination = FixedPolicyPath;
+        if (File.Exists(destination))
+            throw new IOException("Protected install policy already exists; silent replacement is prohibited.");
+
+        var temporary = Path.Combine(securityDirectory, ".install-policy-" + Guid.NewGuid().ToString("N") + ".tmp");
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(policy);
+        try
+        {
+            using (var stream = new FileStream(
+                temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                ApplyFileAcl(temporary);
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+            File.Move(temporary, destination);
+            VerifyPolicyDirectory(productRoot);
+            VerifyPolicyDirectory(securityDirectory);
+            VerifyPolicyFile(destination);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bytes);
+            try { if (File.Exists(temporary)) File.Delete(temporary); } catch { /* incomplete temp is never loaded */ }
+        }
+    }
+
+    private static void ProvisionDirectory(string path)
+    {
+        Directory.CreateDirectory(path);
+        var info = new DirectoryInfo(path);
+        if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+            throw new CryptographicException("Provisioned security directory must not be a reparse point.");
+        var security = new DirectorySecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.SetOwner(AdministratorsSid);
+        security.AddAccessRule(new FileSystemAccessRule(
+            SystemSid, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+            PropagationFlags.None, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(
+            AdministratorsSid, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+            PropagationFlags.None, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(
+            UsersSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+            PropagationFlags.None, AccessControlType.Allow));
+        info.SetAccessControl(security);
+        VerifyPolicyDirectory(path);
+    }
+
+    private static void ApplyFileAcl(string path)
+    {
+        var security = new FileSecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.SetOwner(AdministratorsSid);
+        security.AddAccessRule(new FileSystemAccessRule(SystemSid, FileSystemRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(AdministratorsSid, FileSystemRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(UsersSid, FileSystemRights.ReadAndExecute, AccessControlType.Allow));
+        new FileInfo(path).SetAccessControl(security);
+        VerifyPolicyFile(path);
+    }
     private void VerifyInstalledHelper()
     {
         var helperPath = Path.GetFullPath(HelperPath);
