@@ -43,6 +43,7 @@ public sealed record ProtectedInstallPolicy(
         var directory = Path.GetDirectoryName(path)
             ?? throw new InvalidOperationException("Protected policy directory is invalid.");
         VerifyNotReparsePoint(directory, "policy directory");
+        VerifyPolicyDirectory(directory);
         VerifyPolicyFile(path);
 
         var json = File.ReadAllBytes(path);
@@ -92,34 +93,43 @@ public sealed record ProtectedInstallPolicy(
             throw new CryptographicException($"Protected {description} is missing or is a reparse point.");
     }
 
+    private static void VerifyPolicyDirectory(string path)
+    {
+        var info = new DirectoryInfo(path);
+        VerifyAcl(info.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner), "policy directory");
+    }
+
     private static void VerifyPolicyFile(string path)
     {
         var info = new FileInfo(path);
         if (!info.Exists || (info.Attributes & FileAttributes.ReparsePoint) != 0)
             throw new CryptographicException("Protected install policy is missing or is a reparse point.");
+        VerifyAcl(info.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner), "install policy");
+    }
 
-        var security = info.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner);
+    private static void VerifyAcl(FileSystemSecurity security, string description)
+    {
         if (!security.AreAccessRulesProtected)
-            throw new CryptographicException("Protected install policy DACL must not inherit permissions.");
+            throw new CryptographicException($"Protected {description} DACL must not inherit permissions.");
 
         var owner = security.GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
         if (owner is null || (!owner.Equals(SystemSid) && !owner.Equals(AdministratorsSid)))
-            throw new CryptographicException("Protected install policy owner must be SYSTEM or Administrators.");
+            throw new CryptographicException($"Protected {description} owner must be SYSTEM or Administrators.");
 
         foreach (AuthorizationRule rule in security.GetAccessRules(
                      includeExplicit: true, includeInherited: true, targetType: typeof(SecurityIdentifier)))
         {
             if (rule is not FileSystemAccessRule access)
-                throw new CryptographicException("Protected install policy contains an unsupported ACL rule.");
+                throw new CryptographicException($"Protected {description} contains an unsupported ACL rule.");
             if (access.AccessControlType != AccessControlType.Allow)
-                throw new CryptographicException("Protected install policy must not contain deny ACL rules.");
+                throw new CryptographicException($"Protected {description} must not contain deny ACL rules.");
 
             var sid = (SecurityIdentifier)access.IdentityReference;
             var rights = access.FileSystemRights;
             if (sid.Equals(SystemSid) || sid.Equals(AdministratorsSid))
             {
                 if ((rights & FileSystemRights.FullControl) != FileSystemRights.FullControl)
-                    throw new CryptographicException("SYSTEM and Administrators require full control of install policy.");
+                    throw new CryptographicException($"SYSTEM and Administrators require full control of {description}.");
             }
             else if (sid.Equals(UsersSid))
             {
@@ -127,11 +137,11 @@ public sealed record ProtectedInstallPolicy(
                     | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | FileSystemRights.FullControl;
                 if ((rights & writeRights) != 0
                     || (rights & FileSystemRights.ReadAndExecute) != FileSystemRights.ReadAndExecute)
-                    throw new CryptographicException("Standard Users may read but must not modify install policy.");
+                    throw new CryptographicException($"Standard Users may read but must not modify {description}.");
             }
             else
             {
-                throw new CryptographicException("Protected install policy grants access to an unexpected principal.");
+                throw new CryptographicException($"Protected {description} grants access to an unexpected principal.");
             }
         }
     }
