@@ -72,7 +72,7 @@ static void ExpectTicketFailure(Action action)
 static void RunDurableNonceStoreChecks()
 {
     var directory = Path.Combine(Path.GetTempPath(), "installer-helper-nonces-" + Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(directory);
+    ProtectedApprovalKeyStore.ProvisionDirectory(directory);
     try
     {
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
