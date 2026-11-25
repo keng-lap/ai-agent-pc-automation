@@ -21,6 +21,26 @@ internal static class ProtectedApprovalKeyStoreChecks
                 throw new InvalidOperationException("Protected key store did not reload the same key.");
             Console.WriteLine("PASS: protected DPAPI key is atomically created and reloaded.");
 
+            var raceDirectory = Path.Combine(Path.GetTempPath(), "installer-helper-key-race-" + Guid.NewGuid().ToString("N"));
+            ProtectedApprovalKeyStore.ProvisionDirectory(raceDirectory);
+            try
+            {
+                var concurrentKeys = new System.Collections.Concurrent.ConcurrentBag<byte[]>();
+                Parallel.For(0, 16, _ =>
+                    concurrentKeys.Add(new ProtectedApprovalKeyStore(raceDirectory).LoadOrCreate()));
+                var winningKey = concurrentKeys.First();
+                if (concurrentKeys.Count != 16 || concurrentKeys.Any(candidate =>
+                    !CryptographicOperations.FixedTimeEquals(winningKey, candidate)))
+                    throw new InvalidOperationException("Concurrent key initialization did not converge on one durable key.");
+                foreach (var candidate in concurrentKeys)
+                    CryptographicOperations.ZeroMemory(candidate);
+                Console.WriteLine("PASS: concurrent key initialization publishes one complete key without partial reads.");
+            }
+            finally
+            {
+                Directory.Delete(raceDirectory, recursive: true);
+            }
+
             var keyPath = Path.Combine(directory, "approval-ticket-key.dpapi");
             var fileInfo = new FileInfo(keyPath);
             var fileSecurity = fileInfo.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner);
