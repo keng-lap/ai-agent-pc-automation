@@ -34,8 +34,8 @@ The Launcher is a minimal, separately signed bootstrap component. It accepts no 
 
 ## Backend / Agent runtime guard
 
-- At application construction, query the current process effective access token using `OpenProcessToken(TOKEN_QUERY)` and `GetTokenInformation(TokenElevation)`.
-- If the token is elevated, abort Backend startup before routes or the install worker are made available.
+- At ASGI server startup, query the current process effective access token using `OpenProcessToken(TOKEN_QUERY)` and `GetTokenInformation(TokenElevation)`.
+- If the token is elevated, abort Backend startup before it serves requests or starts the install worker.
 - If token inspection fails or returns an incomplete result, abort startup (fail closed).
 - The in-process Agent and worker share the Backend process token; they cannot request or inherit a separate elevation path.
 - This guard is not a substitute for Windows ACLs, code signing, or Helper-side token validation.
