@@ -55,7 +55,7 @@ public static class WindowsSecurity
 
         // Always release provider state, including on verification failure.
         trustData.StateAction = WinTrustStateAction.Close;
-        _ = NativeMethods.WinVerifyTrust(IntPtr.Zero, ref action, ref trustData);
+        _ = NativeMethods.WinVerifyTrust(IntPtr.Zero, ref action, trustData);
 
         if (status != 0)
             throw new CryptographicException($"Authenticode trust verification failed (0x{status:X8}).");
