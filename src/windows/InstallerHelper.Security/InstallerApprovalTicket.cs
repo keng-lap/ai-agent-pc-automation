@@ -16,6 +16,7 @@ public sealed record InstallerApprovalTicket(
     string RequesterLogonId,
     int RequesterSessionId,
     string PlanId,
+    string ReservationId,
     string ApprovalDigest,
     string PackageId,
     string Version,
@@ -27,7 +28,7 @@ public sealed record InstallerApprovalTicket(
     long ExpiresAtUnixSeconds,
     string SignatureSha256)
 {
-    public const int CurrentProtocolVersion = 2;
+    public const int CurrentProtocolVersion = 3;
     public const long MaximumLifetimeSeconds = 120;
 
     /// <summary>Returns a copy signed with HMAC-SHA256 using a caller-protected key.</summary>
@@ -96,6 +97,7 @@ public sealed record InstallerApprovalTicket(
         WriteString(writer, RequesterLogonId);
         writer.Write(RequesterSessionId);
         WriteString(writer, PlanId);
+        WriteString(writer, ReservationId);
         WriteString(writer, ApprovalDigest);
         WriteString(writer, PackageId);
         WriteString(writer, Version);
@@ -115,6 +117,9 @@ public sealed record InstallerApprovalTicket(
             throw new CryptographicException("Unsupported approval ticket protocol version.");
         RequireHex(TicketId, 32, nameof(TicketId));
         RequireHex(PlanId, 32, nameof(PlanId));
+        if (!Guid.TryParseExact(ReservationId, "D", out var reservationId)
+            || !StringComparer.Ordinal.Equals(reservationId.ToString("D"), ReservationId))
+            throw new CryptographicException("Approval ticket reservation ID must be a canonical UUID.");
         RequireHex(ApprovalDigest, 64, nameof(ApprovalDigest));
         RequireHex(InstallerSha256, 64, nameof(InstallerSha256));
         RequireHex(Nonce, 64, nameof(Nonce));
