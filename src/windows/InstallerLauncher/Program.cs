@@ -12,6 +12,12 @@ try
 {
     var options = LauncherOptions.Parse(args);
     var policy = ProtectedInstallPolicy.Load();
+    var launcherPath = Path.GetFullPath(Environment.ProcessPath
+        ?? throw new InvalidOperationException("Launcher executable path is unavailable."));
+    if (!StringComparer.OrdinalIgnoreCase.Equals(launcherPath, Path.GetFullPath(policy.LauncherPath)))
+        throw new CryptographicException("Running Launcher path does not match the protected install policy.");
+    WindowsSecurity.RequireTrustedAuthenticodeSignature(launcherPath, policy.CertificateSha256);
+
     var requester = WindowsTokenIdentity.GetCurrentProcessIdentity();
     if (requester.IsElevated)
         throw new UnauthorizedAccessException("Launcher must run with a non-elevated token.");
