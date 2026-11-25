@@ -18,6 +18,7 @@ ProtectedApprovalKeyStoreChecks.Run();
 NamedPipePeerChecks.Run();
 RunAuthenticodeChecks();
 RunJobObjectChecks();
+ContainedProcessRunnerChecks.Run();
 Console.WriteLine("Windows Installer Helper security integration checks passed.");
 
 
