@@ -77,7 +77,7 @@ For Machine Scope, introduce a separately installed and signed Windows helper ex
 3. Backend binds Scope into immutable evidence and the approval digest.
 4. User confirms the scope change and completes the existing exact-action step-up mechanism.
 5. Backend persists the exact approval and creates a short-lived, one-use helper authorization.
-6. Backend launches only the fixed, verified helper executable through the Windows UAC mechanism. Backend itself remains unelevated.
+6. Backend starts only the fixed, verified unelevated Launcher. The Launcher verifies the fixed Helper binary and requests UAC for that Helper only. Backend itself remains unelevated and never invokes `ShellExecute(runas)`.
 7. Helper verifies its own signature/build identity, ticket integrity, expiry, nonce, approval digest, exact package facts, expected Windows SID, and elevated token.
 8. Helper creates its own Job Object, creates the exact approved child process suspended, assigns it to the Job Object, and only then resumes it.
 9. Helper returns a minimal authenticated result over a secured local IPC channel.
