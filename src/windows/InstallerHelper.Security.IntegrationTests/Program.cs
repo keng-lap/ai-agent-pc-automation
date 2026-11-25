@@ -85,6 +85,7 @@ static void RunAuthenticodeChecks()
 
     try
     {
+        Console.WriteLine("Authenticode: preparing test binary and certificate.");
         var currentAssembly = typeof(Program).Assembly.Location;
         File.Copy(currentAssembly, signedFile, overwrite: true);
 
@@ -114,20 +115,25 @@ static void RunAuthenticodeChecks()
             AddCertificateToStore(publisherCert, StoreName.TrustedPublisher);
 
         File.WriteAllBytes(pfxFile, certificateWithKey.Export(X509ContentType.Pfx, password));
+        Console.WriteLine("Authenticode: locating Windows SDK SignTool.");
         var signTool = FindSignTool();
+        Console.WriteLine("Authenticode: signing test binary.");
         RunProcess(signTool, new[]
         {
             "sign", "/f", pfxFile, "/p", password, "/fd", "SHA256", signedFile
         });
 
         var pin = Convert.ToHexString(SHA256.HashData(certificateWithKey.RawData));
+        Console.WriteLine("Authenticode: verifying valid signature.");
         WindowsSecurity.RequireTrustedAuthenticodeSignature(signedFile, pin);
         Console.WriteLine("PASS: trusted Authenticode signature with the pinned SHA-256 certificate accepted.");
 
+        Console.WriteLine("Authenticode: checking wrong certificate pin rejection.");
         ExpectCryptographicFailure(() => WindowsSecurity.RequireTrustedAuthenticodeSignature(signedFile, new string('0', 64)));
         Console.WriteLine("PASS: valid signature from an unpinned certificate rejected.");
 
         File.AppendAllText(signedFile, "tampered");
+        Console.WriteLine("Authenticode: checking modified binary rejection.");
         ExpectCryptographicFailure(() => WindowsSecurity.RequireTrustedAuthenticodeSignature(signedFile, pin));
         Console.WriteLine("PASS: modified signed file rejected.");
     }
@@ -197,7 +203,11 @@ static void RunProcess(string executable, IEnumerable<string> arguments)
         ?? throw new InvalidOperationException("Could not start Windows SDK SignTool.");
     var stdoutTask = process.StandardOutput.ReadToEndAsync();
     var stderrTask = process.StandardError.ReadToEndAsync();
-    process.WaitForExit();
+    if (!process.WaitForExit(90_000))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("SignTool exceeded the 90-second integration-test limit: " + executable);
+    }
     Task.WaitAll(stdoutTask, stderrTask);
     if (process.ExitCode != 0)
         throw new InvalidOperationException($"SignTool failed with exit code {process.ExitCode}: {stderrTask.Result}{stdoutTask.Result}");
