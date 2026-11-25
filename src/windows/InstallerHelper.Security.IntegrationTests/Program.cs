@@ -35,6 +35,7 @@ static void RunApprovalTicketChecks()
         RequesterLogonId: requester.AuthenticationId,
         RequesterSessionId: requester.SessionId,
         PlanId: new string('b', 32),
+        ReservationId: Guid.NewGuid().ToString("D"),
         ApprovalDigest: digest,
         PackageId: "Example.Package",
         Version: "1.2.3",
@@ -55,12 +56,14 @@ static void RunApprovalTicketChecks()
     ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId + 1, digest, now));
     ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, new string('D', 64), now));
     ExpectTicketFailure(() => (signed with { Version = "9.9.9" }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => (signed with { ReservationId = Guid.NewGuid().ToString("D") }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => (signed with { ReservationId = "not-a-reservation" }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
     ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now.AddMinutes(3)));
     ExpectTicketFailure(() => signed.Verify(RandomNumberGenerator.GetBytes(32), unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
     ExpectTicketFailure(() => (signed with { Scope = "user" }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
     ExpectTicketFailure(() => (signed with { Version = null! }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
     ExpectTicketFailure(() => (signed with { SignatureSha256 = null! }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
-    Console.WriteLine("PASS: approval ticket rejects wrong SID, action digest, package version, expiry, key, and scope.");
+    Console.WriteLine("PASS: approval ticket rejects wrong SID, reservation, action digest, package version, expiry, key, and scope.");
 }
 
 static void ExpectTicketFailure(Action action)
