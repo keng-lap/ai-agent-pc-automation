@@ -12,6 +12,7 @@ if (!OperatingSystem.IsWindows())
 
 RunTokenChecks();
 RunApprovalTicketChecks();
+RunDurableNonceStoreChecks();
 RunAuthenticodeChecks();
 RunJobObjectChecks();
 Console.WriteLine("Windows Installer Helper security integration checks passed.");
