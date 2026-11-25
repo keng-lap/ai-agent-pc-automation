@@ -44,7 +44,7 @@ public static class DpapiApprovalKeyProtector
         {
             ZeroAndFree(input);
             ZeroAndFree(entropy);
-            ZeroAndFree(output);
+            ZeroAndLocalFree(output);
         }
     }
 
@@ -102,6 +102,15 @@ public static class DpapiApprovalKeyProtector
         if (blob.Length > 0)
             Marshal.Copy(new byte[blob.Length], 0, blob.Data, blob.Length);
         Marshal.FreeHGlobal(blob.Data);
+    }
+
+    private static void ZeroAndLocalFree(DataBlob blob)
+    {
+        if (blob.Data == IntPtr.Zero)
+            return;
+        if (blob.Length > 0)
+            Marshal.Copy(new byte[blob.Length], 0, blob.Data, blob.Length);
+        Native.LocalFree(blob.Data);
     }
 
     [StructLayout(LayoutKind.Sequential)]
