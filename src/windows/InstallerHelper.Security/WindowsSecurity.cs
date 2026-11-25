@@ -48,7 +48,7 @@ public static class WindowsSecurity
 
         var normalizedPin = NormalizeThumbprint(expectedCertificateThumbprint);
         var fileInfo = new WinTrustFileInfo(filePath);
-        var trustData = new WinTrustData(fileInfo);
+        using var trustData = new WinTrustData(fileInfo);
         var action = NativeMethods.WinTrustActionGenericVerifyV2;
         var status = NativeMethods.WinVerifyTrust(IntPtr.Zero, ref action, ref trustData);
 
@@ -70,7 +70,7 @@ public static class WindowsSecurity
     private static SafeKernelHandle OpenCurrentProcessToken()
     {
         if (!NativeMethods.OpenProcessToken(
-                NativeMethods.GetCurrentProcess(), TokenAccessMask.Query, out var token))
+                NativeMethods.GetCurrentProcess(), TokenAccessMaskQuery, out var token))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open the current process token.");
         return token;
     }
@@ -107,7 +107,7 @@ public static class WindowsSecurity
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private sealed class WinTrustData
+    private sealed class WinTrustData : IDisposable
     {
         public uint Size;
         public IntPtr PolicyCallbackData;
@@ -133,6 +133,16 @@ public static class WindowsSecurity
             Marshal.StructureToPtr(fileInfo, FileInfo, false);
             StateAction = WinTrustStateAction.Verify;
             ProviderFlags = 0x00000080; // WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT
+        }
+
+        public void Dispose()
+        {
+            if (FileInfo != IntPtr.Zero)
+            {
+                Marshal.DestroyStructure<WinTrustFileInfo>(FileInfo);
+                Marshal.FreeHGlobal(FileInfo);
+                FileInfo = IntPtr.Zero;
+            }
         }
     }
 
