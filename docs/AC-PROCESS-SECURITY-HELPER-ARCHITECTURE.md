@@ -68,6 +68,14 @@ The Launcher is a minimal, separately signed bootstrap component. It accepts no 
 - `ProtectedApprovalKeyStore` persists the DPAPI ciphertext as `approval-ticket-key.dpapi`. Elevated provisioning sets an explicit SYSTEM/Administrators-only protected DACL. Runtime audits directory and file owner/DACL, rejects reparse points and untrusted allow ACEs, and creates the ciphertext through a same-directory temporary file followed by an atomic no-overwrite rename. Concurrent initializers cannot observe a partially published key. DPAPI LocalMachine is not treated as an ACL.
 - The key store and nonce store are implemented and covered by Windows CI, but the ticket/nonce/key path is not yet connected to Backend reservations or a running Helper. Key rotation/recovery policy and deployment-time invocation of elevated provisioning remain outstanding. These primitives alone do not authorize Machine Scope.
 
+## Named-pipe transport implementation status
+
+- `WindowsSecureNamedPipeServer` now creates the local pipe with the requester-specific protected DACL, `PIPE_REJECT_REMOTE_CLIENTS`, `FILE_FLAG_FIRST_PIPE_INSTANCE`, and overlapped I/O; it wraps the native handle for asynchronous managed stream operations.
+- `WaitForApprovedClientAsync` waits with cancellation and validates the connected client PID's actual token SID, logon AuthenticationId (LUID), SessionId, and non-elevated status before the caller may process a frame.
+- `InstallerHelperPipeProtocol` uses a four-byte big-endian length prefix, rejects empty or over-64-KiB frames before allocation, reads exact payload lengths, and rejects truncated/disconnected frames.
+- Windows integration checks create and connect through the native server factory, inspect the actual peer token, reject mismatched SID/LUID/SessionId, and exercise valid, empty, oversized, and truncated frames. The positive test currently permits an elevated test runner; it does not prove a successful medium-integrity client handshake or a two-logon-session scenario.
+- The server-side transport is only a security primitive. The unelevated Launcher/client is not yet implemented, so server PID/token/path/signature verification from the client side, Backend reservation-to-ticket-to-nonce wiring, Helper executable, UAC behavior, Helper-owned Job Object execution, and Windows 11 Home end-to-end installation remain outstanding. Machine Scope stays disabled.
+
 ## Local-first Helper signing and trust policy
 
 The current product target is a locally installed Windows agent, not public software distribution. A paid public-CA Code Signing Certificate is **not a prerequisite**.
