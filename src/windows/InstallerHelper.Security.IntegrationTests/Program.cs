@@ -48,6 +48,8 @@ static void RunApprovalTicketChecks()
     ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, digest, now.AddMinutes(3)));
     ExpectTicketFailure(() => signed.Verify(RandomNumberGenerator.GetBytes(32), unsigned.RequesterSid, digest, now));
     ExpectTicketFailure(() => (signed with { Scope = "user" }).Verify(key, unsigned.RequesterSid, digest, now));
+    ExpectTicketFailure(() => (signed with { Version = null! }).Verify(key, unsigned.RequesterSid, digest, now));
+    ExpectTicketFailure(() => (signed with { SignatureSha256 = null! }).Verify(key, unsigned.RequesterSid, digest, now));
     Console.WriteLine("PASS: approval ticket rejects wrong SID, action digest, package version, expiry, key, and scope.");
 }
 
