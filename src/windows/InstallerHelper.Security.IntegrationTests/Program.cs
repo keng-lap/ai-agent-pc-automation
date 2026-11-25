@@ -23,12 +23,15 @@ Console.WriteLine("Windows Installer Helper security integration checks passed."
 static void RunApprovalTicketChecks()
 {
     var now = DateTimeOffset.UtcNow;
+    var requester = WindowsTokenIdentity.GetCurrentProcessIdentity();
     var digest = new string('A', 64);
     var key = RandomNumberGenerator.GetBytes(32);
     var unsigned = new InstallerApprovalTicket(
         ProtocolVersion: InstallerApprovalTicket.CurrentProtocolVersion,
         TicketId: Guid.NewGuid().ToString("N"),
-        RequesterSid: "S-1-5-21-100-200-300-1001",
+        RequesterSid: requester.UserSid,
+        RequesterLogonId: requester.AuthenticationId,
+        RequesterSessionId: requester.SessionId,
         PlanId: new string('b', 32),
         ApprovalDigest: digest,
         PackageId: "Example.Package",
@@ -42,17 +45,19 @@ static void RunApprovalTicketChecks()
         SignatureSha256: string.Empty);
 
     var signed = unsigned.Sign(key);
-    signed.Verify(key, unsigned.RequesterSid, digest, now);
+    signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now);
     Console.WriteLine("PASS: exact-action machine-scope approval ticket HMAC accepted.");
 
-    ExpectTicketFailure(() => signed.Verify(key, "S-1-5-21-100-200-300-9999", digest, now));
-    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, new string('D', 64), now));
-    ExpectTicketFailure(() => (signed with { Version = "9.9.9" }).Verify(key, unsigned.RequesterSid, digest, now));
-    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, digest, now.AddMinutes(3)));
-    ExpectTicketFailure(() => signed.Verify(RandomNumberGenerator.GetBytes(32), unsigned.RequesterSid, digest, now));
-    ExpectTicketFailure(() => (signed with { Scope = "user" }).Verify(key, unsigned.RequesterSid, digest, now));
-    ExpectTicketFailure(() => (signed with { Version = null! }).Verify(key, unsigned.RequesterSid, digest, now));
-    ExpectTicketFailure(() => (signed with { SignatureSha256 = null! }).Verify(key, unsigned.RequesterSid, digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, "S-1-5-21-100-200-300-9999", unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, new string('0', 16), unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId + 1, digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, new string('D', 64), now));
+    ExpectTicketFailure(() => (signed with { Version = "9.9.9" }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now.AddMinutes(3)));
+    ExpectTicketFailure(() => signed.Verify(RandomNumberGenerator.GetBytes(32), unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => (signed with { Scope = "user" }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => (signed with { Version = null! }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
+    ExpectTicketFailure(() => (signed with { SignatureSha256 = null! }).Verify(key, unsigned.RequesterSid, unsigned.RequesterLogonId, unsigned.RequesterSessionId, digest, now));
     Console.WriteLine("PASS: approval ticket rejects wrong SID, action digest, package version, expiry, key, and scope.");
 }
 
