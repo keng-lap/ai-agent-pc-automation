@@ -256,9 +256,22 @@ static void RunJobObjectChecks()
         if (Native.ResumeThread(process.ThreadHandle) == uint.MaxValue)
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the contained test process.");
 
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        uint activeProcesses;
+        do
+        {
+            activeProcesses = job.GetActiveProcessCount();
+            if (activeProcesses >= 2)
+                break;
+            Thread.Sleep(50);
+        } while (DateTime.UtcNow < deadline);
+
+        if (activeProcesses < 2)
+            throw new InvalidOperationException("The child process was not observed inside the Job Object.");
+
         job.Terminate();
         job.WaitForEmpty(TimeSpan.FromSeconds(10));
-        Console.WriteLine("PASS: process assigned while suspended; Job Object terminated its process tree.");
+        Console.WriteLine("PASS: suspended root assigned before resume; child process joined the same Job Object; entire tree terminated and active count reached zero.");
     }
     finally
     {
@@ -274,7 +287,7 @@ static class SuspendedChild
     {
         var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
         var executable = Path.Combine(system, "cmd.exe");
-        var command = new StringBuilder($"\"{executable}\" /c ping -n 30 127.0.0.1 > nul");
+        var command = new StringBuilder($"\\\"{executable}\\\" /c start \"\" /b ping -n 30 127.0.0.1 & ping -n 30 127.0.0.1");
         var startup = new StartupInfo { Cb = Marshal.SizeOf<StartupInfo>() };
         if (!Native.CreateProcess(
                 executable, command, IntPtr.Zero, IntPtr.Zero,
