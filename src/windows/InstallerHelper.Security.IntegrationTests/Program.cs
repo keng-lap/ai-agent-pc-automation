@@ -191,7 +191,7 @@ static class SuspendedChild
     {
         var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
         var executable = Path.Combine(system, "cmd.exe");
-        var command = new StringBuilder($"\\"{executable}\\" /c ping -n 30 127.0.0.1 > nul");
+        var command = new StringBuilder($"\\\"{executable}\\\" /c ping -n 30 127.0.0.1 > nul");
         var startup = new StartupInfo { Cb = Marshal.SizeOf<StartupInfo>() };
         if (!Native.CreateProcess(
                 executable, command, IntPtr.Zero, IntPtr.Zero,
