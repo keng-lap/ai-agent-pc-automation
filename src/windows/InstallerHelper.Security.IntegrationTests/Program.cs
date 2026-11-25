@@ -67,6 +67,53 @@ static void ExpectTicketFailure(Action action)
     throw new InvalidOperationException("An invalid approval ticket was incorrectly accepted.");
 }
 
+static void RunDurableNonceStoreChecks()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "installer-helper-nonces-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var ticketId = Guid.NewGuid().ToString("N");
+        var expires = DateTimeOffset.UtcNow.AddMinutes(2);
+        var now = DateTimeOffset.UtcNow;
+        var store = new DurableNonceStore(directory);
+        store.Consume(nonce, ticketId, expires, now);
+        ExpectTicketFailure(() => store.Consume(nonce, ticketId, expires, now));
+
+        // A new instance models a Helper/backend process restart.
+        var restartedStore = new DurableNonceStore(directory);
+        ExpectTicketFailure(() => restartedStore.Consume(nonce, ticketId, expires, now));
+
+        var concurrentNonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var successes = 0;
+        Parallel.For(0, 16, _ =>
+        {
+            try
+            {
+                new DurableNonceStore(directory).Consume(concurrentNonce, ticketId, expires, now);
+                Interlocked.Increment(ref successes);
+            }
+            catch (CryptographicException)
+            {
+                // Expected for every contender except the single atomic winner.
+            }
+        });
+        if (successes != 1)
+            throw new InvalidOperationException($"Expected exactly one nonce consumer; observed {successes}.");
+        ExpectTicketFailure(() => store.Consume(
+            Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
+            ticketId,
+            now.AddSeconds(-1),
+            now));
+        Console.WriteLine("PASS: durable nonce is single-use across instances/restarts and concurrent consumers.");
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
 static void RunTokenChecks()
 {
     using var identity = WindowsIdentity.GetCurrent();
