@@ -13,6 +13,7 @@ if (!OperatingSystem.IsWindows())
 RunTokenChecks();
 RunApprovalTicketChecks();
 RunDurableNonceStoreChecks();
+RunDpapiApprovalKeyChecks();
 RunAuthenticodeChecks();
 RunJobObjectChecks();
 Console.WriteLine("Windows Installer Helper security integration checks passed.");
@@ -112,6 +113,27 @@ static void RunDurableNonceStoreChecks()
     {
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static void RunDpapiApprovalKeyChecks()
+{
+    var key = RandomNumberGenerator.GetBytes(32);
+    var protectedKey = DpapiApprovalKeyProtector.Protect(key);
+    var recovered = DpapiApprovalKeyProtector.Unprotect(protectedKey);
+    if (!CryptographicOperations.FixedTimeEquals(key, recovered))
+        throw new InvalidOperationException("DPAPI did not recover the original approval key.");
+    Console.WriteLine("PASS: machine-scope DPAPI protects and recovers the approval HMAC key.");
+
+    var tampered = protectedKey.ToArray();
+    tampered[^1] ^= 0x01;
+    ExpectTicketFailure(() => DpapiApprovalKeyProtector.Unprotect(tampered));
+    ExpectTicketFailure(() => DpapiApprovalKeyProtector.Protect(new byte[16]));
+    Console.WriteLine("PASS: DPAPI rejects a modified protected key and undersized HMAC keys.");
+
+    CryptographicOperations.ZeroMemory(key);
+    CryptographicOperations.ZeroMemory(recovered);
+    CryptographicOperations.ZeroMemory(protectedKey);
+    CryptographicOperations.ZeroMemory(tampered);
 }
 
 static void RunTokenChecks()
