@@ -79,11 +79,13 @@ public sealed class WindowsJobObject : IDisposable
                 ref startup, out var processInfo))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create suspended installer process.");
 
+        var assignedToJob = false;
         try
         {
             // This is the security boundary: do not call ResumeThread until the
             // process has been assigned to the Helper-owned kill-on-close Job.
             AssignSuspendedProcess(processInfo.Process);
+            assignedToJob = true;
             var resumeResult = NativeMethods.ResumeThread(processInfo.Thread);
             if (resumeResult == uint.MaxValue)
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the contained installer process.");
@@ -121,8 +123,19 @@ public sealed class WindowsJobObject : IDisposable
         {
             // Any failure after process creation is fail-closed: terminate every
             // process already assigned to the Job before propagating the error.
-            try { Terminate(1); } catch { /* preserve the original failure */ }
-            try { WaitForEmpty(TimeSpan.FromSeconds(10)); } catch { /* caller records containment failure */ }
+            if (assignedToJob)
+            {
+                try { Terminate(1); } catch { /* preserve the original failure */ }
+                try { WaitForEmpty(TimeSpan.FromSeconds(10)); } catch { /* caller records containment failure */ }
+            }
+            else
+            {
+                // Assignment failure leaves the root suspended and outside the
+                // Job. Explicitly terminate that process; closing its handle is
+                // not sufficient and would leak a suspended process.
+                _ = NativeMethods.TerminateProcess(processInfo.Process, 1);
+                _ = NativeMethods.WaitForSingleObject(processInfo.Process, 10_000);
+            }
             throw;
         }
         finally
@@ -279,6 +292,9 @@ public sealed class WindowsJobObject : IDisposable
 
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern uint ResumeThread(IntPtr thread);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool TerminateProcess(IntPtr process, uint exitCode);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
