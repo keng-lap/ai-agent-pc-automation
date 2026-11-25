@@ -51,7 +51,7 @@ public static class WindowsSecurity
         var fileInfo = new WinTrustFileInfo(filePath);
         using var trustData = new WinTrustData(fileInfo);
         var action = NativeMethods.WinTrustActionGenericVerifyV2;
-        var status = NativeMethods.WinVerifyTrust(IntPtr.Zero, ref action, ref trustData);
+        var status = NativeMethods.WinVerifyTrust(IntPtr.Zero, ref action, trustData);
 
         // Always release provider state, including on verification failure.
         trustData.StateAction = WinTrustStateAction.Close;
@@ -186,6 +186,6 @@ public static class WindowsSecurity
 
         [DllImport("wintrust.dll", ExactSpelling = true, PreserveSig = true, SetLastError = true)]
         internal static extern int WinVerifyTrust(
-            IntPtr windowHandle, ref Guid actionId, [In, Out] ref WinTrustData trustData);
+            IntPtr windowHandle, ref Guid actionId, WinTrustData trustData);
     }
 }
