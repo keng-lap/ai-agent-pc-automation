@@ -43,7 +43,7 @@ public static class WindowsSecureNamedPipeServer
             };
 
             var handle = Native.CreateNamedPipe(
-                @"\\.\pipe\\" + pipeName,
+                @"\\.\pipe\" + pipeName,
                 PipeAccessDuplex | FileFlagOverlapped | FileFlagFirstPipeInstance,
                 PipeRejectRemoteClients,
                 1,
@@ -61,7 +61,7 @@ public static class WindowsSecureNamedPipeServer
 
             try
             {
-                return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true, isConnected: false, handle);
+                return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true, isConnected: false, safePipeHandle: handle);
             }
             catch
             {
