@@ -248,37 +248,65 @@ static void RunProcess(string executable, IEnumerable<string> arguments)
 
 static void RunJobObjectChecks()
 {
-    using var job = new WindowsJobObject();
-    var process = SuspendedChild.Start();
+    using (var job = new WindowsJobObject())
+    {
+        var process = SuspendedChild.Start();
+        try
+        {
+            job.AssignSuspendedProcess(process.ProcessHandle);
+            if (Native.ResumeThread(process.ThreadHandle) == uint.MaxValue)
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the contained test process.");
+
+            WaitForContainedChild(job);
+
+            job.Terminate();
+            job.WaitForEmpty(TimeSpan.FromSeconds(10));
+            Console.WriteLine("PASS: suspended root assigned before resume; child process joined the same Job Object; explicit tree termination reached zero active processes.");
+        }
+        finally
+        {
+            _ = Native.TerminateProcess(process.ProcessHandle, 1);
+            _ = Native.CloseHandle(process.ThreadHandle);
+            _ = Native.CloseHandle(process.ProcessHandle);
+        }
+    }
+
+    var killOnCloseJob = new WindowsJobObject();
+    var killOnCloseProcess = SuspendedChild.Start();
     try
     {
-        job.AssignSuspendedProcess(process.ProcessHandle);
-        if (Native.ResumeThread(process.ThreadHandle) == uint.MaxValue)
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the contained test process.");
+        killOnCloseJob.AssignSuspendedProcess(killOnCloseProcess.ProcessHandle);
+        if (Native.ResumeThread(killOnCloseProcess.ThreadHandle) == uint.MaxValue)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resume the kill-on-close test process.");
 
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-        uint activeProcesses;
-        do
-        {
-            activeProcesses = job.GetActiveProcessCount();
-            if (activeProcesses >= 2)
-                break;
-            Thread.Sleep(50);
-        } while (DateTime.UtcNow < deadline);
-
-        if (activeProcesses < 2)
-            throw new InvalidOperationException("The child process was not observed inside the Job Object.");
-
-        job.Terminate();
-        job.WaitForEmpty(TimeSpan.FromSeconds(10));
-        Console.WriteLine("PASS: suspended root assigned before resume; child process joined the same Job Object; entire tree terminated and active count reached zero.");
+        WaitForContainedChild(killOnCloseJob);
+        killOnCloseJob.Dispose();
+        if (Native.WaitForSingleObject(killOnCloseProcess.ProcessHandle, 10_000) != 0)
+            throw new InvalidOperationException("Closing the Job Object did not terminate its root process.");
+        Console.WriteLine("PASS: closing the Helper-owned Job Object terminated the root process and its contained child.");
     }
     finally
     {
-        _ = Native.TerminateProcess(process.ProcessHandle, 1);
-        _ = Native.CloseHandle(process.ThreadHandle);
-        _ = Native.CloseHandle(process.ProcessHandle);
+        killOnCloseJob.Dispose();
+        _ = Native.TerminateProcess(killOnCloseProcess.ProcessHandle, 1);
+        _ = Native.CloseHandle(killOnCloseProcess.ThreadHandle);
+        _ = Native.CloseHandle(killOnCloseProcess.ProcessHandle);
     }
+}
+
+static void WaitForContainedChild(WindowsJobObject job)
+{
+    var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+    uint activeProcesses;
+    do
+    {
+        activeProcesses = job.GetActiveProcessCount();
+        if (activeProcesses >= 2)
+            return;
+        Thread.Sleep(50);
+    } while (DateTime.UtcNow < deadline);
+
+    throw new InvalidOperationException("The child process was not observed inside the Job Object.");
 }
 
 static class SuspendedChild
@@ -346,6 +374,9 @@ static class Native
 
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern uint ResumeThread(IntPtr thread);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
