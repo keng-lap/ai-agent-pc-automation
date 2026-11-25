@@ -53,23 +53,15 @@ try
             options.RequesterSessionId,
             request.Ticket.ApprovalDigest,
             now);
-
-        var nonceStore = new DurableNonceStore(options.ProtectedStoreDirectory);
-        nonceStore.Consume(
-            request.Ticket.Nonce,
-            request.Ticket.TicketId,
-            DateTimeOffset.FromUnixTimeSeconds(request.Ticket.ExpiresAtUnixSeconds),
-            now);
     }
     finally
     {
         CryptographicOperations.ZeroMemory(key);
     }
 
-    // Deliberately no installer launch in this bootstrap. A reservation-to-ticket
-    // signer and verified staged-installer binding must be wired before execution
-    // can be enabled. Consuming an otherwise valid ticket without those bindings
-    // fails closed and never creates an installer process.
+    // HMAC authenticates the ticket contents, but the approval digest is not yet
+    // independently matched to the Backend's durable reservation. Do not consume
+    // the durable nonce or launch a process until that reservation bridge exists.
     var response = JsonSerializer.SerializeToUtf8Bytes(new HelperResponse(
         "DENIED_NOT_READY",
         "execution_binding_not_implemented"));
