@@ -75,96 +75,132 @@ static bool GetTokenElevation()
 
 static void RunAuthenticodeChecks()
 {
-    var tempDirectory = Path.Combine(Path.GetTempPath(), "installer-helper-security-" + Guid.NewGuid().ToString("N"));
+    var tempDirectory = Path.Combine(Path.GetTempPath(), "installer-helper-authenticode-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(tempDirectory);
-    var signedFile = Path.Combine(tempDirectory, "signed-test.ps1");
-    var thumbprintFile = Path.Combine(tempDirectory, "thumbprint.txt");
+    var signedFile = Path.Combine(tempDirectory, "signed-test.dll");
+    var pfxFile = Path.Combine(tempDirectory, "test-signing.pfx");
+    var password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    X509Certificate2? certificateWithKey = null;
     string? thumbprint = null;
 
     try
     {
-        var setupScript = $@"
-$ErrorActionPreference = 'Stop'
-Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
-Import-Module PKI -ErrorAction Stop
-$cert = New-SelfSignedCertificate -Subject 'CN=InstallerHelper Integration Test' -Type CodeSigningCert -CertStoreLocation 'Cert:\CurrentUser\My' -HashAlgorithm SHA256
-$root = Get-Item 'Cert:\CurrentUser\Root'
-$root.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-$root.Add($cert)
-$root.Close()
-$publishers = Get-Item 'Cert:\CurrentUser\TrustedPublisher'
-$publishers.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-$publishers.Add($cert)
-$publishers.Close()
-Set-Content -LiteralPath '{EscapePowerShell(signedFile)}' -Value 'Write-Output ""signed integration test""' -Encoding UTF8
-Set-AuthenticodeSignature -LiteralPath '{EscapePowerShell(signedFile)}' -Certificate $cert -HashAlgorithm SHA256 | Out-Null
-Set-Content -LiteralPath '{EscapePowerShell(thumbprintFile)}' -Value $cert.Thumbprint -NoNewline
-";
-        RunPowerShell(setupScript);
-        thumbprint = File.ReadAllText(thumbprintFile).Trim();
-        if (thumbprint.Length == 0)
-            throw new InvalidOperationException("PowerShell did not return the test certificate thumbprint.");
+        var currentAssembly = typeof(Program).Assembly.Location;
+        File.Copy(currentAssembly, signedFile, overwrite: true);
 
-        using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-        store.Open(OpenFlags.ReadOnly);
-        var matches = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
-        if (matches.Count != 1)
-            throw new InvalidOperationException("The temporary code-signing certificate was not found.");
-        using var certificate = new X509Certificate2(matches[0]);
-        var pin = Convert.ToHexString(SHA256.HashData(certificate.RawData));
+        using (var rsa = RSA.Create(2048))
+        {
+            var request = new CertificateRequest(
+                "CN=InstallerHelper Integration Test",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
+            var eku = new OidCollection { new("1.3.6.1.5.5.7.3.3") };
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(eku, false));
+            using var created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(2));
+            certificateWithKey = new X509Certificate2(
+                created.Export(X509ContentType.Pfx, password),
+                password,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+        }
 
+        thumbprint = certificateWithKey.Thumbprint;
+        AddCertificateToStore(certificateWithKey, StoreName.My);
+        using (var rootCert = new X509Certificate2(certificateWithKey.RawData))
+            AddCertificateToStore(rootCert, StoreName.Root);
+        using (var publisherCert = new X509Certificate2(certificateWithKey.RawData))
+            AddCertificateToStore(publisherCert, StoreName.TrustedPublisher);
+
+        File.WriteAllBytes(pfxFile, certificateWithKey.Export(X509ContentType.Pfx, password));
+        var signTool = FindSignTool();
+        RunProcess(signTool, new[]
+        {
+            "sign", "/f", pfxFile, "/p", password, "/fd", "SHA256", signedFile
+        });
+
+        var pin = Convert.ToHexString(SHA256.HashData(certificateWithKey.RawData));
         WindowsSecurity.RequireTrustedAuthenticodeSignature(signedFile, pin);
         Console.WriteLine("PASS: trusted Authenticode signature with the pinned SHA-256 certificate accepted.");
 
         ExpectCryptographicFailure(() => WindowsSecurity.RequireTrustedAuthenticodeSignature(signedFile, new string('0', 64)));
         Console.WriteLine("PASS: valid signature from an unpinned certificate rejected.");
 
-        File.AppendAllText(signedFile, Environment.NewLine + "# tampered after signing");
+        File.AppendAllText(signedFile, "tampered");
         ExpectCryptographicFailure(() => WindowsSecurity.RequireTrustedAuthenticodeSignature(signedFile, pin));
         Console.WriteLine("PASS: modified signed file rejected.");
     }
     finally
     {
+        certificateWithKey?.Dispose();
         if (thumbprint is not null)
         {
-            var cleanup = $@"
-$ErrorActionPreference = 'Stop'
-Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
-Import-Module PKI -ErrorAction Stop
-$thumb = '{EscapePowerShell(thumbprint)}'
-foreach ($location in @('My', 'Root', 'TrustedPublisher')) {{
-  $store = Get-Item ('Cert:\CurrentUser\' + $location)
-  $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-  foreach ($cert in @($store.Certificates | Where-Object Thumbprint -eq $thumb)) {{ $store.Remove($cert) }}
-  $store.Close()
-}}
-";
-            RunPowerShell(cleanup);
+            RemoveCertificateFromStore(thumbprint, StoreName.My);
+            RemoveCertificateFromStore(thumbprint, StoreName.Root);
+            RemoveCertificateFromStore(thumbprint, StoreName.TrustedPublisher);
         }
-        Directory.Delete(tempDirectory, recursive: true);
+
+        if (Directory.Exists(tempDirectory))
+            Directory.Delete(tempDirectory, recursive: true);
     }
 }
 
-static string EscapePowerShell(string value) => value.Replace("'", "''", StringComparison.Ordinal);
-
-static void RunPowerShell(string script)
+static void AddCertificateToStore(X509Certificate2 certificate, StoreName storeName)
 {
-    var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-    using var process = Process.Start(new ProcessStartInfo
+    using var store = new X509Store(storeName, StoreLocation.CurrentUser);
+    store.Open(OpenFlags.ReadWrite);
+    store.Add(certificate);
+}
+
+static void RemoveCertificateFromStore(string thumbprint, StoreName storeName)
+{
+    using var store = new X509Store(storeName, StoreLocation.CurrentUser);
+    store.Open(OpenFlags.ReadWrite);
+    var matches = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false);
+    foreach (var certificate in matches)
+        store.Remove(certificate);
+}
+
+static string FindSignTool()
+{
+    var kitsRoot = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        "Windows Kits", "10", "bin");
+    if (Directory.Exists(kitsRoot))
     {
-        FileName = "powershell.exe",
-        Arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + encoded,
+        foreach (var versionDirectory in Directory.GetDirectories(kitsRoot).OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var candidate = Path.Combine(versionDirectory, "x64", "signtool.exe");
+            if (File.Exists(candidate))
+                return candidate;
+        }
+    }
+
+    throw new FileNotFoundException("Windows SDK SignTool was not found; Authenticode integration checks cannot run.");
+}
+
+static void RunProcess(string executable, IEnumerable<string> arguments)
+{
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = executable,
         UseShellExecute = false,
         RedirectStandardOutput = true,
         RedirectStandardError = true,
         CreateNoWindow = true
-    }) ?? throw new InvalidOperationException("Could not start Windows PowerShell for Authenticode integration checks.");
+    };
+    foreach (var argument in arguments)
+        startInfo.ArgumentList.Add(argument);
 
-    var stdout = process.StandardOutput.ReadToEnd();
-    var stderr = process.StandardError.ReadToEnd();
+    using var process = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Could not start Windows SDK SignTool.");
+    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+    var stderrTask = process.StandardError.ReadToEndAsync();
     process.WaitForExit();
+    Task.WaitAll(stdoutTask, stderrTask);
     if (process.ExitCode != 0)
-        throw new InvalidOperationException("PowerShell Authenticode setup/cleanup failed: " + stderr + stdout);
+        throw new InvalidOperationException($"SignTool failed with exit code {process.ExitCode}: {stderrTask.Result}{stdoutTask.Result}");
 }
 
 static void RunJobObjectChecks()
