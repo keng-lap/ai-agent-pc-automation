@@ -138,10 +138,8 @@ def test_publisher_cleanup_removes_worktree_registration_and_temp_artifacts(tmp_
     monkeypatch.setattr(publisher.subprocess, "run", fake_run)
     publisher._cleanup_publisher_artifacts("12345678-1234-4234-8234-123456789abc")
 
-    assert [call[0][-2:] for call in calls] == [
-        ["remove", "--force", str(worktree)],
-        ["worktree", "prune"],
-    ] or calls[0][0][-3:] == ["--force", str(worktree)]
+    assert calls[0][0][-3:] == ["remove", "--force", str(worktree)]
+    assert calls[1][0][-2:] == ["worktree", "prune"]
     assert not temp_root.exists()
     assert not worktree.exists()
 
