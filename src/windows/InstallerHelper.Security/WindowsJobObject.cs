@@ -55,6 +55,18 @@ public sealed class WindowsJobObject : IDisposable
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not terminate the installer process tree.");
     }
 
+    /// <summary>Returns the current number of active processes contained by this Job Object.</summary>
+    public uint GetActiveProcessCount()
+    {
+        EnsureOpen();
+        var accounting = new BasicAccountingInformation();
+        if (!NativeMethods.QueryInformationJobObject(
+                _handle, JobObjectBasicAccountingInformation,
+                ref accounting, (uint)Marshal.SizeOf<BasicAccountingInformation>(), out _))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not query installer process-tree accounting.");
+        return accounting.ActiveProcesses;
+    }
+
     public void WaitForEmpty(TimeSpan timeout)
     {
         EnsureOpen();
