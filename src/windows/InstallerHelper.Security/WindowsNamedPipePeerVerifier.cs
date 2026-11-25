@@ -48,7 +48,8 @@ public static class WindowsNamedPipePeerVerifier
         SafePipeHandle serverPipeHandle,
         string expectedRequesterSid,
         string expectedAuthenticationId,
-        int expectedSessionId)
+        int expectedSessionId,
+        bool requireNonElevatedClient = true)
     {
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("Windows named-pipe peer verification is Windows-only.");
@@ -61,7 +62,7 @@ public static class WindowsNamedPipePeerVerifier
         if (!StringComparer.Ordinal.Equals(identity.UserSid, expectedRequesterSid)
             || !StringComparer.Ordinal.Equals(identity.AuthenticationId, expectedAuthenticationId)
             || identity.SessionId != expectedSessionId
-            || identity.IsElevated)
+            || (requireNonElevatedClient && identity.IsElevated))
             throw new UnauthorizedAccessException("Named-pipe client process token does not match the approved non-elevated requester session.");
 
         return identity;
