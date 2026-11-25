@@ -57,6 +57,14 @@ The Launcher is a minimal, separately signed bootstrap component. It accepts no 
 7. Helper validates ticket MAC, expiry, nonce, one-time state, session binding, approval digest, and all immutable package fields. It does not accept caller-supplied executable paths or free-form installer arguments.
 8. Backend and Helper communicate over a local named pipe with a restrictive DACL for the expected logon SID. Both ends verify peer PID and token SID; message framing and maximum lengths are fixed. Disconnect or malformed message => UNKNOWN/stop, never assume success.
 
+## Durable approval nonce primitive (implemented; not yet wired to Helper)
+
+- `InstallerApprovalTicket` provides an HMAC-SHA256 integrity envelope bound to the requester SID, approval digest, package ID/version/architecture, Machine Scope, installer SHA-256, nonce, and a maximum 120-second lifetime.
+- `DurableNonceStore` consumes a nonce using an atomic `FileMode.CreateNew` record named from SHA-256(nonce). A second thread, process, or newly constructed store instance cannot consume the same nonce again. Records are flushed to disk and are not overwritten.
+- The nonce directory must be provisioned before runtime in an administrator-protected location. Its DACL must grant write access only to SYSTEM and Administrators; the runtime constructor rejects a missing directory and a reparse-point directory. The current primitive does not itself provision or audit the DACL.
+- The Helper must call ticket verification first, then atomically consume the nonce, and only then permit any privileged side effect. If consumption or durable storage fails, deny the action. Do not delete nonce records while their tickets could still be valid.
+- The HMAC key is not yet provisioned or protected by DPAPI, and the ticket/nonce path is not yet connected to Backend reservations or a running Helper. These primitives alone do not authorize Machine Scope.
+
 ## Local-first Helper signing and trust policy
 
 The current product target is a locally installed Windows agent, not public software distribution. A paid public-CA Code Signing Certificate is **not a prerequisite**.
@@ -107,6 +115,6 @@ Run on supported Windows 11 editions, including the nominated Windows 11 Home ta
 
 ## Current implementation boundary
 
-The PR currently contains a Backend-side User Scope WinGet executor and a Backend-owned Job Object. It does **not** contain the Launcher, Elevated Helper, Helper-owned Job Object, SID/token handshake, or UAC protocol. The existing Backend Job Object does not satisfy the future Helper containment requirement.
+The PR currently contains a Backend-side User Scope WinGet executor, a Backend-owned Job Object, an exact-action HMAC approval-ticket primitive, and an atomic durable nonce-consumption primitive. The nonce directory ACL is a deployment prerequisite and is not yet provisioned/audited by code. The ticket and nonce primitives are not yet wired to DPAPI key protection, Backend reservations, a Launcher, or an Elevated Helper. The PR does **not** contain the Launcher, Elevated Helper, Helper-owned Job Object integration, SID/token handshake, or UAC protocol. The existing Backend Job Object does not satisfy the future Helper containment requirement.
 
 Until those components and Windows tests exist, keep Machine Scope disabled. Do not describe the six AC items as passed merely because the architecture and Backend runtime guard exist.
