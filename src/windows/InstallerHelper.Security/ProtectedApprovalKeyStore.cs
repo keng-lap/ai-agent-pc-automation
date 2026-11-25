@@ -160,7 +160,7 @@ public sealed class ProtectedApprovalKeyStore
         VerifyAcl(info.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner), "key file");
     }
 
-    private static void VerifyAcl(ObjectSecurity security, string description)
+    private static void VerifyAcl(FileSystemSecurity security, string description)
     {
         if (!security.AreAccessRulesProtected)
             throw new CryptographicException($"Protected approval {description} DACL must not inherit permissions.");
