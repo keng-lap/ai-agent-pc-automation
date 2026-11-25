@@ -128,15 +128,17 @@ public sealed record InstallerApprovalTicket(
             throw new CryptographicException("Approval ticket HMAC key must contain at least 256 bits.");
     }
 
-    private static void RequireText(string value, int maximumLength, string field)
+    private static void RequireText(string? value, int maximumLength, string field)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength
             || value.Any(char.IsControl))
             throw new CryptographicException($"Approval ticket field {field} is invalid.");
     }
 
-    private static void RequireHex(string value, int length, string field, bool allowEmpty = false)
+    private static void RequireHex(string? value, int length, string field, bool allowEmpty = false)
     {
+        if (value is null)
+            throw new CryptographicException($"Approval ticket field {field} is missing.");
         if (allowEmpty && value.Length == 0)
             return;
         if (value.Length != length || value.Any(character => !Uri.IsHexDigit(character)))
