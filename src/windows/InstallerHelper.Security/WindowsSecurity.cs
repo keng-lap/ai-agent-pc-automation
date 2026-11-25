@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Win32.SafeHandles;
 
@@ -25,7 +26,7 @@ public static class WindowsSecurity
         if (!NativeMethods.GetTokenInformation(
                 token, TokenInformationClass.TokenElevation,
                 ref elevation, (uint)Marshal.SizeOf<TokenElevation>(), out var returned)
-            || returned < Marshal.SizeOf<TokenElevation>())
+            || returned < (uint)Marshal.SizeOf<TokenElevation>())
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not verify the effective token elevation.");
 
         if (elevation.TokenIsElevated == 0)
@@ -60,12 +61,20 @@ public static class WindowsSecurity
             throw new CryptographicException($"Authenticode trust verification failed (0x{status:X8}).");
 
         using var signer = new X509Certificate2(X509Certificate.CreateFromSignedFile(filePath));
-        if (!StringComparer.OrdinalIgnoreCase.Equals(NormalizeThumbprint(signer.Thumbprint), normalizedPin))
+        var signerSha256 = Convert.ToHexString(SHA256.HashData(signer.RawData));
+        if (!StringComparer.Ordinal.Equals(signerSha256, normalizedPin))
             throw new CryptographicException("The signed binary certificate does not match the pinned project certificate.");
     }
 
-    private static string NormalizeThumbprint(string value) =>
-        new(value.Where(Uri.IsHexDigit).Select(char.ToUpperInvariant).ToArray());
+    private static string NormalizeThumbprint(string value)
+    {
+        var normalized = value.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace(":", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
+        if (normalized.Length != 64 || normalized.Any(character => !Uri.IsHexDigit(character)))
+            throw new ArgumentException("The pinned certificate SHA-256 fingerprint must contain exactly 64 hexadecimal characters.");
+        return normalized;
+    }
 
     private static SafeKernelHandle OpenCurrentProcessToken()
     {
