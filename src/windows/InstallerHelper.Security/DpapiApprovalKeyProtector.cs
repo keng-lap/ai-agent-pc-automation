@@ -91,8 +91,21 @@ public static class DpapiApprovalKeyProtector
     private static DataBlob CreateBlob(ReadOnlySpan<byte> value)
     {
         var pointer = Marshal.AllocHGlobal(value.Length);
-        Marshal.Copy(value.ToArray(), 0, pointer, value.Length);
-        return new DataBlob { Length = value.Length, Data = pointer };
+        var copy = value.ToArray();
+        try
+        {
+            Marshal.Copy(copy, 0, pointer, copy.Length);
+            return new DataBlob { Length = copy.Length, Data = pointer };
+        }
+        catch
+        {
+            Marshal.FreeHGlobal(pointer);
+            throw;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(copy);
+        }
     }
 
     private static void ZeroAndFree(DataBlob blob)
