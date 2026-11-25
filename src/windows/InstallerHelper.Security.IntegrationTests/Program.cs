@@ -11,9 +11,58 @@ if (!OperatingSystem.IsWindows())
     throw new PlatformNotSupportedException("These integration checks require Windows.");
 
 RunTokenChecks();
+RunApprovalTicketChecks();
 RunAuthenticodeChecks();
 RunJobObjectChecks();
 Console.WriteLine("Windows Installer Helper security integration checks passed.");
+
+
+static void RunApprovalTicketChecks()
+{
+    var now = DateTimeOffset.UtcNow;
+    var digest = new string('A', 64);
+    var key = RandomNumberGenerator.GetBytes(32);
+    var unsigned = new InstallerApprovalTicket(
+        ProtocolVersion: InstallerApprovalTicket.CurrentProtocolVersion,
+        TicketId: Guid.NewGuid().ToString("N"),
+        RequesterSid: "S-1-5-21-100-200-300-1001",
+        PlanId: new string('b', 32),
+        ApprovalDigest: digest,
+        PackageId: "Example.Package",
+        Version: "1.2.3",
+        Architecture: "x64",
+        Scope: "machine",
+        InstallerSha256: new string('c', 64),
+        Nonce: Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
+        IssuedAtUnixSeconds: now.ToUnixTimeSeconds(),
+        ExpiresAtUnixSeconds: now.AddSeconds(60).ToUnixTimeSeconds(),
+        SignatureSha256: string.Empty);
+
+    var signed = unsigned.Sign(key);
+    signed.Verify(key, unsigned.RequesterSid, digest, now);
+    Console.WriteLine("PASS: exact-action machine-scope approval ticket HMAC accepted.");
+
+    ExpectTicketFailure(() => signed.Verify(key, "S-1-5-21-100-200-300-9999", digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, new string('D', 64), now));
+    ExpectTicketFailure(() => (signed with { Version = "9.9.9" }).Verify(key, unsigned.RequesterSid, digest, now));
+    ExpectTicketFailure(() => signed.Verify(key, unsigned.RequesterSid, digest, now.AddMinutes(3)));
+    ExpectTicketFailure(() => signed.Verify(RandomNumberGenerator.GetBytes(32), unsigned.RequesterSid, digest, now));
+    ExpectTicketFailure(() => (signed with { Scope = "user" }).Verify(key, unsigned.RequesterSid, digest, now));
+    Console.WriteLine("PASS: approval ticket rejects wrong SID, action digest, package version, expiry, key, and scope.");
+}
+
+static void ExpectTicketFailure(Action action)
+{
+    try
+    {
+        action();
+    }
+    catch (CryptographicException)
+    {
+        return;
+    }
+    throw new InvalidOperationException("An invalid approval ticket was incorrectly accepted.");
+}
 
 static void RunTokenChecks()
 {
