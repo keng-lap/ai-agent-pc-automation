@@ -173,9 +173,12 @@ static void RunAuthenticodeChecks()
 
 static void AddCertificateToStore(X509Certificate2 certificate, StoreName storeName)
 {
+    Console.WriteLine($"Authenticode: opening CurrentUser\\{storeName} store.");
     using var store = new X509Store(storeName, StoreLocation.CurrentUser);
     store.Open(OpenFlags.ReadWrite);
+    Console.WriteLine($"Authenticode: opened CurrentUser\\{storeName} store; adding certificate.");
     store.Add(certificate);
+    Console.WriteLine($"Authenticode: added certificate to CurrentUser\\{storeName} store.");
 }
 
 static void RemoveCertificateFromStore(string thumbprint, StoreName storeName)
