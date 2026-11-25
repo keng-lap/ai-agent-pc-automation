@@ -87,39 +87,44 @@ public sealed class ProtectedApprovalKeyStore
 
         var key = RandomNumberGenerator.GetBytes(32);
         var protectedKey = DpapiApprovalKeyProtector.Protect(key);
+        var temporaryPath = Path.Combine(_directoryPath, ".approval-key-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
+            // Prepare the temporary file's restrictive DACL before writing any secret.
             using (var stream = new FileStream(
-                _keyPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 4096, FileOptions.WriteThrough))
             {
+                ApplyKeyFileAcl(temporaryPath);
                 stream.Write(protectedKey);
                 stream.Flush(flushToDisk: true);
             }
 
-            ApplyAndVerifyKeyFileAcl();
-            return key;
-        }
-        catch (IOException) when (File.Exists(_keyPath))
-        {
-            // Another Helper may have won the CreateNew race. Never overwrite;
-            // discard our generated key and load the winner's protected key.
-            CryptographicOperations.ZeroMemory(key);
-            VerifyKeyFile();
-            var winnerBlob = File.ReadAllBytes(_keyPath);
-            try { return DpapiApprovalKeyProtector.Unprotect(winnerBlob); }
-            finally { CryptographicOperations.ZeroMemory(winnerBlob); }
+            try
+            {
+                // Same-volume rename publishes only a complete, flushed ciphertext.
+                File.Move(temporaryPath, _keyPath);
+                VerifyKeyFile();
+                return key;
+            }
+            catch (IOException) when (File.Exists(_keyPath))
+            {
+                CryptographicOperations.ZeroMemory(key);
+                VerifyKeyFile();
+                var winnerBlob = File.ReadAllBytes(_keyPath);
+                try { return DpapiApprovalKeyProtector.Unprotect(winnerBlob); }
+                finally { CryptographicOperations.ZeroMemory(winnerBlob); }
+            }
         }
         catch
         {
             CryptographicOperations.ZeroMemory(key);
-            // A partially written file must never be accepted on a later run.
-            try { if (File.Exists(_keyPath)) File.Delete(_keyPath); } catch { /* fail closed on next verification */ }
             throw;
         }
         finally
         {
             CryptographicOperations.ZeroMemory(protectedKey);
+            try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { /* stale temp is never loaded */ }
         }
     }
 
@@ -143,15 +148,16 @@ public sealed class ProtectedApprovalKeyStore
         VerifyAcl(info.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner), "key file");
     }
 
-    private void ApplyAndVerifyKeyFileAcl()
+    private static void ApplyKeyFileAcl(string path)
     {
         var security = new FileSecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.SetOwner(AdministratorsSid);
         security.AddAccessRule(new FileSystemAccessRule(SystemSid, FileSystemRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new FileSystemAccessRule(AdministratorsSid, FileSystemRights.FullControl, AccessControlType.Allow));
-        new FileInfo(_keyPath).SetAccessControl(security);
-        VerifyKeyFile();
+        new FileInfo(path).SetAccessControl(security);
+        var info = new FileInfo(path);
+        VerifyAcl(info.GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner), "key file");
     }
 
     private static void VerifyAcl(ObjectSecurity security, string description)
