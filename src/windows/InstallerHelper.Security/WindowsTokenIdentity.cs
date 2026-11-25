@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
