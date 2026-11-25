@@ -13,6 +13,8 @@ public sealed record InstallerApprovalTicket(
     int ProtocolVersion,
     string TicketId,
     string RequesterSid,
+    string RequesterLogonId,
+    int RequesterSessionId,
     string PlanId,
     string ApprovalDigest,
     string PackageId,
@@ -25,7 +27,7 @@ public sealed record InstallerApprovalTicket(
     long ExpiresAtUnixSeconds,
     string SignatureSha256)
 {
-    public const int CurrentProtocolVersion = 1;
+    public const int CurrentProtocolVersion = 2;
     public const long MaximumLifetimeSeconds = 120;
 
     /// <summary>Returns a copy signed with HMAC-SHA256 using a caller-protected key.</summary>
@@ -45,6 +47,8 @@ public sealed record InstallerApprovalTicket(
     public void Verify(
         ReadOnlySpan<byte> key,
         string expectedRequesterSid,
+        string expectedRequesterLogonId,
+        int expectedRequesterSessionId,
         string expectedApprovalDigest,
         DateTimeOffset now)
     {
@@ -53,6 +57,9 @@ public sealed record InstallerApprovalTicket(
         if (string.IsNullOrWhiteSpace(expectedRequesterSid)
             || !StringComparer.Ordinal.Equals(RequesterSid, expectedRequesterSid))
             throw new CryptographicException("Approval ticket requester SID mismatch.");
+        if (!StringComparer.Ordinal.Equals(RequesterLogonId, expectedRequesterLogonId)
+            || RequesterSessionId != expectedRequesterSessionId)
+            throw new CryptographicException("Approval ticket requester logon session mismatch.");
         if (!FixedHexEquals(ApprovalDigest, expectedApprovalDigest))
             throw new CryptographicException("Approval ticket action digest mismatch.");
 
@@ -86,6 +93,8 @@ public sealed record InstallerApprovalTicket(
         writer.Write(ProtocolVersion);
         WriteString(writer, TicketId);
         WriteString(writer, RequesterSid);
+        WriteString(writer, RequesterLogonId);
+        writer.Write(RequesterSessionId);
         WriteString(writer, PlanId);
         WriteString(writer, ApprovalDigest);
         WriteString(writer, PackageId);
@@ -113,6 +122,9 @@ public sealed record InstallerApprovalTicket(
         if (string.IsNullOrWhiteSpace(RequesterSid) || RequesterSid.Length > 184
             || !RequesterSid.StartsWith("S-1-", StringComparison.Ordinal))
             throw new CryptographicException("Approval ticket requester SID is invalid.");
+        RequireHex(RequesterLogonId, 16, nameof(RequesterLogonId));
+        if (RequesterSessionId < 0)
+            throw new CryptographicException("Approval ticket requester session ID is invalid.");
         RequireText(PackageId, 128, nameof(PackageId));
         RequireText(Version, 64, nameof(Version));
         RequireText(Architecture, 16, nameof(Architecture));
