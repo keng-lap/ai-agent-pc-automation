@@ -27,6 +27,9 @@ public sealed class DurableNonceStore
             throw new DirectoryNotFoundException("The pre-provisioned protected nonce directory does not exist.");
         if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
             throw new CryptographicException("Nonce store directory must not be a reparse point.");
+        // The same strict SYSTEM/Administrators-only DACL protects nonce records
+        // as well as the DPAPI ciphertext. DPAPI alone is not an access-control boundary.
+        _ = new ProtectedApprovalKeyStore(_directoryPath);
     }
 
     /// <summary>
