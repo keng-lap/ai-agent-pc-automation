@@ -37,9 +37,10 @@ $exporter = Join-Path $RepoRoot "scripts\export-runtime-diagnostics.py"
 if (-not (Test-Path -LiteralPath $python)) { throw "Project Python environment not found. Run scripts\setup.ps1 first." }
 if (-not (Test-Path -LiteralPath $exporter)) { throw "Diagnostics exporter not found." }
 
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ai-agent-diagnostics-" + [guid]::NewGuid().ToString("N"))
+$runSuffix = $RunId.Replace("-", "")
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ai-agent-diagnostics-" + $runSuffix)
 $exportFile = Join-Path $tempRoot "events.jsonl"
-$worktree = Join-Path ([System.IO.Path]::GetTempPath()) ("ai-agent-diagnostics-worktree-" + [guid]::NewGuid().ToString("N"))
+$worktree = Join-Path ([System.IO.Path]::GetTempPath()) ("ai-agent-diagnostics-worktree-" + $runSuffix)
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 
 try {
