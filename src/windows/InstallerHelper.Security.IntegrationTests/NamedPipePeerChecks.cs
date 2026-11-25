@@ -28,6 +28,23 @@ internal static class NamedPipePeerChecks
             || peer.SessionId != identity.SessionId)
             throw new InvalidOperationException("Named-pipe peer identity did not match the actual client token.");
 
+        // Exercise server PID discovery and identity/path checks from the client end.
+        ExpectUnauthorized(() => WindowsNamedPipePeerVerifier.RequireServerIdentity(
+            client.SafePipeHandle, "S-1-5-21-0-0-0-9999", identity.AuthenticationId, identity.SessionId,
+            Environment.ProcessPath ?? throw new InvalidOperationException("Current executable path is unavailable."),
+            new string('0', 64)));
+        if (identity.IsElevated)
+        {
+            var currentImagePath = Environment.ProcessPath
+                ?? throw new InvalidOperationException("Current executable path is unavailable.");
+            ExpectUnauthorized(() => WindowsNamedPipePeerVerifier.RequireServerIdentity(
+                client.SafePipeHandle, identity.UserSid, identity.AuthenticationId, identity.SessionId,
+                Path.Combine(Path.GetTempPath(), "not-the-helper.exe"), new string('0', 64)));
+            ExpectCryptographicFailure(() => WindowsNamedPipePeerVerifier.RequireServerIdentity(
+                client.SafePipeHandle, identity.UserSid, identity.AuthenticationId, identity.SessionId,
+                currentImagePath, new string('0', 64)));
+        }
+
         ExpectUnauthorized(() => WindowsNamedPipePeerVerifier.RequireClientIdentity(
             server.SafePipeHandle, "S-1-5-21-0-0-0-9999", identity.AuthenticationId, identity.SessionId,
             requireNonElevatedClient: false));
@@ -98,6 +115,13 @@ internal static class NamedPipePeerChecks
         }
         catch (InvalidDataException) { return; }
         throw new InvalidOperationException("An oversized IPC frame was written.");
+    }
+
+    private static void ExpectCryptographicFailure(Action action)
+    {
+        try { action(); }
+        catch (System.Security.Cryptography.CryptographicException) { return; }
+        throw new InvalidOperationException("A named-pipe server with an incorrect certificate pin was accepted.");
     }
 
     private static void ExpectUnauthorized(Action action)
