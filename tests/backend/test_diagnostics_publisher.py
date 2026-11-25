@@ -133,6 +133,10 @@ def test_publisher_cleanup_removes_worktree_registration_and_temp_artifacts(tmp_
 
     def fake_run(command, **kwargs):
         calls.append((command, kwargs))
+        if command[-3:] == ["remove", "--force", str(worktree)]:
+            import shutil
+
+            shutil.rmtree(worktree)
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(publisher.subprocess, "run", fake_run)
