@@ -429,7 +429,7 @@ def confirm_software_approval(
                     action_digest=binding.approval_digest,
                     idempotency_key=plan.plan_id,
                     binding_json=binding.model_dump_json(),
-                    workflow_id=getattr(request.state, "workflow_id", "unknown"),
+                    workflow_id=getattr(getattr(request, "state", None), "workflow_id", "unknown"),
                     correlation_id=correlation,
                 )
             except ApprovalReservationExpired:
