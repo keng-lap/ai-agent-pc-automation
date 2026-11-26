@@ -252,9 +252,10 @@ class SQLiteApprovalReservationStore:
                         outcome TEXT NOT NULL CHECK(outcome IN ('success', 'denied')),
                         result_code TEXT
                     );
-                    CREATE TRIGGER IF NOT EXISTS install_execution_payload_immutable
+                    DROP TRIGGER IF EXISTS install_execution_payload_immutable;
+                    CREATE TRIGGER install_execution_payload_immutable
                     BEFORE UPDATE OF reservation_id, owner_id, action_digest,
-                        binding_json, created_at
+                        binding_json, plan_id, workflow_id, correlation_id, created_at
                     ON install_execution_jobs
                     BEGIN
                         SELECT RAISE(ABORT, 'install execution payload is immutable');
