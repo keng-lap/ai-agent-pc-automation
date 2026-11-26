@@ -283,6 +283,8 @@ def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
     assert response.reservation_id == "reservation-123"
     assert reservation_store.reserved[0]["approval_id"] == "f" * 32
     assert reservation_store.reserved[0]["binding_json"] == binding.model_dump_json()
+    assert reservation_store.reserved[0]["workflow_id"] == "unknown"
+    assert reservation_store.reserved[0]["correlation_id"] == "unknown"
     assert response.approval_digest == binding.approval_digest
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
     assert step_up.verified[0]["code"] == "123456"
