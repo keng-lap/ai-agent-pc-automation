@@ -70,6 +70,9 @@ class InstallExecutionJob:
     attempts: int
     version: int
     result_code: str | None
+    plan_id: str = ""
+    workflow_id: str = "unknown"
+    correlation_id: str = "unknown"
 
 
 def _timestamp(value: datetime) -> str:
@@ -213,6 +216,9 @@ class SQLiteApprovalReservationStore:
                         attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 1),
                         version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0),
                         result_code TEXT,
+                        plan_id TEXT NOT NULL DEFAULT '',
+                        workflow_id TEXT NOT NULL DEFAULT 'unknown',
+                        correlation_id TEXT NOT NULL DEFAULT 'unknown',
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     );
@@ -317,6 +323,24 @@ class SQLiteApprovalReservationStore:
                     PRAGMA user_version = 1;
                     """
                 )
+                # Add diagnostic correlation metadata to databases created by
+                # earlier versions. These fields are immutable job metadata and
+                # contain identifiers only, never request bodies or credentials.
+                columns = {
+                    row["name"]
+                    for row in connection.execute(
+                        "PRAGMA table_info(install_execution_jobs)"
+                    ).fetchall()
+                }
+                for name, declaration in (
+                    ("plan_id", "TEXT NOT NULL DEFAULT ''"),
+                    ("workflow_id", "TEXT NOT NULL DEFAULT 'unknown'"),
+                    ("correlation_id", "TEXT NOT NULL DEFAULT 'unknown'"),
+                ):
+                    if name not in columns:
+                        connection.execute(
+                            f"ALTER TABLE install_execution_jobs ADD COLUMN {name} {declaration}"
+                        )
         except (sqlite3.Error, OSError, PlatformStorageUnavailable):
             raise ApprovalReservationUnavailable(
                 "Approval reservation database could not be initialized securely."
@@ -385,6 +409,8 @@ class SQLiteApprovalReservationStore:
         action_digest: str,
         idempotency_key: str,
         binding_json: str | None = None,
+        workflow_id: str = "unknown",
+        correlation_id: str = "unknown",
         now: datetime | None = None,
     ) -> ReservationReceipt:
         """Consume an active approval and persist one inert reservation atomically."""
@@ -499,10 +525,14 @@ class SQLiteApprovalReservationStore:
                             """
                             INSERT INTO install_execution_jobs (
                                 reservation_id, owner_id, action_digest, binding_json,
-                                state, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?)
+                                state, plan_id, workflow_id, correlation_id,
+                                created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?)
                             """,
-                            (reservation_id, owner_id, action_digest, binding_json, timestamp, timestamp),
+                            (
+                                reservation_id, owner_id, action_digest, binding_json,
+                                plan_id, workflow_id[:36], correlation_id[:36], timestamp, timestamp,
+                            ),
                         )
                         connection.execute(
                             """
