@@ -429,6 +429,8 @@ def confirm_software_approval(
                     action_digest=binding.approval_digest,
                     idempotency_key=plan.plan_id,
                     binding_json=binding.model_dump_json(),
+                    workflow_id=getattr(request.state, "workflow_id", "unknown"),
+                    correlation_id=correlation,
                 )
             except ApprovalReservationExpired:
                 raise HTTPException(status_code=410, detail="Install approval expired before it could be queued.") from None
@@ -464,7 +466,11 @@ def confirm_software_approval(
         component="approval",
         stage="approval_queue",
         correlation=correlation,
-        fields={"status_code": 200},
+        fields={
+            "status_code": 200,
+            "plan_id": plan_id,
+            "reservation_id": receipt.reservation_id,
+        },
     )
     return SoftwareApprovalResult(
         plan_id=plan_id,
