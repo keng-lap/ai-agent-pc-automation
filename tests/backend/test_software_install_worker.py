@@ -1,5 +1,7 @@
 """Tests for the one-shot local WinGet install worker."""
 
+import json
+import logging
 import threading
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -9,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from agent_backend import software_install_worker as worker_module
+from agent_backend import runtime_diagnostics as diagnostics
 from agent_backend.approval_reservation_store import InstallExecutionJob
 from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 
@@ -146,6 +149,55 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         "nonce": authorization.nonce,
         "expires_at": authorization.expires_at,
     }]
+
+
+def test_worker_emits_correlated_runtime_diagnostics_for_complete_install(caplog, monkeypatch, tmp_path):
+    binding = make_binding()
+    store = FakeStore(binding)
+    store.job = replace(
+        store.job,
+        plan_id="1" * 32,
+        workflow_id="11111111-2222-4333-8444-555555555555",
+        correlation_id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    )
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=0),
+        verifier=lambda *_a: next(iter([False, True])),
+        heartbeat_seconds=5,
+        release_authorization=make_release_authorization(binding),
+    )
+
+    diagnostics.set_enabled(True)
+    try:
+        with caplog.at_level(logging.INFO, logger="agent_backend.runtime_diagnostics"):
+            result = worker.run_once()
+    finally:
+        diagnostics.set_enabled(False)
+
+    events = [json.loads(record.message) for record in caplog.records]
+    event_codes = {event["event_code"] for event in events}
+    assert result.state == "SUCCEEDED"
+    assert {
+        "INSTALL_WORKER_CLAIMED",
+        "INSTALL_JOB_STATE_CHANGED",
+        "INSTALL_PRECHECK_STARTED",
+        "INSTALLER_PREPARATION_COMPLETED",
+        "WINGET_EXECUTION_STARTED",
+        "WINGET_EXECUTION_COMPLETED",
+        "POST_INSTALL_VERIFICATION_COMPLETED",
+    }.issubset(event_codes)
+    for event in events:
+        assert event["workflow_id"] == "11111111-2222-4333-8444-555555555555"
+        assert event["correlation_id"] == "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        assert event["fields"]["plan_id"] == "1" * 32
+        assert event["fields"]["reservation_id"] == "reservation-1"
+        assert "installer_url" not in event["fields"]
+        assert "api_key" not in event["fields"]
 
 
 def test_worker_records_unknown_after_execution_timeout(monkeypatch, tmp_path):
