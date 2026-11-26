@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_backend import software_install_worker as worker_module
 from agent_backend import runtime_diagnostics as diagnostics
+from agent_backend import software_install_worker as worker_module
 from agent_backend.approval_reservation_store import InstallExecutionJob
 from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
 
