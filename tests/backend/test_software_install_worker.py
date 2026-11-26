@@ -162,12 +162,13 @@ def test_worker_emits_correlated_runtime_diagnostics_for_complete_install(caplog
     )
     monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
     monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+    verification_results = iter([False, True])
     worker = worker_module.SoftwareInstallWorker(
         store,
         work_root=tmp_path / "work",
         worker_id="worker-1",
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=0),
-        verifier=lambda *_a: next(iter([False, True])),
+        verifier=lambda *_a: next(verification_results),
         heartbeat_seconds=5,
         release_authorization=make_release_authorization(binding),
     )
