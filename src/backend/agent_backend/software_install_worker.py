@@ -24,13 +24,13 @@ from agent_backend.approval_reservation_store import (
     SQLiteApprovalReservationStore,
 )
 from agent_backend.config import RealInstallReleaseAuthorization
-from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.runtime_diagnostics import (
     emit_event,
     emit_exception,
     reset_workflow_context,
     set_workflow_context,
 )
+from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.winget_adapter import (
     WinGetAdapterError,
     cleanup_prepared_install,
