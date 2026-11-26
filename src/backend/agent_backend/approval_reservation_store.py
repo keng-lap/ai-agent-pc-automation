@@ -1010,6 +1010,8 @@ class SQLiteApprovalReservationStore:
             state=row["state"], worker_id=row["worker_id"],
             lease_token=row["lease_token"], lease_expires_at=row["lease_expires_at"],
             attempts=row["attempts"], version=row["version"], result_code=row["result_code"],
+            plan_id=row["plan_id"], workflow_id=row["workflow_id"],
+            correlation_id=row["correlation_id"],
         )
 
     @staticmethod
