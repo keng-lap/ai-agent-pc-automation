@@ -80,16 +80,13 @@ try {
 
     $command = Get-Command winget.exe -ErrorAction SilentlyContinue
     if (-not $command) {
-        $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
-        if (Test-Path -LiteralPath $alias -PathType Leaf) {
-            $script:WinGetPath = $alias
-        } else {
-            throw 'WinGet was not found for the current Windows user. Install/update App Installer from Microsoft Store, then retry.'
-        }
-    } else {
-        $script:WinGetPath = $command.Source
+        throw 'WinGet command was not found in the current PowerShell command path. Install/update App Installer from Microsoft Store, then retry.'
     }
-    Write-Host "WinGet   : $script:WinGetPath"
+    # Do not pin a per-user WindowsApps alias path. Packaged-app aliases can
+    # resolve to another profile path while the command remains callable here.
+    $script:WinGetPath = 'winget.exe'
+    Write-Host "WinGet   : $($command.Source)"
+    Write-Host 'Invocation: current-session command resolution'
 
     $version = Invoke-WinGetCapture -Arguments @('--version') -OutputFile (Join-Path $logDirectory 'winget-version.txt')
     $result.WinGetVersionExitCode = $version.ExitCode
