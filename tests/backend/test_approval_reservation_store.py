@@ -215,6 +215,8 @@ def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_
             action_digest=binding.approval_digest,
             idempotency_key=PLAN_ID,
             binding_json=binding.model_dump_json(),
+            workflow_id="11111111-2222-4333-8444-555555555555",
+            correlation_id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
             now=NOW,
         )
 
@@ -223,6 +225,9 @@ def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_
     assert recovered.state == "QUEUED"
     assert recovered.reservation_id
     assert recovered.attempts == 0
+    assert recovered.plan_id == PLAN_ID
+    assert recovered.workflow_id == "11111111-2222-4333-8444-555555555555"
+    assert recovered.correlation_id == "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 
 def test_concurrent_same_request_returns_one_stable_receipt(tmp_path):
