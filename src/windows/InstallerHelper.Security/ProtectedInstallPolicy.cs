@@ -84,7 +84,7 @@ public sealed record ProtectedInstallPolicy(
         foreach (var binaryPath in new[] { helperPath, launcherPath, backendPath })
         {
             if (!File.Exists(binaryPath) || (File.GetAttributes(binaryPath) & FileAttributes.ReparsePoint) != 0)
-                throw new CryptographicException("Signed Launcher/Helper binary is missing or is a reparse point.");
+                throw new CryptographicException("Signed Backend/Launcher/Helper binary is missing or is a reparse point.");
             WindowsSecurity.RequireTrustedAuthenticodeSignature(binaryPath, policy.CertificateSha256);
         }
 
@@ -167,10 +167,11 @@ public sealed record ProtectedInstallPolicy(
         foreach (var binaryPath in new[] { Path.GetFullPath(HelperPath), Path.GetFullPath(LauncherPath), Path.GetFullPath(BackendPath) })
         {
             var binaryDirectory = Path.GetDirectoryName(binaryPath)
-                ?? throw new CryptographicException("Installed Launcher/Helper directory is invalid.");
-            VerifyNotReparsePoint(binaryDirectory, "Launcher/Helper directory");
+                ?? throw new CryptographicException("Installed Backend/Launcher/Helper directory is invalid.");
+            VerifyNotReparsePoint(binaryDirectory, "Backend/Launcher/Helper directory");
             VerifyPolicyDirectory(binaryDirectory);
             VerifyPolicyFile(binaryPath);
+            WindowsSecurity.RequireTrustedAuthenticodeSignature(binaryPath, CertificateSha256);
         }
     }
     private void ValidateValues()
