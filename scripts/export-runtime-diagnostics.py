@@ -17,6 +17,9 @@ from agent_backend.runtime_diagnostics import RuntimeDiagnosticsStore
 
 ALLOWED_FIELDS = {
     "status_code",
+    "intent",
+    "status",
+    "package_count",
     "upstream_status",
     "failure_code",
     "manifest_listing_item_count",
