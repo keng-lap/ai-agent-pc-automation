@@ -140,3 +140,32 @@ Run on supported Windows 11 editions, including the nominated Windows 11 Home ta
 The PR contains a non-elevated Backend, a separate unelevated Launcher, a separate Elevated Installer Helper, protected install-policy validation/provisioning primitives, a DPAPI LocalMachine-protected HMAC key store, a durable nonce-store primitive, an exact-action HMAC ticket (protocol v3, including a durable reservation UUID), and a Helper-owned Job Object process runner. The Launcher and Helper perform Windows token, SID, logon-session, Named Pipe peer, Authenticode, and protected-policy checks. The Helper deliberately stops at `DENIED_NOT_READY`: it does not yet independently resolve the reservation, consume the nonce, or start the staged installer. `ProtectedInstallPolicy.Provision` exists but is not yet wired into the signed product setup flow. The existing Backend User Scope executor is not a substitute for the future Elevated Helper execution boundary.
 
 Keep Machine Scope disabled until the remaining authorization, nonce, staging, Helper execution, setup provisioning, and target Windows acceptance gates are complete. Passing Windows CI for the current primitives is not equivalent to a successful real install through the AI Agent application on Windows 11 Home.
+
+## Trusted Backend-to-Helper authorization bridge (required before execution)
+
+**Decision: preserve the existing approval flow.** The user-facing sequence remains proposal/evidence review, exact-action TOTP/step-up confirmation, atomic durable reservation, then execution dispatch. A Helper ticket is transport integrity metadata only; it is not a second approval and cannot create or broaden approval.
+
+### Why the current bridge is intentionally not enabled
+
+- The Backend currently runs as a non-elevated Python process and owns the approval database. A record read from that database is not independently trustworthy to an elevated Helper: the same interactive user can modify user-writable application state, and SQLite constraints/triggers are not cryptographic authenticity.
+- The Helper's HMAC key and nonce store are intentionally writable only by SYSTEM/Administrators. Giving the HMAC key to the non-elevated Backend, putting it in a user-readable configuration file, or accepting a digest supplied by the Launcher would let a same-user process mint privileged tickets. Those are prohibited.
+- The current approval evidence model explicitly supports `scope="user"`; the Helper ticket currently accepts only `scope="machine"`. Do not silently translate one scope into the other. The scope presented to the user, confirmed by TOTP, persisted in the reservation, and checked by the Helper must be identical.
+- Consequently the Helper must continue to return `DENIED_NOT_READY`. It must not consume the nonce or create an installer process until the bridge below is implemented and independently tested.
+
+### Required bridge design
+
+1. Keep the existing TOTP challenge and confirmation endpoints as the sole user approval step. Confirmation must continue to atomically consume the one-use challenge and create the immutable reservation; no new confirmation prompt is introduced.
+2. Package the Backend as a signed, fixed-path executable installed under the administrator-protected Program Files product directory. The installed Backend executable and its runtime dependencies must be protected against standard-user modification. Running the Python development server from a user-writable checkout is not an eligible production authorization authority.
+3. Extend the protected install policy with the exact Backend executable path and pinned Authenticode certificate identity (the same locally enrolled, self-signed code-signing identity is acceptable). Provision and validate its DACL, owner, reparse-point status, and signature exactly as for Launcher/Helper.
+4. Add a dedicated local-only Backend reservation IPC endpoint. The Helper connects to that endpoint and independently verifies the server PID, token SID, logon AuthenticationId, session ID, fixed executable path, protected file ACL, and pinned Authenticode signature. The endpoint must reject remote clients and use bounded, versioned framing.
+5. The Helper requests the reservation by canonical UUID and a fresh per-request challenge. The Backend returns a read-only snapshot sourced from the durable reservation and immutable approval binding. The response must include reservation/approval/plan IDs, owner/session binding, reservation state, plan and action digests, package ID/version/architecture/scope, installer SHA-256, publisher/signature evidence, source/manifest identity, and the exact approved silent-install policy. No free-form executable path or command line is accepted.
+6. The Helper validates the snapshot against every corresponding ticket field and its own fresh challenge. It rejects missing, extra, stale, revoked, expired, mismatched, or non-queued reservations. The Backend IPC response is accepted only from the protected signed Backend process described above; a JSON snapshot alone is not proof.
+7. Only after all checks pass may the Helper atomically consume the protected nonce, re-hash and re-verify the staged installer, create it suspended, assign it to the Helper-owned Job Object, and resume it. Any failure before process creation is a denial. Any ambiguous result after process creation becomes UNKNOWN and is never automatically retried.
+
+### Acceptance gates for this bridge
+
+- Negative tests: forged or modified database rows, fake Backend process, wrong PID/path/signature/certificate pin, wrong SID/LUID/session, remote pipe client, stale/revoked reservation, mismatched scope/digest/package/version/architecture/installer hash/publisher, changed installer bytes, replayed nonce, expired challenge, malformed/oversized/truncated IPC frames, and UAC cancellation.
+- Positive tests: same approved proposal flows through the existing TOTP UI once, durable reservation is retrieved by the verified installed Backend, Helper validates exact fields, nonce is consumed exactly once, and the exact staged installer is contained by the Job Object.
+- Windows 11 Home acceptance must run through the actual AI Agent PC Automation application and install the selected DBeaver Community package. CI-only checks do not satisfy this gate.
+- Until all gates pass, keep Machine Scope disabled and keep Helper execution fail-closed. Do not merge this PR without explicit user approval.
+
