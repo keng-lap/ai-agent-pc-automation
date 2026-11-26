@@ -252,10 +252,9 @@ class SQLiteApprovalReservationStore:
                         outcome TEXT NOT NULL CHECK(outcome IN ('success', 'denied')),
                         result_code TEXT
                     );
-                    DROP TRIGGER IF EXISTS install_execution_payload_immutable;
-                    CREATE TRIGGER install_execution_payload_immutable
+                    CREATE TRIGGER IF NOT EXISTS install_execution_payload_immutable
                     BEFORE UPDATE OF reservation_id, owner_id, action_digest,
-                        binding_json, plan_id, workflow_id, correlation_id, created_at
+                        binding_json, created_at
                     ON install_execution_jobs
                     BEGIN
                         SELECT RAISE(ABORT, 'install execution payload is immutable');
@@ -321,7 +320,7 @@ class SQLiteApprovalReservationStore:
                     BEGIN
                         SELECT RAISE(ABORT, 'reservation receipts cannot be deleted');
                     END;
-                    PRAGMA user_version = 1;
+                    PRAGMA user_version = 2;
                     """
                 )
                 # Add diagnostic correlation metadata to databases created by
@@ -342,6 +341,20 @@ class SQLiteApprovalReservationStore:
                         connection.execute(
                             f"ALTER TABLE install_execution_jobs ADD COLUMN {name} {declaration}"
                         )
+                # Recreate the immutable-payload trigger after adding columns so
+                # existing databases migrate before SQLite validates the trigger.
+                connection.executescript(
+                    """
+                    DROP TRIGGER IF EXISTS install_execution_payload_immutable;
+                    CREATE TRIGGER install_execution_payload_immutable
+                    BEFORE UPDATE OF reservation_id, owner_id, action_digest,
+                        binding_json, plan_id, workflow_id, correlation_id, created_at
+                    ON install_execution_jobs
+                    BEGIN
+                        SELECT RAISE(ABORT, 'install execution payload is immutable');
+                    END;
+                    """
+                )
         except (sqlite3.Error, OSError, PlatformStorageUnavailable):
             raise ApprovalReservationUnavailable(
                 "Approval reservation database could not be initialized securely."
