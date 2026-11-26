@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-Set-StrictMode -Version Latest
 param(
     [Parameter(Mandatory = $true)][string]$CertificateThumbprint,
     [string]$ExecutablePath = "dist\AgentBackend.exe"
 )
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 $thumbprint = ($CertificateThumbprint -replace "\s", "").ToUpperInvariant()
 if ($thumbprint -notmatch "^[0-9A-F]{40,64}$") { throw "Certificate thumbprint must be a SHA-1 or SHA-256 hex thumbprint." }
 $certificate = Get-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -ErrorAction Stop
