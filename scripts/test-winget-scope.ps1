@@ -15,7 +15,7 @@ param(
 
     [switch]$Install,
 
-    [string]$PackageId = 'dbeaver.dbeaver.community'
+    [string]$PackageId = 'DBeaver.DBeaver.Community'
 )
 
 Set-StrictMode -Version Latest
