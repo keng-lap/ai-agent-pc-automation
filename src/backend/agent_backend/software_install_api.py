@@ -111,6 +111,11 @@ def create_software_install_proposal(
         component="install",
         stage="proposal_verification",
         correlation=correlation,
+        fields={
+            "package_id": payload.package_id,
+            "version": payload.version,
+            "scope": payload.scope,
+        },
     )
     if sys.platform != "win32":
         emit_event(
