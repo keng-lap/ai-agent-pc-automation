@@ -258,6 +258,10 @@ def create_software_install_proposal(
         fields={
             "duration_ms": round((datetime.now(UTC) - started).total_seconds() * 1000, 2),
             "publisher_verification": candidate.publisher_verification,
+            "plan_id": plan.plan_id,
+            "package_id": evidence.package_id,
+            "version": evidence.version,
+            "scope": evidence.scope,
         },
     )
     return SoftwareInstallProposalResponse(
