@@ -167,6 +167,20 @@ def create_software_install_proposal(
         )
         raise HTTPException(status_code=503, detail="Approved package source is unavailable.") from None
     except ValueError:
+        emit_event(
+            event_code="INSTALL_PROPOSAL_REJECTED",
+            component="install",
+            stage="proposal_validation",
+            correlation=correlation,
+            severity="WARNING",
+            fields={
+                "status_code": 422,
+                "failure_code": "invalid_lookup_parameters",
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "scope": payload.scope,
+            },
+        )
         raise HTTPException(status_code=422, detail="Package lookup parameters are invalid.") from None
 
     candidate = discovery.candidate
@@ -191,12 +205,40 @@ def create_software_install_proposal(
         )
         or (candidate.installer_type == "exe" and not candidate.installer_silent_switch)
     ):
+        emit_event(
+            event_code="INSTALL_PROPOSAL_REJECTED",
+            component="install",
+            stage="proposal_validation",
+            correlation=correlation,
+            severity="WARNING",
+            fields={
+                "status_code": 409,
+                "failure_code": "candidate_evidence_mismatch",
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "scope": payload.scope,
+            },
+        )
         raise HTTPException(
             status_code=409,
             detail="The exact package is not eligible for publisher and installer verification.",
         )
 
     if candidate.installer_type.casefold() not in {"exe", "msi", "msix", "appx"}:
+        emit_event(
+            event_code="INSTALL_PROPOSAL_REJECTED",
+            component="install",
+            stage="proposal_validation",
+            correlation=correlation,
+            severity="WARNING",
+            fields={
+                "status_code": 409,
+                "failure_code": "installer_type_unsupported",
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "scope": payload.scope,
+            },
+        )
         raise HTTPException(
             status_code=409,
             detail="The selected installer type is not supported for verified installation.",
@@ -204,6 +246,20 @@ def create_software_install_proposal(
 
     store_path = getattr(request.app.state, "job_store_path", None)
     if store_path is None:
+        emit_event(
+            event_code="INSTALL_PROPOSAL_REJECTED",
+            component="install",
+            stage="proposal_validation",
+            correlation=correlation,
+            severity="ERROR",
+            fields={
+                "status_code": 503,
+                "failure_code": "staging_storage_unavailable",
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "scope": payload.scope,
+            },
+        )
         raise HTTPException(status_code=503, detail="Local installer staging storage is unavailable.")
     staging_root = Path(store_path).expanduser().absolute().parent / "winget-evidence"
 
@@ -245,6 +301,20 @@ def create_software_install_proposal(
             detail="Authenticode signer identity does not match the WinGet manifest Publisher.",
         ) from None
     except InstallPlanCapacityError:
+        emit_event(
+            event_code="INSTALL_PROPOSAL_REJECTED",
+            component="install",
+            stage="proposal_validation",
+            correlation=correlation,
+            severity="WARNING",
+            fields={
+                "status_code": 503,
+                "failure_code": "active_proposal_capacity_reached",
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "scope": payload.scope,
+            },
+        )
         if evidence is not None:
             software_evidence_registry.revoke(evidence.evidence_id)
         raise HTTPException(status_code=503, detail="Active install proposal capacity reached.") from None
