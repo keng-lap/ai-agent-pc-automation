@@ -37,7 +37,8 @@ function Invoke-WinGetCapture {
     Write-Host ('> winget ' + ($Arguments -join ' ')) -ForegroundColor Gray
     $captured = @(& $script:WinGetPath @Arguments 2>&1)
     $nativeExitCode = $LASTEXITCODE
-    $captured | ForEach-Object { "$_" } | Tee-Object -FilePath $OutputFile
+    $captured | ForEach-Object { "$_" } | Set-Content -LiteralPath $OutputFile -Encoding UTF8
+    $captured | ForEach-Object { Write-Host "$_" }
     return [pscustomobject]@{
         ExitCode = [int]$nativeExitCode
         Output = @($captured | ForEach-Object { "$_" })
