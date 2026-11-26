@@ -27,6 +27,7 @@ from agent_backend.config import RealInstallReleaseAuthorization
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.runtime_diagnostics import (
     emit_event,
+    emit_exception,
     reset_workflow_context,
     set_workflow_context,
 )
@@ -413,6 +414,18 @@ class SoftwareInstallWorker:
         except (OSError, WinGetExecutionError, ApprovalReservationError):
             return self._transition(
                 job, token, version, version_lock, "UNKNOWN", "EXECUTION_OUTCOME_AMBIGUOUS"
+            ) or job
+        except Exception as exc:  # noqa: BLE001 - record unexpected worker failures without leaking messages
+            emit_exception(
+                event_code="INSTALL_WORKER_UNEXPECTED_FAILURE",
+                component="install_worker",
+                stage="install_lifecycle",
+                correlation=job.correlation_id,
+                error=exc,
+                fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+            )
+            return self._transition(
+                job, token, version, version_lock, "UNKNOWN", "WORKER_UNEXPECTED_FAILURE"
             ) or job
         finally:
             stop_heartbeat.set()
