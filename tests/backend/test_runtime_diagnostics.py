@@ -337,7 +337,17 @@ def test_export_sanitizer_includes_only_bounded_version_options():
         "component": "manifest",
         "stage": "manifest_validation",
         "correlation_id": "6f1d8e34-0a7b-4f89-9a13-0c8a4d4b8e21",
+        "workflow_id": "11111111-2222-4333-8444-555555555555",
         "fields": {
+            "plan_id": "1" * 32,
+            "reservation_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+            "scope": "user",
+            "state": "SUCCEEDED",
+            "result_code": "PACKAGE_VERSION_VERIFIED",
+            "exit_code": 0,
+            "timed_out": False,
+            "cancelled": False,
+            "result": "verified",
             "available_version_count": 2,
             "official_version_count": 1,
             "available_versions": ["26.2.5"],
@@ -355,7 +365,17 @@ def test_export_sanitizer_includes_only_bounded_version_options():
 
     sanitized = sanitize_event(event)
 
+    assert sanitized["workflow_id"] == "11111111-2222-4333-8444-555555555555"
     assert sanitized["fields"] == {
+        "plan_id": "1" * 32,
+        "reservation_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "scope": "user",
+        "state": "SUCCEEDED",
+        "result_code": "PACKAGE_VERSION_VERIFIED",
+        "exit_code": 0,
+        "timed_out": False,
+        "cancelled": False,
+        "result": "verified",
         "available_version_count": 2,
         "available_versions": ["26.2.5"],
         "manifest_versions": ["7.3.5", "26.2.5"],
