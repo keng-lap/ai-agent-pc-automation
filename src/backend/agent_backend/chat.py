@@ -333,6 +333,9 @@ def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
             fields={
                 "response_bytes": len(raw_response.encode("utf-8")),
                 "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                "intent": structured.intent,
+                "status": structured.status,
+                "package_count": len(structured.data.packages),
             },
         )
         request_id = correlation
