@@ -120,10 +120,10 @@ try {
                 '--accept-source-agreements', '--accept-package-agreements',
                 '--verbose-logs'
             )
-            $install = Invoke-WinGetCapture -Arguments $installArgs -OutputFile (Join-Path $logDirectory "install-$($Scope.ToLowerInvariant()).txt")
-            $result.InstallExitCode = $install.ExitCode
-            if ($install.ExitCode -ne 0) {
-                Write-Host "WinGet install returned exit code $($install.ExitCode)." -ForegroundColor Red
+            $installResult = Invoke-WinGetCapture -Arguments $installArgs -OutputFile (Join-Path $logDirectory "install-$($Scope.ToLowerInvariant()).txt")
+            $result.InstallExitCode = $installResult.ExitCode
+            if ($installResult.ExitCode -ne 0) {
+                Write-Host "WinGet install returned exit code $($installResult.ExitCode)." -ForegroundColor Red
             } else {
                 Write-Host 'WinGet install command completed with exit code 0.' -ForegroundColor Green
             }
