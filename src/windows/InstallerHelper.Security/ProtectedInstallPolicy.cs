@@ -13,6 +13,7 @@ namespace InstallerHelper.Security;
 public sealed record ProtectedInstallPolicy(
     string HelperPath,
     string LauncherPath,
+    string BackendPath,
     string CertificateSha256,
     string ProtectedStoreDirectory,
     string NonceDirectory)
@@ -79,7 +80,8 @@ public sealed record ProtectedInstallPolicy(
 
         var helperPath = Path.GetFullPath(policy.HelperPath);
         var launcherPath = Path.GetFullPath(policy.LauncherPath);
-        foreach (var binaryPath in new[] { helperPath, launcherPath })
+        var backendPath = Path.GetFullPath(policy.BackendPath);
+        foreach (var binaryPath in new[] { helperPath, launcherPath, backendPath })
         {
             if (!File.Exists(binaryPath) || (File.GetAttributes(binaryPath) & FileAttributes.ReparsePoint) != 0)
                 throw new CryptographicException("Signed Launcher/Helper binary is missing or is a reparse point.");
@@ -115,6 +117,7 @@ public sealed record ProtectedInstallPolicy(
             File.Move(temporary, destination);
             ApplyFileAcl(helperPath);
             ApplyFileAcl(launcherPath);
+            ApplyFileAcl(backendPath);
             VerifyPolicyDirectory(productRoot);
             VerifyPolicyDirectory(securityDirectory);
             VerifyPolicyFile(destination);
@@ -161,7 +164,7 @@ public sealed record ProtectedInstallPolicy(
     }
     private void VerifyInstalledBinaries()
     {
-        foreach (var binaryPath in new[] { Path.GetFullPath(HelperPath), Path.GetFullPath(LauncherPath) })
+        foreach (var binaryPath in new[] { Path.GetFullPath(HelperPath), Path.GetFullPath(LauncherPath), Path.GetFullPath(BackendPath) })
         {
             var binaryDirectory = Path.GetDirectoryName(binaryPath)
                 ?? throw new CryptographicException("Installed Launcher/Helper directory is invalid.");
@@ -174,11 +177,13 @@ public sealed record ProtectedInstallPolicy(
     {
         if (string.IsNullOrWhiteSpace(HelperPath)
             || string.IsNullOrWhiteSpace(LauncherPath)
+            || string.IsNullOrWhiteSpace(BackendPath)
             || string.IsNullOrWhiteSpace(CertificateSha256)
             || string.IsNullOrWhiteSpace(ProtectedStoreDirectory)
             || string.IsNullOrWhiteSpace(NonceDirectory)
             || !Path.IsPathFullyQualified(HelperPath)
             || !Path.IsPathFullyQualified(LauncherPath)
+            || !Path.IsPathFullyQualified(BackendPath)
             || !Path.IsPathFullyQualified(ProtectedStoreDirectory)
             || !Path.IsPathFullyQualified(NonceDirectory))
             throw new CryptographicException("Protected install policy paths and certificate pin are required and must be absolute.");
@@ -196,9 +201,11 @@ public sealed record ProtectedInstallPolicy(
         var expectedRoot = Path.GetFullPath(Path.Combine(programFiles, ProductDirectoryName));
         var helper = Path.GetFullPath(HelperPath);
         var launcher = Path.GetFullPath(LauncherPath);
+        var backend = Path.GetFullPath(BackendPath);
         if (!StringComparer.OrdinalIgnoreCase.Equals(helper, Path.Combine(expectedRoot, "InstallerHelper.exe"))
-            || !StringComparer.OrdinalIgnoreCase.Equals(launcher, Path.Combine(expectedRoot, "InstallerLauncher.exe")))
-            throw new CryptographicException("Launcher and Helper must use their fixed direct-child paths under the protected Program Files product directory.");
+            || !StringComparer.OrdinalIgnoreCase.Equals(launcher, Path.Combine(expectedRoot, "InstallerLauncher.exe"))
+            || !StringComparer.OrdinalIgnoreCase.Equals(backend, Path.Combine(expectedRoot, "AgentBackend.exe")))
+            throw new CryptographicException("Backend, Launcher, and Helper must use their fixed direct-child paths under the protected Program Files product directory.");
 
         var expectedDataRoot = Path.GetFullPath(Path.Combine(programData, ProductDirectoryName));
         var protectedStore = Path.GetFullPath(ProtectedStoreDirectory);
