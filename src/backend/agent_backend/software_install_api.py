@@ -197,8 +197,42 @@ def create_software_install_proposal(
                 or candidate.official_asset_sha256 != candidate.installer_sha256
             )
         )
-        or (candidate.installer_type == "exe" and not candidate.installer_silent_switch)
+        or (
+            candidate.installer_type == "exe"
+            and not candidate.installer_silent_switch
+            and not candidate.installer_silent_with_progress_switch
+            and candidate.installer_technology not in {"nullsoft", "inno", "burn"}
+        )
     ):
+        mismatch_fields = []
+        if discovery.status != "CONDITIONAL" or candidate is None:
+            mismatch_fields.append("discovery_candidate")
+        else:
+            for field_name, actual, expected in (
+                ("package_id", candidate.package_id, payload.package_id),
+                ("version", candidate.version, payload.version),
+                ("architecture", candidate.architecture, payload.architecture),
+                ("scope", candidate.scope, payload.scope),
+            ):
+                if actual != expected:
+                    mismatch_fields.append(field_name)
+            if candidate.publisher_verification not in {"NOT_CHECKED", "VERIFIED"}:
+                mismatch_fields.append("official_release_evidence")
+            if (
+                candidate.publisher_verification == "VERIFIED"
+                and (
+                    candidate.official_version != candidate.version
+                    or candidate.official_asset_sha256 != candidate.installer_sha256
+                )
+            ):
+                mismatch_fields.append("official_release_version_or_sha256")
+            if (
+                candidate.installer_type == "exe"
+                and not candidate.installer_silent_switch
+                and not candidate.installer_silent_with_progress_switch
+                and candidate.installer_technology not in {"nullsoft", "inno", "burn"}
+            ):
+                mismatch_fields.append("silent_install_strategy")
         emit_event(
             event_code="INSTALL_PROPOSAL_REJECTED",
             component="install",
@@ -208,6 +242,8 @@ def create_software_install_proposal(
             fields={
                 "status_code": 409,
                 "failure_code": "candidate_evidence_mismatch",
+                "failure_reason": "The selected manifest candidate failed one or more exact-evidence checks.",
+                "mismatch_fields": mismatch_fields or ["candidate_contract"],
                 "package_id": payload.package_id,
                 "version": payload.version,
                 "scope": payload.scope,

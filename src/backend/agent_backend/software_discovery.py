@@ -123,7 +123,10 @@ class InstallerCandidate(BaseModel):
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user", "machine"]
     installer_type: str
+    installer_technology: str = "exe"
     installer_silent_switch: str | None = None
+    installer_silent_with_progress_switch: str | None = None
+    installer_custom_switch: str | None = None
     installer_url: str
     installer_domain: str
     installer_sha256: str
@@ -465,10 +468,27 @@ class WinGetManifestRepository:
         installer_hash = installer.get("InstallerSha256")
         installer_type = installer.get("InstallerType") or installer_doc.get("InstallerType")
         switches = installer.get("InstallerSwitches")
-        silent_switch = switches.get("Silent") if isinstance(switches, dict) else None
-        if not silent_switch:
-            root_switches = installer_doc.get("InstallerSwitches")
-            silent_switch = root_switches.get("Silent") if isinstance(root_switches, dict) else None
+        root_switches = installer_doc.get("InstallerSwitches")
+
+        def read_switch(name: str) -> str | None:
+            value = switches.get(name) if isinstance(switches, dict) else None
+            if value is None:
+                value = root_switches.get(name) if isinstance(root_switches, dict) else None
+            if value is not None and (
+                not isinstance(value, str)
+                or not value.strip()
+                or any(ord(char) < 0x20 for char in value)
+            ):
+                raise DiscoveryUnavailable(
+                    f"installer {name} switch was invalid",
+                    failure_code="installer_switch_invalid",
+                    diagnostic_fields={"switch_name": name},
+                )
+            return value
+
+        silent_switch = read_switch("Silent")
+        silent_with_progress_switch = read_switch("SilentWithProgress")
+        custom_switch = read_switch("Custom")
         domain = _validate_installer_url(installer_url)
         if not isinstance(installer_hash, str) or not SHA256_PATTERN.fullmatch(installer_hash):
             raise DiscoveryUnavailable("installer SHA-256 was missing or invalid")
@@ -520,7 +540,10 @@ class WinGetManifestRepository:
             architecture=architecture,
             scope=scope,
             installer_type=_normalize_installer_type(installer_type, installer_url),
+            installer_technology=installer_type.strip().casefold(),
             installer_silent_switch=silent_switch,
+            installer_silent_with_progress_switch=silent_with_progress_switch,
+            installer_custom_switch=custom_switch,
             installer_url=installer_url,
             installer_domain=domain,
             installer_sha256=installer_hash.lower(),

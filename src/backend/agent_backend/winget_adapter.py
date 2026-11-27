@@ -25,6 +25,9 @@ from agent_backend.software_approval import InstallApprovalBinding
 
 MANIFEST_VERSION = "1.10.0"
 SUPPORTED_INSTALLER_TYPES = frozenset({"exe", "msi", "msix", "appx"})
+SUPPORTED_INSTALLER_TECHNOLOGIES = frozenset({
+    "exe", "msi", "msix", "appx", "nullsoft", "inno", "burn", "wix",
+})
 INSTALLER_SUFFIXES = {
     "exe": ".exe",
     "msi": ".msi",
@@ -64,6 +67,7 @@ def build_local_manifest_documents(
         not _PACKAGE_ID.fullmatch(evidence.package_id)
         or not _VERSION.fullmatch(evidence.version)
         or evidence.installer_type not in SUPPORTED_INSTALLER_TYPES
+        or evidence.installer_technology not in SUPPORTED_INSTALLER_TECHNOLOGIES
         or evidence.scope != "user"
         or evidence.source != "winget"
     ):
@@ -103,16 +107,27 @@ def build_local_manifest_documents(
         "InstallerUrl": evidence.installer_url,
         "InstallerSha256": evidence.installer_sha256,
     }
-    if evidence.installer_type == "exe":
-        if not evidence.installer_silent_switch:
-            raise WinGetAdapterError("EXE installer has no approved silent switch")
-        installer_entry["InstallerSwitches"] = {
-            "Silent": evidence.installer_silent_switch,
-        }
+    installer_switches = {
+        "Silent": evidence.installer_silent_switch,
+        "SilentWithProgress": evidence.installer_silent_with_progress_switch,
+        "Custom": evidence.installer_custom_switch,
+    }
+    installer_switches = {
+        key: value for key, value in installer_switches.items() if value is not None
+    }
+    if installer_switches:
+        installer_entry["InstallerSwitches"] = installer_switches
+    if (
+        evidence.installer_type == "exe"
+        and not evidence.installer_silent_switch
+        and not evidence.installer_silent_with_progress_switch
+        and evidence.installer_technology not in {"nullsoft", "inno", "burn"}
+    ):
+        raise WinGetAdapterError("EXE installer has no approved silent strategy")
     installer_doc = {
         **common,
         "ManifestType": "installer",
-        "InstallerType": evidence.installer_type,
+        "InstallerType": evidence.installer_technology,
         "Installers": [installer_entry],
     }
 

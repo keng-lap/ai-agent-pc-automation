@@ -143,7 +143,28 @@ def test_discovery_normalizes_executable_installer_technologies_for_any_package(
     assert result.candidate is not None
     assert result.candidate.package_id == PACKAGE_ID
     assert result.candidate.installer_type == "exe"
+    assert result.candidate.installer_technology == manifest_type
     assert result.candidate.installer_silent_switch == "/S"
+
+
+def test_discovery_preserves_custom_and_silent_with_progress_switches():
+    source = FakeSource()
+    installer = source.documents["Acme.Editor.installer.yaml"]["Installers"][0]
+    installer["InstallerType"] = "nullsoft"
+    installer["InstallerSwitches"] = {
+        "SilentWithProgress": "/S",
+        "Custom": "/currentuser",
+    }
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.installer_technology == "nullsoft"
+    assert result.candidate.installer_silent_switch is None
+    assert result.candidate.installer_silent_with_progress_switch == "/S"
+    assert result.candidate.installer_custom_switch == "/currentuser"
 
 
 def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():

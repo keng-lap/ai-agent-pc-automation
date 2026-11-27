@@ -220,6 +220,22 @@ def test_exe_manifest_includes_backend_verified_silent_switch():
     assert installer["Installers"][0]["InstallerSwitches"] == {"Silent": "/S"}
 
 
+def test_nullsoft_manifest_preserves_custom_scope_switch_and_uses_technology_default():
+    binding, _ = _binding(
+        installer_type="exe",
+        installer_technology="nullsoft",
+        installer_custom_switch="/currentuser",
+        installer_url="https://downloads.contoso.example/sample-2.4.1.exe",
+    )
+    documents = build_local_manifest_documents(binding)
+    installer = yaml.safe_load(documents["Contoso.Sample.installer.yaml"])
+    assert installer["Installers"][0]["Scope"] == "user"
+    assert installer["InstallerType"] == "nullsoft"
+    assert installer["Installers"][0]["InstallerSwitches"] == {
+        "Custom": "/currentuser",
+    }
+
+
 def test_exe_evidence_without_manifest_silent_switch_is_rejected():
     with pytest.raises(ValidationError, match="silent switch"):
         _binding(installer_type="exe", installer_url="https://downloads.contoso.example/sample-2.4.1.exe", installer_silent_switch=None)
