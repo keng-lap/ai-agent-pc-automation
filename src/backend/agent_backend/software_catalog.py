@@ -196,7 +196,11 @@ class WindowsMsixSignatureVerifier:
         trust_data.fdwRevocationChecks = 1  # WTD_REVOKE_WHOLECHAIN
         trust_data.dwUnionChoice = 1  # WTD_CHOICE_FILE
         trust_data.dwStateAction = 1  # WTD_STATEACTION_VERIFY
-        trust_data.dwProvFlags = 0x1000  # WTD_CACHE_ONLY_URL_RETRIEVAL
+        # Allow Windows to retrieve missing intermediate certificates through
+        # their AIA URLs while still checking the chain for revocation. A
+        # cache-only chain build incorrectly rejects valid signers when an
+        # intermediate certificate is not already present on this machine.
+        trust_data.dwProvFlags = 0x80  # WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT
         trust_data.pFile = ctypes.pointer(file_info)
 
         wintrust = None
