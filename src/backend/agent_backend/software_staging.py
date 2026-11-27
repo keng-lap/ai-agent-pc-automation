@@ -229,7 +229,7 @@ class InstallerStager:
                     signature_subject = None
                 signature_sha256 = None
             if signature_valid is not True:
-                raise InstallerStageError("Windows Authenticode trust or signer extraction failed")
+                raise InstallerStageError("Windows Authenticode signature verification failed")
 
             final_path = root / f"installer-{uuid.uuid4().hex}{suffix}"
             os.replace(temp_path, final_path)
