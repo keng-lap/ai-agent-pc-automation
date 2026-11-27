@@ -113,7 +113,7 @@ class PublisherVerification(BaseModel):
 class DBeaverGitHubReleaseVerifier:
     """Cross-check DBeaver Community manifests against its official GitHub release."""
 
-    RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=100"
+    RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases"
     RELEASES_PAGE_SIZE = 100
     RELEASE_TAG_API_PREFIX = "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/"
     RELEASE_PAGE_PREFIX = "https://github.com/dbeaver/dbeaver/releases/tag/"
@@ -138,7 +138,7 @@ class DBeaverGitHubReleaseVerifier:
             try:
                 response = self._http_get(
                     self.RELEASES_API_URL,
-                    params={"page": str(page)},
+                    params={"per_page": str(self.RELEASES_PAGE_SIZE), "page": str(page)},
                     headers={
                         "Accept": "application/vnd.github+json",
                         "X-GitHub-Api-Version": "2022-11-28",
