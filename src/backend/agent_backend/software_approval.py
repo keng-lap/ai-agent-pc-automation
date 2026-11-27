@@ -32,8 +32,6 @@ class VerifiedPackageEvidence(BaseModel):
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
-    signature_subject: str | None = Field(default=None, max_length=300)
-    signature_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     verified_at: datetime
     expires_at: datetime
 
