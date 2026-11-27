@@ -163,7 +163,7 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
     && typeof value['package_allowlist_enabled'] === 'boolean'
     && Array.isArray(value['supported_package_ids'])
     && value['supported_package_ids'].every((item) => typeof item === 'string')
-    && value['notice'] === 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+    && value['notice'] === 'RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP';
 }
 
 function isSoftwareInstallProposalResponse(value: unknown): value is SoftwareInstallProposalResponse {
@@ -1136,7 +1136,7 @@ export class App implements AfterViewChecked {
   protected requestSoftwareApproval(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const proposal = discovery?.proposal;
-    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== proposal.package_id || discovery.readiness.real_install_release_version !== proposal.version || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
+    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
@@ -1175,7 +1175,7 @@ export class App implements AfterViewChecked {
     const proposal = discovery?.proposal;
     const challenge = discovery?.approvalChallenge;
     const code = discovery?.totpCode ?? '';
-    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
+    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || !/^\d{6}$/.test(code) || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
@@ -1243,32 +1243,6 @@ export class App implements AfterViewChecked {
                 }
                 : item
             )));
-            return;
-          }
-          const releaseAuthorizationRejected = isRecord(error)
-            && error['status'] === 409
-            && isRecord(error['error'])
-            && typeof error['error']['detail'] === 'string'
-            && error['error']['detail'].toLowerCase().includes('release authorization');
-          if (releaseAuthorizationRejected) {
-            this.entries.update((entries) => entries.map((item) => (
-              item.id === entryId && item.discovery
-                ? {
-                  ...item,
-                  discovery: {
-                    ...item.discovery,
-                    approvalChallenge: undefined,
-                    reservationRecoveryPending: false,
-                    jobStatusChecking: false,
-                    totpCode: '',
-                    proposalError: this.language() === 'th'
-                      ? 'Release Authorization หมดอายุหรือไม่ตรงกับ Package/Version กรุณาตั้งค่าใหม่แล้วรีเฟรช'
-                      : 'The release authorization expired or does not match this package/version. Refresh authorization and try again.',
-                  },
-                }
-                : item
-            )));
-            this.loadSoftwareInstallReadiness(entryId);
             return;
           }
           if (isRecord(error) && error['status'] === 403) {
