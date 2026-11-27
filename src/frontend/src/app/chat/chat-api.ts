@@ -112,7 +112,7 @@ export interface SoftwareInstallReadiness {
   real_install_release_expires_at: string | null;
   package_allowlist_enabled: boolean;
   supported_package_ids: string[];
-  notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+  notice: 'RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP';
 }
 
 export interface SoftwareInstallProposalResponse {
