@@ -151,6 +151,10 @@ class FakeChatApi {
     return of(this.authSession);
   }
 
+  getSoftwareInstallJobs(): Observable<{ jobs: []; checked_at: string }> {
+    return of({ jobs: [], checked_at: '2026-11-28T00:00:00Z' });
+  }
+
   startGoogleLogin(): Observable<{ authorization_url: string }> {
     return of({ authorization_url: 'https://accounts.google.com/test' });
   }
