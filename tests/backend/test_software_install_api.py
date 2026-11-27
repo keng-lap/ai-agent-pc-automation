@@ -61,8 +61,6 @@ def make_evidence():
         manifest_sha256="b" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=DBeaver Corporation",
-        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -145,8 +143,6 @@ def test_generic_package_proposal_uses_publisher_independent_sha256_trust_path(m
         file_size=18,
         sha256="a" * 64,
         authenticode_valid=True,
-        signature_subject="CN=Acme Editor, O=Acme Inc",
-        signature_sha256="d" * 64,
         official_release_url=None,
         staged_at=NOW.isoformat(),
     )
