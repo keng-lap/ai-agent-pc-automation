@@ -117,9 +117,40 @@ class WindowsAuthenticodeVerifier:
         self,
         installer_path: Path,
     ) -> tuple[bool, str | None, str | None]:
+        trusted, subject, thumbprint, _hresult = self.verify_with_diagnostics(installer_path)
+        return trusted, subject, thumbprint
+
+    def verify_with_diagnostics(
+        self,
+        installer_path: Path,
+    ) -> tuple[bool, str | None, str | None, str | None]:
         if not installer_path.is_file():
-            return False, None, None
+            return False, None, None, None
         try:
+            extract_diagnostics = getattr(self._verifier, "verify_with_diagnostics", None)
+            if callable(extract_diagnostics):
+                trusted, subject, thumbprint, hresult = extract_diagnostics(installer_path)
+                safe_hresult = (
+                    hresult
+                    if isinstance(hresult, str)
+                    and (hresult == "WINVERIFYTRUST_CALL_FAILED"
+                         or (len(hresult) == 10
+                             and hresult.startswith("0x")
+                             and all(char in "0123456789ABCDEF" for char in hresult[2:])))
+                    else None
+                )
+                if trusted is not True:
+                    return False, None, None, safe_hresult
+                safe_subject = subject.strip() if isinstance(subject, str) and subject.strip() else None
+                safe_thumbprint = (
+                    thumbprint.lower()
+                    if isinstance(thumbprint, str)
+                    and len(thumbprint) == 64
+                    and all(char in "0123456789abcdefABCDEF" for char in thumbprint)
+                    else None
+                )
+                return True, safe_subject, safe_thumbprint, None
+
             extract_identity = getattr(self._verifier, "verify_and_get_signer_identity", None)
             if callable(extract_identity):
                 trusted, subject, thumbprint = extract_identity(installer_path)
@@ -132,15 +163,15 @@ class WindowsAuthenticodeVerifier:
                         and all(char in "0123456789abcdefABCDEF" for char in thumbprint)
                         else None
                     )
-                    return True, safe_subject, safe_thumbprint
-                return False, None, None
+                    return True, safe_subject, safe_thumbprint, None
+                return False, None, None, None
             extract_subject = getattr(self._verifier, "verify_and_get_signer_subject", None)
             if callable(extract_subject):
                 subject = extract_subject(installer_path)
-                return True, subject.strip() if isinstance(subject, str) and subject.strip() else None, None
-            return self._verifier.verify(installer_path) is True, None, None
+                return True, subject.strip() if isinstance(subject, str) and subject.strip() else None, None, None
+            return self._verifier.verify(installer_path) is True, None, None, None
         except (OSError, TypeError, ValueError):
-            return False, None, None
+            return False, None, None, "WINVERIFYTRUST_CALL_FAILED"
 
     def verify_with_subject(self, installer_path: Path) -> tuple[bool, str | None]:
         trusted, subject, _thumbprint = self.verify_with_identity(installer_path)
