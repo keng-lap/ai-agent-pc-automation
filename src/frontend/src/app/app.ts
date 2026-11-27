@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
-import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { defer, exhaustMap, finalize, take, takeUntil, takeWhile, timeout, TimeoutError, timer } from 'rxjs';
+import { AfterViewChecked, Component, DestroyRef, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
+import { catchError, defer, exhaustMap, filter, finalize, of, take, takeUntil, takeWhile, timeout, TimeoutError, timer, switchMap } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AuthSession,
   BrowserDiagnosticCode,
@@ -15,6 +16,7 @@ import {
   SoftwareCatalogSearchResponse,
   SoftwareDiscoveryResponse,
   SoftwareInstallJobStatus,
+  SoftwareInstallJobSummary,
   SoftwareInstallProposalResponse,
   SoftwareInstallReadiness,
   UiLanguage,
@@ -390,6 +392,7 @@ export class App implements AfterViewChecked {
   private readonly document = inject(DOCUMENT);
   private readonly chatApi = inject(ChatApi);
   private readonly diagnosticsState = inject(RuntimeDiagnosticsState);
+  private readonly destroyRef = inject(DestroyRef);
   private nextEntryId = 0;
 
   @ViewChild('messageLog') private messageLog?: ElementRef<HTMLElement>;
@@ -399,6 +402,9 @@ export class App implements AfterViewChecked {
   protected readonly language = signal<UiLanguage>(readStoredLanguage());
   protected readonly draft = signal('');
   protected readonly entries = signal<ChatEntry[]>([]);
+  protected readonly installJobs = signal<SoftwareInstallJobSummary[]>([]);
+  protected readonly installJobStatusUnavailable = signal(false);
+  protected readonly recentInstallJobs = computed(() => this.installJobs().slice(0, 3));
   protected readonly pending = signal(false);
   protected readonly planning = signal(false);
   protected readonly restoring = signal(false);
@@ -430,6 +436,20 @@ export class App implements AfterViewChecked {
     browserWindow?.addEventListener('error', (event: ErrorEvent) => this.reportBrowserDiagnostic('BROWSER_UNCAUGHT_ERROR', event.error));
     browserWindow?.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => this.reportBrowserDiagnostic('BROWSER_UNHANDLED_REJECTION', event.reason));
     this.refreshAuthSession();
+    timer(0, 5000)
+      .pipe(
+        filter(() => this.authReady() && this.authenticated()),
+        switchMap(() => this.chatApi.getSoftwareInstallJobs(50).pipe(catchError(() => of(null)))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((response) => {
+        if (response === null) {
+          this.installJobStatusUnavailable.set(true);
+          return;
+        }
+        this.installJobs.set(response.jobs);
+        this.installJobStatusUnavailable.set(false);
+      });
     const storedConversationId = readStoredConversationId();
     const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
     this.conversationId.set(conversationId);
@@ -749,6 +769,20 @@ export class App implements AfterViewChecked {
           ? 'ออกจากระบบไม่สำเร็จ'
           : 'Could not sign out.'),
       });
+  }
+
+  protected installJobStateLabel(state: SoftwareInstallJobSummary['state']): string {
+    const labels: Record<SoftwareInstallJobSummary['state'], [string, string]> = {
+      QUEUED: ['รอ Worker รับงาน', 'Queued for worker'],
+      CLAIMED: ['Worker รับงานแล้ว', 'Claimed by worker'],
+      RUNNING: ['กำลังติดตั้ง', 'Installing'],
+      VERIFYING: ['กำลังตรวจสอบผล', 'Verifying installation'],
+      SUCCEEDED: ['ติดตั้งสำเร็จ', 'Installed successfully'],
+      FAILED: ['ติดตั้งไม่สำเร็จ', 'Installation failed'],
+      REBOOT_REQUIRED: ['ต้องรีสตาร์ต', 'Restart required'],
+      UNKNOWN: ['ไม่สามารถยืนยันผลได้', 'Outcome unknown'],
+    };
+    return labels[state][this.language() === 'th' ? 0 : 1];
   }
 
   protected setActiveView(view: 'chat' | 'workflow' | 'jobs'): void {
