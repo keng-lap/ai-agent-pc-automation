@@ -282,11 +282,11 @@ def test_discovery_accepts_whitespace_wrapped_github_base64_manifest_content():
 
 
 def test_discovery_offers_manifest_versions_when_official_release_source_is_unavailable():
-    source = FakeSource()
+    source = FakeSource(publisher_url="https://github.com/acme/editor")
     original_get = source.get
 
     def unavailable_releases(url, **kwargs):
-        if request_path(url) == "repos/acme/editor/releases":
+        if request_path(url).startswith("repos/acme/editor/releases/"):
             return FakeResponse({}, status_code=503)
         return original_get(url, **kwargs)
 
@@ -303,7 +303,7 @@ def test_discovery_offers_manifest_versions_when_official_release_source_is_unav
 
 
 def test_selected_version_continues_when_optional_official_release_check_is_unavailable():
-    source = FakeSource()
+    source = FakeSource(publisher_url="https://github.com/acme/editor")
     original_get = source.get
 
     def unavailable_selected_release(url, **kwargs):
