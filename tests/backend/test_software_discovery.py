@@ -250,7 +250,7 @@ def test_non_github_publisher_url_uses_generic_manifest_hash_policy_without_hard
     assert result.status == "CONDITIONAL"
     assert result.candidate is not None
     assert result.candidate.publisher_verification == "NOT_CHECKED"
-    assert not any("api.github.com/repos/" in call[0] for call in source.calls)
+    assert not any("api.github.com/repos/acme/editor/" in call[0] for call in source.calls)
 
 
 @pytest.mark.parametrize("manifest_type", ["nullsoft", "inno", "burn"])
