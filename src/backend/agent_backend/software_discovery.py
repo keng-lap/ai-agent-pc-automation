@@ -26,10 +26,10 @@ from yaml.tokens import AliasToken, AnchorToken
 WINGET_REPOSITORY = "microsoft/winget-pkgs"
 GITHUB_API_ORIGIN = "https://api.github.com"
 USER_AGENT = "ai-agent-pc-automation-trusted-discovery/1.0"
-MAX_RESPONSE_BYTES = 1_000_000
+MAX_RESPONSE_BYTES = 8_000_000
 MAX_MANIFEST_FILES = 12
 MAX_AVAILABLE_VERSIONS = 20
-MAX_OFFICIAL_RELEASES = 100
+MAX_OFFICIAL_RELEASES = 500
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
 DBEAVER_VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+){1,4}$")
@@ -112,8 +112,8 @@ class PublisherVerification(BaseModel):
 class DBeaverGitHubReleaseVerifier:
     """Cross-check DBeaver Community manifests against its official GitHub release."""
 
-    RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=10"
-    RELEASES_PAGE_SIZE = 10
+    RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases?per_page=100"
+    RELEASES_PAGE_SIZE = 100
     RELEASE_TAG_API_PREFIX = "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/"
     RELEASE_PAGE_PREFIX = "https://github.com/dbeaver/dbeaver/releases/tag/"
     ASSET_PREFIX = "https://github.com/dbeaver/dbeaver/releases/download/"
