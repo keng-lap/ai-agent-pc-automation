@@ -125,7 +125,7 @@ class DBeaverGitHubReleaseVerifier:
     def list_official_versions(self, package_id: str) -> tuple[str, ...] | None:
         """Return every valid stable release within the bounded API response.
 
-        Pagination is bounded by MAX_OFFICIAL_RELEASES and MAX_RESPONSE_BYTES;
+        Pagination is bounded by MAX_OFFICIAL_RELEASES and MAX_OFFICIAL_RELEASE_RESPONSE_BYTES;
         the UI intersection must not truncate either source to its newest 20
         entries before comparing versions.
         """
