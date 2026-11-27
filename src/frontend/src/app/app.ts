@@ -155,9 +155,7 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
   return isRecord(value)
     && typeof value['platform_supported'] === 'boolean'
     && typeof value['authenticode_verification_available'] === 'boolean'
-    && typeof value['publisher_identity_policy_available'] === 'boolean'
-    && typeof value['publisher_trust_configured'] === 'boolean'
-    && value['publisher_trust_mode'] === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+    && value['installer_trust_mode'] === 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY'
     && typeof value['real_install_enabled'] === 'boolean'
     && (value['real_install_release_package_id'] === null || typeof value['real_install_release_package_id'] === 'string')
     && (value['real_install_release_version'] === null || typeof value['real_install_release_version'] === 'string')
@@ -1105,20 +1103,6 @@ export class App implements AfterViewChecked {
       || candidate.scope !== 'user'
       || discovery.readiness?.platform_supported !== true
       || discovery.readiness.authenticode_verification_available !== true
-      || discovery.readiness.publisher_identity_policy_available !== true
-      || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
-      || (
-        candidate.package_id === 'DBeaver.DBeaver.Community'
-        && (
-          candidate.publisher_verification !== 'VERIFIED'
-          || candidate.official_version !== candidate.version
-          || candidate.official_asset_sha256 !== candidate.installer_sha256
-        )
-      )
-      || (
-        candidate.package_id !== 'DBeaver.DBeaver.Community'
-        && !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
-      )
       || this.planning()
     ) return;
 
