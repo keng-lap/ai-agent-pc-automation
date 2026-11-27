@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from agent_backend.software_discovery import InstallerCandidate
-from agent_backend.software_staging import InstallerStageError, InstallerStager, WindowsAuthenticodeVerifier
+from agent_backend.software_staging import (
+    InstallerStageError,
+    InstallerStager,
+    WindowsAuthenticodeVerifier,
+)
 
 
 class FakeResponse:
