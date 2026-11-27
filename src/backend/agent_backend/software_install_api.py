@@ -243,7 +243,7 @@ def create_software_install_proposal(
                 "status_code": 409,
                 "failure_code": "candidate_evidence_mismatch",
                 "failure_reason": "The selected manifest candidate failed one or more exact-evidence checks.",
-                "mismatch_fields": mismatch_fields or ["candidate_contract"],
+                "mismatch_fields": ",".join(mismatch_fields or ["candidate_contract"]),
                 "package_id": payload.package_id,
                 "version": payload.version,
                 "scope": payload.scope,
