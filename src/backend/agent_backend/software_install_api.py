@@ -86,9 +86,7 @@ def get_software_install_readiness(request: Request) -> dict:
         "real_install_release_version": release_authorization.version if release_authorization else None,
         "real_install_release_expires_at": release_authorization.expires_at.isoformat() if release_authorization else None,
         "authenticode_verification_available": sys.platform == "win32",
-        "publisher_identity_policy_available": software_evidence_registry.publisher_identity_policy_available,
-        "publisher_trust_configured": software_evidence_registry.publisher_identity_policy_available,
-        "publisher_trust_mode": "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH",
+        "installer_trust_mode": "WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY",
         "package_allowlist_enabled": False,
         "supported_package_ids": [],
         "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
@@ -103,7 +101,7 @@ def create_software_install_proposal(
     payload: SoftwareInstallProposalRequest,
     request: Request,
 ) -> SoftwareInstallProposalResponse:
-    """Rediscover, stage, hash and Authenticode-check the exact package before approval."""
+    """Rediscover, stage, hash and verify Authenticode signature integrity before approval."""
     correlation = getattr(request.state, "correlation_id", "unknown")
     started = datetime.now(UTC)
     emit_event(
@@ -221,7 +219,7 @@ def create_software_install_proposal(
         )
         raise HTTPException(
             status_code=409,
-            detail="The exact package is not eligible for publisher and installer verification.",
+            detail="The exact package is not eligible for installer evidence verification.",
         )
 
     if candidate.installer_type.casefold() not in {"exe", "msi", "msix", "appx"}:
