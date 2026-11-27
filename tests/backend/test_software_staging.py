@@ -197,6 +197,7 @@ def test_authenticode_failure_preserves_safe_winverifytrust_hresult(tmp_path):
     assert captured.value.failure_code == "authenticode_verification_failed"
     assert captured.value.diagnostic_fields == {"winverifytrust_hresult": "0x800B0109"}
     assert "0x800B0109" in captured.value.failure_reason
+    assert "untrusted root" in captured.value.failure_reason
     assert response.closed is True
     assert list(tmp_path.iterdir()) == []
 
