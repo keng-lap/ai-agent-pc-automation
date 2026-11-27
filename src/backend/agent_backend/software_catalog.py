@@ -116,6 +116,14 @@ class WindowsMsixSignatureVerifier:
         package_path: Path,
     ) -> tuple[bool, str | None, str | None]:
         """Return signer subject and SHA-256 of the signer certificate DER."""
+        trusted, subject, thumbprint, _hresult = self.verify_with_diagnostics(package_path)
+        return trusted, subject, thumbprint
+
+    def verify_with_diagnostics(
+        self,
+        package_path: Path,
+    ) -> tuple[bool, str | None, str | None, str | None]:
+        """Return trust result, signer identity, and a safe WinVerifyTrust HRESULT."""
         return self._verify_and_read_signer(package_path, include_identity=True)
 
     @staticmethod
@@ -123,9 +131,9 @@ class WindowsMsixSignatureVerifier:
         package_path: Path,
         *,
         include_identity: bool,
-    ) -> tuple[bool, str | None, str | None]:
+    ) -> tuple[bool, str | None, str | None, str | None]:
         if os.name != "nt" or not package_path.is_file():
-            return False, None, None
+            return False, None, None, hresult, None
 
         class _Guid(ctypes.Structure):
             _fields_ = [
@@ -201,13 +209,15 @@ class WindowsMsixSignatureVerifier:
                 ctypes.POINTER(_Guid),
                 ctypes.POINTER(_WinTrustData),
             ]
-            trusted = verify(
+            trust_status = int(verify(
                 ctypes.c_void_p(-1),
                 ctypes.byref(action),
                 ctypes.byref(trust_data),
-            ) == 0
+            ))
+            trusted = trust_status == 0
+            hresult = None if trusted else f"0x{trust_status & 0xFFFFFFFF:08X}"
             if not trusted or not include_identity:
-                return trusted, None, None
+                return trusted, None, None, hresult
 
             get_provider_data = wintrust.WTHelperProvDataFromStateData
             get_provider_data.restype = ctypes.c_void_p
@@ -290,9 +300,9 @@ class WindowsMsixSignatureVerifier:
             subject = buffer.value.strip()
             if not subject or len(subject) > 1000 or len(thumbprint) != 64:
                 return False, None, None
-            return True, subject, thumbprint
+            return True, subject, thumbprint, None
         except (AttributeError, OSError, TypeError, ValueError):
-            return False, None, None
+            return False, None, None, "WINVERIFYTRUST_CALL_FAILED"
         finally:
             if wintrust is not None:
                 trust_data.dwStateAction = 2  # WTD_STATEACTION_CLOSE
