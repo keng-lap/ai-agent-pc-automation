@@ -249,11 +249,14 @@ def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
 
 def test_readiness_exposes_sha256_and_authenticode_integrity_policy(monkeypatch, tmp_path):
     monkeypatch.delenv("AI_AGENT_DBEAVER_SIGNER_SHA256", raising=False)
+    monkeypatch.setattr(api.sys, "platform", "win32")
     request = make_request(tmp_path)
-    request.app.state.real_install_enabled = False
-    request.app.state.real_install_release_authorization = None
     ready = api.get_software_install_readiness(request)
-    assert ready["notice"] == "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT"
+    assert ready["notice"] == "RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP"
+    assert ready["real_install_enabled"] is True
+    assert ready["real_install_release_package_id"] is None
+    assert ready["real_install_release_version"] is None
+    assert ready["real_install_release_expires_at"] is None
     assert ready["package_allowlist_enabled"] is False
     assert ready["installer_trust_mode"] == "WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY"
     assert "publisher" not in str(ready).casefold()
@@ -262,39 +265,12 @@ def test_readiness_exposes_sha256_and_authenticode_integrity_policy(monkeypatch,
     assert "d" * 64 not in str(ready)
 
 
-def test_readiness_uses_worker_configuration_not_process_environment(monkeypatch, tmp_path):
-    from agent_backend.config import RealInstallReleaseAuthorization
-
-    monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
-    request = make_request(tmp_path)
-    request.app.state.real_install_enabled = False
-    request.app.state.real_install_release_authorization = None
-    assert api.get_software_install_readiness(request)["real_install_enabled"] is False
-
-    authorization = RealInstallReleaseAuthorization(
-        task_id="P6-609-C",
-        package_id="Contoso.Editor",
-        version="2.4.1",
-        expires_at=datetime.now(UTC) + timedelta(minutes=5),
-        nonce="a" * 64,
-    )
-    request.app.state.real_install_enabled = True
-    request.app.state.real_install_release_authorization = authorization
-    ready = api.get_software_install_readiness(request)
-    assert ready["real_install_enabled"] is True
-    assert ready["real_install_release_package_id"] == "Contoso.Editor"
-    assert ready["real_install_release_version"] == "2.4.1"
-
-    expired = RealInstallReleaseAuthorization(
-        task_id="P6-609-C",
-        package_id="Contoso.Editor",
-        version="2.4.1",
-        expires_at=datetime.now(UTC) - timedelta(seconds=1),
-        nonce="b" * 64,
-    )
-    request.app.state.real_install_release_authorization = expired
-    assert api.get_software_install_readiness(request)["real_install_enabled"] is False
+def test_readiness_disables_real_install_off_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr(api.sys, "platform", "linux")
+    ready = api.get_software_install_readiness(make_request(tmp_path))
+    assert ready["platform_supported"] is False
+    assert ready["real_install_enabled"] is False
+    assert ready["notice"] == "RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP"
 
 
 def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypatch, tmp_path):
