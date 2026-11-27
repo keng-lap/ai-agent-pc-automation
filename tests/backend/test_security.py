@@ -253,6 +253,7 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/jobs/{job_id}",
         "/api/software/install/readiness",
         "/api/software/install/jobs/{reservation_id}",
+        "/api/software/install/jobs",
         "/api/plans/{plan_id}/software-approval/reservation",
         "/api/auth/session",
         "/api/auth/google/start",
