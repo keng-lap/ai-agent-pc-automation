@@ -228,3 +228,18 @@ app-job-monitor .jm-install-events li{display:flex;flex-wrap:wrap;align-items:ce
 app-job-monitor .jm-install-events time,app-job-monitor .jm-install-events small{color:#829188}
 app-job-monitor .jm-install-events code{font-size:8px;color:#a45d55}
 @media(prefers-color-scheme:dark){app-job-monitor .jm-install-history,app-job-monitor .jm-install-item{background:#1d2c27;border-color:#344a42}app-job-monitor .jm-install-meta{color:#a8b9af}}
+
+
+.chat-install-status{display:grid;gap:9px;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);color:var(--ink)}
+.chat-install-status-heading,.chat-install-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.chat-install-status-heading strong{font-size:11px}
+.chat-install-status-row>span{display:grid;gap:3px;min-width:0}
+.chat-install-status-row>span strong{font-size:10px}
+.chat-install-status-row>span small,.chat-install-result,.chat-install-status>small{font-size:9px;color:var(--muted)}
+.chat-install-status-row>span small{overflow-wrap:anywhere}
+.chat-install-state{font-size:9px;text-align:right}
+.chat-install-state--running,.chat-install-state--verifying,.chat-install-state--succeeded{color:#39765d}
+.chat-install-state--queued,.chat-install-state--claimed,.chat-install-state--reboot_required{color:#98713a}
+.chat-install-state--failed,.chat-install-state--unknown{color:#a45d55}
+@media(max-width:600px){.chat-install-status-row{align-items:flex-start;flex-direction:column}.chat-install-status-heading{align-items:flex-start}}
+@media(prefers-color-scheme:dark){.chat-install-status{background:#1d2c27;border-color:#344a42}.chat-install-state--running,.chat-install-state--verifying,.chat-install-state--succeeded{color:#9ed0ad}}
