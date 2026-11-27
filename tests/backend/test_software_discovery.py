@@ -620,3 +620,34 @@ def test_discovery_returns_available_scope_choices_when_user_scope_is_missing():
     assert result.candidate is None
     assert result.available_scopes == ("machine",)
 
+
+def test_discovery_uses_winget_default_installer_type_priority_for_multiple_matches():
+    source = FakeSource()
+    installer_doc = source.documents["Acme.Editor.installer.yaml"]
+    first = installer_doc["Installers"][0]
+    first.update({
+        "InstallerType": "nullsoft",
+        "InstallerUrl": "https://downloads.acme.example/editor-setup.exe",
+        "InstallerSha256": "c" * 64,
+    })
+    second = {
+        "Architecture": "x64",
+        "Scope": "user",
+        "InstallerType": "wix",
+        "InstallerUrl": "https://downloads.acme.example/editor-setup.msi",
+        "InstallerSha256": "d" * 64,
+    }
+    installer_doc["Installers"] = [first, second]
+
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+        scope="user",
+    )
+
+    assert result.candidate is not None
+    assert result.candidate.installer_technology == "wix"
+    assert result.candidate.installer_type == "msi"
+    assert result.candidate.installer_url.endswith("editor-setup.msi")
+    assert result.candidate.installer_sha256 == "d" * 64
