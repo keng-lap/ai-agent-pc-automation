@@ -30,7 +30,35 @@ ALLOWED_RELEASE_REDIRECT_HOSTS = frozenset({
 
 
 class InstallerStageError(RuntimeError):
-    """A bounded download or verification step failed."""
+    """A bounded download or verification step failed with a safe diagnostic code."""
+
+    _REASONS = {
+        "staging directory must be an absolute, non-symlink path": ("unsafe_staging_path", "Staging directory was not an absolute, non-symlink path."),
+        "staging directory is not a safe directory": ("unsafe_staging_directory", "Staging directory failed the directory safety check."),
+        "staging directory is unavailable": ("staging_storage_unavailable", "Staging directory could not be created or accessed."),
+        "installer file type is not supported": ("installer_type_unsupported", "Installer file extension is not supported."),
+        "installer content length was invalid": ("invalid_content_length", "Installer source returned an invalid Content-Length."),
+        "installer exceeded the staging size limit": ("installer_size_limit_exceeded", "Installer exceeded the configured staging size limit."),
+        "installer source returned non-binary content": ("invalid_installer_content", "Installer source returned non-binary content."),
+        "installer size did not match its declared content length": ("installer_size_mismatch", "Downloaded byte count did not match Content-Length."),
+        "installer SHA-256 did not match the approved release digest": ("installer_manifest_hash_mismatch", "Downloaded SHA-256 did not match the WinGet manifest digest."),
+        "installer SHA-256 did not match the official release asset": ("installer_official_hash_mismatch", "Downloaded SHA-256 did not match the official release asset digest."),
+        "Windows Authenticode trust or signer extraction failed": ("authenticode_verification_failed", "Windows Authenticode trust validation or signer identity extraction failed."),
+        "official installer source returned an unsuccessful response": ("installer_source_http_error", "Official installer source returned an unsuccessful HTTP status."),
+        "official installer redirect chain was invalid": ("installer_redirect_invalid", "Official installer redirect chain was missing or exceeded its limit."),
+        "official installer redirect target was not trusted": ("installer_redirect_untrusted", "Installer redirect target was outside the approved HTTPS host set."),
+        "official installer redirect limit was exceeded": ("installer_redirect_limit_exceeded", "Installer redirect count exceeded the configured limit."),
+        "DBeaver installer is not matched to its verified official release": ("official_release_evidence_mismatch", "Selected DBeaver version, URL, or SHA-256 did not match verified official release evidence."),
+        "installer publisher source check did not pass": ("publisher_source_check_failed", "Publisher source verification did not pass."),
+        "installer URL is not an approved HTTPS URL": ("installer_url_untrusted", "Installer URL failed the approved HTTPS origin check."),
+    }
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.failure_code, self.failure_reason = self._REASONS.get(
+            message,
+            ("installer_staging_failed", "Installer could not be staged or verified safely."),
+        )
 
 
 class StagedInstaller(BaseModel):
