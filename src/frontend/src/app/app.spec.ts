@@ -28,12 +28,12 @@ class FakeChatApi {
     authenticode_verification_available: true,
     installer_trust_mode: 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY' as const,
     real_install_enabled: true,
-    real_install_release_package_id: 'DBeaver.DBeaver.Community' as string | null,
-    real_install_release_version: '25.3.0' as string | null,
-    real_install_release_expires_at: '2026-11-12T00:10:00Z' as string | null,
+    real_install_release_package_id: null as string | null,
+    real_install_release_version: null as string | null,
+    real_install_release_expires_at: null as string | null,
     package_allowlist_enabled: false,
     supported_package_ids: [] as string[],
-    notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
+    notice: 'RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP' as const,
   };
   proposalCalls: Array<{ packageId: string; version: string; architecture: string; scope: string }> = [];
   revokeProposalCalls: string[] = [];
@@ -243,13 +243,6 @@ class FakeChatApi {
       const detail = this.approvalErrorDetail;
       this.approvalErrorStatus = null;
       this.approvalErrorDetail = null;
-      if (status === 409 && detail?.toLowerCase().includes('release authorization')) {
-        // The release can be revoked after readiness was loaded but before approval.
-        this.readiness.real_install_enabled = false;
-        this.readiness.real_install_release_package_id = null;
-        this.readiness.real_install_release_version = null;
-        this.readiness.real_install_release_expires_at = null;
-      }
       return throwError(() => ({ status, error: detail ? { detail } : undefined }));
     }
     return of({
@@ -1285,7 +1278,7 @@ describe('App chat UI (T-202)', () => {
     const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
     expect(codeInput).not.toBeNull();
     api.approvalErrorStatus = 409;
-    api.approvalErrorDetail = 'A current one-use real-install release authorization for this exact package/version is required.';
+    api.approvalErrorDetail = 'The approval reservation conflicts with an existing install.';
     codeInput.value = '123456';
     codeInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -1298,11 +1291,10 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(api.readinessCalls).toBe(2);
-    expect(api.reservationRecoveryCalls).toEqual([]);
+    expect(api.readinessCalls).toBe(1);
+    expect(api.reservationRecoveryCalls).toHaveLength(1);
     expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('รีเฟรช Release Authorization');
-    expect(fixture.nativeElement.textContent).toContain('Release Authorization หมดอายุ');
+    expect(fixture.nativeElement.textContent).not.toContain('รีเฟรช Release Authorization');
   });
 
   it('recovers a committed reservation after an ambiguous confirmation failure', async () => {
