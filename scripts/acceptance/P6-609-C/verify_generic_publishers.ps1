@@ -15,7 +15,7 @@ $checks = @(
         PackageId = 'GitHub.GitHubDesktop'
         Version = '3.7.0'
         Architecture = 'x64'
-    },
+    }
 )
 
 $pythonCode = @'
