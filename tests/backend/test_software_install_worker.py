@@ -174,6 +174,7 @@ def test_worker_emits_correlated_runtime_diagnostics_for_complete_install(caplog
         "INSTALL_JOB_STATE_CHANGED",
         "INSTALL_PRECHECK_STARTED",
         "INSTALLER_PREPARATION_COMPLETED",
+        "REAL_INSTALL_RELEASE_AUTHORIZATION_CONSUMED",
         "WINGET_EXECUTION_STARTED",
         "WINGET_EXECUTION_COMPLETED",
         "POST_INSTALL_VERIFICATION_COMPLETED",
