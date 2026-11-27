@@ -660,8 +660,6 @@
                               <span>{{ language() === "th" ? "แหล่งไฟล์" : "Installer source" }}: {{ discovery.approvalChallenge.installer_url }}</span>
                               <span>SHA-256: {{ discovery.approvalChallenge.installer_sha256 }}</span>
                               <span>{{ language() === "th" ? "แหล่ง Manifest" : "Manifest source" }}: {{ discovery.approvalChallenge.manifest_source_url }}</span>
-                              <span>{{ language() === "th" ? "Fingerprint ผู้ลงนาม" : "Signer certificate SHA-256" }}: {{ discovery.approvalChallenge.signature_sha256 }}</span>
-                              <span>{{ language() === "th" ? "ผู้ลงนามที่ตรวจสอบแล้ว" : "Verified signer" }}: {{ discovery.approvalChallenge.signature_subject }}</span>
                               @if (discovery.approvalChallenge.installer_silent_switch) {
                                 <span>{{ language() === "th" ? "คำสั่ง Silent จาก Manifest" : "Manifest silent switch" }}: {{ discovery.approvalChallenge.installer_silent_switch }}</span>
                               }
