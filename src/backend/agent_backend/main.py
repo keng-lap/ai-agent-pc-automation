@@ -180,7 +180,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
             configure_store(diagnostics_directory / "runtime.sqlite3")
         # Keep the Windows worker idle and polling. It can execute only a
         # durable queue item created after exact-action TOTP approval.
-        if os.name != "nt":
+        if os.name != "nt" or settings.app_env == "test":
             return
         try:
             store = application.state.approval_reservation_store
