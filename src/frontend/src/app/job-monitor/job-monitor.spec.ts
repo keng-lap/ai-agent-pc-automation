@@ -25,6 +25,32 @@ describe('JobMonitorComponent', () => {
 
   it('renders backend job state and bounded event data without mock records', async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
+    const installRequest = http.expectOne('/api/software/install/jobs?limit=50');
+    expect(installRequest.request.method).toBe('GET');
+    installRequest.flush({
+      checked_at: '2026-11-13T09:45:00Z',
+      jobs: [{
+        reservation_id: 'a'.repeat(32),
+        plan_id: 'b'.repeat(32),
+        package_id: 'DBeaver.DBeaver.Community',
+        package_name: 'DBeaver Community Edition',
+        version: '26.2.5',
+        state: 'RUNNING',
+        attempts: 1,
+        version_number: 3,
+        result_code: null,
+        lease_expires_at: '2026-11-13T09:46:00Z',
+        created_at: '2026-11-13T09:40:00Z',
+        updated_at: '2026-11-13T09:42:00Z',
+        events: [{
+          sequence: 1,
+          state: 'QUEUED',
+          occurred_at: '2026-11-13T09:40:00Z',
+          outcome: 'success',
+          result_code: null,
+        }],
+      }],
+    });
     const request = http.expectOne((req) => req.url === '/api/jobs' && req.params.get('limit') === '25');
     expect(request.request.method).toBe('GET');
     request.flush({
@@ -51,6 +77,8 @@ describe('JobMonitorComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('job-123');
+    expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition 26.2.5');
+    expect(fixture.nativeElement.textContent).toContain('กำลังติดตั้ง');
     expect(fixture.nativeElement.textContent).toContain('กำลังทำงาน');
     expect(fixture.nativeElement.textContent).toContain('Process started inside containment');
     expect(fixture.nativeElement.textContent).not.toContain('RUN-2026-0118');
@@ -59,6 +87,8 @@ describe('JobMonitorComponent', () => {
 
   it('shows an unavailable state instead of fabricated jobs when the API fails', async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
+    const installRequest = http.expectOne('/api/software/install/jobs?limit=50');
+    installRequest.flush({ checked_at: '2026-11-13T09:45:00Z', jobs: [] });
     const request = http.expectOne('/api/jobs?limit=25');
     request.flush({}, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
