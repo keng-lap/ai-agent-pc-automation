@@ -100,7 +100,7 @@ class WindowsMsixSignatureVerifier:
     """Use WinVerifyTrust and extract the verified primary signer identity."""
 
     def verify(self, package_path: Path) -> bool:
-        trusted, _subject, _thumbprint = self._verify_and_read_signer(
+        trusted, _subject, _thumbprint, _hresult = self._verify_and_read_signer(
             package_path,
             include_identity=False,
         )
