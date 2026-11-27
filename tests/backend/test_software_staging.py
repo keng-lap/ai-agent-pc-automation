@@ -85,7 +85,7 @@ def test_stage_downloads_hashes_and_verifies_without_executing(tmp_path):
     assert staged.authenticode_valid is True
     assert response.closed is True
     assert signature.paths == [path] or signature.paths[0].suffix == ".exe"
-    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
+    assert calls[0][0] == make_candidate(body).installer_url
     assert calls[0][1]["allow_redirects"] is False
     assert calls[0][1]["stream"] is True
     assert list(tmp_path.glob("*.part.exe")) == []
@@ -217,7 +217,7 @@ def test_generic_installer_redirect_cannot_escape_manifest_host(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(tmp_path):
+def test_manifest_url_redirect_to_approved_github_asset_cdn_is_followed_without_auth(tmp_path):
     body = b"verified-installer-bytes"
     redirect = FakeResponse(
         status_code=302,
@@ -239,7 +239,7 @@ def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(
     assert Path(staged.file_path).read_bytes() == body
     assert redirect.closed is True
     assert final.closed is True
-    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
+    assert calls[0][0] == make_candidate(body).installer_url
     assert calls[1][0].startswith("https://release-assets.githubusercontent.com/")
     assert all("Authorization" not in call[1]["headers"] for call in calls)
     assert all(call[1]["allow_redirects"] is False for call in calls)
