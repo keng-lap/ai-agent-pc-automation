@@ -27,13 +27,10 @@ WINGET_REPOSITORY = "microsoft/winget-pkgs"
 GITHUB_API_ORIGIN = "https://api.github.com"
 USER_AGENT = "ai-agent-pc-automation-trusted-discovery/1.0"
 MAX_RESPONSE_BYTES = 1_000_000
-MAX_OFFICIAL_RELEASE_RESPONSE_BYTES = 8_000_000
 MAX_MANIFEST_FILES = 12
 MAX_AVAILABLE_VERSIONS = 20
-MAX_OFFICIAL_RELEASES = 500
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
-DBEAVER_VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+){1,4}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
@@ -110,220 +107,6 @@ class PublisherVerification(BaseModel):
     official_asset_id: int | None = None
 
 
-class DBeaverGitHubReleaseVerifier:
-    """Cross-check DBeaver Community manifests against its official GitHub release."""
-
-    RELEASES_API_URL = "https://api.github.com/repos/dbeaver/dbeaver/releases"
-    RELEASES_PAGE_SIZE = 100
-    RELEASE_TAG_API_PREFIX = "https://api.github.com/repos/dbeaver/dbeaver/releases/tags/"
-    RELEASE_PAGE_PREFIX = "https://github.com/dbeaver/dbeaver/releases/tag/"
-    ASSET_PREFIX = "https://github.com/dbeaver/dbeaver/releases/download/"
-
-    def __init__(self, *, http_get=None) -> None:
-        self._http_get = http_get or requests.get
-
-    def list_official_versions(self, package_id: str) -> tuple[str, ...] | None:
-        """Return every valid stable release within the bounded API response.
-
-        Pagination is bounded by MAX_OFFICIAL_RELEASES and MAX_OFFICIAL_RELEASE_RESPONSE_BYTES;
-        the UI intersection must not truncate either source to its newest 20
-        entries before comparing versions.
-        """
-        if package_id != "DBeaver.DBeaver.Community":
-            return None
-        versions: list[str] = []
-        total_bytes = 0
-        for page in range(1, (MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE) + 2):
-            response = None
-            try:
-                response = self._http_get(
-                    self.RELEASES_API_URL,
-                    params={"per_page": str(self.RELEASES_PAGE_SIZE), "page": str(page)},
-                    headers={
-                        "Accept": "application/vnd.github+json",
-                        "X-GitHub-Api-Version": "2022-11-28",
-                        "User-Agent": USER_AGENT,
-                    },
-                    timeout=(3.05, 10),
-                    allow_redirects=False,
-                    stream=True,
-                )
-                if response.status_code != 200:
-                    return None
-                chunks: list[bytes] = []
-                for chunk in response.iter_content(chunk_size=65536):
-                    if not chunk:
-                        continue
-                    total_bytes += len(chunk)
-                    if total_bytes > MAX_OFFICIAL_RELEASE_RESPONSE_BYTES:
-                        return None
-                    chunks.append(chunk)
-                releases = json.loads(b"".join(chunks))
-                if not isinstance(releases, list) or len(releases) > self.RELEASES_PAGE_SIZE:
-                    return None
-                if page > MAX_OFFICIAL_RELEASES // self.RELEASES_PAGE_SIZE:
-                    # A full final permitted page means the source may have
-                    # been truncated; never expose an incomplete intersection.
-                    if releases:
-                        return None
-                    return tuple(sorted(set(versions), key=_version_sort_key, reverse=True))
-                for release in releases:
-                    if not isinstance(release, dict):
-                        return None
-                    draft = release.get("draft")
-                    prerelease = release.get("prerelease")
-                    if type(draft) is not bool or type(prerelease) is not bool:
-                        return None
-                    if draft or prerelease:
-                        continue
-                    tag = release.get("tag_name")
-                    url = release.get("html_url")
-                    if (
-                        not isinstance(tag, str)
-                        or not DBEAVER_VERSION_PATTERN.fullmatch(tag)
-                    ):
-                        # Ignore non-version release tags (for example "CN");
-                        # they are not selectable software versions.
-                        continue
-                    if url != self.RELEASE_PAGE_PREFIX + tag:
-                        return None
-                    versions.append(tag)
-                if len(releases) < self.RELEASES_PAGE_SIZE:
-                    break
-            except (requests.RequestException, ValueError, TypeError, KeyError):
-                return None
-            finally:
-                if response is not None:
-                    close = getattr(response, "close", None)
-                    if callable(close):
-                        close()
-        return tuple(sorted(set(versions), key=_version_sort_key))
-
-    def verify(
-        self,
-        *,
-        package_id: str,
-        publisher: str,
-        version: str,
-        architecture: str,
-        installer_url: str,
-        installer_sha256: str,
-    ) -> PublisherVerification:
-        if package_id != "DBeaver.DBeaver.Community":
-            return PublisherVerification(status="NOT_CHECKED")
-
-        # Verify the exact selected tag directly. The version-list endpoint is
-        # only for UI choices; pagination/truncation must never substitute the
-        # latest release for the operator's selected version.
-        response = None
-        try:
-            response = self._http_get(
-                self.RELEASE_TAG_API_PREFIX + version,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": USER_AGENT,
-                },
-                timeout=(3.05, 10),
-                allow_redirects=False,
-                stream=True,
-            )
-            if response.status_code == 404:
-                return PublisherVerification(status="MISMATCH")
-            if response.status_code != 200:
-                return PublisherVerification(status="UNAVAILABLE")
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in response.iter_content(chunk_size=65536):
-                if not chunk:
-                    continue
-                total += len(chunk)
-                if total > MAX_RESPONSE_BYTES:
-                    return PublisherVerification(status="UNAVAILABLE")
-                chunks.append(chunk)
-            release = json.loads(b"".join(chunks))
-            if not isinstance(release, dict):
-                return PublisherVerification(status="UNAVAILABLE")
-            official_version = release.get("tag_name")
-            release_url = release.get("html_url")
-            if (
-                not isinstance(official_version, str)
-                or not VERSION_PATTERN.fullmatch(official_version)
-                or release_url != self.RELEASE_PAGE_PREFIX + official_version
-            ):
-                return PublisherVerification(status="UNAVAILABLE")
-            if release.get("draft") is not False or release.get("prerelease") is not False:
-                return PublisherVerification(
-                    status="MISMATCH",
-                    official_version=official_version,
-                    official_release_url=release_url,
-                )
-
-            asset_name_by_architecture = {
-                "x64": f"dbeaver-ce-{official_version}-windows-x86_64.exe",
-                "arm64": f"dbeaver-ce-{official_version}-windows-aarch64.exe",
-            }
-            expected_asset_name = asset_name_by_architecture.get(architecture)
-            if expected_asset_name is None:
-                return PublisherVerification(
-                    status="MISMATCH",
-                    official_version=official_version,
-                    official_release_url=release_url,
-                )
-            assets = release.get("assets")
-            if not isinstance(assets, list) or len(assets) > 100:
-                return PublisherVerification(status="UNAVAILABLE")
-            matching_assets = [
-                asset
-                for asset in assets
-                if isinstance(asset, dict)
-                and asset.get("name") == expected_asset_name
-                and isinstance(asset.get("browser_download_url"), str)
-                and asset.get("browser_download_url")
-                == self.ASSET_PREFIX + official_version + "/" + expected_asset_name
-                and type(asset.get("id")) is int
-                and asset.get("id") > 0
-            ]
-            if len(matching_assets) != 1:
-                return PublisherVerification(
-                    status="MISMATCH",
-                    official_version=official_version,
-                    official_release_url=release_url,
-                )
-            digest = matching_assets[0].get("digest")
-            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
-                return PublisherVerification(status="UNAVAILABLE")
-            official_sha256 = digest.split(":", 1)[1].lower()
-            asset_url = matching_assets[0]["browser_download_url"]
-            asset_id = matching_assets[0]["id"]
-            if (
-                version != official_version
-                or installer_url != asset_url
-                or installer_sha256.lower() != official_sha256
-            ):
-                return PublisherVerification(
-                    status="MISMATCH",
-                    official_version=official_version,
-                    official_release_url=release_url,
-                    official_asset_sha256=official_sha256,
-                    official_asset_id=asset_id,
-                )
-            return PublisherVerification(
-                status="VERIFIED",
-                official_version=official_version,
-                official_release_url=release_url,
-                official_asset_sha256=official_sha256,
-                official_asset_id=asset_id,
-            )
-        except (requests.RequestException, ValueError, TypeError, KeyError):
-            return PublisherVerification(status="UNAVAILABLE")
-        finally:
-            if response is not None:
-                close = getattr(response, "close", None)
-                if callable(close):
-                    close()
-
-
 class DiscoveryResponse(BaseModel):
     """A discovery result that cannot be mistaken for verified approval evidence."""
 
@@ -345,7 +128,7 @@ class WinGetManifestRepository:
     def __init__(self, *, http_get=None, clock=None, publisher_verifier=None) -> None:
         self._http_get = http_get or requests.get
         self._clock = clock or _utc_now_iso
-        self._publisher_verifier = publisher_verifier or DBeaverGitHubReleaseVerifier(http_get=self._http_get)
+        self._publisher_verifier = publisher_verifier
 
     def discover(
         self,
@@ -374,11 +157,6 @@ class WinGetManifestRepository:
         if not isinstance(version_entries, list):
             raise DiscoveryUnavailable("package version listing was invalid")
 
-        version_pattern = (
-            DBEAVER_VERSION_PATTERN
-            if normalized_id == "DBeaver.DBeaver.Community"
-            else VERSION_PATTERN
-        )
         versions = tuple(
             sorted(
                 {
@@ -387,10 +165,9 @@ class WinGetManifestRepository:
                     if isinstance(item, dict)
                     and item.get("type") == "dir"
                     and isinstance(item.get("name"), str)
-                    and version_pattern.fullmatch(item["name"])
+                    and VERSION_PATTERN.fullmatch(item["name"])
                 },
                 key=_version_sort_key,
-                reverse=normalized_id == "DBeaver.DBeaver.Community",
             )
         )
         if not versions:
@@ -660,13 +437,19 @@ class WinGetManifestRepository:
         source_url = (
             f"https://github.com/{WINGET_REPOSITORY}/tree/{commit_sha}/{version_path}"
         )
-        publisher_check = self._publisher_verifier.verify(
-            package_id=normalized_id,
-            publisher=publisher,
-            version=version,
-            architecture=architecture,
-            installer_url=installer_url,
-            installer_sha256=installer_hash.lower(),
+        # Vendor-specific release APIs are not part of the install trust gate.
+        # WinGet manifest URL + SHA-256 are the common source of truth for every package.
+        publisher_check = (
+            self._publisher_verifier.verify(
+                package_id=normalized_id,
+                publisher=publisher,
+                version=version,
+                architecture=architecture,
+                installer_url=installer_url,
+                installer_sha256=installer_hash.lower(),
+            )
+            if self._publisher_verifier is not None
+            else PublisherVerification(status="NOT_CHECKED")
         )
         # An unavailable optional vendor release endpoint is NOT_CHECKED,
         # not a reason to suppress WinGet manifest versions or block approval.
@@ -711,11 +494,7 @@ class WinGetManifestRepository:
         return DiscoveryResponse(
             status=response_status,
             package_id=normalized_id,
-            available_versions=(
-                versions
-                if normalized_id == "DBeaver.DBeaver.Community"
-                else versions[-MAX_AVAILABLE_VERSIONS:]
-            ),
+            available_versions=versions[-MAX_AVAILABLE_VERSIONS:],
             candidate=candidate,
             available_scopes=available_scopes,
         )
