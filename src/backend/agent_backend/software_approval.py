@@ -32,8 +32,8 @@ class VerifiedPackageEvidence(BaseModel):
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
-    signature_subject: str = Field(min_length=1, max_length=300)
-    signature_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signature_subject: str | None = Field(default=None, max_length=300)
+    signature_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     verified_at: datetime
     expires_at: datetime
 
@@ -46,7 +46,7 @@ class VerifiedPackageEvidence(BaseModel):
             raise ValueError("installer silent switch contains control characters")
         return value
 
-    @field_validator("package_name", "publisher", "version", "signature_subject")
+    @field_validator("package_name", "publisher", "version")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
