@@ -26,7 +26,13 @@ def test_linux_platform_selects_linux_secure_storage():
     )
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin", "freebsd"])
+def test_windows_platform_selects_windows_secure_storage():
+    assert isinstance(
+        create_platform_secure_storage(platform="win32"), WindowsSecureStorage
+    )
+
+
+@pytest.mark.parametrize("platform", ["darwin", "freebsd"])
 def test_unreviewed_platforms_fail_closed(platform):
     with pytest.raises(PlatformStorageUnavailable):
         create_platform_secure_storage(platform=platform)

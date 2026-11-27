@@ -1,3 +1,5 @@
+import json
+
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
@@ -22,6 +24,20 @@ client = TestClient(
 def clear_provider_key(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", None)
     chat_module._conversation_store.clear()
+
+
+
+
+def _response_json(message="Gemini reply"):
+    return json.dumps({
+        "schema_version": "1.0",
+        "message": message,
+        "intent": "conversation.chat",
+        "status": "completed",
+        "data": {"packages": [], "environment": None, "checks": [], "notes": []},
+        "needs_clarification": False,
+        "clarification": None,
+    }, ensure_ascii=False)
 
 
 def _chat_payload(message="hello", language="en", conversation_id=CONVERSATION_ID):
@@ -90,21 +106,30 @@ def test_test_connection_requires_saved_key():
     assert response.status_code == 409
 
 
-def test_chat_uses_gemini_and_returns_plain_reply(monkeypatch):
+def test_chat_uses_gemini_and_returns_universal_contract_and_raw_json(monkeypatch):
     calls = []
     gemini.save_api_key("test-gemini-api-key-123456789")
-    monkeypatch.setattr(gemini, "generate_reply", lambda contents: calls.append(contents) or "สวัสดีจาก Gemini")
+    monkeypatch.setattr(gemini, "generate_universal_response", lambda contents, schema: calls.append(contents) or _response_json("สวัสดีจาก Gemini"))
     response = client.post(
         "/api/chat",
         json=_chat_payload(message="  สวัสดี Gemini  ", language="th"),
     )
     assert response.status_code == 200
-    assert response.json() == {
-        "reply": "สวัสดีจาก Gemini",
-        "provider": "gemini",
-        "model": "gemini-3.1-flash-lite",
-        "provider_connected": True,
+    body = response.json()
+    assert body["request_id"]
+    assert body["gemini_response"] == {
+        "schema_version": "1.0",
+        "message": "สวัสดีจาก Gemini",
+        "intent": "conversation.chat",
+        "status": "completed",
+        "data": {"packages": [], "environment": None, "checks": [], "notes": []},
+        "needs_clarification": False,
+        "clarification": None,
     }
+    assert json.loads(body["gemini_raw_json"]) == body["gemini_response"]
+    assert body["provider"] == "gemini"
+    assert body["model"] == "gemini-3.1-flash-lite"
+    assert body["provider_connected"] is True
     assert len(calls) == 1
     assert [(item.role, item.parts[0].text) for item in calls[0]] == [
         ("user", "สวัสดี Gemini"),
@@ -141,6 +166,35 @@ def test_structured_plan_uses_gemini_json_schema(monkeypatch):
     assert calls[0]["contents"] == "Create a plan"
     assert calls[0]["config"].response_mime_type == "application/json"
     assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
+
+
+def test_universal_response_generation_uses_json_schema_and_backend_instruction(monkeypatch):
+    calls = []
+
+    class Response:
+        text = _response_json("Hello")
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    class Schema:
+        @classmethod
+        def model_json_schema(cls):
+            return {"type": "OBJECT", "properties": {"message": {"type": "STRING"}}}
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+    assert gemini.generate_universal_response("hello", Schema) == Response.text
+    assert calls[0]["model"] == "gemini-3.1-flash-lite"
+    assert calls[0]["config"].system_instruction == gemini.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION
+    assert calls[0]["config"].response_mime_type == "application/json"
+    assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
+    assert "Return ONLY one JSON object" in calls[0]["config"].system_instruction
 
 
 def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
@@ -201,6 +255,53 @@ def test_structured_plan_does_not_receive_chat_system_instruction(monkeypatch):
     assert calls[0]["config"].response_mime_type == "application/json"
 
 
+
+def test_chat_retries_invalid_contract_once_then_returns_valid_response(monkeypatch):
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    calls = []
+    responses = ['{"schema_version":"1.0","message":"bad","intent":"conversation.chat"}', _response_json("corrected")]
+    def generate(contents, schema):
+        calls.append(contents)
+        return responses.pop(0)
+    monkeypatch.setattr(gemini, "generate_universal_response", generate)
+    response = client.post("/api/chat", json=_chat_payload("hello"))
+    assert response.status_code == 200
+    assert response.json()["gemini_response"]["message"] == "corrected"
+    assert len(calls) == 2
+    assert client.get(f"/api/chat/{CONVERSATION_ID}").json()["messages"] == [
+        {"role": "user", "text": "hello"},
+        {"role": "assistant", "text": "corrected"},
+    ]
+
+
+def test_chat_fails_closed_after_second_invalid_contract(monkeypatch):
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    calls = []
+    monkeypatch.setattr(
+        gemini,
+        "generate_universal_response",
+        lambda contents, schema: calls.append(contents) or '{"not":"a contract"}',
+    )
+    response = client.post("/api/chat", json=_chat_payload("hello"))
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "invalid_response"
+    assert len(calls) == 2
+    assert client.get(f"/api/chat/{CONVERSATION_ID}").json() == {"messages": []}
+
+
+def test_chat_response_does_not_expose_system_instruction_or_api_key(monkeypatch):
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    monkeypatch.setattr(
+        gemini,
+        "generate_universal_response",
+        lambda _contents, _schema: _response_json("hello"),
+    )
+    body = client.post("/api/chat", json=_chat_payload()).json()
+    serialized = json.dumps(body)
+    assert "UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION" not in serialized
+    assert "test-gemini-api-key-123456789" not in serialized
+
+
 def test_chat_requires_gemini_configuration():
     response = client.post(
         "/api/chat",
@@ -212,10 +313,10 @@ def test_chat_requires_gemini_configuration():
 def test_upstream_error_is_not_exposed(monkeypatch):
     gemini.save_api_key("test-gemini-api-key-123456789")
 
-    def fail(_message):
+    def fail(_contents, _schema):
         raise RuntimeError("sensitive upstream detail")
 
-    monkeypatch.setattr(gemini, "generate_reply", fail)
+    monkeypatch.setattr(gemini, "generate_universal_response", fail)
     response = client.post(
         "/api/chat",
         json=_chat_payload(),
@@ -394,11 +495,11 @@ def test_chat_sends_prior_successful_pairs_to_gemini(monkeypatch):
     calls = []
     gemini.save_api_key("test-gemini-api-key-123456789")
 
-    def reply(contents):
+    def reply(contents, _schema):
         calls.append([(item.role, item.parts[0].text) for item in contents])
-        return f"answer {len(calls)}"
+        return _response_json(f"answer {len(calls)}")
 
-    monkeypatch.setattr(gemini, "generate_reply", reply)
+    monkeypatch.setattr(gemini, "generate_universal_response", reply)
     for message in ("first question", "second question"):
         response = client.post("/api/chat", json=_chat_payload(message))
         assert response.status_code == 200
@@ -426,8 +527,8 @@ def test_conversation_context_is_isolated(monkeypatch):
     gemini.save_api_key("test-gemini-api-key-123456789")
     monkeypatch.setattr(
         gemini,
-        "generate_reply",
-        lambda contents: calls.append(contents) or "answer",
+        "generate_universal_response",
+        lambda contents, _schema: calls.append(contents) or _response_json("answer"),
     )
     other_conversation_id = "123e4567-e89b-42d3-a456-426614174001"
     assert client.post(
@@ -445,8 +546,8 @@ def test_chat_keeps_only_the_ten_most_recent_pairs(monkeypatch):
     gemini.save_api_key("test-gemini-api-key-123456789")
     monkeypatch.setattr(
         gemini,
-        "generate_reply",
-        lambda contents: calls.append(contents) or f"answer {len(calls)}",
+        "generate_universal_response",
+        lambda contents, _schema: calls.append(contents) or _response_json(f"answer {len(calls)}"),
     )
     for index in range(11):
         response = client.post(
@@ -468,8 +569,8 @@ def test_failed_reply_is_not_added_to_conversation(monkeypatch):
     gemini.save_api_key("test-gemini-api-key-123456789")
     monkeypatch.setattr(
         gemini,
-        "generate_reply",
-        lambda contents: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
+        "generate_universal_response",
+        lambda contents, _schema: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
     )
     response = client.post("/api/chat", json=_chat_payload("failed"))
     assert response.status_code == 502
@@ -478,7 +579,7 @@ def test_failed_reply_is_not_added_to_conversation(monkeypatch):
 
 def test_delete_clears_conversation_and_is_idempotent(monkeypatch):
     gemini.save_api_key("test-gemini-api-key-123456789")
-    monkeypatch.setattr(gemini, "generate_reply", lambda _contents: "answer")
+    monkeypatch.setattr(gemini, "generate_universal_response", lambda _contents, _schema: _response_json("answer"))
     assert client.post("/api/chat", json=_chat_payload()).status_code == 200
 
     response = client.request("DELETE", f"/api/chat/{CONVERSATION_ID}", json={})
@@ -490,7 +591,7 @@ def test_delete_clears_conversation_and_is_idempotent(monkeypatch):
 def test_chat_sessions_are_capped(monkeypatch):
     monkeypatch.setattr(chat_module, "MAX_CONVERSATIONS", 2)
     gemini.save_api_key("test-gemini-api-key-123456789")
-    monkeypatch.setattr(gemini, "generate_reply", lambda _contents: "answer")
+    monkeypatch.setattr(gemini, "generate_universal_response", lambda _contents, _schema: _response_json("answer"))
     ids = [
         "123e4567-e89b-42d3-a456-426614174001",
         "123e4567-e89b-42d3-a456-426614174002",
@@ -509,6 +610,6 @@ def test_chat_sessions_are_capped(monkeypatch):
 def test_idle_conversation_expires(monkeypatch):
     monkeypatch.setattr(chat_module, "CONVERSATION_TTL_SECONDS", 0)
     gemini.save_api_key("test-gemini-api-key-123456789")
-    monkeypatch.setattr(gemini, "generate_reply", lambda _contents: "answer")
+    monkeypatch.setattr(gemini, "generate_universal_response", lambda _contents, _schema: _response_json("answer"))
     assert client.post("/api/chat", json=_chat_payload()).status_code == 200
     assert client.get(f"/api/chat/{CONVERSATION_ID}").status_code == 404

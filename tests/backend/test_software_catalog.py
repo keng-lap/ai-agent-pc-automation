@@ -128,6 +128,31 @@ def test_catalog_search_resolves_product_name_without_ai_or_winget_cli():
     assert verifier.paths and not verifier.paths[0].exists()
 
 
+def test_catalog_search_matches_all_words_in_natural_product_name():
+    result = make_index(FakeSource()).search("DBeaver Community")
+
+    assert [candidate.package_id for candidate in result.candidates] == [
+        "DBeaver.DBeaver.Community",
+    ]
+    assert result.candidates[0].name == "DBeaver Community Edition"
+
+
+def test_catalog_search_is_case_and_word_order_insensitive():
+    result = make_index(FakeSource()).search("community dBeAvEr")
+
+    assert [candidate.package_id for candidate in result.candidates] == [
+        "DBeaver.DBeaver.Community",
+    ]
+
+
+def test_catalog_search_requires_every_query_word():
+    result = make_index(FakeSource()).search("DBeaver Enterprise")
+
+    assert [candidate.package_id for candidate in result.candidates] == [
+        "DBeaverCorp.DBeaverEnterpriseEdition",
+    ]
+
+
 def test_catalog_index_is_cached_between_searches():
     source = FakeSource()
     index = make_index(source)

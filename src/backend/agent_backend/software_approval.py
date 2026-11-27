@@ -23,8 +23,9 @@ class VerifiedPackageEvidence(BaseModel):
     version: str = Field(min_length=1, max_length=80)
     source: Literal["winget"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
+    installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=256)
     installer_url: str = Field(min_length=8, max_length=2048)
-    official_release_url: str = Field(min_length=8, max_length=2048)
+    official_release_url: str | None = Field(default=None, min_length=8, max_length=2048)
     manifest_source_url: str = Field(min_length=8, max_length=2048)
     repository_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     installer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -36,6 +37,15 @@ class VerifiedPackageEvidence(BaseModel):
     verified_at: datetime
     expires_at: datetime
 
+    @field_validator("installer_silent_switch")
+    @classmethod
+    def validate_silent_switch(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("installer silent switch must not be blank")
+        if value is not None and any(ord(char) < 0x20 for char in value):
+            raise ValueError("installer silent switch contains control characters")
+        return value
+
     @field_validator("package_name", "publisher", "version", "signature_subject")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
@@ -43,7 +53,7 @@ class VerifiedPackageEvidence(BaseModel):
             raise ValueError("value must not be blank")
         return value.strip()
 
-    @field_validator("installer_url", "official_release_url", "manifest_source_url")
+    @field_validator("installer_url", "manifest_source_url")
     @classmethod
     def require_https_source_urls(cls, value: str) -> str:
         parsed = urlsplit(value)
@@ -57,6 +67,22 @@ class VerifiedPackageEvidence(BaseModel):
             raise ValueError("installer URL must be an absolute HTTPS URL without credentials or fragment")
         return value
 
+    @field_validator("official_release_url")
+    @classmethod
+    def validate_optional_official_release_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+        ):
+            raise ValueError("official release URL must be absolute HTTPS without credentials or fragment")
+        return value
+
     @model_validator(mode="after")
     def validate_evidence_window(self) -> VerifiedPackageEvidence:
         if (
@@ -66,6 +92,8 @@ class VerifiedPackageEvidence(BaseModel):
             or self.expires_at.utcoffset() is None
         ):
             raise ValueError("evidence timestamps must be timezone-aware")
+        if self.installer_type == "exe" and self.installer_silent_switch is None:
+            raise ValueError("EXE installer evidence requires a manifest-declared silent switch")
         if self.expires_at <= self.verified_at:
             raise ValueError("evidence expiry must be after verification")
         if (self.expires_at - self.verified_at).total_seconds() > 900:

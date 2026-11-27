@@ -56,6 +56,7 @@ def make_candidate(body=b"verified-installer-bytes"):
         official_version="26.2.4",
         official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         official_asset_sha256=digest,
+        official_asset_id=12345,
         limitations=("installer_authenticode_signature_not_yet_verified",),
     )
 
@@ -84,11 +85,52 @@ def test_stage_downloads_hashes_and_verifies_without_executing(tmp_path):
     assert staged.authenticode_valid is True
     assert response.closed is True
     assert signature.paths == [path] or signature.paths[0].suffix == ".exe"
-    assert calls[0][0] == make_candidate(body).installer_url
+    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
     assert calls[0][1]["allow_redirects"] is False
     assert calls[0][1]["stream"] is True
     assert list(tmp_path.glob("*.part.exe")) == []
 
+
+
+def test_generic_package_uses_manifest_url_and_hash_without_vendor_release_api(tmp_path):
+    body = b"generic-signed-installer"
+    digest = hashlib.sha256(body).hexdigest()
+    candidate = make_candidate(body).model_copy(update={
+        "package_id": "Acme.Editor",
+        "package_name": "Acme Editor",
+        "publisher": "Acme Inc",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "installer_domain": "downloads.acme.example",
+        "installer_sha256": digest,
+    })
+    calls = []
+    staged = InstallerStager(
+        http_get=lambda url, **kwargs: (calls.append(url) or FakeResponse(body)),
+        signature_verifier=AcceptSignature(),
+        clock=lambda: "2026-11-12T00:00:00Z",
+    ).stage(candidate, staging_root=tmp_path)
+    assert calls == ["https://downloads.acme.example/editor.exe"]
+    assert staged.package_id == "Acme.Editor"
+    assert staged.sha256 == digest
+    assert staged.official_release_url is None
+
+
+def test_generic_package_rejects_unexpected_unverified_vendor_claims(tmp_path):
+    candidate = make_candidate().model_copy(update={
+        "package_id": "Acme.Editor",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": "1.0.0",
+        "official_release_url": "https://vendor.example/releases/1.0.0",
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+    })
+    with pytest.raises(InstallerStageError, match="unexpected vendor release"):
+        InstallerStager(signature_verifier=AcceptSignature()).stage(candidate, staging_root=tmp_path)
 
 def test_unverified_candidate_is_rejected_before_network_or_file_creation(tmp_path):
     candidate = make_candidate().model_copy(update={"publisher_verification": "MISMATCH"})
@@ -139,7 +181,7 @@ def test_invalid_authenticode_signature_removes_downloaded_file(tmp_path):
 def test_redirect_is_not_followed_and_partial_file_is_removed(tmp_path):
     response = FakeResponse(status_code=302, headers={"Location": "https://attacker.example/file.exe"})
 
-    with pytest.raises(InstallerStageError, match="unsuccessful"):
+    with pytest.raises(InstallerStageError, match="redirect target was not trusted"):
         InstallerStager(
             http_get=lambda *args, **kwargs: response,
             signature_verifier=AcceptSignature(),
@@ -147,6 +189,60 @@ def test_redirect_is_not_followed_and_partial_file_is_removed(tmp_path):
 
     assert response.closed is True
     assert list(tmp_path.iterdir()) == []
+
+
+
+def test_generic_installer_redirect_cannot_escape_manifest_host(tmp_path):
+    candidate = make_candidate().model_copy(update={
+        "package_id": "Acme.Editor",
+        "publisher": "Acme Inc",
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+        "installer_url": "https://downloads.acme.example/editor.exe",
+        "installer_domain": "downloads.acme.example",
+    })
+    response = FakeResponse(
+        status_code=302,
+        headers={"Location": "https://cdn.attacker.example/editor.exe"},
+    )
+    with pytest.raises(InstallerStageError, match="redirect target was not trusted"):
+        InstallerStager(
+            http_get=lambda *args, **kwargs: response,
+            signature_verifier=AcceptSignature(),
+        ).stage(candidate, staging_root=tmp_path)
+    assert response.closed is True
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(tmp_path):
+    body = b"verified-installer-bytes"
+    redirect = FakeResponse(
+        status_code=302,
+        headers={"Location": "https://release-assets.githubusercontent.com/github-production-release-asset/asset?token=temporary"},
+    )
+    final = FakeResponse(body)
+    responses = iter([redirect, final])
+    calls = []
+
+    def http_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return next(responses)
+
+    staged = InstallerStager(
+        http_get=http_get,
+        signature_verifier=AcceptSignature(),
+    ).stage(make_candidate(body), staging_root=tmp_path)
+
+    assert Path(staged.file_path).read_bytes() == body
+    assert redirect.closed is True
+    assert final.closed is True
+    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
+    assert calls[1][0].startswith("https://release-assets.githubusercontent.com/")
+    assert all("Authorization" not in call[1]["headers"] for call in calls)
+    assert all(call[1]["allow_redirects"] is False for call in calls)
 
 
 def test_oversized_content_length_is_rejected(tmp_path, monkeypatch):

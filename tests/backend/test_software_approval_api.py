@@ -24,6 +24,7 @@ def make_binding():
         version="26.2.4",
         source="winget",
         installer_type="exe",
+        installer_silent_switch="/S",
         installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver.exe",
         official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
         manifest_source_url="https://github.com/microsoft/winget-pkgs/tree/cccccccccccccccccccccccccccccccccccccccc",
@@ -56,8 +57,36 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
                 self.loaded_secret = kwargs["secret_loader"]()
             return accepted
 
+        def get(self, _challenge_id):
+            return SimpleNamespace(status="active")
+
     step_up = StepUp()
     principal = SimpleNamespace(owner_sub=owner, session_id=session)
+    monkeypatch.setattr(
+        api,
+        "_release_authorization_for_request",
+        lambda _request: SimpleNamespace(
+            task_id="P6-609-C",
+            package_id="DBeaver.DBeaver.Community",
+            version="26.2.4",
+            expires_at=NOW + timedelta(minutes=5),
+        ),
+    )
+
+    class ReservationStore:
+        def __init__(self):
+            self.created = []
+            self.reserved = []
+
+        def create_approval(self, **kwargs):
+            self.created.append(kwargs)
+
+        def reserve(self, **kwargs):
+            self.reserved.append(kwargs)
+            return SimpleNamespace(reservation_id="reservation-123", state="RESERVED")
+
+    reservation_store = ReservationStore()
+    monkeypatch.setattr(api, "_reservation_store", lambda _request: reservation_store)
     services = SimpleNamespace(
         step_up=step_up,
         secret_store=SimpleNamespace(load=lambda owner_sub: "test-secret"),
@@ -70,24 +99,26 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
     monkeypatch.setattr(
         api,
         "_get_install_plan",
-        lambda _plan_id: SimpleNamespace(
+        lambda _plan_id, **_kwargs: SimpleNamespace(
             plan_id=PLAN_ID,
             plan_digest=PLAN_DIGEST,
-            tool_id="software.install",
-            risk_class="R1",
-            required_permission="P1",
-            mode="dry_run",
-            programs=(SimpleNamespace(program="DBeaver.DBeaver.Community", status="PLANNED"),),
+            evidence_id="e" * 32,
+            package_id="DBeaver.DBeaver.Community",
+            package_name="DBeaver Community Edition",
+            publisher="DBeaver Corp",
+            version="26.2.4",
+            architecture="x64",
+            scope="user",
         ),
     )
     api._bindings.clear()
     api._consumed_bindings.clear()
-    return step_up, principal
+    return step_up, principal, reservation_store
 
 
 def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypatch):
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch)
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
     monkeypatch.setattr(
         api.software_evidence_registry,
         "bind_to_plan",
@@ -112,20 +143,72 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.installer_type == binding.evidence.installer_type
     assert response.signature_subject == binding.evidence.signature_subject
     assert response.signature_sha256 == binding.evidence.signature_sha256
-    assert response.notice == "APPROVAL_ONLY_NOT_EXECUTED"
+    assert response.notice == "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
+    assert reservation_store.created[0]["approval_id"] == "f" * 32
+    assert reservation_store.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["action_digest"] == binding.approval_digest
     assert step_up.created[0]["plan_id"] == PLAN_ID
 
 
-def test_confirm_consumes_exact_digest_and_returns_approved_not_executed(monkeypatch):
+
+def test_generic_publisher_approval_challenge_allows_no_vendor_release_url(monkeypatch):
+    base = make_binding().evidence
+    evidence = base.model_copy(update={
+        "package_id": "Discord.Discord",
+        "package_name": "Discord",
+        "publisher": "Discord Inc",
+        "installer_url": "https://stable.dl2.discordapp.net/DiscordSetup.exe",
+        "official_release_url": None,
+    })
+    binding = build_install_approval_binding(plan_digest=PLAN_DIGEST, evidence=evidence)
+    setup_context(monkeypatch)
+    monkeypatch.setattr(
+        api,
+        "_get_install_plan",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            plan_id=PLAN_ID,
+            plan_digest=PLAN_DIGEST,
+            evidence_id=evidence.evidence_id,
+            package_id=evidence.package_id,
+            package_name=evidence.package_name,
+            publisher=evidence.publisher,
+            version=evidence.version,
+            architecture=evidence.architecture,
+            scope=evidence.scope,
+        ),
+    )
+    monkeypatch.setattr(
+        api.software_evidence_registry,
+        "bind_to_plan",
+        lambda **_kwargs: binding,
+    )
+    response = api.create_software_approval_challenge(
+        PLAN_ID,
+        api.SoftwareApprovalChallengeRequest(evidence_id=evidence.evidence_id),
+        request=object(),
+    )
+    assert response.package_id == "Discord.Discord"
+    assert response.official_release_url is None
+    assert response.approval_digest == binding.approval_digest
+
+
+def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch)
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
     monkeypatch.setattr(
         api.software_evidence_registry,
         "bind_to_plan",
         lambda **_kwargs: binding,
     )
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+    requested_plan_owners = []
+    original_get_plan = api._get_install_plan
+
+    def get_plan_for_owner(plan_id, *, owner_id):
+        requested_plan_owners.append((plan_id, owner_id))
+        return original_get_plan(plan_id, owner_id=owner_id)
+
+    monkeypatch.setattr(api, "_get_install_plan", get_plan_for_owner)
 
     response = api.confirm_software_approval(
         PLAN_ID,
@@ -133,8 +216,13 @@ def test_confirm_consumes_exact_digest_and_returns_approved_not_executed(monkeyp
         request=object(),
     )
 
+    assert requested_plan_owners == [(PLAN_ID, "owner-1")]
     assert response.approved is True
-    assert response.notice == "APPROVED_NOT_EXECUTED"
+    assert response.notice == "APPROVED_QUEUED_NOT_YET_EXECUTED"
+    assert response.execution_state == "QUEUED"
+    assert response.reservation_id == "reservation-123"
+    assert reservation_store.reserved[0]["approval_id"] == "f" * 32
+    assert reservation_store.reserved[0]["binding_json"] == binding.model_dump_json()
     assert response.approval_digest == binding.approval_digest
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
     assert step_up.verified[0]["code"] == "123456"
@@ -177,7 +265,7 @@ def test_confirm_rejects_expired_or_revoked_evidence(monkeypatch):
 def test_invalid_totp_never_returns_approval(monkeypatch):
     AUTH_AUDIT_SINK.clear()
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch, accepted=False)
+    step_up, _principal, reservation_store = setup_context(monkeypatch, accepted=False)
     monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
 
@@ -193,17 +281,19 @@ def test_invalid_totp_never_returns_approval(monkeypatch):
     assert len(events) == 1
     assert events[0].reason == "invalid_software_approval"
     assert events[0].outcome == "denied"
+    assert reservation_store.reserved == []
 
 
 def test_successful_confirmation_consumes_plan_binding_and_rejects_replay(monkeypatch):
     binding = make_binding()
-    step_up, _principal = setup_context(monkeypatch)
+    step_up, _principal, _store = setup_context(monkeypatch)
     monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
     api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
     payload = api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456")
 
     first = api.confirm_software_approval(PLAN_ID, payload, request=object())
     assert first.approved is True
+    assert first.execution_state == "QUEUED"
     assert api._consumed_bindings[PLAN_ID] == binding.evidence.expires_at
 
     with pytest.raises(Exception) as error:
@@ -225,3 +315,164 @@ def test_consumed_binding_cannot_create_another_challenge(monkeypatch):
             request=object(),
         )
     assert getattr(error.value, "status_code", None) == 409
+
+
+
+def test_install_job_status_is_owner_scoped_and_exposes_only_safe_fields(monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_backend import software_approval_api as api
+
+    requested = []
+    job = SimpleNamespace(
+        reservation_id="a" * 32,
+        state="RUNNING",
+        attempts=1,
+        version=4,
+        result_code=None,
+        lease_expires_at="2026-11-22T00:10:00Z",
+        owner_id="owner-1",
+        action_digest="f" * 64,
+        binding_json="private-binding",
+        worker_id="worker-1",
+        lease_token="lease-value",
+    )
+
+    class Store:
+        def get_install_job(self, *, reservation_id, owner_id):
+            requested.append((reservation_id, owner_id))
+            return job
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.get_software_install_job_status("a" * 32, request)
+
+    assert requested == [("a" * 32, "owner-1")]
+    assert response.state == "RUNNING"
+    assert response.attempts == 1
+    assert not hasattr(response, "binding_json")
+    assert not hasattr(response, "lease_token")
+    assert not hasattr(response, "action_digest")
+
+
+
+def test_install_job_status_accepts_canonical_uuid_reservation_id(monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_backend import software_approval_api as api
+
+    reservation_id = "12345678-1234-5678-1234-567812345678"
+    requested = []
+
+    class Store:
+        def get_install_job(self, *, reservation_id, owner_id):
+            requested.append((reservation_id, owner_id))
+            return SimpleNamespace(
+                reservation_id=reservation_id,
+                state="QUEUED",
+                attempts=0,
+                version=1,
+                result_code=None,
+                lease_expires_at=None,
+            )
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.get_software_install_job_status(reservation_id, request)
+
+    assert requested == [(reservation_id, "owner-1")]
+    assert response.reservation_id == reservation_id
+    assert response.state == "QUEUED"
+
+
+def test_install_job_status_hides_other_owners_jobs(monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from agent_backend import software_approval_api as api
+    from agent_backend.approval_reservation_store import ApprovalReservationNotFound
+
+    class Store:
+        def get_install_job(self, **_kwargs):
+            raise ApprovalReservationNotFound("not found")
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    with pytest.raises(HTTPException) as error:
+        api.get_software_install_job_status("b" * 32, request)
+
+    assert error.value.status_code == 404
+
+
+def test_owner_can_recover_committed_install_job_by_plan_without_new_approval(monkeypatch):
+    from types import SimpleNamespace
+
+    job = SimpleNamespace(
+        reservation_id="12345678-1234-5678-1234-567812345678",
+        state="RUNNING",
+        attempts=1,
+        version=3,
+        result_code=None,
+        lease_expires_at="2026-11-23T13:00:00Z",
+    )
+    requested = []
+
+    class Store:
+        def get_install_job_for_plan(self, *, plan_id, owner_id):
+            requested.append((plan_id, owner_id))
+            return job
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    monkeypatch.setattr(api, "_get_install_plan", lambda plan_id, *, owner_id: SimpleNamespace(plan_id=plan_id))
+    monkeypatch.setattr(api, "_reservation_store", lambda _request: Store())
+
+    response = api.get_software_install_job_for_plan(PLAN_ID, request=object())
+
+    assert requested == [(PLAN_ID, "owner-1")]
+    assert response.reservation_id == job.reservation_id
+    assert response.state == "RUNNING"
+    assert response.attempts == 1
+
+def test_confirm_rejects_missing_exact_release_before_consuming_totp(monkeypatch):
+    binding = make_binding()
+    step_up, _principal, reservation_store = setup_context(monkeypatch)
+    monkeypatch.setattr(api, "_release_authorization_for_request", lambda _request: None)
+    monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
+    api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
+
+    with pytest.raises(api.HTTPException) as error:
+        api.confirm_software_approval(
+            PLAN_ID,
+            api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456"),
+            request=object(),
+        )
+
+    assert error.value.status_code == 409
+    assert step_up.verified == []
+    assert reservation_store.reserved == []

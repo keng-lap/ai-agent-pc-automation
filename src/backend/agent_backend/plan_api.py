@@ -60,7 +60,7 @@ class PlanReviewResponse(BaseModel):
     tool_result: ToolResult | None = None
     approved: bool = False
     questions: tuple[str, ...]
-    notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE"] = "DRY_RUN_ONLY_NO_CHANGES_MADE"
+    notice: Literal["DRY_RUN_ONLY_NO_CHANGES_MADE", "PLAN_REVIEW_ONLY_NO_EXECUTION"] = "PLAN_REVIEW_ONLY_NO_EXECUTION"
     refined_from_plan_id: str | None = None
     clarification: str | None = None
 
@@ -87,10 +87,15 @@ def _programs_for_review(
     intent: TaskIntent, language: Literal["th", "en"]
 ) -> tuple[str, tuple[ProgramPlan, ...]] | None:
     """Return only a clearly requested/safely implied core program, never optional tools."""
-    if intent.category in ("software_install", "software_remove"):
+    if intent.category == "software_install":
+        # Real installs use the WinGet discovery/evidence/TOTP queue path.
+        # Never mint a legacy preview plan for a software.install request.
+        return None
+
+    if intent.category == "software_remove":
         if intent.target is None:
             return None
-        tool_id = "software.install" if intent.category == "software_install" else "software.remove"
+        tool_id = "software.remove"
         purpose = "ซอฟต์แวร์ตามคำขอ" if language == "th" else "Software requested by the user"
         reason = (
             "ระบุไว้ในคำขอของผู้ใช้"
@@ -112,25 +117,9 @@ def _programs_for_review(
         return tool_id, (item,)
 
     if intent.category == "development_task" and intent.target == "Java":
-        item = ProgramPlan(
-            order=1,
-            program="JDK",
-            version="ยังไม่ได้ระบุ" if language == "th" else "Not specified",
-            purpose=(
-                "ชุดพัฒนาและคอมไพเลอร์สำหรับภาษา Java"
-                if language == "th"
-                else "Java development kit and compiler"
-            ),
-            reason=(
-                "JDK เป็นเครื่องมือหลักที่จำเป็นสำหรับคอมไพล์และรันโปรแกรม Java"
-                if language == "th"
-                else "A JDK is the core tool required to compile and run Java applications"
-            ),
-            source="ยังไม่ได้ตรวจสอบ" if language == "th" else "Not checked",
-            impact="ยังไม่ได้ตรวจสอบ" if language == "th" else "Unknown / not checked",
-            status="NEEDS_CLARIFICATION",
-        )
-        return "software.install", (item,)
+        # Multi-package development environments are not a single exact install
+        # action. Keep clarification in the conversational/task plan, not DryRunPlan.
+        return None
 
     return None
 
@@ -191,6 +180,11 @@ def create_plan_review(payload: PlanReviewRequest) -> PlanReviewResponse:
         tool_result=None,
         approved=False,
         questions=_questions_for_review(intent, payload.language),
+        notice=(
+            "DRY_RUN_ONLY_NO_CHANGES_MADE"
+            if dry_run_plan is not None
+            else "PLAN_REVIEW_ONLY_NO_EXECUTION"
+        ),
     )
 
 
@@ -242,6 +236,12 @@ def create_plan_step_up_challenge(
         raise HTTPException(status_code=410, detail="Plan expired.") from None
     except PlanNotFoundError:
         raise HTTPException(status_code=404, detail="Plan not found.") from None
+
+    if plan.tool_id == "software.install":
+        raise HTTPException(
+            status_code=409,
+            detail="Software installs require verified package evidence and the dedicated exact-action approval route.",
+        )
 
     if (
         plan.risk_class != "R1"
@@ -308,6 +308,14 @@ def approve_plan_review(
         # Do not return a cached approval result before authenticating this request.
         # A plan ID is an opaque reference, not a bearer authorization token.
         # A retry must prove a fresh owner/session-bound TOTP challenge first.
+
+        # Real installs must never fall through the legacy mock/dry-run approval path.
+        # They require verified package evidence, exact-action TOTP, and the durable queue.
+        if plan.tool_id == "software.install":
+            raise HTTPException(
+                status_code=409,
+                detail="Software installs require verified package evidence and the dedicated exact-action approval route.",
+            )
 
         # These fields are server-generated and digest-bound; never accept them from a client.
         if plan.risk_class != "R1" or plan.required_permission != "P1" or plan.mode != "dry_run":

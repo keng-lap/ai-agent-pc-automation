@@ -97,18 +97,23 @@ def build_local_manifest_documents(
         "PackageName": evidence.package_name,
         "ManifestType": "defaultLocale",
     }
+    installer_entry = {
+        "Architecture": evidence.architecture,
+        "Scope": "user",
+        "InstallerUrl": evidence.installer_url,
+        "InstallerSha256": evidence.installer_sha256,
+    }
+    if evidence.installer_type == "exe":
+        if not evidence.installer_silent_switch:
+            raise WinGetAdapterError("EXE installer has no approved silent switch")
+        installer_entry["InstallerSwitches"] = {
+            "Silent": evidence.installer_silent_switch,
+        }
     installer_doc = {
         **common,
         "ManifestType": "installer",
         "InstallerType": evidence.installer_type,
-        "Installers": [
-            {
-                "Architecture": evidence.architecture,
-                "Scope": "user",
-                "InstallerUrl": evidence.installer_url,
-                "InstallerSha256": evidence.installer_sha256,
-            }
-        ],
+        "Installers": [installer_entry],
     }
 
     documents = {

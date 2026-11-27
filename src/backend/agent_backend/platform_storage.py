@@ -1,9 +1,9 @@
 """Platform-specific protection for the local SQLite job database.
 
 The Job Store depends on this narrow interface instead of embedding OS checks.
-Linux is currently the only enabled adapter. Windows remains fail-closed until
-native DACL, owner SID, reparse-point and handle-based path-race protections
-are implemented and independently reviewed. macOS remains unsupported.
+Linux and Windows have dedicated platform adapters. The Windows adapter is
+covered by native ACL, owner SID, reparse-point, SQLite sidecar and mutex tests
+in the Windows CI workflow. macOS remains unsupported.
 """
 
 from __future__ import annotations
@@ -830,10 +830,12 @@ def create_platform_secure_storage(
     if current.startswith("linux"):
         return LinuxSecureStorage()
     if current == "win32":
-        raise PlatformStorageUnavailable(
-            "Windows job-store storage remains disabled until the native adapter "
-            "passes dedicated Windows integration tests and independent security review."
-        )
+        # The Windows adapter is enabled only after the dedicated native
+        # integration suite is exercised in the Windows CI workflow. It pins
+        # local directory handles, rejects reparse points, verifies current-user
+        # ownership and protected owner-only DACLs for the database and sidecars,
+        # and serializes leases with a SID-scoped, directory-identity mutex.
+        return WindowsSecureStorage()
     if current == "darwin":
         raise PlatformStorageUnavailable(
             "macOS job-store storage is disabled pending native ACL and "

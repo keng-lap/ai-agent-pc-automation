@@ -339,13 +339,30 @@ class MicrosoftWinGetCatalogIndex:
                 self._refresh()
 
             assert self._connection is not None
+            # Match every meaningful query token against the catalog's name,
+            # package ID, or moniker. This supports natural-language product names
+            # such as "DBeaver Community" while keeping package identity catalog-owned.
+            search_terms = tuple(
+                dict.fromkeys(re.findall(r"[^\W_]+", normalized.casefold()))
+            ) or (normalized.casefold(),)
+            term_predicate = " AND ".join(
+                "("
+                "instr(lower(name), ?) > 0 "
+                "OR instr(lower(id), ?) > 0 "
+                "OR instr(lower(COALESCE(moniker, '')), ?) > 0"
+                ")"
+                for _term in search_terms
+            )
+            search_parameters = tuple(
+                value
+                for term in search_terms
+                for value in (term, term, term)
+            )
             rows = self._connection.execute(
-                """
+                f"""
                 SELECT id, name, moniker, latest_version
                 FROM packages
-                WHERE instr(lower(name), lower(?)) > 0
-                   OR instr(lower(id), lower(?)) > 0
-                   OR instr(lower(COALESCE(moniker, '')), lower(?)) > 0
+                WHERE {term_predicate}
                 ORDER BY
                     CASE
                         WHEN lower(name) = lower(?) OR lower(id) = lower(?) THEN 0
@@ -356,16 +373,7 @@ class MicrosoftWinGetCatalogIndex:
                     id COLLATE NOCASE
                 LIMIT ?
                 """,
-                (
-                    normalized,
-                    normalized,
-                    normalized,
-                    normalized,
-                    normalized,
-                    normalized,
-                    normalized,
-                    limit,
-                ),
+                (*search_parameters, normalized, normalized, normalized, normalized, limit),
             ).fetchall()
 
             candidates = tuple(

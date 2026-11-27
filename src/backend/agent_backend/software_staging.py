@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from pydantic import BaseModel, ConfigDict
@@ -21,6 +21,12 @@ MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 CHUNK_SIZE = 65536
 ALLOWED_INSTALLER_SUFFIXES = frozenset({".exe", ".msi", ".msix", ".appx"})
 USER_AGENT = "ai-agent-pc-automation/0.1"
+MAX_RELEASE_REDIRECTS = 3
+ALLOWED_RELEASE_REDIRECT_HOSTS = frozenset({
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "github-releases.githubusercontent.com",
+})
 
 
 class InstallerStageError(RuntimeError):
@@ -39,10 +45,10 @@ class StagedInstaller(BaseModel):
     file_size: int
     sha256: str
     authenticode_valid: Literal[True] = True
-    # Subject is for display; trust decisions must use the certificate DER fingerprint.
+    # Subject is matched to the manifest Publisher; fingerprint is bound into approval evidence.
     signature_subject: str | None = None
     signature_sha256: str | None = None
-    official_release_url: str
+    official_release_url: str | None = None
     staged_at: str
 
 
@@ -132,18 +138,16 @@ class InstallerStager:
             total = 0
             declared_length: int | None = None
             with staged_file:
-                response = self._http_get(
-                    candidate.installer_url,
-                    headers={
-                        "Accept": "application/octet-stream",
-                        "User-Agent": USER_AGENT,
-                    },
-                    timeout=(3.05, 30),
-                    allow_redirects=False,
-                    stream=True,
+                download_url = self._download_url(candidate)
+                allowed_redirect_hosts = (
+                    ALLOWED_RELEASE_REDIRECT_HOSTS
+                    if candidate.package_id == "DBeaver.DBeaver.Community"
+                    else frozenset({candidate.installer_domain.casefold()}) | ALLOWED_RELEASE_REDIRECT_HOSTS
                 )
-                if response.status_code != 200:
-                    raise InstallerStageError("official installer source returned an unsuccessful response")
+                response = self._get_safe_release_response(
+                    download_url,
+                    allowed_redirect_hosts=allowed_redirect_hosts,
+                )
 
                 headers = getattr(response, "headers", {})
                 encoding = str(headers.get("Content-Encoding", "identity")).strip().lower()
@@ -176,7 +180,10 @@ class InstallerStager:
                 raise InstallerStageError("installer size did not match its declared content length")
             if actual_sha256 != candidate.installer_sha256.lower():
                 raise InstallerStageError("installer SHA-256 did not match the approved release digest")
-            if actual_sha256 != candidate.official_asset_sha256:
+            if (
+                candidate.official_asset_sha256 is not None
+                and actual_sha256 != candidate.official_asset_sha256
+            ):
                 raise InstallerStageError("installer SHA-256 did not match the official release asset")
 
             verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
@@ -206,7 +213,7 @@ class InstallerStager:
                 authenticode_valid=True,
                 signature_subject=signature_subject,
                 signature_sha256=signature_sha256,
-                official_release_url=candidate.official_release_url or "",
+                official_release_url=candidate.official_release_url,
                 staged_at=self._clock(),
             )
         except InstallerStageError:
@@ -230,21 +237,101 @@ class InstallerStager:
                     pass
 
     @staticmethod
+    def _download_url(candidate: InstallerCandidate) -> str:
+        if candidate.package_id == "DBeaver.DBeaver.Community":
+            asset_id = candidate.official_asset_id
+            if type(asset_id) is not int or asset_id < 1:
+                raise InstallerStageError("official DBeaver release asset identity is missing")
+            return f"https://api.github.com/repos/dbeaver/dbeaver/releases/assets/{asset_id}"
+        return candidate.installer_url
+
+    def _get_safe_release_response(
+        self,
+        initial_url: str,
+        *,
+        allowed_redirect_hosts: frozenset[str] = ALLOWED_RELEASE_REDIRECT_HOSTS,
+    ):
+        current_url = initial_url
+        for redirect_count in range(MAX_RELEASE_REDIRECTS + 1):
+            request_headers = {
+                "Accept": "application/octet-stream",
+                "User-Agent": USER_AGENT,
+            }
+            if urlsplit(current_url).hostname == "api.github.com":
+                request_headers["X-GitHub-Api-Version"] = "2022-11-28"
+            response = self._http_get(
+                current_url,
+                headers=request_headers,
+                timeout=(3.05, 30),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code == 200:
+                return response
+            if response.status_code not in {301, 302, 303, 307, 308}:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+                raise InstallerStageError(
+                    "official installer source returned an unsuccessful response"
+                )
+            location = str(getattr(response, "headers", {}).get("Location", "")).strip()
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+            if not location or redirect_count >= MAX_RELEASE_REDIRECTS:
+                raise InstallerStageError("official installer redirect chain was invalid")
+            target_url = urljoin(current_url, location)
+            parsed_target = urlsplit(target_url)
+            if (
+                parsed_target.scheme != "https"
+                or not parsed_target.hostname
+                or parsed_target.hostname.casefold() not in allowed_redirect_hosts
+                or parsed_target.port not in (None, 443)
+                or parsed_target.username
+                or parsed_target.password
+                or parsed_target.fragment
+            ):
+                raise InstallerStageError("official installer redirect target was not trusted")
+            current_url = target_url
+        raise InstallerStageError("official installer redirect limit was exceeded")
+
+    @staticmethod
     def _require_official_release_match(candidate: InstallerCandidate) -> None:
         if not isinstance(candidate, InstallerCandidate):
             raise InstallerStageError("installer candidate must come from the backend discovery service")
-        if (
-            candidate.publisher_verification != "VERIFIED"
-            or candidate.official_version != candidate.version
-            or not candidate.official_release_url
-            or not candidate.official_asset_sha256
-            or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
-        ):
-            raise InstallerStageError("installer is not matched to a verified official release")
+        if candidate.package_id == "DBeaver.DBeaver.Community":
+            if (
+                candidate.publisher_verification != "VERIFIED"
+                or candidate.official_version != candidate.version
+                or not candidate.official_release_url
+                or not candidate.official_asset_sha256
+                or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
+                or type(candidate.official_asset_id) is not int
+                or candidate.official_asset_id < 1
+            ):
+                raise InstallerStageError("DBeaver installer is not matched to its verified official release")
+        elif candidate.publisher_verification == "NOT_CHECKED":
+            if any((
+                candidate.official_version is not None,
+                candidate.official_release_url is not None,
+                candidate.official_asset_sha256 is not None,
+                candidate.official_asset_id is not None,
+            )):
+                raise InstallerStageError("unchecked publisher candidate contained unexpected vendor release claims")
+        elif candidate.publisher_verification == "VERIFIED":
+            if (
+                candidate.official_version != candidate.version
+                or not candidate.official_release_url
+                or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
+            ):
+                raise InstallerStageError("verified vendor release did not match the exact manifest candidate")
+        else:
+            raise InstallerStageError("installer publisher source check did not pass")
         parsed_url = urlsplit(candidate.installer_url)
         if (
             parsed_url.scheme != "https"
-            or not parsed_url.hostname
+            or parsed_url.hostname.casefold() != candidate.installer_domain.casefold()
             or parsed_url.username
             or parsed_url.password
             or parsed_url.fragment

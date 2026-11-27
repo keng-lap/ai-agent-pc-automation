@@ -8,6 +8,41 @@ export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
 
+export interface GeminiConversationResponse {
+  schema_version: '1.0';
+  message: string;
+  intent: 'conversation.chat' | 'system.help' | 'software.install' | 'software.install_multiple' | 'software.remove' | 'environment.prepare' | 'environment.inspect';
+  status: 'completed' | 'ready' | 'needs_clarification' | 'unsupported';
+  data: {
+    packages: Array<{
+      name: string;
+      version: string;
+      purpose: string;
+      suggested_source: string;
+      suggested_method: string;
+    }>;
+    environment: {
+      name: string;
+      purpose: string;
+      development_type: string;
+      framework_version: string;
+    } | null;
+    checks: string[];
+    notes: string[];
+  };
+  needs_clarification: boolean;
+  clarification: string | null;
+}
+
+export interface GeminiChatResponse {
+  request_id: string;
+  gemini_response: GeminiConversationResponse;
+  gemini_raw_json: string;
+  provider: 'gemini';
+  model: string;
+  provider_connected: true;
+}
+
 export interface SoftwareCatalogCandidate {
   package_id: string;
   name: string;
@@ -55,6 +90,79 @@ export interface SoftwareDiscoveryResponse {
   source: 'winget-community-repository';
 }
 
+export interface SoftwareInstallReadiness {
+  platform_supported: boolean;
+  authenticode_verification_available: boolean;
+  publisher_identity_policy_available: boolean;
+  publisher_trust_configured: boolean;
+  publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH';
+  real_install_enabled: boolean;
+  real_install_release_package_id: string | null;
+  real_install_release_version: string | null;
+  real_install_release_expires_at: string | null;
+  package_allowlist_enabled: boolean;
+  supported_package_ids: string[];
+  notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+}
+
+export interface SoftwareInstallProposalResponse {
+  plan_id: string;
+  evidence_id: string;
+  package_id: string;
+  package_name: string;
+  publisher: string;
+  version: string;
+  architecture: 'x86' | 'x64' | 'arm64';
+  scope: 'user';
+  expires_at: string;
+  notice: 'VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP';
+}
+
+export interface SoftwareApprovalChallenge {
+  plan_id: string;
+  challenge_id: string;
+  expires_at: number;
+  package_id: string;
+  package_name: string;
+  publisher: string;
+  version: string;
+  architecture: 'x86' | 'x64' | 'arm64';
+  scope: 'user';
+  installer_type: 'exe' | 'msi' | 'msix' | 'appx';
+  installer_silent_switch: string | null;
+  installer_url: string;
+  official_release_url: string | null;
+  manifest_source_url: string;
+  repository_commit: string;
+  installer_sha256: string;
+  manifest_sha256: string;
+  signature_subject: string;
+  signature_sha256: string;
+  evidence_expires_at: string;
+  approval_digest: string;
+  notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
+}
+
+export interface SoftwareInstallJobStatus {
+  reservation_id: string;
+  state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
+  attempts: number;
+  version: number;
+  result_code: string | null;
+  lease_expires_at: string | null;
+}
+
+export interface SoftwareApprovalResult {
+  plan_id: string;
+  approved: true;
+  approval_digest: string;
+  package_id: string;
+  version: string;
+  reservation_id: string;
+  execution_state: 'QUEUED';
+  notice: 'APPROVED_QUEUED_NOT_YET_EXECUTED';
+}
+
 export interface PlanReviewProgram {
   order: number;
   program: string;
@@ -82,6 +190,7 @@ export interface PlanReviewResponse {
   };
   dry_run_plan: {
     plan_id: string;
+    tool_id: 'software.install' | 'software.remove';
     mode: 'dry_run';
     live_checks_performed: false;
     expires_at: string;
@@ -90,7 +199,7 @@ export interface PlanReviewResponse {
   tool_result: { status: 'dry_run'; summary: string } | null;
   approved: boolean;
   questions: string[];
-  notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE';
+  notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE' | 'PLAN_REVIEW_ONLY_NO_EXECUTION';
   refined_from_plan_id?: string | null;
   clarification?: string | null;
 }
@@ -137,8 +246,8 @@ export interface JobListResponse {
 export class ChatApi {
   private readonly http = inject(HttpClient);
 
-  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
-    return this.http.post<unknown>('/api/chat', {
+  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<GeminiChatResponse> {
+    return this.http.post<GeminiChatResponse>('/api/chat', {
       conversation_id: conversationId,
       message,
       language,
@@ -162,6 +271,55 @@ export class ChatApi {
       version,
       architecture,
     });
+  }
+
+  getSoftwareInstallReadiness(): Observable<SoftwareInstallReadiness> {
+    return this.http.get<SoftwareInstallReadiness>('/api/software/install/readiness');
+  }
+
+  createSoftwareInstallProposal(
+    packageId: string,
+    version: string,
+    architecture: 'x86' | 'x64' | 'arm64',
+  ): Observable<SoftwareInstallProposalResponse> {
+    return this.http.post<SoftwareInstallProposalResponse>('/api/software/install/proposals', {
+      package_id: packageId,
+      version,
+      architecture,
+    });
+  }
+
+  createSoftwareApprovalChallenge(
+    planId: string,
+    evidenceId: string,
+  ): Observable<SoftwareApprovalChallenge> {
+    return this.http.post<SoftwareApprovalChallenge>(
+      `/api/plans/${encodeURIComponent(planId)}/software-approval`,
+      { evidence_id: evidenceId },
+    );
+  }
+
+  confirmSoftwareApproval(
+    planId: string,
+    challengeId: string,
+    totpCode: string,
+  ): Observable<SoftwareApprovalResult> {
+    return this.http.post<SoftwareApprovalResult>(
+      `/api/plans/${encodeURIComponent(planId)}/software-approval/confirm`,
+      { challenge_id: challengeId, totp_code: totpCode },
+    );
+  }
+
+  getSoftwareInstallJobForPlan(planId: string): Observable<SoftwareInstallJobStatus> {
+    return this.http.get<SoftwareInstallJobStatus>(
+      `/api/plans/${encodeURIComponent(planId)}/software-approval/reservation`,
+    );
+  }
+
+  getSoftwareInstallJobStatus(reservationId: string): Observable<SoftwareInstallJobStatus> {
+    return this.http.get<SoftwareInstallJobStatus>(
+      `/api/software/install/jobs/${encodeURIComponent(reservationId)}`,
+    );
   }
 
   createPlan(request: string, language: UiLanguage): Observable<PlanReviewResponse> {

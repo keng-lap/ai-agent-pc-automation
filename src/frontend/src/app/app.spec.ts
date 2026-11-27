@@ -2,10 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, Subject, of, throwError } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { TimeoutError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
-import { ChatApi, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
+import { ChatApi, GeminiChatResponse, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
 
 class FakeChatApi {
   calls: Array<{ message: string; language: UiLanguage; conversationId: string }> = [];
@@ -22,6 +23,29 @@ class FakeChatApi {
       { package_id: 'DBeaverCorp.DBeaverEnterpriseEdition', name: 'DBeaver Enterprise Edition', moniker: null, latest_version: '25.3.0' },
     ],
   });
+  readiness = {
+    platform_supported: true,
+    authenticode_verification_available: true,
+    publisher_identity_policy_available: true,
+    publisher_trust_configured: true,
+    publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' as const,
+    real_install_enabled: true,
+    real_install_release_package_id: 'DBeaver.DBeaver.Community' as string | null,
+    real_install_release_version: '25.3.0' as string | null,
+    real_install_release_expires_at: '2026-11-12T00:10:00Z' as string | null,
+    package_allowlist_enabled: false,
+    supported_package_ids: [] as string[],
+    notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
+  };
+  proposalCalls: Array<{ packageId: string; version: string; architecture: string }> = [];
+  approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
+  softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
+  approvalErrorStatus: number | null = null;
+  approvalErrorDetail: string | null = null;
+  readinessCalls = 0;
+  reservationRecoveryCalls: string[] = [];
+  reservationRecoveryResponder: (planId: string) => Observable<unknown> = () => throwError(() => ({ status: 404 }));
+  jobStatusCalls: string[] = [];
   discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
     version === null
       ? {
@@ -136,9 +160,159 @@ class FakeChatApi {
     return this.discoveryResponder(packageId, version);
   }
 
-  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<unknown> {
+  getSoftwareInstallReadiness(): Observable<typeof this.readiness> {
+    this.readinessCalls += 1;
+    return of(this.readiness);
+  }
+
+  getSoftwareInstallJobForPlan(planId: string): Observable<unknown> {
+    this.reservationRecoveryCalls.push(planId);
+    return this.reservationRecoveryResponder(planId);
+  }
+
+  createSoftwareInstallProposal(packageId: string, version: string, architecture: string): Observable<unknown> {
+    this.proposalCalls.push({ packageId, version, architecture });
+    return of({
+      plan_id: 'f'.repeat(32),
+      evidence_id: 'e'.repeat(32),
+      package_id: packageId,
+      package_name: 'DBeaver Community Edition',
+      publisher: 'DBeaver Corp',
+      version,
+      architecture,
+      scope: 'user',
+      expires_at: '2026-11-22T00:10:00Z',
+      notice: 'VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP',
+    });
+  }
+
+  createSoftwareApprovalChallenge(planId: string, evidenceId: string): Observable<unknown> {
+    this.approvalChallengeCalls.push({ planId, evidenceId });
+    return of({
+      plan_id: planId,
+      challenge_id: 'c'.repeat(32),
+      expires_at: 1_800_000_120,
+      package_id: 'DBeaver.DBeaver.Community',
+      package_name: 'DBeaver Community Edition',
+      publisher: 'DBeaver Corp',
+      version: '25.3.0',
+      architecture: 'x64',
+      scope: 'user',
+      installer_type: 'exe',
+      installer_silent_switch: '/S',
+      installer_url: 'https://github.com/dbeaver/dbeaver/releases/download/25.3.0/dbeaver.exe',
+      official_release_url: 'https://github.com/dbeaver/dbeaver/releases/tag/25.3.0',
+      manifest_source_url: 'https://github.com/microsoft/winget-pkgs/tree/main',
+      repository_commit: 'd'.repeat(40),
+      installer_sha256: 'b'.repeat(64),
+      manifest_sha256: 'c'.repeat(64),
+      signature_subject: 'CN=DBeaver Corporation',
+      signature_sha256: 'd'.repeat(64),
+      evidence_expires_at: '2026-11-22T00:10:00Z',
+      approval_digest: 'a'.repeat(64),
+      notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL',
+    });
+  }
+
+  confirmSoftwareApproval(planId: string, challengeId: string, code: string): Observable<unknown> {
+    this.softwareApprovalCalls.push({ planId, challengeId, code });
+    if (this.approvalErrorStatus !== null) {
+      const status = this.approvalErrorStatus;
+      const detail = this.approvalErrorDetail;
+      this.approvalErrorStatus = null;
+      this.approvalErrorDetail = null;
+      if (status === 409 && detail?.toLowerCase().includes('release authorization')) {
+        // The release can be revoked after readiness was loaded but before approval.
+        this.readiness.real_install_enabled = false;
+        this.readiness.real_install_release_package_id = null;
+        this.readiness.real_install_release_version = null;
+        this.readiness.real_install_release_expires_at = null;
+      }
+      return throwError(() => ({ status, error: detail ? { detail } : undefined }));
+    }
+    return of({
+      plan_id: planId,
+      approved: true,
+      approval_digest: 'a'.repeat(64),
+      package_id: 'DBeaver.DBeaver.Community',
+      version: '25.3.0',
+      reservation_id: 'a'.repeat(32),
+      execution_state: 'QUEUED',
+      notice: 'APPROVED_QUEUED_NOT_YET_EXECUTED',
+    });
+  }
+  getSoftwareInstallJobStatus(reservationId: string): Observable<unknown> {
+    this.jobStatusCalls.push(reservationId);
+    return of({
+      reservation_id: reservationId,
+      state: 'SUCCEEDED',
+      attempts: 1,
+      version: 3,
+      result_code: 'EXACT_PACKAGE_VERIFIED',
+      lease_expires_at: null,
+    });
+  }
+
+  sendMessage(message: string, language: UiLanguage, conversationId: string): Observable<GeminiChatResponse> {
     this.calls.push({ message, language, conversationId });
-    return this.responder(message, language);
+    return this.responder(message, language).pipe(map((value) => {
+      if (typeof value !== 'object' || value === null) {
+        return value as GeminiChatResponse;
+      }
+      if ('gemini_response' in value) return value as GeminiChatResponse;
+      if (!('reply' in value) || typeof (value as { reply: unknown }).reply !== 'string') {
+        return value as GeminiChatResponse;
+      }
+      const reply = (value as { reply: string }).reply;
+      const isJava = /java/i.test(message);
+      const isDotNet = /\.net|dotnet/i.test(message);
+      const isEnvironment = /เตรียมเครื่องพัฒนา|prepare.*environment|development environment/i.test(message);
+      const isInstall = /install|ติดตั้ง/i.test(message);
+      const intent: GeminiChatResponse['gemini_response']['intent'] = isEnvironment
+        ? 'environment.prepare'
+        : isInstall ? 'software.install' : 'conversation.chat';
+      const packages = isEnvironment
+        ? isDotNet
+          ? [
+            { name: '.NET SDK', version: 'latest LTS', purpose: 'Build .NET applications', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
+            { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
+            { name: 'C# Dev Kit', version: 'latest', purpose: 'C# development extension', suggested_source: 'VS Code Marketplace', suggested_method: 'Marketplace extension install after verification' },
+          ]
+          : [
+            { name: 'JDK', version: '21 LTS', purpose: 'Java compiler and runtime', suggested_source: 'OpenJDK vendor', suggested_method: 'WinGet if verified' },
+            { name: 'Visual Studio Code', version: 'latest', purpose: 'Code editor', suggested_source: 'Microsoft', suggested_method: 'WinGet if verified' },
+          ]
+        : isInstall
+          ? [{ name: message.replace(/^.*?(?:install(?:ation)?|ติดตั้ง)\s*(?:of\s+)?/i, '').trim() || 'Requested software', version: 'latest', purpose: 'User-requested software', suggested_source: 'Official vendor source', suggested_method: 'WinGet if verified' }]
+          : [];
+      const contract = {
+        schema_version: '1.0' as const,
+        message: reply,
+        intent,
+        status: intent === 'conversation.chat' ? 'completed' as const : 'ready' as const,
+        data: {
+          packages,
+          environment: isEnvironment ? {
+            name: isDotNet ? '.NET development' : isJava ? 'Java development' : 'Development environment',
+            purpose: 'Prepare tools to build and test applications',
+            development_type: isDotNet ? ' .NET' : isJava ? 'Java' : 'General',
+            framework_version: 'LTS',
+          } : null,
+          checks: [],
+          notes: [],
+        },
+        needs_clarification: false,
+        clarification: null,
+      };
+      return {
+        request_id: '123e4567-e89b-42d3-a456-426614174000',
+        gemini_response: contract,
+        gemini_raw_json: JSON.stringify(contract),
+        provider: 'gemini' as const,
+        model: 'test-model',
+        provider_connected: true as const,
+      };
+    }));
   }
 
   createPlan(message: string, language: UiLanguage): Observable<PlanReviewResponse> {
@@ -211,6 +385,26 @@ describe('App baseline', () => {
   });
 });
 
+function validChatResponse(message: string): GeminiChatResponse {
+  const contract: GeminiChatResponse['gemini_response'] = {
+    schema_version: '1.0',
+    message,
+    intent: 'conversation.chat',
+    status: 'completed',
+    data: { packages: [], environment: null, checks: [], notes: [] },
+    needs_clarification: false,
+    clarification: null,
+  };
+  return {
+    request_id: '123e4567-e89b-42d3-a456-426614174000',
+    gemini_response: contract,
+    gemini_raw_json: JSON.stringify(contract),
+    provider: 'gemini',
+    model: 'test-model',
+    provider_connected: true,
+  };
+}
+
 describe('App chat UI (T-202)', () => {
   let fixture!: ComponentFixture<App>;
   let api: FakeChatApi;
@@ -278,88 +472,33 @@ describe('App chat UI (T-202)', () => {
 
 
 
-  it('shows dry-run approval only for a fully specified plan and renders the result after approval', async () => {
-    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+  it('routes AI-interpreted install intents to WinGet discovery instead of legacy Dry Run', async () => {
     await render();
     api.planResponder = (request) => of({
       request,
-      interpretation: { category: 'development_task', goal: request, target: 'Java' },
+      interpretation: { category: 'software_install', goal: request, target: 'Google Chrome' },
       task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: 'a'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T15:00:00Z',
-        programs: [{
-          order: 1,
-          program: 'JDK',
-          version: '21 LTS',
-          purpose: 'Java development kit',
-          reason: 'Explicit user choice',
-          source: 'Not checked',
-          source_verification: 'NOT_CHECKED',
-          dependencies: [],
-          dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null,
-          impact: 'Not checked',
-          status: 'PLANNED',
-        }],
-      },
+      dry_run_plan: null,
       tool_result: null,
       approved: false,
       questions: [],
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      notice: 'PLAN_REVIEW_ONLY_NO_EXECUTION',
     });
-    send('Prepare Java development');
+
+    send('Prepare installation of Google Chrome');
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('ยืนยันตัวตนเพื่ออนุมัติ');
-    expect(fixture.nativeElement.textContent).not.toContain('Mock reply');
-    expect(fixture.nativeElement.querySelector('.installer-card')).not.toBeNull();
-    const flow = fixture.nativeElement.querySelector('.execution-flow') as HTMLElement;
-    expect(flow).not.toBeNull();
-    expect(flow.querySelectorAll('.flow-node').length).toBe(5);
-    expect(flow.textContent).toContain('ขั้นตอนการทำงาน');
-    expect(flow.textContent).toContain('รอผู้ใช้ยืนยัน');
-    expect(flow.querySelectorAll('.flow-node--done').length).toBe(2);
-    expect(flow.querySelectorAll('.flow-node--ready').length).toBe(3);
-    expect((fixture.nativeElement.querySelector('.installer-details') as HTMLDetailsElement).open).toBe(false);
+    expect(api.calls.map((item) => item.message)).toEqual(['Prepare installation of Google Chrome']);
+    expect(api.catalogCalls).toEqual(['Google Chrome']);
+    expect(fixture.nativeElement.textContent).toContain('ค้นหาจาก Microsoft WinGet Catalog');
     expect(fixture.nativeElement.textContent).not.toContain('ผลการจำลอง');
-
-    const approveButtons = Array.from(
-      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
-    );
-    const approve = approveButtons.find((button) => button.textContent?.includes('ยืนยันตัวตนเพื่ออนุมัติ'));
-    if (!approve) throw new Error('Step-up button was not rendered');
-    approve.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.stepUpCalls).toEqual(['a'.repeat(32)]);
-    expect(flow.textContent).toContain('รอรหัส Authenticator');
-    expect(flow.querySelector('.flow-node--waiting')).not.toBeNull();
-    const codeInput = fixture.nativeElement.querySelector('input[id^="totp-"]') as HTMLInputElement;
-    expect(codeInput).not.toBeNull();
-    codeInput.value = '123456';
-    codeInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    const confirm = Array.from(
-      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.includes('ยืนยันและจำลอง'));
-    if (!confirm) throw new Error('TOTP confirmation button was not rendered');
-    confirm.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.approvalCalls).toEqual(['a'.repeat(32)]);
-    expect(flow.querySelectorAll('.flow-node--done').length).toBe(5);
-    expect(flow.textContent).toContain('เสร็จสมบูรณ์');
-    expect(fixture.nativeElement.textContent).toContain('ผลการจำลอง');
-    expect(fixture.nativeElement.textContent).toContain('Dry run only; no changes made.');
+    expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
+    expect(api.stepUpCalls).toEqual([]);
+    expect(api.approvalCalls).toEqual([]);
   });
 
-  it('routes install requests through Microsoft discovery without asking AI to choose a Package ID', async () => {
+  it('uses Gemini to understand install requests while Backend independently resolves Package IDs', async () => {
     await render();
 
     send('ติดตั้ง DBeaver Community Edition');
@@ -367,7 +506,7 @@ describe('App chat UI (T-202)', () => {
     fixture.detectChanges();
 
     expect(api.catalogCalls).toEqual(['DBeaver Community Edition']);
-    expect(api.calls).toHaveLength(0);
+    expect(api.calls.map((item) => item.message)).toEqual(['ติดตั้ง DBeaver Community Edition']);
     expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition');
     expect(fixture.nativeElement.textContent).toContain('DBeaver.DBeaver.Community');
     expect(fixture.nativeElement.textContent).toContain('DBeaverCorp.DBeaverEnterpriseEdition');
@@ -405,6 +544,82 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ยังไม่ใช่หลักฐานอนุญาตติดตั้ง');
     expect(fixture.nativeElement.textContent).toContain('installer_authenticode_signature_not_yet_verified');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
+  });
+
+  it('queues a verified real install only after exact TOTP approval', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    // Generic publisher trust does not depend on a per-package certificate pin or allowlist.
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.proposalCalls).toEqual([{
+      packageId: 'DBeaver.DBeaver.Community',
+      version: '25.3.0',
+      architecture: 'x64',
+    }]);
+    expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition');
+
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Exact-action approval button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.approvalChallengeCalls).toEqual([{ planId: 'f'.repeat(32), evidenceId: 'e'.repeat(32) }]);
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.softwareApprovalCalls).toEqual([{
+      planId: 'f'.repeat(32),
+      challengeId: 'c'.repeat(32),
+      code: '123456',
+    }]);
+    expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
+    expect(fixture.nativeElement.textContent).toContain('a'.repeat(32));
+    expect(api.jobStatusCalls).toEqual(['a'.repeat(32)]);
+    expect(fixture.nativeElement.textContent).toContain('ติดตั้งและตรวจสอบ Package ผ่านแล้ว');
   });
 
   it('blocks a WinGet manifest version that differs from the vendor official release', async () => {
@@ -735,21 +950,10 @@ describe('App chat UI (T-202)', () => {
       message: 'hello',
       language: 'en',
     });
-    request.flush({ reply: 'Mock reply' });
-    const planRequest = httpTestingController.expectOne('/api/plans');
-    expect(planRequest.request.method).toBe('POST');
-    expect(planRequest.request.body).toEqual({ request: 'hello', language: 'en' });
-    planRequest.flush({
-      request: 'hello',
-      interpretation: { category: 'general_task', goal: 'hello', target: null },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: null,
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
+    request.flush(validChatResponse('Mock reply'));
     fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Mock reply');
+    httpTestingController.expectNone('/api/plans');
     expect(fixture.nativeElement.textContent).toContain('Mock reply');
 
     const conversationId = sessionStorage.getItem('ai-agent-pc-automation.conversation-id')!;
@@ -779,36 +983,15 @@ describe('App chat UI (T-202)', () => {
     expect(thaiRequest.request.body).toMatchObject({ message: 'Thai request', language: 'th' });
     languageButton('EN').click();
     fixture.detectChanges();
-    thaiRequest.flush({ reply: 'Thai reply' });
-    const thaiPlanRequest = httpTestingController.expectOne('/api/plans');
-    expect(thaiPlanRequest.request.body).toEqual({ request: 'Thai request', language: 'th' });
-    thaiPlanRequest.flush({
-      request: 'Thai request',
-      interpretation: { category: 'general_task', goal: 'Thai request', target: null },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: null,
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
+    thaiRequest.flush(validChatResponse('Thai reply'));
     fixture.detectChanges();
+    httpTestingController.expectNone('/api/plans');
     send('English request');
     const englishRequest = httpTestingController.expectOne('/api/chat');
     expect(englishRequest.request.body).toMatchObject({ message: 'English request', language: 'en' });
-    englishRequest.flush({ reply: 'English reply' });
-    const englishPlanRequest = httpTestingController.expectOne('/api/plans');
-    expect(englishPlanRequest.request.body).toEqual({ request: 'English request', language: 'en' });
-    englishPlanRequest.flush({
-      request: 'English request',
-      interpretation: { category: 'general_task', goal: 'English request', target: null },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: null,
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
+    englishRequest.flush(validChatResponse('English reply'));
+    fixture.detectChanges();
+    httpTestingController.expectNone('/api/plans');
   });
 
   it('F-17/F-18: language switch updates the UI and document language', async () => {
@@ -916,39 +1099,383 @@ describe('App chat UI (T-202)', () => {
   });
 
 
+  it('refreshes readiness after a definitive release-authorization rejection without reservation recovery', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    api.approvalErrorStatus = 409;
+    api.approvalErrorDetail = 'A current one-use real-install release authorization for this exact package/version is required.';
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.readinessCalls).toBe(2);
+    expect(api.reservationRecoveryCalls).toEqual([]);
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('รีเฟรช Release Authorization');
+    expect(fixture.nativeElement.textContent).toContain('Release Authorization หมดอายุ');
+  });
+
+  it('recovers a committed reservation after an ambiguous confirmation failure', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    const reservationId = '12345678-1234-4678-9234-567812345678';
+    api.reservationRecoveryResponder = () => of({
+      reservation_id: reservationId,
+      state: 'QUEUED',
+      attempts: 0,
+      version: 1,
+      result_code: null,
+      lease_expires_at: null,
+    });
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    api.approvalErrorStatus = 500;
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.reservationRecoveryCalls).toEqual(['f'.repeat(32)]);
+    expect(api.jobStatusCalls).toContain(reservationId);
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
+    expect(api.jobStatusCalls).toEqual([reservationId]);
+    expect(fixture.nativeElement.textContent).not.toContain('งานอาจถูกบันทึกแล้ว');
+  });
+
+  it('clears a definitively missing proposal and offers installer preparation again', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = () => Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    prepare()?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.proposalCalls).toHaveLength(1);
+
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    api.approvalErrorStatus = 404;
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.reservationRecoveryCalls).toEqual([]);
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('ไม่พบแผนติดตั้งที่ยังใช้งานได้แล้ว');
+    expect(prepare()).not.toBeUndefined();
+
+    prepare()?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.proposalCalls).toHaveLength(2);
+  });
+
+  it('keeps reservation recovery visible when readiness is revoked mid-recovery', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    const recovery = new Subject<unknown>();
+    api.reservationRecoveryResponder = () => recovery;
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    api.approvalErrorStatus = 500;
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    codeInput.value = '123456';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.reservationRecoveryCalls).toHaveLength(1);
+    api.readiness.real_install_enabled = false;
+    api.readiness.real_install_release_package_id = null;
+    api.readiness.real_install_release_version = null;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('ตรวจสอบ Reservation อีกครั้ง');
+    expect(fixture.nativeElement.textContent).not.toContain('รีเฟรช Release Authorization');
+    recovery.error({ status: 404 });
+    await fixture.whenStable();
+    fixture.detectChanges();
+  });
+
+  it('restores TOTP approval after a definitive 403 rejection', async () => {
+    api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
+    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === '25.3.0');
+    if (!version) throw new Error('Exact version choice was not rendered');
+    version.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const requestApproval = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!requestApproval) throw new Error('Approval challenge button was not rendered');
+    requestApproval.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(codeInput).not.toBeNull();
+    api.approvalErrorStatus = 410;
+    codeInput.value = '000000';
+    codeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const expiredConfirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!expiredConfirm) throw new Error('Real install approval button was not rendered');
+    expiredConfirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('รหัสอนุมัติหมดอายุแล้ว');
+
+    const newChallenge = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ยืนยันตัวตนและขออนุมัติ'));
+    if (!newChallenge) throw new Error('New approval challenge action was not rendered');
+    newChallenge.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const freshCodeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    expect(freshCodeInput).not.toBeNull();
+
+    api.approvalErrorStatus = 403;
+    freshCodeInput.value = '000000';
+    freshCodeInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const confirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!confirm) throw new Error('Real install approval button was not rendered');
+    confirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.jobStatusCalls).toEqual([]);
+    expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('รหัส Authenticator ไม่ถูกต้องหรือหมดอายุ');
+
+    const retryInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
+    retryInput.value = '123456';
+    retryInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const retryConfirm = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('อนุมัติและเข้าคิวติดตั้งจริง'));
+    if (!retryConfirm) throw new Error('Approval retry button was not rendered');
+    retryConfirm.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.softwareApprovalCalls).toHaveLength(3);
+    expect(fixture.nativeElement.textContent).toContain('อนุมัติแล้วและเข้าคิวติดตั้งจริง');
+  });
+
 });
 
 
 describe('Structured Agent response (T-404)', () => {
-  it('renders the plan but never treats a chat response as dry-run approval', async () => {
+  it('shows the Gemini JSON response as escaped text and never treats it as approval', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    api.responder = () => of({
-      reply: 'Local preview',
-      provider: 'chatgpt',
-      provider_connected: false,
-      task_status: 'dry_run_completed',
-      plan: {
-        intent: { category: 'software_install', goal: 'Install Chrome', target: 'Google Chrome' },
-        language: 'th',
-        prerequisites: [
-          { id: 'software_target', order: 1, title: 'ระบุซอฟต์แวร์เป้าหมาย', reason: 'ทราบจากคำขอ', status: 'known' },
-        ],
-        steps: [
-          { order: 1, kind: 'present_plan', title: 'แสดงแผนงาน', detail: 'ตรวจสอบก่อนดำเนินการ' },
-        ],
-        approval_required: true,
-        execution_mode: 'dry_run',
-      },
-      tool_result: {
-        tool_id: 'software.install',
-        target: 'Google Chrome',
-        status: 'dry_run',
-        approval_required: true,
-        summary: 'Dry run only; no changes were made.',
-      },
-    });
+    api.responder = () => of({ reply: 'Hello <script>alert(1)</script>' });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useValue: api }],
@@ -956,78 +1483,48 @@ describe('Structured Agent response (T-404)', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
-    input.value = 'Prepare a plan for Google Chrome installation';
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'สวัสดี';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     const view = fixture.nativeElement as HTMLElement;
-    expect(view.textContent).toContain('แผนงาน');
-    expect(view.textContent).toContain('Install Chrome');
-    expect(view.textContent).toContain('สิ่งที่ต้องตรวจสอบ');
-    expect(view.textContent).toContain('ระบุซอฟต์แวร์เป้าหมาย');
-    expect(view.textContent).toContain('รอการตรวจสอบแผนและอนุมัติ');
-    expect(view.textContent).not.toContain('Dry run only; no changes were made.');
-    expect(view.textContent).not.toContain('ต้องได้รับอนุมัติก่อนดำเนินการจริง');
-    expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
+    expect(view.textContent).toContain('Hello <script>alert(1)</script>');
+    expect(view.querySelector('script')).toBeNull();
+    expect(view.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
+    expect(view.textContent).toContain('conversation.chat');
+    const log = view.querySelector('[role="log"]') as HTMLElement;
+    expect(log.textContent).not.toMatch(/อนุมัติ|ติดตั้งจริง/);
     fixture.destroy();
   });
-
-
-
-  it('submits a clarification and replaces the review with a new immutable plan', async () => {
+  it('renders Gemini clarification using the same universal response envelope', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    const originalPlanId = 'a'.repeat(32);
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'development_task', goal: message, target: 'Java' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: originalPlanId,
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'JDK', version: 'ยังไม่ได้ระบุ',
-          purpose: 'Java development kit', reason: 'ต้องระบุเวอร์ชัน',
-          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
-          dependencies: [], dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ',
-          status: 'NEEDS_CLARIFICATION',
-        }],
+    const contract = {
+      schema_version: '1.0' as const,
+      message: 'ต้องการทราบว่าจะพัฒนา .NET Web API หรือ Desktop Application?',
+      intent: 'environment.prepare' as const,
+      status: 'needs_clarification' as const,
+      data: {
+        packages: [{ name: '.NET SDK', version: 'LTS', purpose: 'Build .NET apps', suggested_source: 'Microsoft', suggested_method: 'WinGet after backend verification' }],
+        environment: { name: '.NET development', purpose: 'Prepare tools', development_type: 'Unspecified', framework_version: 'LTS' },
+        checks: [],
+        notes: [],
       },
-      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น' },
-      questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    });
-    api.refineResponder = (_planId, request, clarification) => of({
-      request,
-      interpretation: { category: 'development_task', goal: request, target: 'Java' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: 'b'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:05:00Z',
-        programs: [{
-          order: 1, program: 'JDK', version: '21 LTS',
-          purpose: 'Java development kit', reason: 'ระบุเวอร์ชันแล้ว',
-          source: 'ยังไม่ได้ตรวจสอบ', source_verification: 'NOT_CHECKED',
-          dependencies: [], dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null, impact: 'ยังไม่ได้ตรวจสอบ', status: 'PLANNED',
-        }],
-      },
-      tool_result: { status: 'dry_run', summary: 'จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลง' },
-      questions: ['ต้องการ IDE ใด?'],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-      refined_from_plan_id: originalPlanId,
-      clarification,
+      needs_clarification: true,
+      clarification: 'ต้องการพัฒนา .NET Web API หรือ Desktop Application?',
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: contract,
+      gemini_raw_json: JSON.stringify(contract),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
     });
     await TestBed.configureTestingModule({
       imports: [App],
@@ -1036,42 +1533,54 @@ describe('Structured Agent response (T-404)', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();
-    const composer = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    composer.value = 'เตรียมเครื่องพัฒนา Java';
-    composer.dispatchEvent(new Event('input'));
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'เตรียมเครื่องพัฒนา .NET';
+    input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const clarification = fixture.nativeElement.querySelector('.clarification-form textarea') as HTMLTextAreaElement;
-    expect(clarification).toBeTruthy();
-    clarification.value = 'JDK 21 LTS';
-    clarification.dispatchEvent(new Event('input'));
+    expect(fixture.nativeElement.textContent).toContain(contract.message);
+    expect(fixture.nativeElement.textContent).toContain('.NET SDK');
+    expect(fixture.nativeElement.textContent).toContain('Request ID');
+    expect(fixture.nativeElement.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
+    expect(fixture.nativeElement.textContent).not.toContain('Dry Run');
+    fixture.destroy();
+  });
+  it('shows a multi-package .NET environment proposal without starting installation', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const api = new FakeChatApi();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ChatApi, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
-    const refineButton = (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[])
-      .find((button) => button.textContent?.includes('ส่งคำตอบและปรับแผน'));
-    if (!refineButton) throw new Error('Plan refinement button was not rendered');
-    refineButton.click();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
+    input.value = 'เตรียมเครื่องพัฒนาด้วย .NET';
+    input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(api.refineCalls).toEqual([{
-      planId: originalPlanId,
-      request: 'เตรียมเครื่องพัฒนา Java',
-      clarification: 'JDK 21 LTS',
-      language: 'th',
-    }]);
-    expect(fixture.nativeElement.textContent).toContain('21 LTS');
-    expect(fixture.nativeElement.textContent).toContain('ข้อมูลที่เพิ่มจากคุณ');
-    expect(fixture.nativeElement.textContent).toContain('สร้างแผนฉบับใหม่แล้ว');
-    expect(fixture.nativeElement.querySelector('button[aria-label*="execute"]')).toBeNull();
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain('.NET SDK');
+    expect(view.textContent).toContain('Visual Studio Code');
+    expect(view.textContent).toContain('C# Dev Kit');
+    expect(view.textContent).toContain('VS Code Marketplace');
+    expect(view.textContent).toContain('WinGet if verified');
+    expect(view.textContent).toContain('ดู JSON ที่ Gemini ส่งกลับมา');
+    expect(api.catalogCalls).toEqual([]);
+    expect(api.proposalCalls).toEqual([]);
+    expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
   });
 
-  it('renders a Java dry-run plan, clarification questions, and no execution action', async () => {
+  it('does not render a Dry Run plan for multi-package Java setup', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -1083,30 +1592,11 @@ describe('Structured Agent response (T-404)', () => {
         steps: [{ order: 1, kind: 'present_plan', title: 'แสดงแผน', detail: 'ตรวจสอบรายการก่อน' }],
         prerequisites: [{ id: 'runtime_toolchain', order: 1, title: 'เลือก JDK', reason: 'ต้องระบุเวอร์ชัน', status: 'user_confirmation_needed' }],
       },
-      dry_run_plan: {
-        plan_id: 'a'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1,
-          program: 'JDK',
-          version: 'ยังไม่ได้ระบุ',
-          purpose: 'ชุดพัฒนา Java',
-          reason: 'จำเป็นสำหรับคอมไพล์และรัน Java',
-          source: 'ยังไม่ได้ตรวจสอบ',
-          source_verification: 'NOT_CHECKED',
-          dependencies: [],
-          dependencies_verification: 'NOT_CHECKED',
-          disk_space_estimate: null,
-          impact: 'ยังไม่ได้ตรวจสอบ',
-          status: 'NEEDS_CLARIFICATION',
-        }],
-      },
-      tool_result: { status: 'dry_run', summary: 'would install JDK; no changes were made' },
+      dry_run_plan: null,
+      tool_result: null,
       questions: ['ต้องการ JDK เวอร์ชันใด?', 'ต้องการ IDE ใด?'],
       approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      notice: 'PLAN_REVIEW_ONLY_NO_EXECUTION',
     });
     await TestBed.configureTestingModule({
       imports: [App],
@@ -1123,43 +1613,35 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
 
     const view = fixture.nativeElement as HTMLElement;
-    expect(view.textContent).toContain('คำขอที่ได้รับ');
-    expect(view.textContent).toContain('สิ่งที่ Agent เข้าใจ');
-    expect(view.textContent).toContain('JDK');
-    expect(view.textContent).toContain('ต้องการ JDK เวอร์ชันใด?');
-    expect(view.textContent).toContain('ยังไม่พร้อมอนุมัติ');
-    expect(view.textContent).not.toContain('จำลองเท่านั้น — ไม่มีการเปลี่ยนแปลงใด ๆ กับเครื่อง');
+    expect(view.textContent).toContain('ควรเริ่มจาก JDK และเลือก IDE ที่ต้องการ');
+    expect(view.textContent).not.toContain('DRY RUN ONLY');
+    expect(view.textContent).not.toContain('ผลการจำลอง');
     expect(view.querySelector('button[aria-label*="execute"]')).toBeNull();
     expect(view.querySelector('button[aria-label*="อนุมัติ"]')).toBeNull();
     fixture.destroy();
   });
 
-  it('Q28: unknown plan status is rejected and shown as a safe neutral plan error', async () => {
+  it('rejects an invalid Gemini status before displaying a model response', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: 'c'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'Chrome', version: 'Stable',
-          purpose: 'Browser', reason: 'User request', source: 'Not checked',
-          source_verification: 'NOT_CHECKED', dependencies: [],
-          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
-          impact: 'Not checked', status: 'UNRECOGNIZED_STATUS',
-        }],
-      },
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    } as unknown as PlanReviewResponse);
+    const invalid = {
+      schema_version: '1.0',
+      message: 'Install Chrome',
+      intent: 'software.install',
+      status: 'UNRECOGNIZED_STATUS',
+      data: { packages: [], environment: null, checks: [], notes: [] },
+      needs_clarification: false,
+      clarification: null,
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: invalid,
+      gemini_raw_json: JSON.stringify(invalid),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
+    });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useValue: api }],
@@ -1168,45 +1650,39 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    input.value = 'Prepare a plan for Chrome deployment';
+    input.value = 'ติดตั้ง Chrome';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Backend สร้างแผนตรวจสอบไม่ได้');
+    expect(fixture.nativeElement.querySelector('.gemini-json-details')).toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain('UNRECOGNIZED_STATUS');
-    expect(fixture.nativeElement.querySelector('.plan-review')).toBeNull();
+    expect(api.catalogCalls).toEqual([]);
     fixture.destroy();
   });
-
-  it('Q28: missing required program fields are rejected without breaking the chat UI', async () => {
+  it('rejects a Gemini package item missing required contract fields', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'software_install', goal: message, target: 'Chrome' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: 'd'.repeat(32),
-        mode: 'dry_run',
-        live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'Chrome', version: 'Stable',
-          purpose: 'Browser', reason: 'User request', source: 'Not checked',
-          source_verification: 'NOT_CHECKED',
-          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
-          impact: 'Not checked', status: 'PLANNED',
-        }],
-      },
-      tool_result: null,
-      questions: [],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
-    } as unknown as PlanReviewResponse);
+    const invalid = {
+      schema_version: '1.0',
+      message: 'Install Chrome',
+      intent: 'software.install',
+      status: 'ready',
+      data: { packages: [{ name: 'Chrome' }], environment: null, checks: [], notes: [] },
+      needs_clarification: false,
+      clarification: null,
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: invalid,
+      gemini_raw_json: JSON.stringify(invalid),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
+    });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ChatApi, useValue: api }],
@@ -1215,19 +1691,18 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
-    input.value = 'Prepare a plan for Chrome deployment';
+    input.value = 'ติดตั้ง Chrome';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Backend สร้างแผนตรวจสอบไม่ได้');
-    expect(fixture.nativeElement.querySelector('.plan-review')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.gemini-json-details')).toBeNull();
     expect(fixture.nativeElement.querySelector('textarea')).not.toBeNull();
+    expect(api.catalogCalls).toEqual([]);
     fixture.destroy();
   });
-
   it('Q30: controls have accessible names, labels, and non-positive tab order', async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -1262,7 +1737,7 @@ describe('Structured Agent response (T-404)', () => {
     fixture.destroy();
   });
 
-  it('Q31: no machine-changing control appears in empty, loading, error, or plan states', async () => {
+  it('Q31: no machine-changing control appears in empty, loading, error, or Gemini clarification states', async () => {
     localStorage.clear();
     sessionStorage.clear();
     const api = new FakeChatApi();
@@ -1284,7 +1759,6 @@ describe('Structured Agent response (T-404)', () => {
     };
 
     assertNoMachineAction();
-
     const pending = new Subject<unknown>();
     api.responder = () => pending;
     const input = fixture.nativeElement.querySelector('#message-input') as HTMLTextAreaElement;
@@ -1298,35 +1772,38 @@ describe('Structured Agent response (T-404)', () => {
     fixture.detectChanges();
     assertNoMachineAction();
 
-    api.responder = () => of({ reply: 'safe reply' });
-    api.planResponder = (message) => of({
-      request: message,
-      interpretation: { category: 'development_task', goal: message, target: 'Java' },
-      task_plan: { steps: [], prerequisites: [] },
-      dry_run_plan: {
-        plan_id: 'e'.repeat(32), mode: 'dry_run', live_checks_performed: false,
-        expires_at: '2026-11-07T03:00:00Z',
-        programs: [{
-          order: 1, program: 'JDK', version: 'Not specified', purpose: 'Java',
-          reason: 'Clarification needed', source: 'Not checked',
-          source_verification: 'NOT_CHECKED', dependencies: [],
-          dependencies_verification: 'NOT_CHECKED', disk_space_estimate: null,
-          impact: 'Not checked', status: 'NEEDS_CLARIFICATION',
-        }],
+    const contract: GeminiChatResponse['gemini_response'] = {
+      schema_version: '1.0',
+      message: 'ต้องระบุเวอร์ชัน .NET ก่อนจัดทำแผน',
+      intent: 'environment.prepare',
+      status: 'needs_clarification',
+      data: {
+        packages: [{ name: '.NET SDK', version: 'LTS', purpose: 'Build .NET applications', suggested_source: 'Microsoft', suggested_method: 'WinGet after backend verification' }],
+        environment: { name: '.NET development', purpose: 'Prepare tools', development_type: 'Unspecified', framework_version: 'LTS' },
+        checks: [],
+        notes: [],
       },
-      tool_result: { status: 'dry_run', summary: 'Dry run only.' },
-      questions: ['Which JDK version?'],
-      approved: false,
-      notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
+      needs_clarification: true,
+      clarification: 'ต้องการ .NET Web API หรือ Desktop Application?',
+    };
+    api.responder = () => of({
+      request_id: '123e4567-e89b-42d3-a456-426614174000',
+      gemini_response: contract,
+      gemini_raw_json: JSON.stringify(contract),
+      provider: 'gemini',
+      model: 'test-model',
+      provider_connected: true,
     });
-    input.value = 'Prepare Java';
+    input.value = 'เตรียมเครื่องพัฒนา .NET';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
     assertNoMachineAction();
-    expect(fixture.nativeElement.querySelector('.clarification-form')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('ต้องการ .NET Web API หรือ Desktop Application?');
+    expect(fixture.nativeElement.querySelector('.gemini-json-details')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.clarification-form')).toBeNull();
     fixture.destroy();
   });
 

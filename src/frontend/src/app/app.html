@@ -12,8 +12,8 @@
     <section class="rail-safety" aria-label="ขอบเขตความปลอดภัย">
       <span class="safety-symbol" aria-hidden="true">◇</span>
       <strong>ระบบป้องกันทำงานอยู่</strong>
-      <p>ทุกคำสั่งต้องผ่านการตรวจสอบและอนุมัติก่อนจำลองการทำงาน</p>
-      <span class="safety-mode">DRY RUN ONLY</span>
+      <p>การติดตั้งจริงต้องตรวจสอบแหล่งที่มาและ Publisher พร้อมยืนยัน TOTP ก่อน Worker ทำงานบนเครื่องนี้</p>
+      <span class="safety-mode">APPROVAL GATED</span>
     </section>
     <div class="rail-bottom"><span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span></div>
   </aside>
@@ -54,7 +54,7 @@
   } @else {
     @if (!authEnabled()) {
       <section class="chat-card auth-card" role="status">
-        {{ language() === 'th' ? 'Google Login ยังไม่ได้ตั้งค่า · โหมดดูแผนเท่านั้น ไม่สามารถอนุมัติ Dry Run ได้' : 'Google sign-in is not configured. Preview only; Dry Run approval is disabled.' }}
+        {{ language() === 'th' ? 'Google Login ยังไม่ได้ตั้งค่า · ดูข้อมูลได้ แต่ยังไม่สามารถอนุมัติหรือติดตั้งจริงได้' : 'Google sign-in is not configured. You can browse, but approvals and real installs are disabled.' }}
       </section>
     }
     @if (authEnabled()) {
@@ -136,39 +136,43 @@
             }
             <div class="message-bubble">
               <span class="message-label">{{ labelFor(entry.kind) }}</span>
-              @if ((entry.kind === 'error' || !entry.review?.dry_run_plan) && !entry.discovery) {
+              @if (entry.kind === 'user' || entry.kind === 'error' || entry.kind === 'agent') {
                 <p>{{ entry.kind === 'error' ? errorText(entry) : entry.text }}</p>
               }
-              @if (entry.response; as response) {
-                @if (!entry.review?.dry_run_plan) {
-                <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'รายละเอียดแผนงาน' : 'Task plan details'">
-                  <div class="detail-heading">{{ language() === 'th' ? 'แผนงาน' : 'Task plan' }}</div>
-                  <p class="detail-meta">{{ response.plan.intent.goal }}</p>
-                  <p class="detail-meta">{{ response.plan.intent.category }}@if (response.plan.intent.target) { · {{ response.plan.intent.target }} }</p>
-                  <ol class="plan-steps">
-                    @for (step of response.plan.steps; track step.order) {
-                      <li><strong>{{ step.title }}</strong><span>{{ step.detail }}</span></li>
-                    }
-                  </ol>
-                  <div class="detail-heading">{{ language() === 'th' ? 'สิ่งที่ต้องตรวจสอบ' : 'Prerequisites' }}</div>
-                  <ul class="prerequisite-list">
-                    @for (item of response.plan.prerequisites; track item.id) {
-                      <li>
-                        <strong>{{ item.title }}</strong>
-                        <span>{{ item.reason }}</span>
-                        <small>{{ prerequisiteLabel(item.status) }}</small>
-                      </li>
-                    }
-                  </ul>
-                  <div class="tool-preview">
-                    <strong>{{ language() === 'th' ? 'สถานะงาน: รอการตรวจสอบแผนและอนุมัติ' : 'Task status: awaiting plan review and approval' }}</strong>
-                    <span>{{ language() === 'th' ? 'ข้อความจากแชตไม่สามารถอนุมัติหรือเริ่ม Dry Run ได้ ต้องอนุมัติผ่านแผนตรวจสอบเท่านั้น' : 'A chat response cannot approve or start a dry run. Approval must use the plan-review control.' }}</span>
-                    @if (!response.provider_connected) {
-                      <small>{{ language() === 'th' ? 'ยังไม่เชื่อมต่อ AI Provider — ใช้การวางแผนในเครื่อง' : 'AI provider is not connected — using local planning' }}</small>
-                    }
-                  </div>
+              @if (entry.geminiResponse; as geminiResponse) {
+                <section class="agent-details" [attr.aria-label]="language() === 'th' ? 'ข้อเสนอจาก Gemini' : 'Gemini proposal'">
+                  <div class="detail-heading">{{ language() === 'th' ? 'ข้อเสนอจาก Gemini (ยังไม่ผ่านการตรวจสอบ)' : 'Gemini proposal (not yet verified)' }}</div>
+                  <p class="detail-meta">{{ geminiResponse.intent }} · {{ geminiResponse.status }}</p>
+                  @if (geminiResponse.needs_clarification && geminiResponse.clarification) {
+                    <p class="detail-meta"><strong>{{ language() === 'th' ? 'คำถามจาก Gemini' : 'Gemini clarification' }}:</strong> {{ geminiResponse.clarification }}</p>
+                  }
+                  @if (geminiResponse.data.environment; as environment) {
+                    <p class="detail-meta"><strong>{{ environment.name }}</strong> · {{ environment.purpose }}</p>
+                    @if (environment.development_type) { <p class="detail-meta">{{ environment.development_type }} · {{ environment.framework_version }}</p> }
+                  }
+                  @if (geminiResponse.data.packages.length > 0) {
+                    <ul class="prerequisite-list">
+                      @for (program of geminiResponse.data.packages; track $index) {
+                        <li>
+                          <strong>{{ program.name }} · {{ program.version }}</strong>
+                          <span>{{ program.purpose }}</span>
+                          <small>{{ language() === 'th' ? 'แหล่งที่มา/วิธีที่ Gemini เสนอ' : 'Gemini suggested source/method' }}: {{ program.suggested_source }} · {{ program.suggested_method }}</small>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (geminiResponse.data.checks.length > 0) {
+                    <div class="detail-heading">{{ language() === 'th' ? 'รายการตรวจสอบที่เสนอ' : 'Proposed checks' }}</div>
+                    <ul class="prerequisite-list">
+                      @for (check of geminiResponse.data.checks; track $index) { <li><span>{{ check }}</span></li> }
+                    </ul>
+                  }
+                  <p class="detail-meta">{{ language() === 'th' ? 'Request ID' : 'Request ID' }}: {{ entry.requestId }}</p>
                 </section>
-                }
+                <details class="agent-details gemini-json-details">
+                  <summary>{{ language() === 'th' ? 'ดู JSON ที่ Gemini ส่งกลับมา' : 'View JSON returned by Gemini' }}</summary>
+                  <pre class="gemini-json">{{ entry.geminiRawJson }}</pre>
+                </details>
               }
               @if (entry.review; as review) {
                 <section class="agent-details plan-review installer-card" [attr.aria-label]="language() === 'th' ? 'รายการซอฟต์แวร์และการจำลอง' : 'Software plan and dry run'">
@@ -188,6 +192,7 @@
                     }
                   </div>
 
+                  @if (review.dry_run_plan) {
                   <section class="execution-flow" [attr.aria-label]="language() === 'th' ? 'ลำดับการทำงาน Dry Run' : 'Dry Run workflow'">
                     <div class="execution-flow-heading">
                       <div>
@@ -273,6 +278,7 @@
                     <p class="installer-empty">{{ language() === 'th' ? 'ยังไม่มีรายการซอฟต์แวร์ที่พร้อมจำลอง' : 'No software item is ready to simulate.' }}</p>
                   }
 
+                  }
                   @if (review.questions.length) {
                     <div class="tool-preview installer-questions">
                       <strong>{{ language() === 'th' ? 'ต้องการข้อมูลเพิ่ม' : 'More information needed' }}</strong>
@@ -338,8 +344,8 @@
                     </div>
                   } @else {
                     <div class="tool-preview installer-actions installer-actions--blocked">
-                      <strong>{{ language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready to simulate' }}</strong>
-                      <span>{{ language() === 'th' ? 'กรุณาระบุข้อมูลที่จำเป็นก่อน' : 'Provide the required information first.' }}</span>
+                      <strong>{{ review.dry_run_plan?.tool_id === 'software.install' ? (language() === 'th' ? 'ติดตั้งจริงต้องใช้ WinGet Approval' : 'Real installs require WinGet approval') : (language() === 'th' ? 'ยังไม่พร้อมอนุมัติ' : 'Not ready to simulate') }}</strong>
+                      <span>{{ review.dry_run_plan?.tool_id === 'software.install' ? (language() === 'th' ? 'เส้นทาง Dry Run เดิมถูกปิดสำหรับ software.install แล้ว ต้องผ่านการตรวจสอบ Package, Publisher Trust และ TOTP ก่อนเข้าคิวติดตั้งจริง' : 'The legacy dry-run path is disabled for software.install. Package evidence, publisher trust, and TOTP are required before queuing a real install.') : (language() === 'th' ? 'กรุณาระบุข้อมูลที่จำเป็นก่อน' : 'Provide the required information first.') }}</span>
                     </div>
                   }
 
@@ -405,7 +411,7 @@
                 <section class="agent-details software-discovery-card" [attr.aria-label]="language() === 'th' ? 'ผลการค้นหาโปรแกรมจาก Microsoft Catalog' : 'Microsoft Catalog software discovery results'">
                   <div class="composer-footer">
                     <div>
-                      <p class="eyebrow">TRUSTED SOFTWARE DISCOVERY</p>
+                      <p class="eyebrow">BACKEND VERIFICATION</p>
                       <h3>{{ language() === 'th' ? 'ค้นหาจาก Microsoft WinGet Catalog' : 'Microsoft WinGet Catalog search' }}</h3>
                     </div>
                     <span class="status-pill installer-status--pending">
@@ -494,6 +500,99 @@
                         <small>{{ limitation }}</small>
                       }
                     </div>
+                  }
+                  @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
+                    @if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
+                      <section class="tool-preview installer-actions" aria-label="Real WinGet install">
+                        <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
+                        @if (discovery.readinessChecking) {
+                          <span role="status">{{ language() === 'th' ? 'กำลังตรวจสอบความพร้อมของเครื่องและ Publisher Trust…' : 'Checking Windows and publisher trust readiness…' }}</span>
+                        } @else if (discovery.readinessError) {
+                          <span class="installer-error" role="alert">{{ discovery.readinessError }}</span>
+                        } @else if (discovery.readiness && !discovery.readiness.platform_supported) {
+                          <span>{{ language() === 'th' ? 'การตรวจสอบ Authenticode และการติดตั้งจริงรองรับเฉพาะ Windows' : 'Authenticode verification and real installation require Windows.' }}</span>
+                        } @else if (discovery.readiness && (!discovery.readiness.authenticode_verification_available || !discovery.readiness.publisher_identity_policy_available || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH')) {
+                          <span>{{ language() === 'th' ? 'นโยบายตรวจสอบ Authenticode และ Publisher ของ Backend ยังไม่พร้อม จึงยังไม่อนุญาตให้เตรียมการติดตั้ง' : 'Backend Authenticode and publisher identity verification is not ready. Install preparation remains blocked.' }}</span>
+                        } @else if (discovery.readiness?.publisher_identity_policy_available && discovery.readiness.authenticode_verification_available && discovery.readiness.publisher_trust_mode === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' && !discovery.proposal) {
+                          <span>{{ language() === 'th' ? 'ระบบจะดาวน์โหลดไฟล์ชั่วคราว ตรวจ SHA-256 และ Authenticode แล้วลบไฟล์ชั่วคราวหลังสร้างข้อเสนอ' : 'The installer will be temporarily downloaded, SHA-256 and Authenticode checked, then the temporary file removed.' }}</span>
+                          <button class="send-button" type="button" [disabled]="planning()" (click)="prepareSoftwareInstall(entry.id)">
+                            {{ discovery.proposalStatus === 'preparing' ? (language() === 'th' ? 'กำลังตรวจสอบไฟล์…' : 'Verifying installer…') : (language() === 'th' ? 'ตรวจสอบไฟล์และเตรียม Approval' : 'Verify installer and prepare approval') }}
+                          </button>
+                        }
+                        @if (discovery.proposal) {
+                          <div class="program-review">
+                            <strong>{{ discovery.proposal.package_name }}</strong>
+                            <span>Package ID: {{ discovery.proposal.package_id }}</span>
+                            <span>Publisher: {{ discovery.proposal.publisher }}</span>
+                            <span>Version: {{ discovery.proposal.version }}</span>
+                            <span>{{ language() === 'th' ? 'ขอบเขต' : 'Scope' }}: {{ discovery.proposal.scope }}</span>
+                            <span>{{ language() === 'th' ? 'ข้อเสนอหมดอายุ' : 'Proposal expires' }}: {{ discovery.proposal.expires_at }}</span>
+                          </div>
+                          @if (discovery.proposalStatus === 'queued') {
+                            <div role="status">
+                              <strong>{{ language() === 'th' ? 'อนุมัติแล้วและเข้าคิวติดตั้งจริง' : 'Approved and queued for real installation' }}</strong>
+                              <span>Reservation: {{ discovery.reservationId }}</span>
+                              @if (discovery.jobStatusChecking) {
+                                <small role="status">{{ language() === 'th' ? 'กำลังอ่านสถานะ Worker…' : 'Reading worker status…' }}</small>
+                              }
+                              @if (discovery.jobStatus; as jobStatus) {
+                                <strong>{{ jobStatus.state === 'SUCCEEDED' ? (language() === 'th' ? 'ติดตั้งและตรวจสอบ Package ผ่านแล้ว' : 'Installed and exact package verification passed') : jobStatus.state === 'FAILED' ? (language() === 'th' ? 'การติดตั้งล้มเหลว' : 'Installation failed') : jobStatus.state === 'UNKNOWN' ? (language() === 'th' ? 'ผลติดตั้งยังไม่แน่ชัด ต้องตรวจสอบก่อนดำเนินการต่อ' : 'Install outcome is unknown and requires inspection') : jobStatus.state === 'REBOOT_REQUIRED' ? (language() === 'th' ? 'ต้องรีสตาร์ต Windows ก่อนตรวจสอบต่อ' : 'Windows restart is required before verification') : ('Worker: ' + jobStatus.state) }}</strong>
+                                <small>{{ language() === 'th' ? 'จำนวนครั้งที่ Worker เริ่มทำงาน' : 'Worker attempts' }}: {{ jobStatus.attempts }} · {{ language() === 'th' ? 'รหัสผลลัพธ์' : 'Result code' }}: {{ jobStatus.result_code ?? '—' }}</small>
+                              }
+                              @if (discovery.jobStatusError) {
+                                <span class="installer-error" role="alert">{{ discovery.jobStatusError }}</span>
+                              }
+                              <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="refreshSoftwareInstallStatus(entry.id)">
+                                {{ language() === 'th' ? 'รีเฟรชสถานะติดตั้ง' : 'Refresh install status' }}
+                              </button>
+                              <small>{{ language() === 'th' ? 'Worker ทำงานบนเครื่อง Windows นี้ ความสำเร็จจะรายงานเมื่อยืนยัน Package ID และ Version หลังติดตั้งได้เท่านั้น' : 'The worker runs on this Windows machine. Success is reported only after exact Package ID and Version verification.' }}</small>
+                            </div>
+                          } @else if (discovery.reservationRecoveryPending) {
+                            <small role="alert">{{ language() === 'th' ? 'ยังยืนยันไม่ได้ว่าคิวติดตั้งถูกบันทึกหรือไม่ ห้ามอนุมัติซ้ำจนกว่าจะตรวจสอบ Reservation สำเร็จ' : 'The committed install reservation is unresolved. Do not approve again until recovery succeeds.' }}</small>
+                            <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
+                              {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
+                            </button>
+                          } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true && discovery.readiness?.real_install_release_package_id === discovery.proposal?.package_id && discovery.readiness?.real_install_release_version === discovery.proposal?.version) {
+                            <div class="program-review" aria-label="Verified installer approval evidence">
+                              <strong>{{ language() === "th" ? "หลักฐานไฟล์ติดตั้งที่ตรวจสอบแล้ว" : "Verified installer evidence" }}</strong>
+                              <span>Package ID: {{ discovery.approvalChallenge.package_id }}</span>
+                              <span>Publisher: {{ discovery.approvalChallenge.publisher }}</span>
+                              <span>Version: {{ discovery.approvalChallenge.version }} · {{ discovery.approvalChallenge.architecture }}</span>
+                              <span>{{ language() === "th" ? "ขอบเขต" : "Scope" }}: {{ discovery.approvalChallenge.scope }} · {{ discovery.approvalChallenge.installer_type }}</span>
+                              <span>{{ language() === "th" ? "แหล่งไฟล์" : "Installer source" }}: {{ discovery.approvalChallenge.installer_url }}</span>
+                              <span>SHA-256: {{ discovery.approvalChallenge.installer_sha256 }}</span>
+                              <span>{{ language() === "th" ? "แหล่ง Manifest" : "Manifest source" }}: {{ discovery.approvalChallenge.manifest_source_url }}</span>
+                              <span>{{ language() === "th" ? "Fingerprint ผู้ลงนาม" : "Signer certificate SHA-256" }}: {{ discovery.approvalChallenge.signature_sha256 }}</span>
+                              <span>{{ language() === "th" ? "ผู้ลงนามที่ตรวจสอบแล้ว" : "Verified signer" }}: {{ discovery.approvalChallenge.signature_subject }}</span>
+                              @if (discovery.approvalChallenge.installer_silent_switch) {
+                                <span>{{ language() === "th" ? "คำสั่ง Silent จาก Manifest" : "Manifest silent switch" }}: {{ discovery.approvalChallenge.installer_silent_switch }}</span>
+                              }
+                            </div>
+                            <label [for]="'install-totp-' + entry.id">{{ language() === 'th' ? 'รหัส Authenticator 6 หลัก' : 'Six-digit authenticator code' }}</label>
+                            <input [id]="'install-totp-' + entry.id" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [value]="discovery.totpCode ?? ''" (input)="onSoftwareProposalTotpInput(entry.id, $event)" />
+                            <button class="send-button" type="button" [disabled]="planning() || (discovery.totpCode ?? '').length !== 6" (click)="confirmSoftwareInstall(entry.id)">
+                              {{ language() === 'th' ? 'อนุมัติและเข้าคิวติดตั้งจริง' : 'Approve and queue real install' }}
+                            </button>
+                          } @else if (!discovery.readiness?.real_install_enabled || discovery.readiness?.real_install_release_package_id !== discovery.proposal?.package_id || discovery.readiness?.real_install_release_version !== discovery.proposal?.version) {
+                            <small role="status">{{ language() === 'th' ? 'ยังไม่มี Release Authorization สำหรับ Package/Version นี้ ให้รัน scripts/authorize-real-install.ps1 จาก PowerShell แล้ว Restart Backend จากหน้าต่างเดียวกัน จากนั้นรีเฟรชสถานะ' : 'No active release authorization for this exact package/version. Run scripts/authorize-real-install.ps1 in PowerShell, restart the backend from that same window, then refresh readiness.' }}</small>
+                            <small>{{ language() === 'th' ? 'เป้าหมายที่อนุญาตอยู่ในระบบ: ' : 'Currently authorized target: ' }}{{ discovery.readiness?.real_install_release_package_id ?? '—' }} {{ discovery.readiness?.real_install_release_version ?? '' }}</small>
+                            <button class="send-button" type="button" [disabled]="discovery.readinessChecking" (click)="refreshSoftwareInstallReadiness(entry.id)">
+                              {{ language() === 'th' ? 'รีเฟรช Release Authorization' : 'Refresh release authorization' }}
+                            </button>
+                          } @else {
+                            <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">
+                              {{ language() === 'th' ? 'ยืนยันตัวตนและขออนุมัติ' : 'Verify identity and request approval' }}
+                            </button>
+                            @if (!authenticatorEnrolled()) {
+                              <small>{{ language() === 'th' ? 'ต้องลงทะเบียน Authenticator ก่อนอนุมัติ' : 'Authenticator enrollment is required before approval.' }}</small>
+                            }
+                          }
+                        }
+                        @if (discovery.proposalError) {
+                          <span class="installer-error" role="alert">{{ discovery.proposalError }}</span>
+                        }
+                      </section>
+                    }
                   }
                   @if (discovery.status === 'error' && discovery.error) {
                     <p class="installer-error" role="alert">{{ discovery.error }}</p>

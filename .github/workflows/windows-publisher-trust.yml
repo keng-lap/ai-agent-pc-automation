@@ -1,0 +1,53 @@
+name: Windows Generic Publisher Trust
+
+on:
+  pull_request:
+    paths:
+      - "src/backend/agent_backend/software_discovery.py"
+      - "src/backend/agent_backend/software_staging.py"
+      - "src/backend/agent_backend/software_evidence.py"
+      - "src/backend/agent_backend/software_approval.py"
+      - "tests/backend/test_software_discovery.py"
+      - "tests/backend/test_software_staging.py"
+      - "tests/backend/test_software_evidence.py"
+      - "scripts/acceptance/P6-609-C/**"
+      - "src/backend/pyproject.toml"
+      - ".github/workflows/windows-publisher-trust.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/backend/agent_backend/software_discovery.py"
+      - "src/backend/agent_backend/software_staging.py"
+      - "src/backend/agent_backend/software_evidence.py"
+      - "src/backend/agent_backend/software_approval.py"
+      - "tests/backend/test_software_discovery.py"
+      - "tests/backend/test_software_staging.py"
+      - "tests/backend/test_software_evidence.py"
+      - "scripts/acceptance/P6-609-C/**"
+      - "src/backend/pyproject.toml"
+      - ".github/workflows/windows-publisher-trust.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-generic-publisher-trust:
+    runs-on: windows-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create project virtual environment
+        run: python -m venv .venv
+      - name: Install backend and test dependencies
+        run: .\.venv\Scripts\python.exe -m pip install -e "src/backend[dev]"
+      - name: Verify two unrelated signed publishers without installing
+        shell: powershell
+        run: .\scripts\acceptance\P6-609-C\verify_generic_publishers.ps1

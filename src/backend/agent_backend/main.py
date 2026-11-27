@@ -7,12 +7,14 @@ import shlex
 import sys
 import threading
 import traceback
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .approval_reservation_store import SQLiteApprovalReservationStore
 from .auth_api import build_auth_services, require_session
 from .auth_api import router as auth_router
 from .chat import router as chat_router
@@ -23,6 +25,8 @@ from .policy import validate_policy_configuration
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
+from .software_install_api import router as software_install_router
+from .software_install_worker import SoftwareInstallWorker
 
 
 def enforce_single_worker(*, environ=None, argv=None) -> None:
@@ -81,14 +85,81 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.auth_services = auth_services
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
+    application.state.real_install_enabled = settings.real_install_enabled
+    application.state.real_install_release_authorization = settings.real_install_release_authorization
     application.state.job_store_lock = threading.Lock()
+    application.state.approval_reservation_store = None
+    application.state.approval_reservation_store_lock = threading.Lock()
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
+    application.include_router(software_install_router, dependencies=[Depends(require_session)])
     application.include_router(software_approval_router, dependencies=[Depends(require_session)])
     application.include_router(jobs_router)
+
+    application.state.install_worker_stop = threading.Event()
+    application.state.install_worker_thread = None
+
+    @application.on_event("startup")
+    def start_local_install_worker() -> None:
+        # Reconcile stale jobs on Windows even while live execution is disabled.
+        # This path never claims queued work or starts WinGet.
+        if os.name != "nt":
+            return
+        try:
+            store = application.state.approval_reservation_store
+            if store is None:
+                with application.state.approval_reservation_store_lock:
+                    store = application.state.approval_reservation_store
+                    if store is None:
+                        store = SQLiteApprovalReservationStore(settings.job_store_path)
+                        application.state.approval_reservation_store = store
+            store.reconcile_expired_install_leases()
+            if not settings.real_install_enabled:
+                return
+            worker = SoftwareInstallWorker(
+                store,
+                work_root=Path(settings.job_store_path).parent / "winget-work",
+                stop_event=application.state.install_worker_stop,
+                release_authorization=settings.real_install_release_authorization,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Local software install worker could not start.")
+            return
+
+        stop = application.state.install_worker_stop
+
+        def run_worker() -> None:
+            while not stop.is_set():
+                try:
+                    job = worker.run_once()
+                    if job is None:
+                        stop.wait(2)
+                except Exception:
+                    # Storage faults must not crash the HTTP server. A claimed
+                    # job will age to UNKNOWN and is never auto-retried.
+                    logging.getLogger(__name__).exception("Local software install worker stopped a queue cycle.")
+                    stop.wait(5)
+
+        thread = threading.Thread(
+            target=run_worker,
+            name="local-approved-winget-worker",
+            daemon=True,
+        )
+        application.state.install_worker_thread = thread
+        thread.start()
+
+    @application.on_event("shutdown")
+    def stop_local_install_worker() -> None:
+        application.state.install_worker_stop.set()
+        thread = application.state.install_worker_thread
+        if thread is not None:
+            # Shutdown is not complete until the worker has observed the stop
+            # signal and the contained WinGet process has exited.
+            thread.join()
+
     return application
 
 

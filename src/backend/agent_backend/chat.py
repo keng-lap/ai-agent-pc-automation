@@ -7,12 +7,13 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException
 from google.genai import types
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from agent_backend.conversation_contract import UniversalConversationResponse
 from agent_backend.providers import gemini
 
 router = APIRouter()
@@ -177,16 +178,55 @@ def chat(payload: ChatRequest) -> dict[str, object]:
             types.Content(role="user", parts=[types.Part.from_text(text=payload.message)])
         )
         try:
-            reply = gemini.generate_reply(contents)
+            raw_response = gemini.generate_universal_response(
+                contents,
+                UniversalConversationResponse,
+            )
+            if len(raw_response) > 16000:
+                raise gemini.GeminiProviderError("invalid_response")
+            try:
+                structured = UniversalConversationResponse.model_validate_json(raw_response)
+            except ValidationError:
+                # One bounded correction attempt. The malformed output remains untrusted
+                # and is never returned as a valid plan or saved into conversation history.
+                repair_contents = [
+                    *contents,
+                    types.Content(role="model", parts=[types.Part.from_text(text=raw_response[:12000])]),
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(
+                            text=(
+                                "Your previous response did not satisfy the required JSON schema. "
+                                "Return one corrected JSON object only, matching the same schema. "
+                                "Do not add commentary or extra fields."
+                            )
+                        )],
+                    ),
+                ]
+                raw_response = gemini.generate_universal_response(
+                    repair_contents,
+                    UniversalConversationResponse,
+                )
+                if len(raw_response) > 16000:
+                    raise gemini.GeminiProviderError("invalid_response")
+                try:
+                    structured = UniversalConversationResponse.model_validate_json(raw_response)
+                except ValidationError:
+                    raise gemini.GeminiProviderError("invalid_response") from None
         except gemini.GeminiProviderError as exc:
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
         except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
-        conversation.turns.append((payload.message, reply))
+
+        request_id = str(uuid4())
+        normalized = structured.model_dump(mode="json")
+        conversation.turns.append((payload.message, structured.message))
         del conversation.turns[:-MAX_CONTEXT_PAIRS]
         conversation.last_access = time.monotonic()
     return {
-        "reply": reply,
+        "request_id": request_id,
+        "gemini_response": normalized,
+        "gemini_raw_json": raw_response,
         "provider": "gemini",
         "model": gemini.MODEL_NAME,
         "provider_connected": True,

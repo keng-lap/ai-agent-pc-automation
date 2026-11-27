@@ -213,3 +213,15 @@ def test_install_arguments_reject_prepared_manifest_from_another_approval(tmp_pa
 
     with pytest.raises(WinGetAdapterError, match="exact approval"):
         build_install_arguments(binding, forged, work_root=tmp_path)
+
+
+def test_exe_manifest_includes_backend_verified_silent_switch():
+    binding, _ = _binding(installer_type="exe", installer_url="https://downloads.contoso.example/sample-2.4.1.exe", installer_silent_switch="/S")
+    documents = build_local_manifest_documents(binding)
+    installer = yaml.safe_load(documents["Contoso.Sample.installer.yaml"])
+    assert installer["Installers"][0]["InstallerSwitches"] == {"Silent": "/S"}
+
+
+def test_exe_evidence_without_manifest_silent_switch_is_rejected():
+    with pytest.raises(ValidationError, match="silent switch"):
+        _binding(installer_type="exe", installer_url="https://downloads.contoso.example/sample-2.4.1.exe", installer_silent_switch=None)

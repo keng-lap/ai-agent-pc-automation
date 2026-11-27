@@ -2,8 +2,8 @@
 
 This module reads the Microsoft-owned winget-pkgs repository over its fixed
 GitHub API origin. It never invokes WinGet, downloads installers, or executes
-package code. A manifest match is only a CONDITIONAL candidate until publisher
-ownership and the downloaded installer's Authenticode signature are verified.
+package code. A manifest match is only a CONDITIONAL candidate until the downloaded installer's
+Authenticode chain and signer identity are verified against the manifest Publisher.
 """
 
 from __future__ import annotations
@@ -12,7 +12,9 @@ import base64
 import hashlib
 import ipaddress
 import json
+import os
 import re
+import time
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -55,6 +57,7 @@ class InstallerCandidate(BaseModel):
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
     installer_type: str
+    installer_silent_switch: str | None = None
     installer_url: str
     installer_domain: str
     installer_sha256: str
@@ -66,6 +69,7 @@ class InstallerCandidate(BaseModel):
     official_version: str | None = None
     official_release_url: str | None = None
     official_asset_sha256: str | None = None
+    official_asset_id: int | None = None
     status: Literal["CONDITIONAL"] = "CONDITIONAL"
     limitations: tuple[str, ...] = (
         "publisher_official_source_not_yet_cross_checked",
@@ -82,6 +86,7 @@ class PublisherVerification(BaseModel):
     official_version: str | None = None
     official_release_url: str | None = None
     official_asset_sha256: str | None = None
+    official_asset_id: int | None = None
 
 
 class DBeaverGitHubReleaseVerifier:
@@ -167,6 +172,8 @@ class DBeaverGitHubReleaseVerifier:
                 and isinstance(asset.get("browser_download_url"), str)
                 and asset.get("browser_download_url")
                 == self.ASSET_PREFIX + official_version + "/" + expected_asset_name
+                and type(asset.get("id")) is int
+                and asset.get("id") > 0
             ]
             if len(matching_assets) != 1:
                 return PublisherVerification(
@@ -179,6 +186,7 @@ class DBeaverGitHubReleaseVerifier:
                 return PublisherVerification(status="UNAVAILABLE")
             official_sha256 = digest.split(":", 1)[1].lower()
             asset_url = matching_assets[0]["browser_download_url"]
+            asset_id = matching_assets[0]["id"]
             if (
                 version != official_version
                 or installer_url != asset_url
@@ -189,12 +197,14 @@ class DBeaverGitHubReleaseVerifier:
                     official_version=official_version,
                     official_release_url=release_url,
                     official_asset_sha256=official_sha256,
+                    official_asset_id=asset_id,
                 )
             return PublisherVerification(
                 status="VERIFIED",
                 official_version=official_version,
                 official_release_url=release_url,
                 official_asset_sha256=official_sha256,
+                official_asset_id=asset_id,
             )
         except (requests.RequestException, ValueError, TypeError, KeyError):
             return PublisherVerification(status="UNAVAILABLE")
@@ -305,7 +315,8 @@ class WinGetManifestRepository:
             ):
                 raise DiscoveryUnavailable("manifest content response was invalid")
             try:
-                raw = base64.b64decode(content_response["content"], validate=True)
+                encoded_content = "".join(content_response["content"].split())
+                raw = base64.b64decode(encoded_content, validate=True)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     raise DiscoveryUnavailable("manifest document exceeded its size limit")
                 if any(isinstance(token, (AliasToken, AnchorToken)) for token in yaml.scan(raw)):
@@ -316,6 +327,13 @@ class WinGetManifestRepository:
             if not isinstance(document, dict):
                 raise DiscoveryUnavailable("manifest document must be a YAML mapping")
             documents.append((item["name"], raw, document))
+
+        # This exact-action proposal approves one Package ID/version only.
+        # Do not allow WinGet to add undeclared-by-the-approval dependency installs.
+        if any(document.get("Dependencies") for _, _, document in documents):
+            raise DiscoveryUnavailable(
+                "package manifests with additional package dependencies are not eligible for exact single-package approval"
+            )
 
         package_docs = [
             document
@@ -415,17 +433,26 @@ class WinGetManifestRepository:
             for item in installers
             if isinstance(item, dict)
             and item.get("Architecture") == architecture
-            and isinstance(item.get("Scope"), str)
-            and item["Scope"].lower() == "user"
+            and isinstance(item.get("Scope", installer_doc.get("Scope")), str)
+            and item.get("Scope", installer_doc.get("Scope")).lower() == "user"
         ]
         if len(matching) != 1:
             raise DiscoveryUnavailable(
                 "manifest must contain exactly one installer for the requested architecture and user scope"
             )
         installer = matching[0]
+        if installer.get("Dependencies"):
+            raise DiscoveryUnavailable(
+                "selected installer dependencies are not eligible for exact single-package approval"
+            )
         installer_url = installer.get("InstallerUrl")
         installer_hash = installer.get("InstallerSha256")
         installer_type = installer.get("InstallerType") or installer_doc.get("InstallerType")
+        switches = installer.get("InstallerSwitches")
+        silent_switch = switches.get("Silent") if isinstance(switches, dict) else None
+        if not silent_switch:
+            root_switches = installer_doc.get("InstallerSwitches")
+            silent_switch = root_switches.get("Silent") if isinstance(root_switches, dict) else None
         domain = _validate_installer_url(installer_url)
         if not isinstance(installer_hash, str) or not SHA256_PATTERN.fullmatch(installer_hash):
             raise DiscoveryUnavailable("installer SHA-256 was missing or invalid")
@@ -465,7 +492,8 @@ class WinGetManifestRepository:
             version=version,
             architecture=architecture,
             scope="user",
-            installer_type=installer_type,
+            installer_type=installer_type.strip().casefold(),
+            installer_silent_switch=silent_switch,
             installer_url=installer_url,
             installer_domain=domain,
             installer_sha256=installer_hash.lower(),
@@ -477,6 +505,7 @@ class WinGetManifestRepository:
             official_version=publisher_check.official_version,
             official_release_url=publisher_check.official_release_url,
             official_asset_sha256=publisher_check.official_asset_sha256,
+            official_asset_id=publisher_check.official_asset_id,
             limitations=tuple(limitations),
         )
         response_status = {
@@ -494,43 +523,58 @@ class WinGetManifestRepository:
         if not path.startswith("/repos/microsoft/winget-pkgs/"):
             raise DiscoveryUnavailable("request path is outside the approved source")
         url = GITHUB_API_ORIGIN + path
-        response = None
-        try:
-            response = self._http_get(
-                url,
-                params=params,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": USER_AGENT,
-                },
-                timeout=(3.05, 10),
-                allow_redirects=False,
-                stream=True,
-            )
-            if response.status_code == 404:
-                raise DiscoveryNotFound("package or manifest was not found in the approved source")
-            if response.status_code != 200:
-                raise DiscoveryUnavailable("approved package source returned an unsuccessful response")
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in response.iter_content(chunk_size=65536):
-                if not chunk:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": USER_AGENT,
+        }
+        # Actions provides a short-lived, read-only token. Using it avoids
+        # anonymous API rate limits on shared Windows runners.
+        github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if github_token:
+            headers["Authorization"] = f"Bearer {github_token}"
+
+        for attempt in range(3):
+            response = None
+            try:
+                response = self._http_get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=(3.05, 10),
+                    allow_redirects=False,
+                    stream=True,
+                )
+                if response.status_code == 404:
+                    raise DiscoveryNotFound("package or manifest was not found in the approved source")
+                if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                    time.sleep(0.25 * (attempt + 1))
                     continue
-                total += len(chunk)
-                if total > MAX_RESPONSE_BYTES:
-                    raise DiscoveryUnavailable("approved source response exceeded its size limit")
-                chunks.append(chunk)
-            return json.loads(b"".join(chunks))
-        except (DiscoveryNotFound, DiscoveryUnavailable):
-            raise
-        except (requests.RequestException, ValueError, TypeError):
-            raise DiscoveryUnavailable("approved package source could not be read safely") from None
-        finally:
-            if response is not None:
-                close = getattr(response, "close", None)
-                if callable(close):
-                    close()
+                if response.status_code != 200:
+                    raise DiscoveryUnavailable("approved package source returned an unsuccessful response")
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in response.iter_content(chunk_size=65536):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > MAX_RESPONSE_BYTES:
+                        raise DiscoveryUnavailable("approved source response exceeded its size limit")
+                    chunks.append(chunk)
+                return json.loads(b"".join(chunks))
+            except (DiscoveryNotFound, DiscoveryUnavailable):
+                raise
+            except (requests.RequestException, ValueError, TypeError):
+                if attempt < 2:
+                    time.sleep(0.25 * (attempt + 1))
+                    continue
+                raise DiscoveryUnavailable("approved package source could not be read safely") from None
+            finally:
+                if response is not None:
+                    close = getattr(response, "close", None)
+                    if callable(close):
+                        close()
+        raise DiscoveryUnavailable("approved package source could not be read safely")
 
 
 def _manifest_package_path(package_id: str) -> str:

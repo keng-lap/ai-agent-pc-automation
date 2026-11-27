@@ -1,7 +1,21 @@
 import { DOCUMENT } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
-import { AuthSession, ChatApi, ConversationHistory, PlanReviewResponse, SoftwareCatalogSearchResponse, SoftwareDiscoveryResponse, UiLanguage } from './chat/chat-api';
+import {
+  AuthSession,
+  ChatApi,
+  ConversationHistory,
+  GeminiChatResponse,
+  PlanReviewResponse,
+  SoftwareApprovalChallenge,
+  SoftwareApprovalResult,
+  SoftwareCatalogSearchResponse,
+  SoftwareDiscoveryResponse,
+  SoftwareInstallJobStatus,
+  SoftwareInstallProposalResponse,
+  SoftwareInstallReadiness,
+  UiLanguage,
+} from './chat/chat-api';
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 import { JobMonitorComponent } from './job-monitor/job-monitor';
@@ -9,25 +23,25 @@ import { JobMonitorComponent } from './job-monitor/job-monitor';
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11' | 'MSG-12' | 'MSG-13' | 'MSG-14' | 'MSG-15' | 'MSG-16' | 'MSG-17' | 'MSG-18' | 'MSG-19' | 'MSG-20' | 'MSG-21' | 'MSG-22' | 'MSG-23';
 
-interface StructuredAgentResponse {
-  task_status: 'planned' | 'dry_run_completed';
-  provider_connected: false;
-  plan: {
-    intent: { category: string; goal: string; target: string | null };
-    prerequisites: Array<{ id: string; order: number; title: string; reason: string; status: string }>;
-    steps: Array<{ order: number; title: string; detail: string }>;
-    execution_mode: 'dry_run';
-    approval_required: true;
-  };
-  tool_result: { tool_id: string; target: string; status: 'dry_run'; approval_required: true; summary: string } | null;
-}
-
 interface SoftwareDiscoveryUiState {
   query: string;
   status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'verifying_manifest' | 'conditional' | 'source_mismatch' | 'source_check_unavailable' | 'error';
   catalog?: SoftwareCatalogSearchResponse;
   packageId?: string;
   result?: SoftwareDiscoveryResponse;
+  readiness?: SoftwareInstallReadiness;
+  readinessChecking?: boolean;
+  readinessError?: string;
+  proposal?: SoftwareInstallProposalResponse;
+  proposalStatus?: 'preparing' | 'ready' | 'challenge' | 'queued' | 'error';
+  proposalError?: string;
+  approvalChallenge?: SoftwareApprovalChallenge;
+  totpCode?: string;
+  reservationId?: string;
+  reservationRecoveryPending?: boolean;
+  jobStatus?: SoftwareInstallJobStatus;
+  jobStatusChecking?: boolean;
+  jobStatusError?: string;
   error?: string;
 }
 
@@ -35,12 +49,14 @@ interface ChatEntry {
   id: number;
   kind: EntryKind;
   text: string;
+  requestId?: string;
+  geminiRawJson?: string;
+  geminiResponse?: GeminiChatResponse['gemini_response'];
   discovery?: SoftwareDiscoveryUiState;
   errorCode?: ErrorCode;
   diagnosticType?: string;
   diagnosticStage?: string;
   diagnosticTrace?: string;
-  response?: StructuredAgentResponse;
   review?: PlanReviewResponse;
   planError?: boolean;
   clarificationDraft?: string;
@@ -57,12 +73,6 @@ const CONVERSATION_STORAGE_KEY = 'ai-agent-pc-automation.conversation-id';
 const MAX_MESSAGE_LENGTH = 2000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function extractSoftwareInstallQuery(message: string): string | null {
-  const match = message.match(/^\s*(?:(?:ช่วย\s*)?ติดตั้ง|(?:please\s+)?install)\s+(.+?)\s*$/i);
-  const query = match?.[1]?.trim();
-  return query && query.length >= 2 ? query : null;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -130,6 +140,81 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && candidate['limitations'].every((item) => typeof item === 'string');
 }
 
+function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallReadiness {
+  return isRecord(value)
+    && typeof value['platform_supported'] === 'boolean'
+    && typeof value['authenticode_verification_available'] === 'boolean'
+    && typeof value['publisher_identity_policy_available'] === 'boolean'
+    && typeof value['publisher_trust_configured'] === 'boolean'
+    && value['publisher_trust_mode'] === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+    && typeof value['real_install_enabled'] === 'boolean'
+    && (value['real_install_release_package_id'] === null || typeof value['real_install_release_package_id'] === 'string')
+    && (value['real_install_release_version'] === null || typeof value['real_install_release_version'] === 'string')
+    && (value['real_install_release_expires_at'] === null || typeof value['real_install_release_expires_at'] === 'string')
+    && typeof value['package_allowlist_enabled'] === 'boolean'
+    && Array.isArray(value['supported_package_ids'])
+    && value['supported_package_ids'].every((item) => typeof item === 'string')
+    && value['notice'] === 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+}
+
+function isSoftwareInstallProposalResponse(value: unknown): value is SoftwareInstallProposalResponse {
+  return isRecord(value)
+    && typeof value['plan_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['plan_id'])
+    && typeof value['evidence_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['evidence_id'])
+    && typeof value['package_id'] === 'string'
+    && typeof value['package_name'] === 'string'
+    && typeof value['publisher'] === 'string'
+    && typeof value['version'] === 'string'
+    && ['x86', 'x64', 'arm64'].includes(String(value['architecture']))
+    && value['scope'] === 'user'
+    && typeof value['expires_at'] === 'string'
+    && value['notice'] === 'VERIFIED_PROPOSAL_REQUIRES_EXACT_ACTION_TOTP';
+}
+
+function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalChallenge {
+  return isRecord(value)
+    && typeof value['plan_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['plan_id'])
+    && typeof value['challenge_id'] === 'string'
+    && /^[0-9a-f]{32}$/.test(value['challenge_id'])
+    && typeof value['package_id'] === 'string'
+    && typeof value['version'] === 'string'
+    && (value['installer_silent_switch'] === null || typeof value['installer_silent_switch'] === 'string')
+    && typeof value['installer_url'] === 'string'
+    && typeof value['installer_sha256'] === 'string'
+    && typeof value['signature_subject'] === 'string'
+    && typeof value['signature_sha256'] === 'string'
+    && typeof value['manifest_source_url'] === 'string'
+    && typeof value['approval_digest'] === 'string'
+    && /^[0-9a-f]{64}$/.test(value['approval_digest'])
+    && value['notice'] === 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
+}
+
+function isSoftwareInstallJobStatus(value: unknown): value is SoftwareInstallJobStatus {
+  return isRecord(value)
+    && typeof value['reservation_id'] === 'string'
+    && (/^[0-9a-f]{32}$/.test(value['reservation_id']) || UUID_PATTERN.test(value['reservation_id']))
+    && ['QUEUED', 'CLAIMED', 'RUNNING', 'VERIFYING', 'SUCCEEDED', 'FAILED', 'REBOOT_REQUIRED', 'UNKNOWN'].includes(String(value['state']))
+    && Number.isInteger(value['attempts'])
+    && Number.isInteger(value['version'])
+    && (value['result_code'] === null || typeof value['result_code'] === 'string')
+    && (value['lease_expires_at'] === null || typeof value['lease_expires_at'] === 'string');
+}
+
+function isSoftwareApprovalResult(value: unknown): value is SoftwareApprovalResult {
+  return isRecord(value)
+    && value['approved'] === true
+    && typeof value['plan_id'] === 'string'
+    && typeof value['approval_digest'] === 'string'
+    && typeof value['package_id'] === 'string'
+    && typeof value['version'] === 'string'
+    && typeof value['reservation_id'] === 'string'
+    && value['execution_state'] === 'QUEUED'
+    && value['notice'] === 'APPROVED_QUEUED_NOT_YET_EXECUTED';
+}
+
 function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
   if (!isRecord(value) || typeof value['request'] !== 'string') return false;
   const interpretation = value['interpretation'];
@@ -158,7 +243,7 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
     ))
     || !Array.isArray(value['questions'])
     || !value['questions'].every((question) => typeof question === 'string')
-    || value['notice'] !== 'DRY_RUN_ONLY_NO_CHANGES_MADE'
+    || !['DRY_RUN_ONLY_NO_CHANGES_MADE', 'PLAN_REVIEW_ONLY_NO_EXECUTION'].includes(String(value['notice']))
     || typeof value['approved'] !== 'boolean'
   ) return false;
 
@@ -167,6 +252,7 @@ function isPlanReviewResponse(value: unknown): value is PlanReviewResponse {
     if (
       !isRecord(dryRunPlan)
       || typeof dryRunPlan['plan_id'] !== 'string'
+      || !['software.install', 'software.remove'].includes(String(dryRunPlan['tool_id']))
       || dryRunPlan['mode'] !== 'dry_run'
       || dryRunPlan['live_checks_performed'] !== false
       || typeof dryRunPlan['expires_at'] !== 'string'
@@ -524,51 +610,6 @@ export class App implements AfterViewChecked {
     ]);
     this.draft.set('');
 
-    const softwareQuery = extractSoftwareInstallQuery(message);
-    if (softwareQuery) {
-      const discoveryEntryId = ++this.nextEntryId;
-      this.entries.update((entries) => [
-        ...entries,
-        {
-          id: discoveryEntryId,
-          kind: 'agent',
-          text: '',
-          discovery: { query: softwareQuery, status: 'searching' },
-        },
-      ]);
-      this.planning.set(true);
-      defer(() => this.chatApi.searchSoftwareCatalog(softwareQuery))
-        .pipe(
-          timeout({ first: REQUEST_TIMEOUT_MS }),
-          take(1),
-          finalize(() => this.planning.set(false)),
-        )
-        .subscribe({
-          next: (result: unknown) => {
-            this.entries.update((entries) => entries.map((entry) => {
-              if (entry.id !== discoveryEntryId || !entry.discovery) return entry;
-              if (!isSoftwareCatalogSearchResponse(result)) {
-                return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Catalog ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid catalog response.' } };
-              }
-              return {
-                ...entry,
-                discovery: {
-                  ...entry.discovery,
-                  status: result.candidates.length ? 'matches' : 'not_found',
-                  catalog: result,
-                },
-              };
-            }));
-          },
-          error: () => this.entries.update((entries) => entries.map((entry) => (
-            entry.id === discoveryEntryId && entry.discovery
-              ? { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'ค้นหา Microsoft Catalog ไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend แล้วลองใหม่' : 'Microsoft Catalog search failed. Check the backend connection and try again.' } }
-              : entry
-          ))),
-        });
-      return;
-    }
-
     this.pending.set(true);
     defer(() => this.chatApi.sendMessage(message, languageAtSend, conversationId))
       .pipe(
@@ -577,13 +618,39 @@ export class App implements AfterViewChecked {
         finalize(() => this.pending.set(false)),
       )
       .subscribe({
-        next: (response: unknown) => {
-          if (this.isReply(response)) {
-            const entryId = ++this.nextEntryId;
-            this.entries.update((entries) => [
-              ...entries,
-              { id: entryId, kind: 'agent', text: '', response: this.isStructuredAgentResponse(response) ? response : undefined },
-            ]);
+        next: (value: unknown) => {
+          if (!this.isGeminiChatResponse(value)) {
+            this.appendError('MSG-08');
+            return;
+          }
+          const contract = value.gemini_response;
+          const entryId = ++this.nextEntryId;
+          this.entries.update((entries) => [
+            ...entries,
+            {
+              id: entryId,
+              kind: 'agent',
+              text: contract.message,
+              requestId: value.request_id,
+              geminiRawJson: value.gemini_raw_json,
+              geminiResponse: contract,
+            },
+          ]);
+
+          // Gemini suggestions are untrusted. Only the backend catalog and
+          // evidence pipeline may resolve and verify a software artifact.
+          if (contract.intent === 'software.install' && contract.status === 'ready'
+            && contract.data.packages.length === 1) {
+            const query = contract.data.packages[0].name;
+            this.entries.update((entries) => entries.map((entry) => entry.id === entryId
+              ? { ...entry, discovery: { query, status: 'searching' } }
+              : entry));
+            this.beginSoftwareCatalogSearch(entryId, query);
+            return;
+          }
+
+          // Removal remains on its existing preview-only backend path.
+          if (contract.intent === 'software.remove' && contract.status === 'ready') {
             this.planning.set(true);
             defer(() => this.chatApi.createPlan(message, languageAtSend))
               .pipe(
@@ -594,19 +661,13 @@ export class App implements AfterViewChecked {
               .subscribe({
                 next: (review: PlanReviewResponse) => this.entries.update((entries) =>
                   entries.map((entry) => entry.id === entryId
-                    ? (isPlanReviewResponse(review)
-                      ? { ...entry, text: review.dry_run_plan ? '' : response.reply, review }
-                      : { ...entry, text: response.reply, planError: true })
+                    ? isPlanReviewResponse(review) ? { ...entry, review } : { ...entry, planError: true }
                     : entry),
                 ),
-                error: () => this.entries.update((entries) =>
-                  entries.map((entry) => entry.id === entryId
-                    ? { ...entry, text: response.reply, planError: true }
-                    : entry),
-                ),
+                error: () => this.entries.update((entries) => entries.map((entry) =>
+                  entry.id === entryId ? { ...entry, planError: true } : entry,
+                )),
               });
-          } else {
-            this.appendError('MSG-08');
           }
         },
         error: (error: unknown) => this.appendError(
@@ -619,6 +680,36 @@ export class App implements AfterViewChecked {
       });
   }
 
+  private beginSoftwareCatalogSearch(entryId: number, query: string): void {
+    this.planning.set(true);
+    defer(() => this.chatApi.searchSoftwareCatalog(query))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (result: unknown) => this.entries.update((entries) => entries.map((entry) => {
+          if (entry.id !== entryId || !entry.discovery) return entry;
+          if (!isSoftwareCatalogSearchResponse(result)) {
+            return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Catalog ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid catalog response.' } };
+          }
+          return {
+            ...entry,
+            discovery: {
+              ...entry.discovery,
+              status: result.candidates.length ? 'matches' : 'not_found',
+              catalog: result,
+            },
+          };
+        })),
+        error: () => this.entries.update((entries) => entries.map((entry) => (
+          entry.id === entryId && entry.discovery
+            ? { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'ค้นหา Microsoft Catalog ไม่สำเร็จ ตรวจสอบการเชื่อมต่อ Backend แล้วลองใหม่' : 'Microsoft Catalog search failed. Check the backend connection and try again.' } }
+            : entry
+        ))),
+      });
+  }
 
   protected selectSoftwarePackage(entryId: number, packageId: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
@@ -660,11 +751,14 @@ export class App implements AfterViewChecked {
   }
 
   private updateSoftwareDiscovery(entryId: number, value: unknown): void {
+    let loadReadiness = false;
     this.entries.update((entries) => entries.map((entry) => {
       if (entry.id !== entryId || !entry.discovery) return entry;
       if (!isSoftwareDiscoveryResponse(value)) {
         return { ...entry, discovery: { ...entry.discovery, status: 'error', error: this.language() === 'th' ? 'Backend ส่งข้อมูล Manifest ในรูปแบบที่ไม่ถูกต้อง' : 'The backend returned an invalid manifest response.' } };
       }
+      loadReadiness = value.status === 'CONDITIONAL'
+        && ['VERIFIED', 'NOT_CHECKED'].includes(value.candidate?.publisher_verification ?? '');
       return {
         ...entry,
         discovery: {
@@ -678,9 +772,331 @@ export class App implements AfterViewChecked {
                 : 'conditional',
           result: value,
           packageId: value.package_id,
+          readiness: undefined,
+          readinessChecking: loadReadiness,
+          readinessError: undefined,
+          proposal: undefined,
+          proposalStatus: undefined,
+          proposalError: undefined,
+          approvalChallenge: undefined,
+          totpCode: '',
+          reservationId: undefined,
         },
       };
     }));
+    if (loadReadiness) this.loadSoftwareInstallReadiness(entryId);
+  }
+
+  protected refreshSoftwareInstallReadiness(entryId: number): void {
+    this.entries.update((entries) => entries.map((entry) => (
+      entry.id === entryId && entry.discovery
+        ? { ...entry, discovery: { ...entry.discovery, proposal: undefined, proposalStatus: undefined, proposalError: undefined, approvalChallenge: undefined, totpCode: "", reservationId: undefined } }
+        : entry
+    )));
+    this.loadSoftwareInstallReadiness(entryId);
+  }
+
+  private loadSoftwareInstallReadiness(entryId: number): void {
+    defer(() => this.chatApi.getSoftwareInstallReadiness())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((entry) => (
+          entry.id === entryId && entry.discovery
+            ? isSoftwareInstallReadiness(value)
+              ? { ...entry, discovery: { ...entry.discovery, readiness: value, readinessChecking: false, readinessError: undefined } }
+              : { ...entry, discovery: { ...entry.discovery, readinessChecking: false, readinessError: 'Invalid install readiness response.' } }
+            : entry
+        ))),
+        error: () => this.entries.update((entries) => entries.map((entry) => (
+          entry.id === entryId && entry.discovery
+            ? { ...entry, discovery: { ...entry.discovery, readinessChecking: false, readinessError: this.language() === 'th' ? 'ตรวจสอบความพร้อมติดตั้งจริงไม่ได้' : 'Could not check real-install readiness.' } }
+            : entry
+        ))),
+      });
+  }
+
+  protected prepareSoftwareInstall(entryId: number): void {
+    const entry = this.entries().find((item) => item.id === entryId);
+    const discovery = entry?.discovery;
+    const candidate = discovery?.result?.candidate;
+    if (
+      !discovery
+      || !candidate
+      || discovery.readiness?.platform_supported !== true
+      || discovery.readiness.authenticode_verification_available !== true
+      || discovery.readiness.publisher_identity_policy_available !== true
+      || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+      || !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
+      || this.planning()
+    ) return;
+
+    this.planning.set(true);
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, proposalStatus: 'preparing', proposalError: undefined } }
+      : item));
+    defer(() => this.chatApi.createSoftwareInstallProposal(
+      candidate.package_id,
+      candidate.version,
+      candidate.architecture,
+    ))
+      .pipe(
+        timeout({ first: REQUEST_TIMEOUT_MS }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (
+            !isSoftwareInstallProposalResponse(value)
+            || value.package_id !== candidate.package_id
+            || value.version !== candidate.version
+          ) {
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'Backend ส่งข้อมูลข้อเสนอการติดตั้งไม่ตรงกับ Package ที่เลือก' : 'The install proposal did not match the selected package.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, proposal: value, proposalStatus: 'ready', proposalError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ตรวจสอบไฟล์ติดตั้งหรือลายเซ็น Publisher ไม่ผ่าน ระบบจึงไม่อนุญาตให้อนุมัติ' : 'Installer verification or publisher trust failed. Approval remains blocked.' } }
+            : item
+        ))),
+      });
+  }
+
+  protected requestSoftwareApproval(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const proposal = discovery?.proposal;
+    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== proposal.package_id || discovery.readiness.real_install_release_version !== proposal.version || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
+
+    this.planning.set(true);
+    defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (!isSoftwareApprovalChallenge(value) || value.plan_id !== proposal.plan_id || value.package_id !== proposal.package_id || value.version !== proposal.version) {
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ข้อมูล Approval ไม่ตรงกับข้อเสนอที่ตรวจสอบไว้' : 'Approval challenge did not match the verified proposal.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, approvalChallenge: value, proposalStatus: 'challenge', proposalError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, proposalError: this.language() === 'th' ? 'สร้างคำขอ TOTP ไม่สำเร็จ กรุณาตรวจสอบการเข้าสู่ระบบและ Authenticator' : 'Could not create the TOTP challenge. Check sign-in and authenticator enrollment.' } }
+            : item
+        ))),
+      });
+  }
+
+  protected onSoftwareProposalTotpInput(entryId: number, event: Event): void {
+    const value = (event.target as HTMLInputElement).value.replace(/[^0-9]/g, '').slice(0, 6);
+    this.entries.update((entries) => entries.map((entry) => (
+      entry.id === entryId && entry.discovery
+        ? { ...entry, discovery: { ...entry.discovery, totpCode: value, proposalError: undefined } }
+        : entry
+    )));
+  }
+
+  protected confirmSoftwareInstall(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const proposal = discovery?.proposal;
+    const challenge = discovery?.approvalChallenge;
+    const code = discovery?.totpCode ?? '';
+    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
+
+    this.planning.set(true);
+    defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        finalize(() => this.planning.set(false)),
+      )
+      .subscribe({
+        next: (value: unknown) => {
+          let reservationId: string | undefined;
+          this.entries.update((entries) => entries.map((item) => {
+            if (item.id !== entryId || !item.discovery) return item;
+            if (
+              !isSoftwareApprovalResult(value)
+              || value.plan_id !== proposal.plan_id
+              || value.package_id !== proposal.package_id
+              || value.version !== proposal.version
+            ) {
+              return { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ผลอนุมัติไม่ตรงกับ Package ที่เลือก จึงไม่แสดงว่าสำเร็จ' : 'Approval result did not match the selected package.' } };
+            }
+            reservationId = value.reservation_id;
+            return { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, totpCode: '', proposalError: undefined, jobStatusChecking: true } };
+          }));
+          if (reservationId) this.loadSoftwareInstallJobStatus(entryId, reservationId);
+        },
+        error: (error: unknown) => {
+          if (isRecord(error) && error['status'] === 410) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'รหัสอนุมัติหมดอายุแล้ว กรุณาสร้างคำขออนุมัติใหม่'
+                      : 'The approval challenge expired. Create a new approval challenge and try again.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          if (isRecord(error) && error['status'] === 404) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    proposal: undefined,
+                    proposalStatus: undefined,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'ไม่พบแผนติดตั้งที่ยังใช้งานได้แล้ว กรุณาตรวจสอบไฟล์และเตรียม Approval ใหม่'
+                      : 'The install proposal is no longer available. Verify the installer and prepare a new approval.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          const releaseAuthorizationRejected = isRecord(error)
+            && error['status'] === 409
+            && isRecord(error['error'])
+            && typeof error['error']['detail'] === 'string'
+            && error['error']['detail'].toLowerCase().includes('release authorization');
+          if (releaseAuthorizationRejected) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    approvalChallenge: undefined,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'Release Authorization หมดอายุหรือไม่ตรงกับ Package/Version กรุณาตั้งค่าใหม่แล้วรีเฟรช'
+                      : 'The release authorization expired or does not match this package/version. Refresh authorization and try again.',
+                  },
+                }
+                : item
+            )));
+            this.loadSoftwareInstallReadiness(entryId);
+            return;
+          }
+          if (isRecord(error) && error['status'] === 403) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? {
+                  ...item,
+                  discovery: {
+                    ...item.discovery,
+                    reservationRecoveryPending: false,
+                    jobStatusChecking: false,
+                    totpCode: '',
+                    proposalError: this.language() === 'th'
+                      ? 'รหัส Authenticator ไม่ถูกต้องหรือหมดอายุ กรุณากรอกรหัสใหม่แล้วลองอนุมัติอีกครั้ง'
+                      : 'The authenticator code was rejected or expired. Enter a new code and try approval again.',
+                  },
+                }
+                : item
+            )));
+            return;
+          }
+          this.recoverSoftwareInstallReservation(entryId, proposal.plan_id);
+        },
+      });
+  }
+
+  protected retrySoftwareInstallReservation(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const planId = discovery?.proposal?.plan_id;
+    if (!planId || discovery?.jobStatusChecking) return;
+    this.recoverSoftwareInstallReservation(entryId, planId);
+  }
+
+  private recoverSoftwareInstallReservation(entryId: number, planId: string): void {
+    this.entries.update((entries) => entries.map((item) => (
+      item.id === entryId && item.discovery
+        ? { ...item, discovery: { ...item.discovery, reservationRecoveryPending: true, jobStatusChecking: true, totpCode: '' } }
+        : item
+    )));
+    defer(() => this.chatApi.getSoftwareInstallJobForPlan(planId))
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => {
+          if (!isSoftwareInstallJobStatus(value)) {
+            this.entries.update((entries) => entries.map((item) => (
+              item.id === entryId && item.discovery
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'ข้อมูล Reservation ที่กู้คืนไม่ถูกต้อง กรุณาลองตรวจสอบซ้ำก่อนอนุมัติใหม่'  : 'Recovered install receipt was invalid. Check install jobs before retrying.' } }
+                : item
+            )));
+            return;
+          }
+          this.entries.update((entries) => entries.map((item) => (
+            item.id === entryId && item.discovery
+              ? { ...item, discovery: { ...item.discovery, proposalStatus: 'queued', reservationId: value.reservation_id, jobStatus: value, jobStatusChecking: false, reservationRecoveryPending: false, totpCode: '', approvalChallenge: undefined, proposalError: undefined } }
+              : item
+          )));
+          this.loadSoftwareInstallJobStatus(entryId, value.reservation_id);
+        },
+        error: (error: unknown) => {
+          const notFound = typeof error === 'object' && error !== null
+            && 'status' in error && (error as { status?: number }).status === 404;
+          this.entries.update((entries) => entries.map((item) => (
+            item.id === entryId && item.discovery
+              ? notFound
+                ? { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: false, approvalChallenge: undefined, proposalError: this.language() === 'th' ? 'ไม่พบ Reservation ที่บันทึกไว้ กรุณาขอการอนุมัติใหม่' : 'No reservation was found. Request a new approval to continue.' } }
+                : { ...item, discovery: { ...item.discovery, totpCode: '', jobStatusChecking: false, reservationRecoveryPending: true, proposalError: this.language() === 'th' ? 'การยืนยันคิวถูกขัดจังหวะ งานอาจถูกบันทึกแล้ว กรุณากดตรวจสอบ Reservation ซ้ำก่อนอนุมัติใหม่' : 'Queue confirmation was interrupted. The job may already be committed; check its status before attempting approval again.' } }
+              : item
+          )));
+        },
+      });
+  }
+  protected refreshSoftwareInstallStatus(entryId: number): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    if (!discovery?.reservationId || discovery.jobStatusChecking) return;
+    this.loadSoftwareInstallJobStatus(entryId, discovery.reservationId);
+  }
+
+  private loadSoftwareInstallJobStatus(entryId: number, reservationId: string): void {
+    this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+      ? { ...item, discovery: { ...item.discovery, jobStatusChecking: true, jobStatusError: undefined } }
+      : item));
+    defer(() => this.chatApi.getSoftwareInstallJobStatus(reservationId))
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (value: unknown) => this.entries.update((entries) => entries.map((item) => {
+          if (item.id !== entryId || !item.discovery) return item;
+          if (!isSoftwareInstallJobStatus(value) || value.reservation_id !== reservationId) {
+            return { ...item, discovery: { ...item.discovery, jobStatusChecking: false, jobStatusError: this.language() === 'th' ? 'สถานะงานติดตั้งไม่ถูกต้อง' : 'Install job status response was invalid.' } };
+          }
+          return { ...item, discovery: { ...item.discovery, jobStatus: value, jobStatusChecking: false, jobStatusError: undefined } };
+        })),
+        error: () => this.entries.update((entries) => entries.map((item) => (
+          item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, jobStatusChecking: false, jobStatusError: this.language() === 'th' ? 'อ่านสถานะงานติดตั้งไม่ได้' : 'Could not read install job status.' } }
+            : item
+        ))),
+      });
   }
 
   private setSoftwareDiscoveryError(entryId: number): void {
@@ -698,6 +1114,7 @@ export class App implements AfterViewChecked {
       && this.authenticatorEnrolled()
       && this.authenticatorStorageAvailable()
       && review.dry_run_plan
+      && review.dry_run_plan.tool_id !== 'software.install'
       && !review.approved
       && review.questions.length === 0
       && review.dry_run_plan.programs.length > 0
@@ -877,13 +1294,6 @@ export class App implements AfterViewChecked {
       });
   }
 
-  protected taskStatusLabel(status: StructuredAgentResponse['task_status']): string {
-    if (this.language() === 'th') {
-      return status === 'dry_run_completed' ? 'จำลองเสร็จแล้ว' : 'วางแผนแล้ว';
-    }
-    return status === 'dry_run_completed' ? 'Dry run completed' : 'Planned';
-  }
-
   protected programStatusLabel(status: string): string {
     const labels: Record<UiLanguage, Record<string, string>> = {
       th: {
@@ -1046,18 +1456,74 @@ export class App implements AfterViewChecked {
     );
   }
 
-  private isStructuredAgentResponse(value: unknown): value is { reply: string } & StructuredAgentResponse {
-    if (typeof value !== 'object' || value === null) return false;
-    const item = value as Record<string, unknown>;
-    return typeof item['task_status'] === 'string'
-      && typeof item['plan'] === 'object' && item['plan'] !== null
-      && Array.isArray((item['plan'] as Record<string, unknown>)['steps'])
-      && Array.isArray((item['plan'] as Record<string, unknown>)['prerequisites']);
-  }
+  private isGeminiChatResponse(value: unknown): value is GeminiChatResponse {
+    if (!isRecord(value)
+      || typeof value['request_id'] !== 'string'
+      || !UUID_PATTERN.test(value['request_id'])
+      || typeof value['gemini_raw_json'] !== 'string'
+      || value['gemini_raw_json'].length > 16000
+      || value['provider'] !== 'gemini'
+      || typeof value['model'] !== 'string'
+      || value['provider_connected'] !== true
+      || !isRecord(value['gemini_response'])) return false;
 
-  private isReply(value: unknown): value is { reply: string } {
-    return typeof value === 'object' && value !== null && 'reply' in value
-      && typeof (value as { reply: unknown }).reply === 'string';
+    const response = value['gemini_response'];
+    const intents = [
+      'conversation.chat', 'system.help', 'software.install',
+      'software.install_multiple', 'software.remove',
+      'environment.prepare', 'environment.inspect',
+    ];
+    const statuses = ['completed', 'ready', 'needs_clarification', 'unsupported'];
+    if (response['schema_version'] !== '1.0'
+      || typeof response['message'] !== 'string'
+      || !intents.includes(String(response['intent']))
+      || !statuses.includes(String(response['status']))
+      || typeof response['needs_clarification'] !== 'boolean'
+      || !(typeof response['clarification'] === 'string' || response['clarification'] === null)
+      || !isRecord(response['data'])) return false;
+
+    const data = response['data'];
+    if (!Array.isArray(data['packages']) || !Array.isArray(data['checks'])
+      || !Array.isArray(data['notes'])
+      || !(isRecord(data['environment']) || data['environment'] === null)) return false;
+    if (!data['packages'].every((item) => isRecord(item)
+      && typeof item['name'] === 'string'
+      && typeof item['version'] === 'string'
+      && typeof item['purpose'] === 'string'
+      && typeof item['suggested_source'] === 'string'
+      && typeof item['suggested_method'] === 'string')) return false;
+    if (!data['checks'].every((item) => typeof item === 'string')
+      || !data['notes'].every((item) => typeof item === 'string')) return false;
+    if (data['environment'] !== null) {
+      const environment = data['environment'] as Record<string, unknown>;
+      if (typeof environment['name'] !== 'string'
+        || typeof environment['purpose'] !== 'string'
+        || typeof environment['development_type'] !== 'string'
+        || typeof environment['framework_version'] !== 'string') return false;
+    }
+    const packageCount = data['packages'].length;
+    const intent = String(response['intent']);
+    if (intent === 'software.install' && packageCount !== 1) return false;
+    if (intent === 'software.install_multiple' && packageCount < 2) return false;
+    if (intent === 'environment.prepare' && data['environment'] === null) return false;
+    if (intent === 'environment.inspect' && data['checks'].length < 1) return false;
+    if (intent === 'software.remove' && packageCount !== 1) return false;
+    if (['conversation.chat', 'system.help'].includes(intent)
+      && (packageCount !== 0 || data['environment'] !== null || data['checks'].length !== 0)) return false;
+    if (response['needs_clarification'] === true
+      && (response['status'] !== 'needs_clarification' || !response['clarification'])) return false;
+    if (response['needs_clarification'] === false
+      && (response['status'] === 'needs_clarification' || response['clarification'] !== null)) return false;
+
+    try {
+      const raw = JSON.parse(value['gemini_raw_json']) as unknown;
+      return isRecord(raw)
+        && raw['schema_version'] === response['schema_version']
+        && raw['message'] === response['message']
+        && raw['intent'] === response['intent'];
+    } catch {
+      return false;
+    }
   }
 
   private getStatus(error: unknown): number | undefined {

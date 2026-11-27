@@ -30,13 +30,15 @@ def request_path(url):
 
 
 class FakeSource:
-    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False, official_version=VERSION):
+    def __init__(self, *, bad_scope=False, bad_hash=False, bad_url=False, official_version=VERSION, wrap_base64=False):
         self.calls = []
         self.official_version = official_version
+        self.wrap_base64 = wrap_base64
         installer = {
             "Architecture": "x64",
             "Scope": "user" if not bad_scope else "machine",
             "InstallerType": "exe",
+            "InstallerSwitches": {"Silent": "/S"},
             "InstallerUrl": f"https://github.com/dbeaver/dbeaver/releases/download/{VERSION}/dbeaver-ce-{VERSION}-windows-x86_64.exe",
             "InstallerSha256": "b" * 64,
         }
@@ -80,6 +82,7 @@ class FakeSource:
                 "tag_name": self.official_version,
                 "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{self.official_version}",
                 "assets": [{
+                    "id": 12345,
                     "name": official_asset,
                     "browser_download_url": f"https://github.com/dbeaver/dbeaver/releases/download/{self.official_version}/{official_asset}",
                     "digest": "sha256:" + ("b" * 64 if self.official_version == VERSION else "c" * 64),
@@ -98,10 +101,13 @@ class FakeSource:
             filename = path.rsplit("/", 1)[-1]
             document = self.documents[filename]
             raw = json.dumps(document).encode()
-            payload = {
-                "encoding": "base64",
-                "content": base64.b64encode(raw).decode(),
-            }
+            encoded = base64.b64encode(raw).decode()
+            if self.wrap_base64:
+                encoded = "\n".join(
+                    encoded[index:index + 60]
+                    for index in range(0, len(encoded), 60)
+                )
+            payload = {"encoding": "base64", "content": encoded}
         return FakeResponse(payload)
 
 
@@ -120,6 +126,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert result.candidate.installer_sha256 == "b" * 64
     assert result.candidate.publisher_verification == "VERIFIED"
     assert result.candidate.official_version == VERSION
+    assert result.candidate.official_asset_id == 12345
     assert "publisher_official_source_not_yet_cross_checked" not in result.candidate.limitations
     assert "installer_authenticode_signature_not_yet_verified" in result.candidate.limitations
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
@@ -128,6 +135,33 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
         "/contents/manifests/d/DBeaver/DBeaver/Community" in call[0]
         for call in source.calls
     )
+
+
+
+def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():
+    source = FakeSource()
+    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc["Scope"] = "user"
+    del installer_doc["Installers"][0]["Scope"]
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.scope == "user"
+
+
+
+def test_discovery_accepts_whitespace_wrapped_github_base64_manifest_content():
+    source = FakeSource(wrap_base64=True)
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.package_id == PACKAGE_ID
 
 
 def test_discovery_blocks_manifest_when_official_release_is_newer():
@@ -171,6 +205,50 @@ def test_discovery_requires_explicit_version_and_never_guesses_latest():
 )
 def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
     with pytest.raises(DiscoveryUnavailable):
+        WinGetManifestRepository(http_get=source.get).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+
+def test_discovery_inherits_root_level_silent_switch_for_selected_installer():
+    source = FakeSource()
+    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc["InstallerSwitches"] = {"Silent": "/S"}
+    del installer_doc["Installers"][0]["InstallerSwitches"]
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+    assert result.candidate is not None
+    assert result.candidate.installer_silent_switch == "/S"
+
+
+def test_discovery_rejects_selected_installer_dependencies_not_in_exact_approval():
+    source = FakeSource()
+    source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Installers"][0]["Dependencies"] = {
+        "PackageDependencies": [{"PackageIdentifier": "Microsoft.VCRedist.2015+.x64"}]
+    }
+
+    with pytest.raises(DiscoveryUnavailable, match="selected installer dependencies"):
+        WinGetManifestRepository(http_get=source.get).discover(
+            package_id=PACKAGE_ID,
+            version=VERSION,
+            architecture="x64",
+        )
+
+
+def test_discovery_rejects_package_dependencies_not_in_exact_approval():
+    source = FakeSource()
+    source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Dependencies"] = {
+        "PackageDependencies": [{
+            "PackageIdentifier": "Microsoft.VCRedist.2015+.x64",
+        }]
+    }
+
+    with pytest.raises(DiscoveryUnavailable, match="package dependencies"):
         WinGetManifestRepository(http_get=source.get).discover(
             package_id=PACKAGE_ID,
             version=VERSION,
@@ -252,4 +330,36 @@ def test_repository_requests_are_pinned_to_one_commit_and_fixed_origin():
     assert any(
         call[0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/latest"
         for call in source.calls
+    )
+
+
+
+
+def test_manifest_source_retries_transient_server_errors_and_uses_actions_token(monkeypatch):
+    source = FakeSource()
+    attempts = 0
+
+    def flaky_get(url, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return FakeResponse({}, status_code=503)
+        return source.get(url, **kwargs)
+
+    monkeypatch.setenv("GITHUB_TOKEN", "read-only-actions-token")
+    result = WinGetManifestRepository(http_get=flaky_get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.candidate is not None
+    assert attempts > len(source.calls)
+    manifest_calls = [
+        call for call in source.calls if "/repos/microsoft/winget-pkgs/" in call[0]
+    ]
+    assert manifest_calls
+    assert all(
+        call[1]["headers"]["Authorization"] == "Bearer read-only-actions-token"
+        for call in manifest_calls
     )
