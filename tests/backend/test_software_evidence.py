@@ -23,15 +23,15 @@ def make_registry(*, clock=lambda: NOW) -> SoftwareEvidenceRegistry:
 
 def candidate() -> InstallerCandidate:
     return InstallerCandidate(
-        package_id="DBeaver.DBeaver.Community",
-        package_name="DBeaver Community Edition",
-        publisher="DBeaver Corp",
+        package_id="Acme.Editor",
+        package_name="Acme Editor",
+        publisher="Acme Inc",
         version="26.2.4",
         architecture="x64",
         scope="user",
         installer_type="exe",
         installer_silent_switch="/S",
-        installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver-ce-26.2.4-windows-x86_64.exe",
+        installer_url="https://github.com/acme/editor/releases/download/26.2.4/acme-editor-26.2.4-windows-x86_64.exe",
         installer_domain="github.com",
         installer_sha256="a" * 64,
         manifest_sha256="b" * 64,
@@ -40,7 +40,7 @@ def candidate() -> InstallerCandidate:
         checked_at=NOW.isoformat(),
         publisher_verification="VERIFIED",
         official_version="26.2.4",
-        official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
+        official_release_url="https://github.com/acme/editor/releases/tag/26.2.4",
         official_asset_sha256="a" * 64,
         official_asset_id=12345,
         limitations=("installer_authenticode_signature_not_yet_verified",),
@@ -49,16 +49,16 @@ def candidate() -> InstallerCandidate:
 
 def staged(**overrides) -> StagedInstaller:
     values = {
-        "package_id": "DBeaver.DBeaver.Community",
+        "package_id": "Acme.Editor",
         "version": "26.2.4",
         "architecture": "x64",
         "file_path": "C:/staging/installer.exe",
         "file_size": 1234,
         "sha256": "a" * 64,
         "authenticode_valid": True,
-        "signature_subject": "CN=DBeaver Corporation",
+        "signature_subject": "CN=Acme Incoration",
         "signature_sha256": "d" * 64,
-        "official_release_url": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
+        "official_release_url": "https://github.com/acme/editor/releases/tag/26.2.4",
         "staged_at": NOW.isoformat(),
     }
     values.update(overrides)
@@ -82,7 +82,7 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
         staged=staged(),
     )
 
-    assert evidence.package_id == "DBeaver.DBeaver.Community"
+    assert evidence.package_id == "Acme.Editor"
     assert evidence.version == "26.2.4"
     assert evidence.installer_sha256 == "a" * 64
     assert registry.get(evidence.evidence_id) == evidence
@@ -154,7 +154,7 @@ def test_binding_is_digest_specific_and_revocable():
 def test_default_registry_does_not_require_publisher_identity_matching():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
-    assert evidence.publisher == "DBeaver Corp"
+    assert evidence.publisher == "Acme Inc"
 
 
 def test_registry_accepts_missing_signer_metadata_when_sha256_matches():
@@ -189,7 +189,7 @@ def test_registry_accepts_dbeaver_without_official_release_metadata_when_manifes
         candidate=generic_manifest_candidate,
         staged=manifest_staged,
     )
-    assert evidence.package_id == "DBeaver.DBeaver.Community"
+    assert evidence.package_id == "Acme.Editor"
     assert evidence.official_release_url is None
 
 
