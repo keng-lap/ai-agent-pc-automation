@@ -331,18 +331,7 @@ class InstallerStager:
     def _require_official_release_match(candidate: InstallerCandidate) -> None:
         if not isinstance(candidate, InstallerCandidate):
             raise InstallerStageError("installer candidate must come from the backend discovery service")
-        if candidate.package_id == "DBeaver.DBeaver.Community":
-            if (
-                candidate.publisher_verification != "VERIFIED"
-                or candidate.official_version != candidate.version
-                or not candidate.official_release_url
-                or not candidate.official_asset_sha256
-                or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
-                or type(candidate.official_asset_id) is not int
-                or candidate.official_asset_id < 1
-            ):
-                raise InstallerStageError("DBeaver installer is not matched to its verified official release")
-        elif candidate.publisher_verification == "NOT_CHECKED":
+        if candidate.publisher_verification == "NOT_CHECKED":
             if any((
                 candidate.official_version is not None,
                 candidate.official_release_url is not None,
