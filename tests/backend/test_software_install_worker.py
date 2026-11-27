@@ -497,7 +497,6 @@ def test_worker_denial_paths_never_reach_executor(monkeypatch, tmp_path, denial,
         executor=lambda *_a, **_k: executor_calls.append(True),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
-        release_authorization=authorization,
     )
 
     result = worker.run_once()
