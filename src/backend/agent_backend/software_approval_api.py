@@ -107,6 +107,41 @@ class SoftwareApprovalResult(BaseModel):
     notice: Literal["APPROVED_QUEUED_NOT_YET_EXECUTED"] = "APPROVED_QUEUED_NOT_YET_EXECUTED"
 
 
+class SoftwareInstallJobEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    sequence: int
+    state: Literal["QUEUED", "CLAIMED", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"]
+    occurred_at: str
+    outcome: Literal["success", "denied"]
+    result_code: str | None
+
+
+class SoftwareInstallJobSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    reservation_id: str
+    plan_id: str
+    package_id: str
+    package_name: str
+    version: str
+    state: Literal["QUEUED", "CLAIMED", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"]
+    attempts: int
+    version_number: int
+    result_code: str | None
+    lease_expires_at: str | None
+    created_at: str
+    updated_at: str
+    events: list[SoftwareInstallJobEventResponse]
+
+
+class SoftwareInstallJobListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    jobs: list[SoftwareInstallJobSummaryResponse]
+    checked_at: str
+
+
 class SoftwareInstallJobStatusResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -493,6 +528,71 @@ def get_software_install_job_for_plan(
         result_code=job.result_code,
         lease_expires_at=job.lease_expires_at,
     )
+
+@router.get(
+    "/api/software/install/jobs",
+    response_model=SoftwareInstallJobListResponse,
+)
+def list_software_install_jobs(
+    request: Request,
+    limit: int = 25,
+) -> SoftwareInstallJobListResponse:
+    """List durable install jobs for the signed-in owner; never returns approval payloads."""
+    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=422, detail="Job history limit is invalid.")
+    try:
+        rows = _reservation_store(request).list_install_jobs(
+            owner_id=principal.owner_sub,
+            limit=limit,
+        )
+    except ApprovalReservationError:
+        raise HTTPException(status_code=503, detail="Install job history is temporarily unavailable.") from None
+
+    summaries = []
+    for row in rows:
+        try:
+            binding = InstallApprovalBinding.model_validate_json(row["binding_json"])
+            evidence = binding.evidence
+        except Exception:
+            # A corrupt or incompatible persisted payload is not exposed to the
+            # client; report a bounded UNKNOWN row without leaking stored data.
+            summaries.append(SoftwareInstallJobSummaryResponse(
+                reservation_id=row["reservation_id"],
+                plan_id=row["plan_id"],
+                package_id="unknown",
+                package_name="Unknown package",
+                version="unknown",
+                state="UNKNOWN",
+                attempts=row["attempts"],
+                version_number=row["version"],
+                result_code="PERSISTED_BINDING_UNREADABLE",
+                lease_expires_at=None,
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+                events=[],
+            ))
+            continue
+        summaries.append(SoftwareInstallJobSummaryResponse(
+            reservation_id=row["reservation_id"],
+            plan_id=row["plan_id"],
+            package_id=evidence.package_id,
+            package_name=evidence.package_name,
+            version=evidence.version,
+            state=row["state"],
+            attempts=row["attempts"],
+            version_number=row["version"],
+            result_code=row["result_code"],
+            lease_expires_at=row["lease_expires_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            events=[SoftwareInstallJobEventResponse(**event) for event in row["events"]],
+        ))
+    return SoftwareInstallJobListResponse(
+        jobs=summaries,
+        checked_at=datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+    )
+
 
 @router.get(
     "/api/software/install/jobs/{reservation_id}",
