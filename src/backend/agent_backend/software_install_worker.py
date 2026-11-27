@@ -304,13 +304,51 @@ class SoftwareInstallWorker:
                     action_digest=binding.approval_digest,
                 )
             except (ApprovalReservationConflict, ApprovalReservationExpired):
+                emit_event(
+                    event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_DENIED",
+                    component="install_worker",
+                    stage="release_authorization",
+                    correlation=job.correlation_id,
+                    severity="WARNING",
+                    fields={
+                        "plan_id": job.plan_id,
+                        "package_id": binding.evidence.package_id,
+                        "version": binding.evidence.version,
+                        "failure_code": "RELEASE_AUTHORIZATION_DENIED",
+                    },
+                )
                 return self._transition(
                     job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
                 ) or job
             except ApprovalReservationError:
+                emit_event(
+                    event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_DENIED",
+                    component="install_worker",
+                    stage="release_authorization",
+                    correlation=job.correlation_id,
+                    severity="ERROR",
+                    fields={
+                        "plan_id": job.plan_id,
+                        "package_id": binding.evidence.package_id,
+                        "version": binding.evidence.version,
+                        "failure_code": "RELEASE_AUTHORIZATION_UNAVAILABLE",
+                    },
+                )
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "RELEASE_AUTHORIZATION_UNAVAILABLE"
                 ) or job
+            emit_event(
+                event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_CONSUMED",
+                component="install_worker",
+                stage="release_authorization",
+                correlation=job.correlation_id,
+                fields={
+                    "plan_id": job.plan_id,
+                    "package_id": binding.evidence.package_id,
+                    "version": binding.evidence.version,
+                    "binding": "exact_package_version_action_digest",
+                },
+            )
             emit_event(
                 event_code="WINGET_EXECUTION_STARTED",
                 component="install_worker",
