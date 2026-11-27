@@ -33,8 +33,6 @@ def make_binding():
         manifest_sha256="c" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=DBeaver Corporation",
-        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -201,8 +199,6 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.manifest_source_url == binding.evidence.manifest_source_url
     assert response.repository_commit == binding.evidence.repository_commit
     assert response.installer_type == binding.evidence.installer_type
-    assert response.signature_subject == binding.evidence.signature_subject
-    assert response.signature_sha256 == binding.evidence.signature_sha256
     assert response.notice == "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
     assert reservation_store.created[0]["approval_id"] == "f" * 32
     assert reservation_store.created[0]["action_digest"] == binding.approval_digest
