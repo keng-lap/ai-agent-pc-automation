@@ -31,13 +31,9 @@ def request_path(url):
 
 class FakeSource:
     def __init__(
-        self, *, bad_scope=False, bad_hash=False, bad_url=False,
-        official_version=VERSION, official_versions=None, tag_versions=None, wrap_base64=False,
+        self, *, bad_scope=False, bad_hash=False, bad_url=False, wrap_base64=False,
     ):
         self.calls = []
-        self.official_version = official_version
-        self.official_versions = official_versions if official_versions is not None else [VERSION, official_version]
-        self.tag_versions = tag_versions if tag_versions is not None else self.official_versions
         self.wrap_base64 = wrap_base64
         installer = {
             "Architecture": "x64",
@@ -81,34 +77,7 @@ class FakeSource:
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
         path = request_path(url)
-        if path == "repos/acme/editor/releases":
-            payload = [
-                {
-                    "tag_name": version,
-                    "html_url": f"https://github.com/acme/editor/releases/tag/{version}",
-                    "draft": False,
-                    "prerelease": False,
-                }
-                for version in self.official_versions
-            ]
-        elif path.startswith("repos/acme/editor/releases/tags/"):
-            requested = path.rsplit("/", 1)[-1]
-            if requested not in self.tag_versions:
-                return FakeResponse({}, status_code=404)
-            official_asset = f"acme-editor-{requested}-windows-x86_64.exe"
-            payload = {
-                "tag_name": requested,
-                "html_url": f"https://github.com/acme/editor/releases/tag/{requested}",
-                "draft": False,
-                "prerelease": False,
-                "assets": [{
-                    "id": 12345,
-                    "name": official_asset,
-                    "browser_download_url": f"https://github.com/acme/editor/releases/download/{requested}/{official_asset}",
-                    "digest": "sha256:" + ("b" * 64 if requested == VERSION else "c" * 64),
-                }],
-            }
-        elif path.endswith("/commits/master"):
+        if path.endswith("/commits/master"):
             payload = {"sha": COMMIT}
         elif path.endswith("/Acme/Editor"):
             payload = [{"name": VERSION, "type": "dir"}]
@@ -459,7 +428,7 @@ def test_discovery_reports_safe_scope_choices_without_implicitly_selecting_machi
 def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
     class VersionListingSource(FakeSource):
         def __init__(self):
-            super().__init__(official_versions=["1.0.0", VERSION])
+            super().__init__()
 
         def get(self, url, **kwargs):
             if request_path(url).endswith("/Acme/Editor"):
