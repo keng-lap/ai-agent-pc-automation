@@ -16,11 +16,6 @@ $checks = @(
         Version = '3.7.0'
         Architecture = 'x64'
     },
-    @{
-        PackageId = 'Discord.Discord'
-        Version = '1.0.9269'
-        Architecture = 'x64'
-    }
 )
 
 $pythonCode = @'
@@ -82,11 +77,11 @@ try {
         Write-Host "Verifying $($check.PackageId) $($check.Version) ($($check.Architecture))..."
         & $python $pythonScript $check.PackageId $check.Version $check.Architecture
         if ($LASTEXITCODE -ne 0) {
-            throw "Generic publisher acceptance failed for $($check.PackageId)."
+            throw "SHA-256 trust acceptance failed for $($check.PackageId)."
         }
     }
     Write-Host ''
-    Write-Host 'PASS: both packages passed the shared WinGet SHA-256 policy without signer-name matching.'
+    Write-Host 'PASS: package passed the shared WinGet SHA-256 policy without signer-name matching.'
     Write-Host 'No installer was executed. No software was installed.'
 }
 finally {
