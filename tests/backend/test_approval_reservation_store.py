@@ -84,8 +84,6 @@ def make_install_binding():
         manifest_sha256="c" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=Contoso Ltd.",
-        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
