@@ -282,7 +282,7 @@ def test_discovery_accepts_a_matching_non_latest_official_release():
     assert result.candidate.official_version == VERSION
 
 
-def test_discovery_does_not_offer_versions_when_official_release_source_is_unavailable():
+def test_discovery_offers_manifest_versions_when_official_release_source_is_unavailable():
     source = FakeSource()
     original_get = source.get
 
@@ -299,11 +299,11 @@ def test_discovery_does_not_offer_versions_when_official_release_source_is_unava
 
     assert result.status == "VERSION_REQUIRED"
     assert result.official_versions is None
-    assert result.available_versions == ()
+    assert result.available_versions == (VERSION,)
     assert result.manifest_versions == (VERSION,)
 
 
-def test_dbeaver_version_choices_include_only_exact_official_release_matches():
+def test_dbeaver_version_choices_do_not_require_official_release_list():
     source = FakeSource(official_version="26.2.4", official_versions=["26.2.4"])
     result = WinGetManifestRepository(http_get=source.get).discover(
         package_id=PACKAGE_ID,
@@ -313,8 +313,29 @@ def test_dbeaver_version_choices_include_only_exact_official_release_matches():
 
     assert result.status == "VERSION_REQUIRED"
     assert result.manifest_versions == (VERSION,)
-    assert result.official_versions == ("26.2.4",)
-    assert result.available_versions == ()
+    assert result.official_versions is None
+    assert result.available_versions == (VERSION,)
+
+
+def test_selected_version_continues_when_optional_official_release_check_is_unavailable():
+    source = FakeSource()
+    original_get = source.get
+
+    def unavailable_selected_release(url, **kwargs):
+        if request_path(url).startswith("repos/dbeaver/dbeaver/releases/tags/"):
+            return FakeResponse({}, status_code=503)
+        return original_get(url, **kwargs)
+
+    result = WinGetManifestRepository(http_get=unavailable_selected_release).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "NOT_CHECKED"
+    assert result.candidate.official_version is None
 
 
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
@@ -329,7 +350,7 @@ def test_discovery_requires_explicit_version_and_never_guesses_latest():
     assert result.candidate is None
     assert result.available_versions == (VERSION,)
     assert result.manifest_versions == (VERSION,)
-    assert result.official_versions == (VERSION,)
+    assert result.official_versions is None
 
 
 @pytest.mark.parametrize(
