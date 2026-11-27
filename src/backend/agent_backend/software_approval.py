@@ -49,7 +49,7 @@ class VerifiedPackageEvidence(BaseModel):
         if value is not None and (
             not value.strip() or any(ord(char) < 0x20 for char in value)
         ):
-            raise ValueError("installer switch must be non-blank and contain no control characters")
+            raise ValueError("installer switch must not be blank or contain control characters")
         return value
 
     @field_validator("installer_success_codes")
@@ -119,7 +119,7 @@ class VerifiedPackageEvidence(BaseModel):
             and self.installer_silent_with_progress_switch is None
             and (self.installer_technology or self.installer_type) not in {"nullsoft", "inno", "burn"}
         ):
-            raise ValueError("EXE installer evidence requires a declared or WinGet technology-default silent strategy")
+            raise ValueError("EXE installer evidence requires a silent switch or supported WinGet installer technology")
         if self.expires_at <= self.verified_at:
             raise ValueError("evidence expiry must be after verification")
         if (self.expires_at - self.verified_at).total_seconds() > 900:
