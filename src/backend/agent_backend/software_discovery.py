@@ -128,7 +128,7 @@ class InstallerCandidate(BaseModel):
     installer_silent_with_progress_switch: str | None = None
     installer_custom_switch: str | None = None
     installer_success_codes: tuple[int, ...] = ()
-    installer_url:
+    installer_url: str
     installer_domain: str
     installer_sha256: str
     manifest_sha256: str
