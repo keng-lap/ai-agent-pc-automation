@@ -38,8 +38,6 @@ def _binding(**overrides):
         "manifest_sha256": "c" * 64,
         "architecture": "x64",
         "scope": "user",
-        "signature_subject": "CN=Contoso Ltd.",
-        "signature_sha256": "d" * 64,
         "verified_at": now - timedelta(seconds=1),
         "expires_at": now + timedelta(minutes=10),
     }
