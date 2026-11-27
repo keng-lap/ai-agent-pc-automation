@@ -89,8 +89,6 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     repository_commit: str
     installer_sha256: str
     manifest_sha256: str
-    signature_subject: str
-    signature_sha256: str
     evidence_expires_at: str
     approval_digest: str
     notice: Literal["APPROVAL_REQUIRED_FOR_REAL_INSTALL"] = "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
@@ -314,8 +312,6 @@ def create_software_approval_challenge(
         repository_commit=evidence.repository_commit,
         installer_sha256=evidence.installer_sha256,
         manifest_sha256=evidence.manifest_sha256,
-        signature_subject=evidence.signature_subject,
-        signature_sha256=evidence.signature_sha256,
         evidence_expires_at=evidence.expires_at.isoformat(),
         approval_digest=binding.approval_digest,
     )
