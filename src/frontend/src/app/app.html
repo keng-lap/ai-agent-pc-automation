@@ -512,7 +512,7 @@
                     <select class="software-version-select" [id]="'software-version-' + entry.id"
                       [disabled]="planning()" [value]="''"
                       [attr.aria-label]="language() === 'th' ? 'เลือกเวอร์ชันซอฟต์แวร์' : 'Select software version'"
-                      (change)="selectSoftwareVersion(entry.id, ($event.target as HTMLSelectElement).value)">
+                      (change)="selectSoftwareVersion(entry.id, $any($event.target).value)">
                       <option value="" disabled>{{ language() === 'th' ? 'เลือกเวอร์ชัน...' : 'Choose a version...' }}</option>
                       @for (version of sortedSoftwareVersions(discovery.result.available_versions); track version) {
                         <option [value]="version">{{ version }}</option>
