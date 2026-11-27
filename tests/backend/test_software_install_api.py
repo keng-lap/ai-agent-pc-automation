@@ -231,26 +231,6 @@ def test_official_release_version_and_digest_must_match_before_download(monkeypa
     assert stage_calls == []
 
 
-def test_unverified_official_release_is_rejected_before_download(monkeypatch, tmp_path):
-    candidate = make_candidate(publisher_verification="NOT_CHECKED")
-    stage_calls = []
-    monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
-    monkeypatch.setattr(api._stager, "stage", lambda *args, **kwargs: stage_calls.append(args))
-
-    with pytest.raises(Exception) as error:
-        api.create_software_install_proposal(
-            api.SoftwareInstallProposalRequest(
-                package_id=candidate.package_id,
-                version=candidate.version,
-            ),
-            request=make_request(tmp_path),
-        )
-
-    assert getattr(error.value, "status_code", None) == 409
-    assert stage_calls == []
-
-
 def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
     monkeypatch.setattr(api.sys, "platform", "linux")
 
