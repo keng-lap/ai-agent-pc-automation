@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from agent_backend.software_discovery import InstallerCandidate
-from agent_backend.software_staging import InstallerStageError, InstallerStager
+from agent_backend.software_staging import InstallerStageError, InstallerStager, WindowsAuthenticodeVerifier
 
 
 class FakeResponse:
@@ -191,7 +191,7 @@ def test_authenticode_failure_preserves_safe_winverifytrust_hresult(tmp_path):
     with pytest.raises(InstallerStageError, match="Authenticode") as captured:
         InstallerStager(
             http_get=lambda *args, **kwargs: response,
-            signature_verifier=RejectSignatureWithDiagnostics(),
+            signature_verifier=WindowsAuthenticodeVerifier(verifier=RejectSignatureWithDiagnostics()),
         ).stage(make_candidate(body), staging_root=tmp_path)
 
     assert captured.value.failure_code == "authenticode_verification_failed"
