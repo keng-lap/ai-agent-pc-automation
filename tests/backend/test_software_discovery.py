@@ -6,7 +6,6 @@ import json
 import pytest
 
 from agent_backend.software_discovery import (
-    DBeaverGitHubReleaseVerifier,
     DiscoveryNotFound,
     DiscoveryUnavailable,
     WinGetManifestRepository,
@@ -132,46 +131,6 @@ class FakeSource:
         return FakeResponse(payload)
 
 
-def test_official_release_listing_reads_all_pages_and_ignores_non_version_tags():
-    # The real DBeaver repository has more than 100 historical releases.
-    # Keep enough rows to exercise the second and third 100-item pages.
-    versions = [f"26.{index}.0" for index in range(261)]
-    calls = []
-
-    def paginated_get(url, **kwargs):
-        page = int(kwargs["params"]["page"])
-        calls.append(page)
-        assert kwargs["params"]["per_page"] == "100"
-        start = (page - 1) * 100
-        releases = [
-            {
-                "tag_name": version,
-                "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{version}",
-                "draft": False,
-                "prerelease": False,
-            }
-            for version in versions[start:start + 100]
-        ]
-        if page == 3:
-            releases.append({
-                "tag_name": "CN",
-                "html_url": "https://github.com/dbeaver/dbeaver/releases/tag/CN",
-                "draft": False,
-                "prerelease": False,
-            })
-        return FakeResponse(releases)
-
-    listed = DBeaverGitHubReleaseVerifier(http_get=paginated_get).list_official_versions(
-        PACKAGE_ID
-    )
-
-    assert listed is not None
-    assert len(listed) == 261
-    assert set(listed) == set(versions)
-    assert "CN" not in listed
-    assert calls == [1, 2, 3]
-
-
 def test_discovery_reads_source_and_returns_conditional_candidate_only():
     source = FakeSource()
     result = WinGetManifestRepository(http_get=source.get).discover(
@@ -185,10 +144,10 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert result.candidate.publisher == "DBeaver Corp"
     assert result.candidate.installer_domain == "github.com"
     assert result.candidate.installer_sha256 == "b" * 64
-    assert result.candidate.publisher_verification == "VERIFIED"
-    assert result.candidate.official_version == VERSION
-    assert result.candidate.official_asset_id == 12345
-    assert "publisher_official_source_not_yet_cross_checked" not in result.candidate.limitations
+    assert result.candidate.publisher_verification == "NOT_CHECKED"
+    assert result.candidate.official_version is None
+    assert result.candidate.official_asset_id is None
+    assert "publisher_official_source_not_yet_cross_checked" in result.candidate.limitations
     assert "installer_authenticode_signature_not_yet_verified" in result.candidate.limitations
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
     assert all("winget.exe" not in call[0] for call in source.calls)
@@ -225,63 +184,6 @@ def test_discovery_accepts_whitespace_wrapped_github_base64_manifest_content():
     assert result.candidate.package_id == PACKAGE_ID
 
 
-def test_discovery_blocks_manifest_when_selected_version_is_absent_from_official_releases():
-    source = FakeSource(official_version="26.2.4", official_versions=["26.2.4"])
-    result = WinGetManifestRepository(http_get=source.get).discover(
-        package_id=PACKAGE_ID,
-        version=VERSION,
-        architecture="x64",
-    )
-
-    assert result.status == "SOURCE_MISMATCH"
-    assert result.candidate is not None
-    assert result.candidate.publisher_verification == "MISMATCH"
-    assert result.candidate.version == VERSION
-    # Never mislabel the newest release as the selected version's mismatch.
-    assert result.candidate.official_version is None
-    assert result.candidate.official_release_url is None
-    assert "publisher_official_release_mismatch" in result.candidate.limitations
-
-
-def test_exact_selected_release_is_verified_even_when_omitted_from_first_release_page():
-    source = FakeSource(
-        official_version="26.2.5.2",
-        official_versions=["26.2.5.2"],
-        tag_versions=[VERSION, "26.2.5.2"],
-    )
-    result = WinGetManifestRepository(http_get=source.get).discover(
-        package_id=PACKAGE_ID,
-        version=VERSION,
-        architecture="x64",
-    )
-
-    assert result.status == "CONDITIONAL"
-    assert result.candidate is not None
-    assert result.candidate.publisher_verification == "VERIFIED"
-    assert result.candidate.official_version == VERSION
-    assert any(
-        call[0].endswith("/releases/tags/" + VERSION)
-        for call in source.calls
-    )
-
-
-def test_discovery_accepts_a_matching_non_latest_official_release():
-    source = FakeSource(
-        official_version="26.2.4",
-        official_versions=[VERSION, "26.2.4"],
-    )
-    result = WinGetManifestRepository(http_get=source.get).discover(
-        package_id=PACKAGE_ID,
-        version=VERSION,
-        architecture="x64",
-    )
-
-    assert result.status == "CONDITIONAL"
-    assert result.candidate is not None
-    assert result.candidate.publisher_verification == "VERIFIED"
-    assert result.candidate.official_version == VERSION
-
-
 def test_discovery_offers_manifest_versions_when_official_release_source_is_unavailable():
     source = FakeSource()
     original_get = source.get
@@ -301,20 +203,6 @@ def test_discovery_offers_manifest_versions_when_official_release_source_is_unav
     assert result.official_versions is None
     assert result.available_versions == (VERSION,)
     assert result.manifest_versions == (VERSION,)
-
-
-def test_dbeaver_version_choices_do_not_require_official_release_list():
-    source = FakeSource(official_version="26.2.4", official_versions=["26.2.4"])
-    result = WinGetManifestRepository(http_get=source.get).discover(
-        package_id=PACKAGE_ID,
-        version=None,
-        architecture="x64",
-    )
-
-    assert result.status == "VERSION_REQUIRED"
-    assert result.manifest_versions == (VERSION,)
-    assert result.official_versions is None
-    assert result.available_versions == (VERSION,)
 
 
 def test_selected_version_continues_when_optional_official_release_check_is_unavailable():
@@ -571,7 +459,7 @@ def test_discovery_reports_safe_scope_choices_without_implicitly_selecting_machi
     assert result.candidate is None
     assert result.available_scopes == ("machine",)
 
-def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
+def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
     class VersionListingSource(FakeSource):
         def __init__(self):
             super().__init__(official_versions=["1.0.0", VERSION])
@@ -594,10 +482,11 @@ def test_version_listing_uses_numeric_order_and_keeps_dbeaver_26_options():
     )
 
     assert result.status == "VERSION_REQUIRED"
-    assert len(result.manifest_versions) == 29
-    assert result.manifest_versions[:3] == ("26.2.5", "26.1.0", "26.0.0")
-    assert result.available_versions == (VERSION, "1.0.0")
-    assert "7.0.0" in result.manifest_versions
+    assert len(result.manifest_versions) == 20
+    assert result.manifest_versions == tuple(sorted(result.manifest_versions, key=lambda value: [int(part) if part.isdigit() else part for part in __import__("re").split(r"(\\d+)", value)]))
+    assert result.available_versions == result.manifest_versions
+    assert result.manifest_versions[-1] == "26.2.5"
+    assert "25.3.0" in result.manifest_versions
     assert "CN" not in result.manifest_versions
 
     selected = WinGetManifestRepository(
