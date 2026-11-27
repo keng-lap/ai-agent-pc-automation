@@ -26,7 +26,8 @@ from yaml.tokens import AliasToken, AnchorToken
 WINGET_REPOSITORY = "microsoft/winget-pkgs"
 GITHUB_API_ORIGIN = "https://api.github.com"
 USER_AGENT = "ai-agent-pc-automation-trusted-discovery/1.0"
-MAX_RESPONSE_BYTES = 8_000_000
+MAX_RESPONSE_BYTES = 1_000_000
+MAX_OFFICIAL_RELEASE_RESPONSE_BYTES = 8_000_000
 MAX_MANIFEST_FILES = 12
 MAX_AVAILABLE_VERSIONS = 20
 MAX_OFFICIAL_RELEASES = 500
@@ -154,7 +155,7 @@ class DBeaverGitHubReleaseVerifier:
                     if not chunk:
                         continue
                     total_bytes += len(chunk)
-                    if total_bytes > MAX_RESPONSE_BYTES:
+                    if total_bytes > MAX_OFFICIAL_RELEASE_RESPONSE_BYTES:
                         return None
                     chunks.append(chunk)
                 releases = json.loads(b"".join(chunks))
