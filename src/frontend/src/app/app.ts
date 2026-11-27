@@ -193,8 +193,6 @@ function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalC
     && (value['installer_silent_switch'] === null || typeof value['installer_silent_switch'] === 'string')
     && typeof value['installer_url'] === 'string'
     && typeof value['installer_sha256'] === 'string'
-    && typeof value['signature_subject'] === 'string'
-    && typeof value['signature_sha256'] === 'string'
     && typeof value['manifest_source_url'] === 'string'
     && typeof value['approval_digest'] === 'string'
     && /^[0-9a-f]{64}$/.test(value['approval_digest'])
