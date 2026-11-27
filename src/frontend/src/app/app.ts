@@ -1135,7 +1135,7 @@ export class App implements AfterViewChecked {
         })),
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ตรวจสอบไฟล์ติดตั้งหรือลายเซ็น Publisher ไม่ผ่าน ระบบจึงไม่อนุญาตให้อนุมัติ' : 'Installer verification or publisher trust failed. Approval remains blocked.' } }
+            ? { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'เตรียมหลักฐานไฟล์ติดตั้งไม่สำเร็จ ระบบจึงยังไม่อนุญาตให้อนุมัติ โปรดตรวจ failure_code และ failure_reason ใน Runtime Diagnostics' : 'Installer evidence preparation failed. Approval remains blocked. Check failure_code and failure_reason in Runtime Diagnostics.' } }
             : item
         ))),
       });
