@@ -59,8 +59,6 @@ def make_binding():
         manifest_sha256="d" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=DBeaver Corp",
-        signature_sha256="f" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
