@@ -1045,6 +1045,54 @@ class SQLiteApprovalReservationStore:
                 "Real-install release authorization could not be consumed."
             ) from None
 
+    def list_install_jobs(self, *, owner_id: str, limit: int = 25) -> list[dict]:
+        """Return bounded owner-scoped install summaries and lifecycle events."""
+        _identity(owner_id, "owner_id")
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        self.reconcile_expired_install_leases()
+        try:
+            with self._connection() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT jobs.*, reservations.created_at AS reserved_at
+                    FROM install_execution_jobs AS jobs
+                    INNER JOIN job_reservations AS reservations
+                        ON reservations.reservation_id = jobs.reservation_id
+                    WHERE jobs.owner_id=? AND reservations.owner_id=?
+                    ORDER BY reservations.created_at DESC LIMIT ?
+                    """,
+                    (owner_id, owner_id, limit),
+                ).fetchall()
+                summaries = []
+                for row in rows:
+                    events = connection.execute(
+                        """
+                        SELECT sequence, state, occurred_at, outcome, result_code
+                        FROM install_execution_events
+                        WHERE reservation_id=? ORDER BY sequence DESC LIMIT 20
+                        """,
+                        (row["reservation_id"],),
+                    ).fetchall()
+                    summaries.append({
+                        "reservation_id": row["reservation_id"],
+                        "plan_id": row["plan_id"],
+                        "state": row["state"],
+                        "attempts": row["attempts"],
+                        "version": row["version"],
+                        "result_code": row["result_code"],
+                        "lease_expires_at": row["lease_expires_at"],
+                        "created_at": row["reserved_at"],
+                        "updated_at": row["updated_at"],
+                        "binding_json": row["binding_json"],
+                        "events": [dict(event) for event in reversed(events)],
+                    })
+                return summaries
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job history could not be read.") from None
+
     def get_install_job_for_plan(self, *, plan_id: str, owner_id: str) -> InstallExecutionJob:
         """Recover the existing install job for an owner-scoped plan without dispatching it."""
         _identity(owner_id, "owner_id")
