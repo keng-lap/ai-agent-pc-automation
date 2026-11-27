@@ -306,3 +306,10 @@ def test_stager_carries_verified_certificate_fingerprint(tmp_path):
     assert staged.authenticode_valid is True
     assert staged.signature_subject == "CN=Trusted Test Publisher, O=Trusted Test Publisher"
     assert staged.signature_sha256 == "d" * 64
+
+
+def test_installer_stage_error_exposes_safe_diagnostic_classification():
+    error = InstallerStageError("installer SHA-256 did not match the approved release digest")
+
+    assert error.failure_code == "installer_manifest_hash_mismatch"
+    assert error.failure_reason == "Downloaded SHA-256 did not match the WinGet manifest digest."
