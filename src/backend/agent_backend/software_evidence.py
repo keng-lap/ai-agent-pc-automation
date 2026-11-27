@@ -35,7 +35,6 @@ class EvidenceRejected(ValueError):
 
     _REASONS: ClassVar[dict[str, tuple[str, str]]] = {
         "candidate and staged proof must be backend model instances": ("invalid_evidence_input", "Candidate or staged proof was not created by the backend trust pipeline."),
-        "DBeaver official release evidence is not verified": ("official_release_evidence_unverified", "Official DBeaver release version, URL, and digest were not verified."),
         "unchecked publisher candidate contained unexpected vendor release claims": ("unexpected_publisher_claims", "Unverified candidate contained unexpected official publisher claims."),
         "verified vendor release did not match the exact manifest candidate": ("official_release_manifest_mismatch", "Official release evidence did not match the exact WinGet manifest candidate."),
         "package publisher source check did not pass": ("publisher_source_check_failed", "Official publisher source verification did not pass."),
