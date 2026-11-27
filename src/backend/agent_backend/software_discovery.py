@@ -33,6 +33,54 @@ PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
+# WinGet InstallerType describes the installer technology, not the executable
+# format consumed by the approval/execution contract. Normalize common
+# executable-based technologies to the generic EXE execution family.
+_EXE_INSTALLER_TECHNOLOGIES = frozenset({"inno", "nullsoft", "burn"})
+
+
+def _normalize_installer_type(installer_type: str, installer_url: str) -> str:
+    """Normalize supported WinGet technologies to the verified file format."""
+    normalized = installer_type.strip().casefold()
+    suffix = urlsplit(installer_url).path.rsplit("/", 1)[-1].casefold()
+    if normalized in _EXE_INSTALLER_TECHNOLOGIES:
+        if suffix.endswith(".exe"):
+            return "exe"
+        raise DiscoveryUnavailable(
+            "executable-based installer technology did not resolve to an EXE file",
+            failure_code="installer_type_format_mismatch",
+            diagnostic_fields={"installer_type": normalized, "installer_suffix": suffix[-16:]},
+        )
+    if normalized == "wix":
+        if suffix.endswith(".msi"):
+            return "msi"
+        if suffix.endswith(".exe"):
+            return "exe"
+        raise DiscoveryUnavailable(
+            "WiX installer did not resolve to a supported installer file",
+            failure_code="installer_type_format_mismatch",
+            diagnostic_fields={"installer_type": normalized, "installer_suffix": suffix[-16:]},
+        )
+    if normalized in {"exe", "msi", "msix", "appx"}:
+        expected_suffixes = {
+            "exe": (".exe",),
+            "msi": (".msi",),
+            "msix": (".msix",),
+            "appx": (".appx",),
+        }
+        if suffix.endswith(expected_suffixes[normalized]):
+            return normalized
+        raise DiscoveryUnavailable(
+            "installer type did not match the manifest installer file extension",
+            failure_code="installer_type_format_mismatch",
+            diagnostic_fields={"installer_type": normalized, "installer_suffix": suffix[-16:]},
+        )
+    raise DiscoveryUnavailable(
+        "manifest installer technology is not supported for verified installation",
+        failure_code="installer_type_unsupported",
+        diagnostic_fields={"installer_type": normalized},
+    )
+
 
 class DiscoveryError(RuntimeError):
     """A bounded, safe discovery failure."""
@@ -471,7 +519,7 @@ class WinGetManifestRepository:
             version=version,
             architecture=architecture,
             scope=scope,
-            installer_type=installer_type.strip().casefold(),
+            installer_type=_normalize_installer_type(installer_type, installer_url),
             installer_silent_switch=silent_switch,
             installer_url=installer_url,
             installer_domain=domain,
