@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -32,7 +32,7 @@ ALLOWED_RELEASE_REDIRECT_HOSTS = frozenset({
 class InstallerStageError(RuntimeError):
     """A bounded download or verification step failed with a safe diagnostic code."""
 
-    _REASONS = {
+    _REASONS: ClassVar[dict[str, tuple[str, str]]] = {
         "staging directory must be an absolute, non-symlink path": ("unsafe_staging_path", "Staging directory was not an absolute, non-symlink path."),
         "staging directory is not a safe directory": ("unsafe_staging_directory", "Staging directory failed the directory safety check."),
         "staging directory is unavailable": ("staging_storage_unavailable", "Staging directory could not be created or accessed."),
