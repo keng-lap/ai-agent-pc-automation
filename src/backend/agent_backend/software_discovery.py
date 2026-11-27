@@ -123,7 +123,7 @@ class InstallerCandidate(BaseModel):
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user", "machine"]
     installer_type: str
-    installer_technology: str = "exe"
+    installer_technology: str | None = None
     installer_silent_switch: str | None = None
     installer_silent_with_progress_switch: str | None = None
     installer_custom_switch: str | None = None

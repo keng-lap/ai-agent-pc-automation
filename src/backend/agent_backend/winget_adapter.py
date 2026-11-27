@@ -63,11 +63,12 @@ def build_local_manifest_documents(
         raise TypeError("an immutable install approval binding is required")
 
     evidence = binding.evidence
+    installer_technology = evidence.installer_technology or evidence.installer_type
     if (
         not _PACKAGE_ID.fullmatch(evidence.package_id)
         or not _VERSION.fullmatch(evidence.version)
         or evidence.installer_type not in SUPPORTED_INSTALLER_TYPES
-        or evidence.installer_technology not in SUPPORTED_INSTALLER_TECHNOLOGIES
+        or installer_technology not in SUPPORTED_INSTALLER_TECHNOLOGIES
         or evidence.scope != "user"
         or evidence.source != "winget"
     ):
@@ -121,13 +122,13 @@ def build_local_manifest_documents(
         evidence.installer_type == "exe"
         and not evidence.installer_silent_switch
         and not evidence.installer_silent_with_progress_switch
-        and evidence.installer_technology not in {"nullsoft", "inno", "burn"}
+        and installer_technology not in {"nullsoft", "inno", "burn"}
     ):
         raise WinGetAdapterError("EXE installer has no approved silent strategy")
     installer_doc = {
         **common,
         "ManifestType": "installer",
-        "InstallerType": evidence.installer_technology,
+        "InstallerType": installer_technology,
         "Installers": [installer_entry],
     }
 

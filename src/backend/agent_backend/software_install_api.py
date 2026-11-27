@@ -201,7 +201,7 @@ def create_software_install_proposal(
             candidate.installer_type == "exe"
             and not candidate.installer_silent_switch
             and not candidate.installer_silent_with_progress_switch
-            and candidate.installer_technology not in {"nullsoft", "inno", "burn"}
+            and (candidate.installer_technology or candidate.installer_type) not in {"nullsoft", "inno", "burn"}
         )
     ):
         mismatch_fields = []
@@ -230,7 +230,7 @@ def create_software_install_proposal(
                 candidate.installer_type == "exe"
                 and not candidate.installer_silent_switch
                 and not candidate.installer_silent_with_progress_switch
-                and candidate.installer_technology not in {"nullsoft", "inno", "burn"}
+                and (candidate.installer_technology or candidate.installer_type) not in {"nullsoft", "inno", "burn"}
             ):
                 mismatch_fields.append("silent_install_strategy")
         emit_event(

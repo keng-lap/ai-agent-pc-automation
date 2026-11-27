@@ -23,7 +23,7 @@ class VerifiedPackageEvidence(BaseModel):
     version: str = Field(min_length=1, max_length=80)
     source: Literal["winget"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
-    installer_technology: str = Field(default="exe", min_length=1, max_length=32)
+    installer_technology: str | None = Field(default=None, min_length=1, max_length=32)
     installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=256)
     installer_silent_with_progress_switch: str | None = Field(default=None, min_length=1, max_length=256)
     installer_custom_switch: str | None = Field(default=None, min_length=1, max_length=256)
@@ -101,7 +101,7 @@ class VerifiedPackageEvidence(BaseModel):
             self.installer_type == "exe"
             and self.installer_silent_switch is None
             and self.installer_silent_with_progress_switch is None
-            and self.installer_technology not in {"nullsoft", "inno", "burn"}
+            and (self.installer_technology or self.installer_type) not in {"nullsoft", "inno", "burn"}
         ):
             raise ValueError("EXE installer evidence requires a declared or WinGet technology-default silent strategy")
         if self.expires_at <= self.verified_at:
