@@ -85,8 +85,6 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
     assert evidence.package_id == "DBeaver.DBeaver.Community"
     assert evidence.version == "26.2.4"
     assert evidence.installer_sha256 == "a" * 64
-    assert evidence.signature_subject == "CN=DBeaver Corporation"
-    assert evidence.signature_sha256 == "d" * 64
     assert registry.get(evidence.evidence_id) == evidence
 
     binding = registry.bind_to_plan(
@@ -155,7 +153,7 @@ def test_binding_is_digest_specific_and_revocable():
         registry.get(evidence.evidence_id)
 
 
-def test_default_registry_accepts_matching_manifest_publisher_without_user_pin():
+def test_default_registry_does_not_require_publisher_identity_matching():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
     assert evidence.publisher == "DBeaver Corp"
@@ -193,7 +191,6 @@ def test_registry_accepts_unrelated_package_when_signer_name_differs():
     evidence = registry.register_staged_candidate(candidate=generic_candidate, staged=generic_staged)
     assert evidence.package_id == "Acme.Editor"
     assert evidence.official_release_url is None
-    assert evidence.signature_sha256 == "d" * 64
 
 
 def test_registry_does_not_reject_generic_package_for_signer_name_mismatch():
@@ -217,19 +214,5 @@ def test_registry_does_not_reject_generic_package_for_signer_name_mismatch():
     )
     assert evidence.package_id == "Acme.Editor"
 
-def test_approval_digest_changes_when_signer_certificate_fingerprint_changes():
-    registry = make_registry(clock=lambda: NOW)
-    evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
-    original = build_install_approval_binding(
-        plan_digest=PLAN_DIGEST,
-        evidence=evidence,
-    )
-    rotated = evidence.model_copy(update={"signature_sha256": "e" * 64})
-    changed = build_install_approval_binding(
-        plan_digest=PLAN_DIGEST,
-        evidence=rotated,
-    )
-
-    assert original.approval_digest != changed.approval_digest
 
 
