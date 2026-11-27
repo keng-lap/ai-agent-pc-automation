@@ -150,7 +150,7 @@ def test_official_release_listing_reads_all_pages_and_ignores_non_version_tags()
                 "draft": False,
                 "prerelease": False,
             }
-            for version in versions[start:start + 10]
+            for version in versions[start:start + 100]
         ]
         if page == 3:
             releases.append({
