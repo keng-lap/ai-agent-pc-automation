@@ -316,7 +316,7 @@ def test_discovery_offers_manifest_versions_when_official_release_source_is_unav
     original_get = source.get
 
     def unavailable_releases(url, **kwargs):
-        if request_path(url).startswith("repos/acme/editor/releases/"):
+        if request_path(url) == "repos/acme/editor/releases":
             return FakeResponse({}, status_code=503)
         return original_get(url, **kwargs)
 
