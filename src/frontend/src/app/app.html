@@ -174,6 +174,28 @@
     @if (conversationNotice()) {
       <p class="conversation-notice" role="status">{{ conversationNotice() }}</p>
     }
+    @if (recentInstallJobs().length > 0) {
+      <section class="chat-install-status" aria-label="{{ language() === 'th' ? 'สถานะงานติดตั้งล่าสุด' : 'Recent installation status' }}" aria-live="polite">
+        <div class="chat-install-status-heading">
+          <strong>{{ language() === 'th' ? 'สถานะงานติดตั้ง' : 'Installation status' }}</strong>
+          <button type="button" class="new-chat-button" (click)="setActiveView('jobs')">
+            {{ language() === 'th' ? 'ดูงานทั้งหมด' : 'View all jobs' }}
+          </button>
+        </div>
+        @for (job of recentInstallJobs(); track job.reservation_id) {
+          <div class="chat-install-status-row">
+            <span><strong>{{ job.package_name }} {{ job.version }}</strong><small>{{ job.package_id }}</small></span>
+            <b [class]="'chat-install-state chat-install-state--' + job.state.toLowerCase()">{{ installJobStateLabel(job.state) }}</b>
+          </div>
+          @if (job.result_code) {
+            <small class="chat-install-result">{{ language() === 'th' ? 'รหัสผลลัพธ์' : 'Result code' }}: {{ job.result_code }}</small>
+          }
+        }
+        @if (installJobStatusUnavailable()) {
+          <small role="status">{{ language() === 'th' ? 'อัปเดตสถานะจาก Backend ไม่สำเร็จ กำลังลองใหม่' : 'Could not refresh backend status; retrying.' }}</small>
+        }
+      </section>
+    }
 
     <div #messageLog class="message-log" role="log" aria-live="polite" aria-relevant="additions text" [attr.aria-label]="language() === 'th' ? 'ข้อความสนทนา' : 'Conversation messages'">
       @if (entries().length === 0) {
