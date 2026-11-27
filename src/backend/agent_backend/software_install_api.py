@@ -61,7 +61,7 @@ class SoftwareInstallProposalResponse(BaseModel):
 
 @router.get("/api/software/install/readiness")
 def get_software_install_readiness(request: Request) -> dict:
-    """Expose Windows capability; each install release is issued after exact-action TOTP."""
+    """Expose active Windows worker readiness; each release is issued after exact-action TOTP."""
     settings = getattr(request.app.state, "settings", None)
     worker = getattr(request.app.state, "install_worker_thread", None)
     worker_ready = worker is not None and worker.is_alive()
