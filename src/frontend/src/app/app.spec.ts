@@ -686,7 +686,7 @@ describe('App chat UI (T-202)', () => {
   it('queues a verified real install only after exact TOTP approval', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
     // Installer trust uses the same SHA-256 and signature-integrity policy for every package.
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -1240,7 +1240,7 @@ describe('App chat UI (T-202)', () => {
 
   it('refreshes readiness after a definitive release-authorization rejection without reservation recovery', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -1305,7 +1305,7 @@ describe('App chat UI (T-202)', () => {
 
   it('recovers a committed reservation after an ambiguous confirmation failure', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     const reservationId = '12345678-1234-4678-9234-567812345678';
@@ -1375,7 +1375,7 @@ describe('App chat UI (T-202)', () => {
 
   it('clears a definitively missing proposal and offers installer preparation again', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -1442,7 +1442,7 @@ describe('App chat UI (T-202)', () => {
 
   it('keeps reservation recovery visible when readiness is revoked mid-recovery', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     const recovery = new Subject<unknown>();
@@ -1507,7 +1507,7 @@ describe('App chat UI (T-202)', () => {
 
   it('restores TOTP approval after a definitive 403 rejection', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
