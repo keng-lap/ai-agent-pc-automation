@@ -81,18 +81,9 @@ class SoftwareEvidenceRegistry:
         """Mint evidence only from matching backend candidate and staged-file proof."""
         if not isinstance(candidate, InstallerCandidate) or not isinstance(staged, StagedInstaller):
             raise EvidenceRejected("candidate and staged proof must be backend model instances")
-        is_dbeaver = candidate.package_id == "DBeaver.DBeaver.Community"
         if candidate.status != "CONDITIONAL":
             raise EvidenceRejected("package discovery candidate is not conditional")
-        if is_dbeaver:
-            if (
-                candidate.publisher_verification != "VERIFIED"
-                or candidate.official_version != candidate.version
-                or not candidate.official_release_url
-                or candidate.official_asset_sha256 != candidate.installer_sha256
-            ):
-                raise EvidenceRejected("DBeaver official release evidence is not verified")
-        elif candidate.publisher_verification == "NOT_CHECKED":
+        if candidate.publisher_verification == "NOT_CHECKED":
             if any((
                 candidate.official_version is not None,
                 candidate.official_release_url is not None,
