@@ -9,7 +9,6 @@ from pydantic import ValidationError
 from agent_backend import software_install_api as api
 from agent_backend.software_approval import VerifiedPackageEvidence
 from agent_backend.software_discovery import InstallerCandidate
-from agent_backend.software_evidence import EvidenceRejected
 from agent_backend.software_staging import StagedInstaller
 
 NOW = datetime.now(UTC)
