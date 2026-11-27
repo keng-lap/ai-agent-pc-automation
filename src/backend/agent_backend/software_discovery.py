@@ -898,7 +898,7 @@ class WinGetManifestRepository:
                     value = document.get("PublisherUrl")
                     if isinstance(value, str) and value.strip():
                         return value.strip()
-        except (DiscoveryUnavailable, DiscoveryNotFound, ValueError, yaml.YAMLError):
+        except (DiscoveryUnavailable, DiscoveryNotFound, KeyError, ValueError, yaml.YAMLError):
             return None
         return None
 
