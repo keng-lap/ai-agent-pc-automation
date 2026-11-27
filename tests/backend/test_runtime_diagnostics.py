@@ -358,6 +358,10 @@ def test_export_sanitizer_includes_only_bounded_version_options():
             "official_versions": ["26.2.5"],
             "latest_available_version": "26.2.5",
             "selected_version": "26.2.5",
+            "failure_code": "candidate_evidence_mismatch",
+            "failure_reason": "Selected manifest candidate failed exact evidence checks.",
+            "mismatch_fields": "silent_install_strategy",
+            "installer_type": "exe",
             "authorization": "secret",
             "unbounded_versions": ["must-not-export"],
         },
@@ -386,6 +390,10 @@ def test_export_sanitizer_includes_only_bounded_version_options():
         "official_versions": ["26.2.5"],
         "latest_available_version": "26.2.5",
         "selected_version": "26.2.5",
+        "failure_code": "candidate_evidence_mismatch",
+        "failure_reason": "Selected manifest candidate failed exact evidence checks.",
+        "mismatch_fields": "silent_install_strategy",
+        "installer_type": "exe",
     }
 
 
