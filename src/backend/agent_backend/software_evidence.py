@@ -1,8 +1,7 @@
 """Backend-only registry for immutable, short-lived installer evidence.
 
-Windows Authenticode validates signature integrity. DBeaver trust is based on
-exact version, release URL, and SHA-256 evidence; signer-name matching remains
-for other packages. The certificate fingerprint is bound to approval evidence.
+All packages use the same installer SHA-256 verification policy. Authenticode
+checks signature integrity only; signer identity is never compared with Publisher.
 """
 
 from __future__ import annotations
@@ -25,61 +24,6 @@ from agent_backend.software_staging import StagedInstaller
 EVIDENCE_TTL = timedelta(minutes=15)
 MAX_EVIDENCE = 128
 
-
-def _normalize_publisher(value: str) -> str:
-    """Normalize formatting and common equivalent legal suffixes."""
-    normalized = "".join(char for char in value.casefold() if char.isalnum())
-    for long_form, short_form in (("corporation", "corp"), ("incorporated", "inc"), ("limited", "ltd")):
-        if normalized.endswith(long_form):
-            normalized = normalized[: -len(long_form)] + short_form
-            break
-    return normalized
-
-
-def _subject_attributes(subject: str) -> dict[str, list[str]]:
-    """Extract O and CN from quoted or escaped Windows X.500 subject strings."""
-    attributes: dict[str, list[str]] = {}
-    components: list[str] = []
-    current: list[str] = []
-    escaped = False
-    quoted = False
-    for char in subject:
-        if escaped:
-            current.append(char)
-            escaped = False
-        elif char == chr(92):
-            current.append(char)
-            escaped = True
-        elif char == chr(34):
-            current.append(char)
-            quoted = not quoted
-        elif char == ',' and not quoted:
-            components.append("".join(current).strip())
-            current = []
-        else:
-            current.append(char)
-    if quoted or escaped:
-        return attributes
-    components.append("".join(current).strip())
-    for component in components:
-        key, separator, raw_value = component.partition("=")
-        name = key.strip().upper()
-        if separator and name in {"O", "CN"}:
-            value = raw_value.strip().strip(chr(34))
-            value = value.replace(chr(92) + ",", ",").replace(chr(92) * 2, chr(92))
-            attributes.setdefault(name, []).append(value)
-    return attributes
-
-def signer_subject_matches_publisher(subject: str, publisher: str) -> bool:
-    """Require exact organization match; use CN only when no organization is present."""
-    if not isinstance(subject, str) or not subject.strip() or not isinstance(publisher, str) or not publisher.strip():
-        return False
-    attributes = _subject_attributes(subject)
-    organizations = attributes.get('O', [])
-    if organizations:
-        return len(organizations) == 1 and _normalize_publisher(organizations[0]) == _normalize_publisher(publisher)
-    common_names = attributes.get('CN', [])
-    return len(common_names) == 1 and _normalize_publisher(common_names[0]) == _normalize_publisher(publisher)
 
 class EvidenceNotFound(LookupError):
     """Evidence is unknown, expired, or no longer available."""
@@ -119,29 +63,13 @@ class SoftwareEvidenceRegistry:
         *,
         clock: Callable[[], datetime] | None = None,
         capacity: int = MAX_EVIDENCE,
-        publisher_identity_verifier: Callable[[InstallerCandidate, str, str], bool] | None = None,
     ) -> None:
         if type(capacity) is not int or not 1 <= capacity <= MAX_EVIDENCE:
             raise ValueError("evidence capacity must be between 1 and 128")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._capacity = capacity
-        self._publisher_identity_verifier = publisher_identity_verifier or (
-            lambda candidate, subject, _fingerprint: signer_subject_matches_publisher(
-                subject, candidate.publisher
-            )
-        )
         self._entries: dict[str, VerifiedPackageEvidence] = {}
         self._lock = threading.RLock()
-
-    @property
-    def publisher_identity_policy_available(self) -> bool:
-        """Generic Authenticode-plus-manifest identity matching is implemented."""
-        return True
-
-    @property
-    def trust_anchor_configured(self) -> bool:
-        """Compatibility alias; this is not a configured certificate pin."""
-        return self.publisher_identity_policy_available
 
     def register_staged_candidate(
         self,
@@ -186,26 +114,10 @@ class SoftwareEvidenceRegistry:
             or staged.architecture != candidate.architecture
             or staged.sha256 != candidate.installer_sha256
             or staged.authenticode_valid is not True
-            or not staged.signature_subject
-            or not isinstance(staged.signature_sha256, str)
-            or len(staged.signature_sha256) != 64
-            or any(char not in "0123456789abcdef" for char in staged.signature_sha256)
         ):
             raise EvidenceRejected("staged installer does not prove the exact candidate and signer")
         if staged.official_release_url != candidate.official_release_url:
             raise EvidenceRejected("staged installer release origin does not match the candidate")
-        # DBeaver's approved trust policy is exact release/version/SHA-256
-        # verification. Do not reject it based on the signer subject's name.
-        # Keep the generic manifest-publisher identity check for other packages.
-        if not is_dbeaver:
-            try:
-                signer_matches = self._publisher_identity_verifier(
-                    candidate, staged.signature_subject, staged.signature_sha256
-                )
-            except (TypeError, ValueError, RuntimeError):
-                signer_matches = False
-            if signer_matches is not True:
-                raise EvidenceRejected("Authenticode signer identity does not match the WinGet manifest Publisher")
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
