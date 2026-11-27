@@ -287,13 +287,14 @@ class GitHubPublisherReleaseVerifier:
                 asset for asset in assets
                 if isinstance(asset, dict)
                 and asset.get("browser_download_url") == installer_url
-                and isinstance(asset.get("digest"), str)
-                and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", asset["digest"])
             ]
             if len(matches) != 1:
                 return PublisherVerification(status="MISMATCH")
             asset = matches[0]
-            official_sha256 = asset["digest"].split(":", 1)[1].lower()
+            digest = asset.get("digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+                return PublisherVerification(status="UNAVAILABLE")
+            official_sha256 = digest.split(":", 1)[1].lower()
             asset_id = asset.get("id")
             if type(asset_id) is not int or asset_id < 1:
                 return PublisherVerification(status="UNAVAILABLE")
