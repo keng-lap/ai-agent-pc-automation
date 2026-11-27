@@ -86,7 +86,30 @@ class EvidenceNotFound(LookupError):
 
 
 class EvidenceRejected(ValueError):
-    """The trusted discovery/staging facts do not satisfy evidence policy."""
+    """Trusted discovery/staging facts failed policy with a safe diagnostic reason."""
+
+    _REASONS = {
+        "candidate and staged proof must be backend model instances": ("invalid_evidence_input", "Candidate or staged proof was not created by the backend trust pipeline."),
+        "DBeaver official release evidence is not verified": ("official_release_evidence_unverified", "Official DBeaver release version, URL, and digest were not verified."),
+        "unchecked publisher candidate contained unexpected vendor release claims": ("unexpected_publisher_claims", "Unverified candidate contained unexpected official publisher claims."),
+        "verified vendor release did not match the exact manifest candidate": ("official_release_manifest_mismatch", "Official release evidence did not match the exact WinGet manifest candidate."),
+        "package publisher source check did not pass": ("publisher_source_check_failed", "Official publisher source verification did not pass."),
+        "staged installer does not prove the exact candidate and signer": ("staged_installer_evidence_mismatch", "Staged file hash, version, architecture, or Authenticode proof did not match the selected candidate."),
+        "staged installer release origin does not match the candidate": ("official_release_origin_mismatch", "Staged installer release origin did not match the verified candidate."),
+        "Authenticode signer identity does not match the WinGet manifest Publisher": ("publisher_signer_mismatch", "Authenticode signer identity did not match the WinGet manifest Publisher."),
+        "discovery or staging timestamp is invalid": ("invalid_evidence_timestamp", "Discovery or staging timestamp could not be parsed."),
+        "discovery and staging timestamps must be timezone-aware": ("invalid_evidence_timestamp", "Discovery and staging timestamps were not timezone-aware."),
+        "discovery or staged installer proof is not current": ("installer_evidence_expired", "Discovery or staged installer evidence exceeded its validity window."),
+        "evidence registry capacity reached": ("evidence_capacity_reached", "Verified evidence registry reached its capacity limit."),
+        "evidence identifier collision": ("evidence_id_collision", "Evidence identifier collision prevented registration."),
+    }
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.failure_code, self.failure_reason = self._REASONS.get(
+            message,
+            ("installer_evidence_rejected", "Installer evidence did not satisfy the verification policy."),
+        )
 
 
 class SoftwareEvidenceRegistry:
