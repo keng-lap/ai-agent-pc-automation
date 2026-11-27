@@ -169,7 +169,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     @application.on_event("startup")
     def start_local_install_worker() -> None:
         # Backend and its in-process Agent must never inherit an elevated token.
-        # UAC is reserved for a separately signed Elevated Installer Helper.
+        # Installation execution uses the current user's WinGet context only.
         # Check the effective token immediately before serving requests.
         enforce_backend_not_elevated()
         if settings.app_env != "test":
