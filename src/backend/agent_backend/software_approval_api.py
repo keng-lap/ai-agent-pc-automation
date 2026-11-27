@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
@@ -554,7 +554,7 @@ def list_software_install_jobs(
         try:
             binding = InstallApprovalBinding.model_validate_json(row["binding_json"])
             evidence = binding.evidence
-        except Exception:
+        except (ValidationError, ValueError, TypeError):
             # A corrupt or incompatible persisted payload is not exposed to the
             # client; report a bounded UNKNOWN row without leaking stored data.
             summaries.append(SoftwareInstallJobSummaryResponse(
