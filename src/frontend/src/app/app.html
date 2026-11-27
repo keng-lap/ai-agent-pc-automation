@@ -621,18 +621,18 @@
                         <strong>{{ language() === 'th' ? 'พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง' : 'Machine Scope discovered but installation is disabled' }}</strong>
                         <span>{{ language() === 'th' ? 'ระบบแสดงรายการจาก Manifest ได้ แต่ยังไม่มี Signed Elevated Helper และการตรวจสอบ UAC/Process Containment จึงไม่สามารถสร้าง Approval หรือติดตั้งได้' : 'Discovery is informational only. A signed elevated helper and verified UAC/process containment are not available, so proposal, approval, and installation are blocked.' }}</span>
                       </div>
-                    } @else if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
+                    } @else {
                       <section class="tool-preview installer-actions" aria-label="Real WinGet install">
                         <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
                         @if (discovery.readinessChecking) {
-                          <span role="status">{{ language() === 'th' ? 'กำลังตรวจสอบความพร้อมของเครื่องและ Publisher Trust…' : 'Checking Windows and publisher trust readiness…' }}</span>
+                          <span role="status">{{ language() === 'th' ? 'กำลังตรวจสอบความพร้อมของเครื่องและนโยบาย SHA-256…' : 'Checking Windows and SHA-256 trust readiness…' }}</span>
                         } @else if (discovery.readinessError) {
                           <span class="installer-error" role="alert">{{ discovery.readinessError }}</span>
                         } @else if (discovery.readiness && !discovery.readiness.platform_supported) {
                           <span>{{ language() === 'th' ? 'การตรวจสอบ Authenticode และการติดตั้งจริงรองรับเฉพาะ Windows' : 'Authenticode verification and real installation require Windows.' }}</span>
-                        } @else if (discovery.readiness && (!discovery.readiness.authenticode_verification_available || !discovery.readiness.publisher_identity_policy_available || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH')) {
-                          <span>{{ language() === 'th' ? 'นโยบายตรวจสอบ Authenticode และ Publisher ของ Backend ยังไม่พร้อม จึงยังไม่อนุญาตให้เตรียมการติดตั้ง' : 'Backend Authenticode and publisher identity verification is not ready. Install preparation remains blocked.' }}</span>
-                        } @else if (discovery.readiness?.publisher_identity_policy_available && discovery.readiness.authenticode_verification_available && discovery.readiness.publisher_trust_mode === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' && !discovery.proposal) {
+                        } @else if (discovery.readiness && (!discovery.readiness.authenticode_verification_available || discovery.readiness.installer_trust_mode !== 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY')) {
+                          <span>{{ language() === 'th' ? 'นโยบายตรวจสอบ SHA-256 และ Authenticode ของ Backend ยังไม่พร้อม จึงยังไม่อนุญาตให้เตรียมการติดตั้ง' : 'Backend SHA-256 and Authenticode signature-integrity verification is not ready. Install preparation remains blocked.' }}</span>
+                        } @else if (discovery.readiness?.authenticode_verification_available && discovery.readiness.installer_trust_mode === 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY' && !discovery.proposal) {
                           <span>{{ language() === 'th' ? 'ระบบจะดาวน์โหลดไฟล์ชั่วคราว ตรวจ SHA-256 และ Authenticode แล้วลบไฟล์ชั่วคราวหลังสร้างข้อเสนอ' : 'The installer will be temporarily downloaded, SHA-256 and Authenticode checked, then the temporary file removed.' }}</span>
                           <button class="send-button" type="button" [disabled]="planning()" (click)="prepareSoftwareInstall(entry.id)">
                             {{ discovery.proposalStatus === 'preparing' ? (language() === 'th' ? 'กำลังตรวจสอบไฟล์…' : 'Verifying installer…') : (language() === 'th' ? 'ตรวจสอบไฟล์และเตรียม Approval' : 'Verify installer and prepare approval') }}
