@@ -127,6 +127,25 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
 
 
 
+@pytest.mark.parametrize("manifest_type", ["nullsoft", "inno", "burn"])
+def test_discovery_normalizes_executable_installer_technologies_for_any_package(manifest_type):
+    source = FakeSource()
+    installer_doc = source.documents["Acme.Editor.installer.yaml"]
+    installer_doc["Installers"][0]["InstallerType"] = manifest_type
+    installer_doc["Installers"][0]["InstallerUrl"] = "https://downloads.acme.example/editor-setup.exe"
+
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.candidate is not None
+    assert result.candidate.package_id == PACKAGE_ID
+    assert result.candidate.installer_type == "exe"
+    assert result.candidate.installer_silent_switch == "/S"
+
+
 def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():
     source = FakeSource()
     installer_doc = source.documents["Acme.Editor.installer.yaml"]
