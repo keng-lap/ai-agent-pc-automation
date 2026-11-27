@@ -38,14 +38,14 @@ class AcceptSignature:
 def make_candidate(body=b"verified-installer-bytes"):
     digest = hashlib.sha256(body).hexdigest()
     return InstallerCandidate(
-        package_id="DBeaver.DBeaver.Community",
-        package_name="DBeaver Community Edition",
-        publisher="DBeaver Corp",
+        package_id="Acme.Editor",
+        package_name="Acme Editor",
+        publisher="Acme Inc",
         version="26.2.4",
         architecture="x64",
         scope="user",
         installer_type="exe",
-        installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver-ce-26.2.4-windows-x86_64.exe",
+        installer_url="https://github.com/acme/editor/releases/download/26.2.4/acme-editor-26.2.4-windows-x86_64.exe",
         installer_domain="github.com",
         installer_sha256=digest,
         manifest_sha256="a" * 64,
@@ -54,7 +54,7 @@ def make_candidate(body=b"verified-installer-bytes"):
         checked_at="2026-11-12T00:00:00Z",
         publisher_verification="VERIFIED",
         official_version="26.2.4",
-        official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
+        official_release_url="https://github.com/acme/editor/releases/tag/26.2.4",
         official_asset_sha256=digest,
         official_asset_id=12345,
         limitations=("installer_authenticode_signature_not_yet_verified",),
