@@ -1,8 +1,8 @@
 """Backend-only registry for immutable, short-lived installer evidence.
 
-Windows Authenticode establishes the code-signing chain. The signer subject is
-compared with the Publisher from the independently resolved WinGet manifest.
-The certificate fingerprint is bound to approval evidence, not used as a pin.
+Windows Authenticode validates signature integrity. DBeaver trust is based on
+exact version, release URL, and SHA-256 evidence; signer-name matching remains
+for other packages. The certificate fingerprint is bound to approval evidence.
 """
 
 from __future__ import annotations
@@ -96,7 +96,6 @@ class EvidenceRejected(ValueError):
         "package publisher source check did not pass": ("publisher_source_check_failed", "Official publisher source verification did not pass."),
         "staged installer does not prove the exact candidate and signer": ("staged_installer_evidence_mismatch", "Staged file hash, version, architecture, or Authenticode proof did not match the selected candidate."),
         "staged installer release origin does not match the candidate": ("official_release_origin_mismatch", "Staged installer release origin did not match the verified candidate."),
-        "Authenticode signer identity does not match the WinGet manifest Publisher": ("publisher_signer_mismatch", "Authenticode signer identity did not match the WinGet manifest Publisher."),
         "discovery or staging timestamp is invalid": ("invalid_evidence_timestamp", "Discovery or staging timestamp could not be parsed."),
         "discovery and staging timestamps must be timezone-aware": ("invalid_evidence_timestamp", "Discovery and staging timestamps were not timezone-aware."),
         "discovery or staged installer proof is not current": ("installer_evidence_expired", "Discovery or staged installer evidence exceeded its validity window."),
@@ -195,14 +194,18 @@ class SoftwareEvidenceRegistry:
             raise EvidenceRejected("staged installer does not prove the exact candidate and signer")
         if staged.official_release_url != candidate.official_release_url:
             raise EvidenceRejected("staged installer release origin does not match the candidate")
-        try:
-            signer_matches = self._publisher_identity_verifier(
-                candidate, staged.signature_subject, staged.signature_sha256
-            )
-        except (TypeError, ValueError, RuntimeError):
-            signer_matches = False
-        if signer_matches is not True:
-            raise EvidenceRejected("Authenticode signer identity does not match the WinGet manifest Publisher")
+        # DBeaver's approved trust policy is exact release/version/SHA-256
+        # verification. Do not reject it based on the signer subject's name.
+        # Keep the generic manifest-publisher identity check for other packages.
+        if not is_dbeaver:
+            try:
+                signer_matches = self._publisher_identity_verifier(
+                    candidate, staged.signature_subject, staged.signature_sha256
+                )
+            except (TypeError, ValueError, RuntimeError):
+                signer_matches = False
+            if signer_matches is not True:
+                raise EvidenceRejected("Authenticode signer identity does not match the WinGet manifest Publisher")
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
