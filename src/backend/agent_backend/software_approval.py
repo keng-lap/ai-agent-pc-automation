@@ -24,9 +24,9 @@ class VerifiedPackageEvidence(BaseModel):
     source: Literal["winget"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
     installer_technology: str | None = Field(default=None, min_length=1, max_length=32)
-    installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=256)
-    installer_silent_with_progress_switch: str | None = Field(default=None, min_length=1, max_length=256)
-    installer_custom_switch: str | None = Field(default=None, min_length=1, max_length=256)
+    installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=512)
+    installer_silent_with_progress_switch: str | None = Field(default=None, min_length=1, max_length=512)
+    installer_custom_switch: str | None = Field(default=None, min_length=1, max_length=2048)
     installer_url: str = Field(min_length=8, max_length=2048)
     official_release_url: str | None = Field(default=None, min_length=8, max_length=2048)
     manifest_source_url: str = Field(min_length=8, max_length=2048)
