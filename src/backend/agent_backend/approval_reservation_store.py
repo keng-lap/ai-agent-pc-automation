@@ -243,6 +243,31 @@ class SQLiteApprovalReservationStore:
                     BEGIN
                         SELECT RAISE(ABORT, 'release authorizations are append-only');
                     END;
+                    CREATE TABLE IF NOT EXISTS real_install_release_authorizations (
+                        nonce TEXT PRIMARY KEY CHECK(length(nonce) = 64),
+                        task_id TEXT NOT NULL CHECK(task_id = 'P6-609-C'),
+                        owner_id TEXT NOT NULL,
+                        plan_id TEXT NOT NULL CHECK(length(plan_id) = 32),
+                        package_id TEXT NOT NULL,
+                        package_version TEXT NOT NULL,
+                        action_digest TEXT NOT NULL CHECK(length(action_digest) = 64),
+                        expires_at TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_real_install_release_binding
+                        ON real_install_release_authorizations(
+                            owner_id, plan_id, package_id, package_version, action_digest, created_at
+                        );
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_authorizations_no_update
+                    BEFORE UPDATE ON real_install_release_authorizations
+                    BEGIN
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_authorizations_no_delete
+                    BEFORE DELETE ON real_install_release_authorizations
+                    BEGIN
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
+                    END;
                     CREATE TABLE IF NOT EXISTS install_execution_events (
                         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                         reservation_id TEXT NOT NULL
@@ -320,7 +345,7 @@ class SQLiteApprovalReservationStore:
                     BEGIN
                         SELECT RAISE(ABORT, 'reservation receipts cannot be deleted');
                     END;
-                    PRAGMA user_version = 2;
+                    PRAGMA user_version = 3;
                     """
                 )
                 # Add diagnostic correlation metadata to databases created by
@@ -448,7 +473,8 @@ class SQLiteApprovalReservationStore:
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                timestamp = _timestamp(now if now is not None else self._clock())
+                current_time = now if now is not None else self._clock()
+                timestamp = _timestamp(current_time)
                 prior = connection.execute(
                     """
                     SELECT * FROM job_reservations
@@ -555,6 +581,31 @@ class SQLiteApprovalReservationStore:
                             ) VALUES (?, 'QUEUED', ?, 'success')
                             """,
                             (reservation_id, timestamp),
+                        )
+                        # A successful exact-action TOTP confirmation reaches
+                        # reserve(); create its short-lived release capability in
+                        # the same SQLite transaction as the durable job.
+                        release_expiry = min(
+                            binding.evidence.expires_at,
+                            current_time + timedelta(minutes=10),
+                        )
+                        if release_expiry <= current_time:
+                            raise ApprovalReservationExpired(
+                                "release authorization evidence has expired"
+                            )
+                        release_nonce = secrets.token_hex(32)
+                        connection.execute(
+                            """
+                            INSERT INTO real_install_release_authorizations (
+                                nonce, task_id, owner_id, plan_id, package_id,
+                                package_version, action_digest, expires_at, created_at
+                            ) VALUES (?, 'P6-609-C', ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                release_nonce, owner_id, plan_id,
+                                binding.evidence.package_id, binding.evidence.version,
+                                action_digest, _timestamp(release_expiry), timestamp,
+                            ),
                         )
                     connection.execute(
                         """
@@ -937,23 +988,38 @@ class SQLiteApprovalReservationStore:
             raise ApprovalReservationUnavailable("Install job transition could not be persisted.") from None
 
     def consume_real_install_release_authorization(
-        self, *, task_id: str, package_id: str, version: str,
-        action_digest: str, nonce: str, expires_at: datetime, now: datetime | None = None,
+        self, *, task_id: str, owner_id: str, plan_id: str, package_id: str,
+        version: str, action_digest: str, now: datetime | None = None,
     ) -> None:
-        """Atomically consume a one-use release nonce for one exact approved install binding."""
+        """Atomically consume the persisted authorization for one exact queued install."""
         if task_id != "P6-609-C":
             raise ApprovalReservationConflict("release authorization task does not match")
+        _identity(owner_id, "owner_id")
         _identity(package_id, "package_id")
         _identity(version, "version")
+        _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
         _hex(action_digest, _DIGEST_LENGTH, "action_digest")
-        _hex(nonce, 64, "release_nonce")
-        expiry = _timestamp(expires_at)
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                current = now if now is not None else self._clock()
-                timestamp = _timestamp(current)
-                if expiry <= timestamp:
+                timestamp = _timestamp(now if now is not None else self._clock())
+                authorization = connection.execute(
+                    """
+                    SELECT auth.* FROM real_install_release_authorizations AS auth
+                    LEFT JOIN real_install_release_consumptions AS consumed
+                        ON consumed.nonce = auth.nonce
+                    WHERE auth.task_id=? AND auth.owner_id=? AND auth.plan_id=?
+                        AND auth.package_id=? AND auth.package_version=?
+                        AND auth.action_digest=? AND consumed.nonce IS NULL
+                    ORDER BY auth.created_at DESC LIMIT 1
+                    """,
+                    (task_id, owner_id, plan_id, package_id, version, action_digest),
+                ).fetchone()
+                if authorization is None:
+                    raise ApprovalReservationConflict(
+                        "no unused release authorization matches the exact install"
+                    )
+                if authorization["expires_at"] <= timestamp:
                     raise ApprovalReservationExpired("release authorization has expired")
                 connection.execute(
                     """
@@ -962,15 +1028,23 @@ class SQLiteApprovalReservationStore:
                         action_digest, expires_at, consumed_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (nonce, task_id, package_id, version, action_digest, expiry, timestamp),
+                    (
+                        authorization["nonce"], task_id, package_id, version,
+                        action_digest, authorization["expires_at"], timestamp,
+                    ),
                 )
                 connection.commit()
         except sqlite3.IntegrityError:
-            raise ApprovalReservationConflict("release authorization nonce was already consumed") from None
+            raise ApprovalReservationConflict(
+                "release authorization nonce was already consumed"
+            ) from None
         except ApprovalReservationError:
             raise
         except sqlite3.Error:
-            raise ApprovalReservationUnavailable("Real-install release authorization could not be consumed.") from None
+            raise ApprovalReservationUnavailable(
+                "Real-install release authorization could not be consumed."
+            ) from None
+
     def get_install_job_for_plan(self, *, plan_id: str, owner_id: str) -> InstallExecutionJob:
         """Recover the existing install job for an owner-scoped plan without dispatching it."""
         _identity(owner_id, "owner_id")
