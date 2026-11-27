@@ -1,7 +1,7 @@
 import { Component, DestroyRef, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, catchError, switchMap, tap, timer } from 'rxjs';
-import { ChatApi, JobState, JobSummary, UiLanguage } from '../chat/chat-api';
+import { EMPTY, catchError, of, switchMap, tap, timer } from 'rxjs';
+import { ChatApi, JobState, JobSummary, SoftwareInstallJobSummary, UiLanguage } from '../chat/chat-api';
 
 const ACTIVE_STATES = new Set<JobState>([
   'QUEUED',
@@ -29,6 +29,9 @@ export class JobMonitorComponent implements OnInit {
   protected readonly jobs = signal<JobSummary[]>([]);
   protected readonly apiStatus = signal<'loading' | 'connected' | 'unavailable'>('loading');
   protected readonly lastCheckedAt = signal<string | null>(null);
+  protected readonly installJobs = signal<SoftwareInstallJobSummary[]>([]);
+  protected readonly installApiAvailable = signal<boolean | null>(null);
+  protected readonly installLastCheckedAt = signal<string | null>(null);
 
   protected readonly activeJobs = computed(() =>
     this.jobs().filter((job) => ACTIVE_STATES.has(job.state)),
@@ -63,6 +66,21 @@ export class JobMonitorComponent implements OnInit {
   ngOnInit(): void {
     timer(0, 5000)
       .pipe(
+        switchMap(() => this.api.getSoftwareInstallJobs(50).pipe(catchError(() => of(null)))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((response) => {
+        if (response === null) {
+          this.installApiAvailable.set(false);
+          return;
+        }
+        this.installJobs.set(response.jobs);
+        this.installLastCheckedAt.set(response.checked_at);
+        this.installApiAvailable.set(true);
+      });
+
+    timer(0, 5000)
+      .pipe(
         switchMap(() =>
           this.api.getJobs(25).pipe(
             tap((response) => {
@@ -85,6 +103,38 @@ export class JobMonitorComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe();
+  }
+
+  protected installStateLabel(state: SoftwareInstallJobSummary['state']): string {
+    const th: Record<SoftwareInstallJobSummary['state'], string> = {
+      QUEUED: 'รอ Worker รับงาน',
+      CLAIMED: 'Worker รับงานแล้ว',
+      RUNNING: 'กำลังติดตั้ง',
+      VERIFYING: 'กำลังตรวจสอบผลติดตั้ง',
+      SUCCEEDED: 'ติดตั้งสำเร็จ',
+      FAILED: 'ติดตั้งไม่สำเร็จ',
+      REBOOT_REQUIRED: 'ต้องรีสตาร์ต',
+      UNKNOWN: 'ไม่สามารถยืนยันผลได้',
+    };
+    const en: Record<SoftwareInstallJobSummary['state'], string> = {
+      QUEUED: 'Queued for worker',
+      CLAIMED: 'Claimed by worker',
+      RUNNING: 'Installing',
+      VERIFYING: 'Verifying installation',
+      SUCCEEDED: 'Installed successfully',
+      FAILED: 'Installation failed',
+      REBOOT_REQUIRED: 'Restart required',
+      UNKNOWN: 'Outcome unknown',
+    };
+    return (this.isThai() ? th : en)[state];
+  }
+
+  protected installStateClass(state: SoftwareInstallJobSummary['state']): string {
+    return state.toLowerCase();
+  }
+
+  protected isInstallActive(state: SoftwareInstallJobSummary['state']): boolean {
+    return ['QUEUED', 'CLAIMED', 'RUNNING', 'VERIFYING', 'REBOOT_REQUIRED'].includes(state);
   }
 
   protected isThai(): boolean {
