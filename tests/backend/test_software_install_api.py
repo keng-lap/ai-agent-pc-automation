@@ -273,6 +273,15 @@ def test_readiness_disables_real_install_off_windows(monkeypatch, tmp_path):
     assert ready["notice"] == "RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP"
 
 
+def test_readiness_disables_real_install_in_test_mode(monkeypatch, tmp_path):
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    request = make_request(tmp_path)
+    request.app.state.settings = SimpleNamespace(app_env="test")
+    ready = api.get_software_install_readiness(request)
+    assert ready["platform_supported"] is False
+    assert ready["real_install_enabled"] is False
+
+
 def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypatch, tmp_path):
     candidate = make_candidate(installer_silent_switch=None)
     stage_calls = []
