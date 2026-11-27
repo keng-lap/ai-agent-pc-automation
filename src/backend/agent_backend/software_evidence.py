@@ -9,8 +9,8 @@ from __future__ import annotations
 import secrets
 import threading
 from collections.abc import Callable
-from typing import ClassVar
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 from pydantic import ValidationError
 
