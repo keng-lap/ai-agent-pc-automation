@@ -151,6 +151,35 @@ export interface SoftwareApprovalChallenge {
   notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
 }
 
+export interface SoftwareInstallJobEvent {
+  sequence: number;
+  state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
+  occurred_at: string;
+  outcome: 'success' | 'denied';
+  result_code: string | null;
+}
+
+export interface SoftwareInstallJobSummary {
+  reservation_id: string;
+  plan_id: string;
+  package_id: string;
+  package_name: string;
+  version: string;
+  state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
+  attempts: number;
+  version_number: number;
+  result_code: string | null;
+  lease_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  events: SoftwareInstallJobEvent[];
+}
+
+export interface SoftwareInstallJobListResponse {
+  jobs: SoftwareInstallJobSummary[];
+  checked_at: string;
+}
+
 export interface SoftwareInstallJobStatus {
   reservation_id: string;
   state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
@@ -326,6 +355,13 @@ export class ChatApi {
     return this.http.post<SoftwareApprovalResult>(
       `/api/plans/${encodeURIComponent(planId)}/software-approval/confirm`,
       { challenge_id: challengeId, totp_code: totpCode },
+    );
+  }
+
+  getSoftwareInstallJobs(limit = 50): Observable<SoftwareInstallJobListResponse> {
+    return this.http.get<SoftwareInstallJobListResponse>(
+      '/api/software/install/jobs',
+      { params: { limit } },
     );
   }
 
