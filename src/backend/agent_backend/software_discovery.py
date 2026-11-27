@@ -3,7 +3,7 @@
 This module reads the Microsoft-owned winget-pkgs repository over its fixed
 GitHub API origin. It never invokes WinGet, downloads installers, or executes
 package code. A manifest match is only a CONDITIONAL candidate until the downloaded installer's
-Authenticode chain and signer identity are verified against the manifest Publisher.
+Authenticode signature integrity and downloaded installer SHA-256 are verified; signer identity is not matched to Publisher.
 """
 
 from __future__ import annotations
@@ -211,8 +211,6 @@ class DBeaverGitHubReleaseVerifier:
     ) -> PublisherVerification:
         if package_id != "DBeaver.DBeaver.Community":
             return PublisherVerification(status="NOT_CHECKED")
-        if publisher.strip().casefold() != "dbeaver corp":
-            return PublisherVerification(status="MISMATCH")
 
         # Verify the exact selected tag directly. The version-list endpoint is
         # only for UI choices; pagination/truncation must never substitute the
