@@ -67,7 +67,10 @@ def make_evidence():
 
 def make_request(tmp_path):
     return SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(job_store_path=tmp_path / "jobs.sqlite")),
+        app=SimpleNamespace(state=SimpleNamespace(
+            job_store_path=tmp_path / "jobs.sqlite",
+            install_worker_thread=SimpleNamespace(is_alive=lambda: True),
+        )),
         state=SimpleNamespace(principal=SimpleNamespace(owner_sub="owner-1")),
     )
 
@@ -277,6 +280,15 @@ def test_readiness_disables_real_install_in_test_mode(monkeypatch, tmp_path):
     monkeypatch.setattr(api.sys, "platform", "win32")
     request = make_request(tmp_path)
     request.app.state.settings = SimpleNamespace(app_env="test")
+    ready = api.get_software_install_readiness(request)
+    assert ready["platform_supported"] is False
+    assert ready["real_install_enabled"] is False
+
+
+def test_readiness_disables_real_install_when_worker_is_not_running(monkeypatch, tmp_path):
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    request = make_request(tmp_path)
+    request.app.state.install_worker_thread = None
     ready = api.get_software_install_readiness(request)
     assert ready["platform_supported"] is False
     assert ready["real_install_enabled"] is False
