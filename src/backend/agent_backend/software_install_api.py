@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -63,33 +62,27 @@ class SoftwareInstallProposalResponse(BaseModel):
 @router.get("/api/software/install/readiness")
 def get_software_install_readiness(request: Request) -> dict:
     """Expose readiness from the exact configuration used to start the worker."""
-    app_state = request.app.state
-    release_authorization = getattr(app_state, "real_install_release_authorization", None)
-    authorization_is_current = (
-        bool(getattr(app_state, "real_install_enabled", False))
-        and release_authorization is not None
-        and release_authorization.expires_at > datetime.now(UTC)
-    )
-    if not authorization_is_current:
-        release_authorization = None
+    platform_supported = sys.platform == "win32"
     emit_event(
         event_code="INSTALL_READINESS_CHECKED",
         component="install",
         stage="install_readiness",
         correlation=getattr(request.state, "correlation_id", "unknown"),
-        fields={"real_install_enabled": sys.platform == "win32" and authorization_is_current},
+        fields={"real_install_enabled": platform_supported},
     )
     return {
-        "platform_supported": sys.platform == "win32",
-        "real_install_enabled": sys.platform == "win32" and authorization_is_current,
-        "real_install_release_package_id": release_authorization.package_id if release_authorization else None,
-        "real_install_release_version": release_authorization.version if release_authorization else None,
-        "real_install_release_expires_at": release_authorization.expires_at.isoformat() if release_authorization else None,
+        "platform_supported": platform_supported,
+        # Real install is enabled as a capability on Windows. Each individual
+        # package/version is authorized only after its exact-action TOTP succeeds.
+        "real_install_enabled": platform_supported,
+        "real_install_release_package_id": None,
+        "real_install_release_version": None,
+        "real_install_release_expires_at": None,
         "authenticode_verification_available": sys.platform == "win32",
         "installer_trust_mode": "WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY",
         "package_allowlist_enabled": False,
         "supported_package_ids": [],
-        "notice": "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT",
+        "notice": "RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP",
     }
 
 
