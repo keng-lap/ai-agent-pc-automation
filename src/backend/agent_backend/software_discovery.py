@@ -885,7 +885,13 @@ class WinGetManifestRepository:
                     "".join(payload["content"].split()),
                     validate=True,
                 )
-                if len(raw) > MAX_RESPONSE_BYTES:
+                if (
+                    len(raw) > MAX_RESPONSE_BYTES
+                    or any(
+                        isinstance(token, (AliasToken, AnchorToken))
+                        for token in yaml.scan(raw)
+                    )
+                ):
                     continue
                 document = yaml.safe_load(raw)
                 if (
