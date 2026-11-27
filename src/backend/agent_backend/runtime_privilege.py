@@ -96,6 +96,6 @@ def enforce_backend_not_elevated() -> None:
     """Fail startup if the Backend / in-process Agent has an elevated token."""
     if is_current_process_elevated():
         raise BackendPrivilegeError(
-            "Backend/Agent must run unelevated. UAC elevation is reserved for "
-            "No backend or in-process agent elevation is permitted."
+            "Backend/Agent must run unelevated. No backend or in-process "
+            "agent elevation is permitted."
         )
