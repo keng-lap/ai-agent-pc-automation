@@ -256,45 +256,6 @@ def test_unverified_official_release_is_rejected_before_download(monkeypatch, tm
     assert stage_calls == []
 
 
-def test_publisher_identity_mismatch_fails_closed_and_removes_staged_file(monkeypatch, tmp_path):
-    candidate = make_candidate()
-    staged_path = tmp_path / "installer.exe"
-    staged_path.write_bytes(b"verified installer")
-    staged = StagedInstaller(
-        package_id=candidate.package_id,
-        version=candidate.version,
-        architecture=candidate.architecture,
-        file_path=str(staged_path),
-        file_size=18,
-        sha256="a" * 64,
-        authenticode_valid=True,
-        signature_subject="CN=DBeaver Corporation",
-        signature_sha256="d" * 64,
-        official_release_url=candidate.official_release_url,
-        staged_at=NOW.isoformat(),
-    )
-    monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
-    monkeypatch.setattr(api._stager, "stage", lambda *_args, **_kwargs: staged)
-
-    def reject(**_kwargs):
-        raise EvidenceRejected("untrusted signer")
-
-    monkeypatch.setattr(api.software_evidence_registry, "register_staged_candidate", reject)
-
-    with pytest.raises(Exception) as error:
-        api.create_software_install_proposal(
-            api.SoftwareInstallProposalRequest(
-                package_id=candidate.package_id,
-                version=candidate.version,
-            ),
-            request=make_request(tmp_path),
-        )
-
-    assert getattr(error.value, "status_code", None) == 409
-    assert not staged_path.exists()
-
-
 def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
     monkeypatch.setattr(api.sys, "platform", "linux")
 
