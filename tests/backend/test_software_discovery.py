@@ -110,7 +110,7 @@ class FakeSource:
             }
         elif path.endswith("/commits/master"):
             payload = {"sha": COMMIT}
-        elif path.endswith("/Acme/Acme/Community"):
+        elif path.endswith("/Acme/Editor"):
             payload = [{"name": VERSION, "type": "dir"}]
         elif path.endswith(f"/{VERSION}"):
             payload = [
@@ -152,7 +152,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
     assert all("winget.exe" not in call[0] for call in source.calls)
     assert any(
-        "/contents/manifests/d/Acme/Acme/Community" in call[0]
+        "/contents/manifests/d/Acme/Editor" in call[0]
         for call in source.calls
     )
 
@@ -326,7 +326,7 @@ def test_manifest_schema_version_with_long_digit_run_is_rejected():
 def test_missing_package_is_not_found():
     class MissingSource(FakeSource):
         def get(self, url, **kwargs):
-            if request_path(url).endswith("/Acme/Acme/Community"):
+            if request_path(url).endswith("/Acme/Editor"):
                 return FakeResponse({"message": "Not Found"}, status_code=404)
             return super().get(url, **kwargs)
 
@@ -462,7 +462,7 @@ def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
             super().__init__(official_versions=["1.0.0", VERSION])
 
         def get(self, url, **kwargs):
-            if request_path(url).endswith("/Acme/Acme/Community"):
+            if request_path(url).endswith("/Acme/Editor"):
                 versions = [f"{major}.0.0" for major in range(1, 26)]
                 versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5", "CN"])
                 return FakeResponse([
@@ -513,13 +513,13 @@ def test_discovery_accepts_manifest_filenames_containing_plus_signs():
 
         def get(self, url, **kwargs):
             path = request_path(url).replace(
-                "/Acme++/Acme++/Community",
-                "/Acme/Acme/Community",
+                "/Acme++/Editor",
+                "/Acme/Editor",
             )
             if path != request_path(url):
                 url = url.replace(
-                    "/Acme++/Acme++/Community",
-                    "/Acme/Acme/Community",
+                    "/Acme++/Editor",
+                    "/Acme/Editor",
                 )
             return super().get(url, **kwargs)
 
@@ -540,7 +540,7 @@ def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata
     class IncompleteMetadataSource(FakeSource):
         def get(self, url, **kwargs):
             response = super().get(url, **kwargs)
-            if request_path(url).endswith(f"/manifests/d/Acme/Acme/Community/{VERSION}"):
+            if request_path(url).endswith(f"/manifests/d/Acme/Editor/{VERSION}"):
                 entries = json.loads(response._body)
                 for entry in entries:
                     entry.pop("type", None)
