@@ -394,10 +394,10 @@ class SoftwareInstallWorker:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WINGET_TIMEOUT"
                 ) or job
-            if result.exit_code != 0:
-                return self._transition(
-                    job, token, version, version_lock, "UNKNOWN", "WINGET_NONZERO_EXIT"
-                ) or job
+            # A nonzero WinGet exit code is not proof that the installer did
+            # nothing. Verify the exact approved package/version before deciding
+            # the outcome; never retry the install from this worker.
+            nonzero_exit = result.exit_code != 0
             verifying = self._transition(
                 job, token, version, version_lock, "VERIFYING", None
             )
@@ -425,15 +425,23 @@ class SoftwareInstallWorker:
             )
             if verified is True:
                 return self._transition(
-                    job, token, version, version_lock, "SUCCEEDED", "PACKAGE_VERSION_VERIFIED"
+                    job,
+                    token,
+                    version,
+                    version_lock,
+                    "SUCCEEDED",
+                    "PACKAGE_VERSION_VERIFIED_AFTER_NONZERO_EXIT" if nonzero_exit else "PACKAGE_VERSION_VERIFIED",
                 ) or job
+            if nonzero_exit and verified is False:
+                failure_code = "WINGET_NONZERO_EXIT"
+            else:
+                failure_code = (
+                    "POST_INSTALL_VERIFICATION_AMBIGUOUS"
+                    if verified is None
+                    else "PACKAGE_VERSION_NOT_CONFIRMED"
+                )
             return self._transition(
-                job,
-                token,
-                version,
-                version_lock,
-                "UNKNOWN",
-                "POST_INSTALL_VERIFICATION_AMBIGUOUS" if verified is None else "PACKAGE_VERSION_NOT_CONFIRMED",
+                job, token, version, version_lock, "UNKNOWN", failure_code
             ) or job
         except (ValueError, TypeError, WinGetAdapterError):
             return self._transition(
