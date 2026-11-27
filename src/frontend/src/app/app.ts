@@ -917,19 +917,6 @@ export class App implements AfterViewChecked {
       });
   }
 
-  protected isOfficialReleaseMatch(result: SoftwareDiscoveryResponse, version: string): boolean {
-    return result.official_versions?.includes(version) === true;
-  }
-
-  protected latestOfficialReleaseVersion(result: SoftwareDiscoveryResponse): string {
-    const versions = result.official_versions ?? [];
-    return versions.length ? versions[versions.length - 1] : (this.language() === 'th' ? 'ไม่พบ Release' : 'No releases found');
-  }
-
-  protected hasMatchingOfficialVersion(result: SoftwareDiscoveryResponse): boolean {
-    return result.available_versions.some((version) => this.isOfficialReleaseMatch(result, version));
-  }
-
   protected selectSoftwareScope(entryId: number, scope: 'user' | 'machine'): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const candidate = discovery?.result?.candidate;
