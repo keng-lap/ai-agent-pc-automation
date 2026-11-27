@@ -40,6 +40,30 @@ SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 # format consumed by the approval/execution contract. Normalize common
 # executable-based technologies to the generic EXE execution family.
 _EXE_INSTALLER_TECHNOLOGIES = frozenset({"inno", "nullsoft", "burn"})
+_WINGET_INSTALLER_TYPE_PRIORITY = {
+    "msix": 0,
+    "appx": 0,
+    "msi": 1,
+    "wix": 1,
+    "burn": 1,
+    "nullsoft": 2,
+    "inno": 2,
+    "exe": 2,
+    "portable": 3,
+}
+
+
+def _winget_installer_type_priority(
+    installer: dict[str, Any],
+    installer_document: dict[str, Any],
+) -> int:
+    installer_type = installer.get("InstallerType") or installer_document.get("InstallerType")
+    if not isinstance(installer_type, str):
+        return 99
+    normalized = installer_type.strip().casefold()
+    if normalized == "zip" and installer.get("NestedInstallerType") == "portable":
+        normalized = "portable"
+    return _WINGET_INSTALLER_TYPE_PRIORITY.get(normalized, 99)
 
 
 def _normalize_installer_type(installer_type: str, installer_url: str) -> str:
@@ -441,7 +465,7 @@ class WinGetManifestRepository:
                 candidate=None,
                 available_scopes=available_scopes,
             )
-        if len(matching) != 1:
+        if not matching:
             available_architectures = sorted({
                 item.get("Architecture")
                 for item in installer_facts
@@ -453,17 +477,26 @@ class WinGetManifestRepository:
                 if isinstance(item.get("Scope", installer_doc.get("Scope")), str)
             })
             raise DiscoveryUnavailable(
-                "manifest does not contain exactly one installer for the requested architecture and scope",
-                failure_code="installer_selection_not_unique",
+                "manifest does not contain an installer for the requested architecture and scope",
+                failure_code="installer_not_found",
                 diagnostic_fields={
                     "requested_architecture": architecture,
                     "requested_scope": scope,
-                    "installer_matching_count": len(matching),
+                    "installer_matching_count": 0,
                     "installer_architectures": ",".join(available_architectures),
                     "installer_scopes": ",".join(available_scopes),
                 },
             )
-        installer = matching[0]
+        # Match WinGet's documented default installer-type preference:
+        # MSIX, MSI/WiX/Burn, Nullsoft/Inno/EXE, then portable. Keep
+        # manifest order as the deterministic tie-breaker within a tier.
+        installer = min(
+            enumerate(matching),
+            key=lambda entry: (
+                _winget_installer_type_priority(entry[1], installer_doc),
+                entry[0],
+            ),
+        )[1]
         if installer.get("Dependencies"):
             raise DiscoveryUnavailable(
                 "selected installer dependencies are not eligible for exact single-package approval"
