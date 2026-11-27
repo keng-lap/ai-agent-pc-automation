@@ -134,6 +134,7 @@ def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> di
                 "status_code": 503,
                 "upstream_status": exc.upstream_status,
                 "failure_code": exc.failure_code,
+                "failure_reason": str(exc),
                 "package_id": payload.package_id,
                 "version": payload.version,
                 "selected_version": payload.version,
