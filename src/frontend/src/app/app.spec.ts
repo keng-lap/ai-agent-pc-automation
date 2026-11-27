@@ -760,7 +760,7 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ติดตั้งและตรวจสอบ Package ผ่านแล้ว');
   });
 
-  it('blocks a WinGet manifest version that differs from the vendor official release', async () => {
+  it('allows choosing a WinGet version before blocking a verified official-release mismatch', async () => {
     api.catalogResponder = () => of({
       status: 'CATALOG_MATCHES',
       source: 'microsoft-winget-source2',
@@ -775,9 +775,9 @@ describe('App chat UI (T-202)', () => {
       ? {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
-        available_versions: [],
+        available_versions: ['7.3.5'],
         manifest_versions: ['7.3.5'],
-        official_versions: ['26.2.4'],
+        official_versions: null,
         candidate: null,
         available_scopes: ['user'],
         source: 'winget-community-repository',
@@ -825,10 +825,13 @@ describe('App chat UI (T-202)', () => {
     const versionButtons = Array.from(
       fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
     );
-    expect(versionButtons).toHaveLength(0);
-    expect(fixture.nativeElement.textContent).not.toContain('7.3.5');
-    expect(fixture.nativeElement.textContent).toContain('26.2.4');
-    expect(fixture.nativeElement.textContent).toContain('ไม่มีเวอร์ชันจาก WinGet ที่ตรงกับ Release ทางการ');
+    expect(versionButtons).toHaveLength(1);
+    expect(versionButtons[0].textContent).toContain('7.3.5');
+    versionButtons[0].click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.discoveryCalls.at(-1)).toEqual({ packageId: 'DBeaver.DBeaver.Community', version: '7.3.5', architecture: 'x64' });
+    expect(fixture.nativeElement.textContent).toContain('บล็อก: Manifest ไม่ตรงกับ Release ทางการ');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
 
