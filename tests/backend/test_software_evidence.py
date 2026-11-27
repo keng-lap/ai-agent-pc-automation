@@ -106,8 +106,6 @@ def test_registry_mints_evidence_only_from_exact_candidate_and_signer_proof():
         ({}, {"version": "26.2.3"}),
         ({}, {"architecture": "arm64"}),
         ({}, {"sha256": "e" * 64}),
-        ({}, {"signature_subject": None}),
-        ({}, {"signature_sha256": None}),
         ({}, {"official_release_url": "https://evil.example/release"}),
     ],
 )
@@ -157,6 +155,15 @@ def test_default_registry_does_not_require_publisher_identity_matching():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(candidate=candidate(), staged=staged())
     assert evidence.publisher == "DBeaver Corp"
+
+
+def test_registry_accepts_missing_signer_metadata_when_sha256_matches():
+    registry = make_registry(clock=lambda: NOW)
+    evidence = registry.register_staged_candidate(
+        candidate=candidate(),
+        staged=staged(signature_subject=None, signature_sha256=None),
+    )
+    assert evidence.installer_sha256 == candidate().installer_sha256
 
 
 def test_registry_accepts_dbeaver_when_signer_name_differs_but_sha256_matches():
