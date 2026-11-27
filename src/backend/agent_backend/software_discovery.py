@@ -300,18 +300,17 @@ class GitHubPublisherReleaseVerifier:
         url = f"{self.API_ORIGIN}/repos/{owner}/{name}/releases/tags/{version}"
         response = None
         try:
+            token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": USER_AGENT,
+            }
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
             response = self._http_get(
                 url,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": USER_AGENT,
-                    **(
-                        {"Authorization": f"Bearer {os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')}"}
-                        if (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
-                        else {}
-                    ),
-                },
+                headers=headers,
                 timeout=(3.05, 10),
                 allow_redirects=False,
                 stream=True,
