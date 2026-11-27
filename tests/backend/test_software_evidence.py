@@ -166,7 +166,7 @@ def test_registry_accepts_missing_signer_metadata_when_sha256_matches():
     assert evidence.installer_sha256 == candidate().installer_sha256
 
 
-def test_registry_accepts_dbeaver_when_signer_name_differs_but_sha256_matches():
+def test_registry_accepts_acme_when_signer_name_differs_but_sha256_matches():
     registry = make_registry(clock=lambda: NOW)
     evidence = registry.register_staged_candidate(
         candidate=candidate(),
@@ -175,7 +175,7 @@ def test_registry_accepts_dbeaver_when_signer_name_differs_but_sha256_matches():
     assert evidence.installer_sha256 == candidate().installer_sha256
 
 
-def test_registry_accepts_dbeaver_without_official_release_metadata_when_manifest_hash_matches():
+def test_registry_accepts_acme_without_official_release_metadata_when_manifest_hash_matches():
     registry = make_registry(clock=lambda: NOW)
     generic_manifest_candidate = candidate().model_copy(update={
         "publisher_verification": "NOT_CHECKED",
