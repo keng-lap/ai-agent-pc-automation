@@ -650,7 +650,7 @@
                             <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
                               {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
                             </button>
-                          } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true && discovery.readiness?.real_install_release_package_id === discovery.proposal?.package_id && discovery.readiness?.real_install_release_version === discovery.proposal?.version) {
+                          } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true) {
                             <div class="program-review" aria-label="Verified installer approval evidence">
                               <strong>{{ language() === "th" ? "หลักฐานไฟล์ติดตั้งที่ตรวจสอบแล้ว" : "Verified installer evidence" }}</strong>
                               <span>Package ID: {{ discovery.approvalChallenge.package_id }}</span>
@@ -671,12 +671,10 @@
                             <button class="send-button" type="button" [disabled]="planning() || (discovery.totpCode ?? '').length !== 6" (click)="confirmSoftwareInstall(entry.id)">
                               {{ language() === 'th' ? 'อนุมัติและเข้าคิวติดตั้งจริง' : 'Approve and queue real install' }}
                             </button>
-                          } @else if (!discovery.readiness?.real_install_enabled || discovery.readiness?.real_install_release_package_id !== discovery.proposal?.package_id || discovery.readiness?.real_install_release_version !== discovery.proposal?.version) {
-                            <small role="status">{{ language() === 'th' ? 'ยังไม่มี Release Authorization สำหรับ Package/Version นี้ ให้รัน scripts/authorize-real-install.ps1 จาก PowerShell แล้ว Restart Backend จากหน้าต่างเดียวกัน จากนั้นรีเฟรชสถานะ' : 'No active release authorization for this exact package/version. Run scripts/authorize-real-install.ps1 in PowerShell, restart the backend from that same window, then refresh readiness.' }}</small>
-                            <small>{{ language() === 'th' ? 'เป้าหมายที่อนุญาตอยู่ในระบบ: ' : 'Currently authorized target: ' }}{{ discovery.readiness?.real_install_release_package_id ?? '—' }} {{ discovery.readiness?.real_install_release_version ?? '' }}</small>
+                          } @else if (discovery.readiness?.real_install_enabled !== true) {
+                            <small role="status">{{ language() === 'th' ? 'การติดตั้งจริงรองรับเฉพาะ Windows และต้องให้ Backend พร้อมใช้งาน' : 'Real installation is supported only on Windows and requires the backend to be ready.' }}</small>
                             <button class="send-button" type="button" [disabled]="discovery.readinessChecking" (click)="refreshSoftwareInstallReadiness(entry.id)">
-                              {{ language() === 'th' ? 'รีเฟรช Release Authorization' : 'Refresh release authorization' }}
-                            </button>
+                              {{ language() === 'th' ? 'ตรวจสอบความพร้อมอีกครั้ง' : 'Refresh readiness' }}</button>
                           } @else {
                             <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">
                               {{ language() === 'th' ? 'ยืนยันตัวตนและขออนุมัติ' : 'Verify identity and request approval' }}
