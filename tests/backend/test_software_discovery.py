@@ -31,7 +31,13 @@ def request_path(url):
 
 class FakeSource:
     def __init__(
-        self, *, bad_scope=False, bad_hash=False, bad_url=False, wrap_base64=False, publisher_url=None,
+        self,
+        *,
+        bad_scope=False,
+        bad_hash=False,
+        bad_url=False,
+        wrap_base64=False,
+        publisher_url=None,
     ):
         self.calls = []
         self.wrap_base64 = wrap_base64
@@ -164,7 +170,10 @@ def test_generic_github_publisher_release_is_discovered_from_manifest_publisher_
     assert result.candidate.official_version == VERSION
     assert result.candidate.official_asset_sha256 == "b" * 64
     assert result.candidate.official_asset_id == 101
-    release_calls = [call for call in source.calls if "api.github.com/repos/acme/editor/releases/tags/" in call[0]]
+    release_calls = [
+        call for call in source.calls
+        if "api.github.com/repos/acme/editor/releases/tags/" in call[0]
+    ]
     assert len(release_calls) == 1
     assert release_calls[0][1]["allow_redirects"] is False
 
