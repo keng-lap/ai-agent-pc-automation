@@ -157,8 +157,6 @@ class SoftwareEvidenceRegistry:
                 manifest_sha256=candidate.manifest_sha256,
                 architecture=candidate.architecture,
                 scope=candidate.scope,
-                signature_subject=staged.signature_subject,
-                signature_sha256=staged.signature_sha256,
                 verified_at=verified_at,
                 expires_at=min(verified_at + EVIDENCE_TTL, now + EVIDENCE_TTL),
             )
