@@ -61,7 +61,7 @@ class SoftwareInstallProposalResponse(BaseModel):
 
 @router.get("/api/software/install/readiness")
 def get_software_install_readiness(request: Request) -> dict:
-    """Expose readiness from the exact configuration used to start the worker."""
+    """Expose Windows capability; each install release is issued after exact-action TOTP."""
     platform_supported = sys.platform == "win32"
     emit_event(
         event_code="INSTALL_READINESS_CHECKED",
