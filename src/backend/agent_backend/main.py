@@ -178,8 +178,8 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
                 job_state_directory.name + "-Diagnostics"
             )
             configure_store(diagnostics_directory / "runtime.sqlite3")
-        # Reconcile stale jobs on Windows even while live execution is disabled.
-        # This path never claims queued work or starts WinGet.
+        # Keep the Windows worker idle and polling. It can execute only a
+        # durable queue item created after exact-action TOTP approval.
         if os.name != "nt":
             return
         try:
