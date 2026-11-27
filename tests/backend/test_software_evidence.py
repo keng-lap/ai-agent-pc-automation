@@ -248,3 +248,14 @@ def test_approval_digest_changes_when_signer_certificate_fingerprint_changes():
     )
 
     assert original.approval_digest != changed.approval_digest
+
+
+def test_evidence_rejection_exposes_safe_publisher_failure_classification():
+    error = EvidenceRejected(
+        "Authenticode signer identity does not match the WinGet manifest Publisher"
+    )
+
+    assert error.failure_code == "publisher_signer_mismatch"
+    assert error.failure_reason == (
+        "Authenticode signer identity did not match the WinGet manifest Publisher."
+    )
