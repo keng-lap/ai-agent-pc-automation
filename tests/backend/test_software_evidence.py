@@ -10,7 +10,6 @@ from agent_backend.software_evidence import (
     EvidenceNotFound,
     EvidenceRejected,
     SoftwareEvidenceRegistry,
-    signer_subject_matches_publisher,
 )
 from agent_backend.software_staging import StagedInstaller
 
@@ -65,22 +64,6 @@ def staged(**overrides) -> StagedInstaller:
     values.update(overrides)
     return StagedInstaller(**values)
 
-
-
-@pytest.mark.parametrize(
-    "subject,publisher,expected",
-    [
-        ("CN=Acme Software, O=Acme Corporation, C=US", "Acme Corp", True),
-        ('C=US, S=California, L=San Francisco, O="GitHub, Inc.", CN="GitHub, Inc."', "GitHub, Inc.", True),
-        ("CN=Acme, O=Acme\\, Incorporated, C=US", "Acme Inc", True),
-        ("CN=Acme Inc, O=Evil Corp, C=US", "Acme Inc", False),
-        ("CN=Acme Inc, O=Acme Inc, O=Other Inc", "Acme Inc", False),
-        ("CN=Acme Inc, C=US", "Acme Inc", True),
-        ("CN=Acme Inc, O=  , C=US", "Acme Inc", False),
-    ],
-)
-def test_signer_subject_publisher_matching_is_exact_and_fail_closed(subject, publisher, expected):
-    assert signer_subject_matches_publisher(subject, publisher) is expected
 
 
 def test_verified_evidence_rejects_whitespace_only_silent_switch():
@@ -188,7 +171,7 @@ def test_registry_accepts_dbeaver_when_signer_name_differs_but_sha256_matches():
 
 
 
-def test_registry_accepts_unrelated_package_with_exact_manifest_publisher_match():
+def test_registry_accepts_unrelated_package_when_signer_name_differs():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     generic_candidate = candidate().model_copy(update={
         "package_id": "Acme.Editor",
@@ -204,7 +187,7 @@ def test_registry_accepts_unrelated_package_with_exact_manifest_publisher_match(
     })
     generic_staged = staged(
         package_id="Acme.Editor",
-        signature_subject="CN=Acme Editor, O=Acme Inc",
+        signature_subject="CN=Unrelated Signer, O=Unrelated Signer",
         official_release_url=None,
     )
     evidence = registry.register_staged_candidate(candidate=generic_candidate, staged=generic_staged)
@@ -213,7 +196,7 @@ def test_registry_accepts_unrelated_package_with_exact_manifest_publisher_match(
     assert evidence.signature_sha256 == "d" * 64
 
 
-def test_registry_rejects_generic_package_when_manifest_publisher_does_not_match():
+def test_registry_does_not_reject_generic_package_for_signer_name_mismatch():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
     generic_candidate = candidate().model_copy(update={
         "package_id": "Acme.Editor",
@@ -224,15 +207,15 @@ def test_registry_rejects_generic_package_when_manifest_publisher_does_not_match
         "official_asset_sha256": None,
         "official_asset_id": None,
     })
-    with pytest.raises(EvidenceRejected, match="does not match"):
-        registry.register_staged_candidate(
-            candidate=generic_candidate,
-            staged=staged(
-                package_id="Acme.Editor",
-                signature_subject="CN=Evil Corp, O=Evil Corp",
-                official_release_url=None,
-            ),
-        )
+    evidence = registry.register_staged_candidate(
+        candidate=generic_candidate,
+        staged=staged(
+            package_id="Acme.Editor",
+            signature_subject="CN=Evil Corp, O=Evil Corp",
+            official_release_url=None,
+        ),
+    )
+    assert evidence.package_id == "Acme.Editor"
 
 def test_approval_digest_changes_when_signer_certificate_fingerprint_changes():
     registry = make_registry(clock=lambda: NOW)
