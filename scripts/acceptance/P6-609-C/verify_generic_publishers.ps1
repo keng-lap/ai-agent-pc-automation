@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "src" / "backend"))
 
 from agent_backend.software_discovery import WinGetManifestRepository
-from agent_backend.software_evidence import signer_subject_matches_publisher
+from agent_backend.software_evidence import SoftwareEvidenceRegistry
 from agent_backend.software_staging import InstallerStager
 
 package_id, version, architecture = sys.argv[1:4]
@@ -51,33 +51,23 @@ with tempfile.TemporaryDirectory(prefix="aiagent-publisher-acceptance-") as temp
     staging_root = Path(temp_dir) / "staging"
     staged = InstallerStager().stage(candidate, staging_root=staging_root)
     try:
-        print(json.dumps({
-            "diagnostic": "PUBLISHER_IDENTITY",
-            "package_id": candidate.package_id,
-            "manifest_publisher": candidate.publisher,
-            "authenticode_signer_subject": staged.signature_subject,
-            "certificate_sha256": staged.signature_sha256,
-            "subject_match": signer_subject_matches_publisher(
-                staged.signature_subject or "", candidate.publisher
-            ),
-        }, ensure_ascii=False))
-        subject_match = signer_subject_matches_publisher(
-            staged.signature_subject or "", candidate.publisher
+        # The signer name is deliberately changed to prove it is not a
+        # trust decision. Installer SHA-256 remains checked against WinGet.
+        staged = staged.model_copy(update={"signature_subject": "CN=Deliberately Different Signer"})
+        evidence = SoftwareEvidenceRegistry().register_staged_candidate(
+            candidate=candidate,
+            staged=staged,
         )
-        if not subject_match:
-            raise SystemExit("Authenticode signer did not match the exact WinGet manifest Publisher")
         print(json.dumps({
-            "result": "PASS_GENERIC_PUBLISHER",
+            "diagnostic": "INSTALLER_SHA256_ONLY",
             "package_id": candidate.package_id,
             "version": candidate.version,
-            "architecture": candidate.architecture,
-            "scope": candidate.scope,
-            "manifest_publisher": candidate.publisher,
-            "authenticode_signer_subject": staged.signature_subject,
-            "certificate_sha256": staged.signature_sha256,
-            "installer_sha256": staged.sha256,
-            "manifest_source": candidate.manifest_source_url,
-            "note": "Publisher verification only. No install evidence was minted, no installer was executed, and no software was installed.",
+            "manifest_sha256": candidate.installer_sha256,
+            "downloaded_sha256": staged.sha256,
+            "signer_name_used_for_decision": False,
+            "result": "PASS_SHA256_POLICY",
+            "evidence_id_created": bool(evidence.evidence_id),
+            "note": "Signer metadata mismatch did not block valid WinGet SHA-256 evidence. No installer was executed and no software was installed.",
         }, ensure_ascii=False))
     finally:
         Path(staged.file_path).unlink(missing_ok=True)
@@ -96,7 +86,7 @@ try {
         }
     }
     Write-Host ''
-    Write-Host 'PASS: both unrelated package publishers matched their WinGet manifest Publisher.'
+    Write-Host 'PASS: both packages passed the shared WinGet SHA-256 policy without signer-name matching.'
     Write-Host 'No installer was executed. No software was installed.'
 }
 finally {
