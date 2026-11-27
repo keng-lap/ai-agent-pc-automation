@@ -26,9 +26,7 @@ class FakeChatApi {
   readiness = {
     platform_supported: true,
     authenticode_verification_available: true,
-    publisher_identity_policy_available: true,
-    publisher_trust_configured: true,
-    publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' as const,
+    installer_trust_mode: 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY' as const,
     real_install_enabled: true,
     real_install_release_package_id: 'DBeaver.DBeaver.Community' as string | null,
     real_install_release_version: '25.3.0' as string | null,
@@ -630,7 +628,7 @@ describe('App chat UI (T-202)', () => {
   });
 
   it('revokes the previous verified proposal before changing its scope', async () => {
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     const originalDiscoveryResponder = api.discoveryResponder;
@@ -687,7 +685,7 @@ describe('App chat UI (T-202)', () => {
 
   it('queues a verified real install only after exact TOTP approval', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    // Generic publisher trust does not depend on a per-package certificate pin or allowlist.
+    // Installer trust uses the same SHA-256 and signature-integrity policy for every package.
     api.readiness.publisher_identity_policy_available = true;
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
