@@ -200,6 +200,36 @@ def test_generic_github_publisher_release_hash_mismatch_fails_closed_for_candida
     assert result.candidate.publisher_verification == "MISMATCH"
 
 
+def test_generic_github_release_without_api_digest_remains_optional_not_mismatch():
+    source = FakeSource(publisher_url="https://github.com/acme/editor")
+    original_get = source.get
+
+    def release_without_digest(url, **kwargs):
+        if request_path(url) == "repos/acme/editor/releases/tags/" + VERSION:
+            return FakeResponse({
+                "tag_name": VERSION,
+                "html_url": "https://github.com/acme/editor/releases/tag/" + VERSION,
+                "assets": [{
+                    "id": 101,
+                    "browser_download_url": (
+                        "https://github.com/acme/editor/releases/download/"
+                        + VERSION + "/acme-editor-" + VERSION + "-windows-x86_64.exe"
+                    ),
+                }],
+            })
+        return original_get(url, **kwargs)
+
+    result = WinGetManifestRepository(http_get=release_without_digest).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "NOT_CHECKED"
+
+
 def test_non_github_publisher_url_uses_generic_manifest_hash_policy_without_hardcoded_lookup():
     source = FakeSource(publisher_url="https://www.acme.example")
     result = WinGetManifestRepository(http_get=source.get).discover(
