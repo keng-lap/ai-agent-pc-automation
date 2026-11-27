@@ -30,7 +30,10 @@ MAX_RESPONSE_BYTES = 1_000_000
 MAX_MANIFEST_FILES = 12
 MAX_AVAILABLE_VERSIONS = 20
 PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
-VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,79}$")
+# WinGet version directory names may contain vendor suffixes (for example,
+# 1.2.3-beta), but must contain at least one digit. This prevents arbitrary
+# locale/metadata directories such as "CN" from being treated as releases.
+VERSION_PATTERN = re.compile(r"^(?=.{1,80}$)(?=.*[0-9])[A-Za-z0-9][A-Za-z0-9._+!-]*$")
 SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 # WinGet InstallerType describes the installer technology, not the executable
