@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agent_backend.software_approval import VerifiedPackageEvidence, build_install_approval_binding
+from agent_backend.software_approval import VerifiedPackageEvidence
 from agent_backend.software_discovery import InstallerCandidate
 from agent_backend.software_evidence import (
     EvidenceNotFound,
