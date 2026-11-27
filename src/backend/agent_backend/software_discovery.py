@@ -162,6 +162,7 @@ class InstallerCandidate(BaseModel):
     repository_commit: str
     manifest_source_url: str
     checked_at: str
+    publisher_url: str | None = None
     publisher_verification: Literal["NOT_CHECKED", "VERIFIED", "MISMATCH", "UNAVAILABLE"] = "NOT_CHECKED"
     official_version: str | None = None
     official_release_url: str | None = None
@@ -186,6 +187,131 @@ class PublisherVerification(BaseModel):
     official_asset_id: int | None = None
 
 
+class GitHubPublisherReleaseVerifier:
+    """Generic GitHub Releases adapter discovered from the manifest PublisherUrl.
+
+    No package IDs or publisher names are hard-coded. A release is corroborated
+    only when the exact selected version, release URL, installer URL and SHA-256
+    all match the publisher's release API response.
+    """
+
+    API_ORIGIN = "https://api.github.com"
+
+    def __init__(self, *, http_get=None) -> None:
+        self._http_get = http_get or requests.get
+
+    @staticmethod
+    def _repository_from_publisher_url(publisher_url: str | None) -> tuple[str, str] | None:
+        if not isinstance(publisher_url, str) or len(publisher_url) > 2048:
+            return None
+        parsed = urlsplit(publisher_url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "github.com"
+            or parsed.port not in (None, 443)
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) != 2 or any(
+            not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", part)
+            or part in {".", ".."}
+            for part in parts
+        ):
+            return None
+        return parts[0], parts[1]
+
+    def verify(
+        self,
+        *,
+        publisher_url: str | None,
+        version: str,
+        installer_url: str,
+        installer_sha256: str,
+    ) -> PublisherVerification:
+        repository = self._repository_from_publisher_url(publisher_url)
+        if repository is None:
+            return PublisherVerification(status="NOT_CHECKED")
+        owner, name = repository
+        url = f"{self.API_ORIGIN}/repos/{owner}/{name}/releases/tags/{version}"
+        response = None
+        try:
+            response = self._http_get(
+                url,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": USER_AGENT,
+                },
+                timeout=(3.05, 10),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code == 404:
+                return PublisherVerification(status="MISMATCH")
+            if response.status_code != 200:
+                return PublisherVerification(status="UNAVAILABLE")
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > MAX_RESPONSE_BYTES:
+                    return PublisherVerification(status="UNAVAILABLE")
+                chunks.append(chunk)
+            release = json.loads(b"".join(chunks))
+            expected_release_url = f"https://github.com/{owner}/{name}/releases/tag/{version}"
+            if (
+                not isinstance(release, dict)
+                or release.get("tag_name") != version
+                or release.get("html_url") != expected_release_url
+            ):
+                return PublisherVerification(status="MISMATCH")
+            assets = release.get("assets")
+            if not isinstance(assets, list) or len(assets) > 100:
+                return PublisherVerification(status="UNAVAILABLE")
+            matches = [
+                asset for asset in assets
+                if isinstance(asset, dict)
+                and asset.get("browser_download_url") == installer_url
+                and isinstance(asset.get("digest"), str)
+                and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", asset["digest"])
+            ]
+            if len(matches) != 1:
+                return PublisherVerification(status="MISMATCH")
+            asset = matches[0]
+            official_sha256 = asset["digest"].split(":", 1)[1].lower()
+            asset_id = asset.get("id")
+            if type(asset_id) is not int or asset_id < 1:
+                return PublisherVerification(status="UNAVAILABLE")
+            if official_sha256 != installer_sha256.lower():
+                return PublisherVerification(
+                    status="MISMATCH",
+                    official_version=version,
+                    official_release_url=expected_release_url,
+                    official_asset_sha256=official_sha256,
+                    official_asset_id=asset_id,
+                )
+            return PublisherVerification(
+                status="VERIFIED",
+                official_version=version,
+                official_release_url=expected_release_url,
+                official_asset_sha256=official_sha256,
+                official_asset_id=asset_id,
+            )
+        except (requests.RequestException, ValueError, TypeError, KeyError):
+            return PublisherVerification(status="UNAVAILABLE")
+        finally:
+            if response is not None:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+
+
 class DiscoveryResponse(BaseModel):
     """A discovery result that cannot be mistaken for verified approval evidence."""
 
@@ -207,7 +333,7 @@ class WinGetManifestRepository:
     def __init__(self, *, http_get=None, clock=None, publisher_verifier=None) -> None:
         self._http_get = http_get or requests.get
         self._clock = clock or _utc_now_iso
-        self._publisher_verifier = publisher_verifier
+        self._publisher_verifier = publisher_verifier or GitHubPublisherReleaseVerifier(http_get=self._http_get)
 
     def discover(
         self,
@@ -562,19 +688,21 @@ class WinGetManifestRepository:
         source_url = (
             f"https://github.com/{WINGET_REPOSITORY}/tree/{commit_sha}/{version_path}"
         )
-        # Vendor-specific release APIs are not part of the install trust gate.
-        # WinGet manifest URL + SHA-256 are the common source of truth for every package.
-        publisher_check = (
-            self._publisher_verifier.verify(
-                package_id=normalized_id,
-                publisher=publisher,
-                version=version,
-                architecture=architecture,
-                installer_url=installer_url,
-                installer_sha256=installer_hash.lower(),
-            )
-            if self._publisher_verifier is not None
-            else PublisherVerification(status="NOT_CHECKED")
+        # Discover the publisher's GitHub repository from PublisherUrl in the
+        # default-locale manifest. The adapter is package-agnostic; unsupported
+        # publisher website formats remain NOT_CHECKED and retain the common
+        # WinGet SHA-256 + Authenticode-integrity policy.
+        publisher_url_value = default_locale_doc.get("PublisherUrl")
+        publisher_url = (
+            publisher_url_value.strip()
+            if isinstance(publisher_url_value, str) and publisher_url_value.strip()
+            else None
+        )
+        publisher_check = self._publisher_verifier.verify(
+            publisher_url=publisher_url,
+            version=version,
+            installer_url=installer_url,
+            installer_sha256=installer_hash.lower(),
         )
         # An unavailable optional vendor release endpoint is NOT_CHECKED,
         # not a reason to suppress WinGet manifest versions or block approval.
@@ -609,6 +737,7 @@ class WinGetManifestRepository:
             repository_commit=commit_sha,
             manifest_source_url=source_url,
             checked_at=self._clock(),
+            publisher_url=publisher_url,
             publisher_verification=publisher_check.status,
             official_version=publisher_check.official_version,
             official_release_url=publisher_check.official_release_url,
