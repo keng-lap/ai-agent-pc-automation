@@ -204,11 +204,15 @@ class GitHubPublisherReleaseVerifier:
     def _repository_from_publisher_url(publisher_url: str | None) -> tuple[str, str] | None:
         if not isinstance(publisher_url, str) or len(publisher_url) > 2048:
             return None
-        parsed = urlsplit(publisher_url)
+        try:
+            parsed = urlsplit(publisher_url)
+            port = parsed.port
+        except ValueError:
+            return None
         if (
             parsed.scheme != "https"
             or parsed.hostname != "github.com"
-            or parsed.port not in (None, 443)
+            or port not in (None, 443)
             or parsed.username
             or parsed.password
             or parsed.query
@@ -245,6 +249,11 @@ class GitHubPublisherReleaseVerifier:
                     "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28",
                     "User-Agent": USER_AGENT,
+                    **(
+                        {"Authorization": f"Bearer {os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')}"}
+                        if (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
+                        else {}
+                    ),
                 },
                 timeout=(3.05, 10),
                 allow_redirects=False,
@@ -333,7 +342,9 @@ class WinGetManifestRepository:
     def __init__(self, *, http_get=None, clock=None, publisher_verifier=None) -> None:
         self._http_get = http_get or requests.get
         self._clock = clock or _utc_now_iso
-        self._publisher_verifier = publisher_verifier or GitHubPublisherReleaseVerifier(http_get=self._http_get)
+        self._publisher_verifier = publisher_verifier or GitHubPublisherReleaseVerifier(
+            http_get=self._http_get
+        )
 
     def discover(
         self,
