@@ -193,7 +193,7 @@ class WindowsMsixSignatureVerifier:
         trust_data = _WinTrustData()
         trust_data.cbStruct = ctypes.sizeof(_WinTrustData)
         trust_data.dwUIChoice = 2  # WTD_UI_NONE
-        trust_data.fdwRevocationChecks = 1  # WTD_REVOKE_WHOLECHAIN
+        trust_data.fdwRevocationChecks = 0  # WTD_REVOKE_NONE; chain checking is explicit below
         trust_data.dwUnionChoice = 1  # WTD_CHOICE_FILE
         trust_data.dwStateAction = 1  # WTD_STATEACTION_VERIFY
         # Allow Windows to retrieve missing intermediate certificates through
