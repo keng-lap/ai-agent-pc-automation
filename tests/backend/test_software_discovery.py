@@ -480,7 +480,7 @@ def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
 
     assert result.status == "VERSION_REQUIRED"
     assert len(result.manifest_versions) == 20
-    assert result.manifest_versions[0] == "7.0.0"
+    assert result.manifest_versions[0] == "10.0.0"
     assert result.available_versions == result.manifest_versions
     assert result.manifest_versions[-1] == "26.2.5"
     assert "25.3.0" in result.manifest_versions
