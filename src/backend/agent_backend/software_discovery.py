@@ -390,10 +390,30 @@ class WinGetManifestRepository:
         if not versions:
             raise DiscoveryNotFound("package has no published manifest versions")
         if version is None:
-            # Version selection is based on the pinned WinGet manifest only.
-            # Vendor release APIs are optional corroboration and must never
-            # make the manifest version list unavailable.
             manifest_versions = versions[-MAX_AVAILABLE_VERSIONS:]
+            publisher_url = self._publisher_url_for_version(
+                normalized_id,
+                versions[-1],
+                commit_sha,
+            )
+            official_versions = self._publisher_verifier.list_versions(publisher_url)
+            if official_versions:
+                # The publisher's own release list is the primary version
+                # selector. Only expose exact versions that also have a
+                # pinned WinGet installer manifest for execution.
+                matched_versions = tuple(
+                    item for item in official_versions if item in versions
+                )[-MAX_AVAILABLE_VERSIONS:]
+                if matched_versions:
+                    return DiscoveryResponse(
+                        status="VERSION_REQUIRED",
+                        package_id=normalized_id,
+                        available_versions=matched_versions,
+                        manifest_versions=manifest_versions,
+                        official_versions=official_versions[-MAX_AVAILABLE_VERSIONS:],
+                    )
+            # Non-GitHub publisher sites and unavailable release APIs retain
+            # the generic WinGet version list; no package-specific exception.
             return DiscoveryResponse(
                 status="VERSION_REQUIRED",
                 package_id=normalized_id,
@@ -768,6 +788,62 @@ class WinGetManifestRepository:
             candidate=candidate,
             available_scopes=available_scopes,
         )
+
+    def _publisher_url_for_version(
+        self,
+        package_id: str,
+        version: str,
+        commit_sha: str,
+    ) -> str | None:
+        """Read PublisherUrl from the pinned default-locale manifest, if present."""
+        root = _manifest_package_path(package_id)
+        try:
+            entries = self._get_json(
+                f"/repos/{WINGET_REPOSITORY}/contents/{root}/{version}",
+                params={"ref": commit_sha},
+            )
+            if not isinstance(entries, list):
+                return None
+            locale_entries = [
+                item for item in entries
+                if isinstance(item, dict)
+                and isinstance(item.get("name"), str)
+                and re.fullmatch(
+                    re.escape(package_id) + r"\.locale\.[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\.ya?ml",
+                    item["name"],
+                    re.IGNORECASE,
+                )
+            ][:MAX_MANIFEST_FILES]
+            for item in locale_entries:
+                payload = self._get_json(
+                    f"/repos/{WINGET_REPOSITORY}/contents/{root}/{version}/{item['name']}",
+                    params={"ref": commit_sha},
+                )
+                if (
+                    not isinstance(payload, dict)
+                    or payload.get("encoding") != "base64"
+                    or not isinstance(payload.get("content"), str)
+                ):
+                    continue
+                raw = base64.b64decode(
+                    "".join(payload["content"].split()),
+                    validate=True,
+                )
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    continue
+                document = yaml.safe_load(raw)
+                if (
+                    isinstance(document, dict)
+                    and document.get("ManifestType") == "defaultLocale"
+                    and document.get("PackageIdentifier") == package_id
+                    and document.get("PackageVersion") == version
+                ):
+                    value = document.get("PublisherUrl")
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+        except (DiscoveryUnavailable, DiscoveryNotFound, ValueError, yaml.YAMLError):
+            return None
+        return None
 
     def _get_json(self, path: str, *, params: dict[str, str] | None = None) -> Any:
         if not path.startswith("/repos/microsoft/winget-pkgs/"):
