@@ -365,6 +365,57 @@ def test_consumed_binding_cannot_create_another_challenge(monkeypatch):
 
 
 
+def test_install_job_history_is_owner_scoped_and_returns_safe_package_summary(monkeypatch):
+    from types import SimpleNamespace
+
+    binding = make_binding()
+    requested = []
+
+    class Store:
+        def list_install_jobs(self, *, owner_id, limit):
+            requested.append((owner_id, limit))
+            return [{
+                "reservation_id": "a" * 32,
+                "plan_id": PLAN_ID,
+                "state": "RUNNING",
+                "attempts": 1,
+                "version": 3,
+                "result_code": None,
+                "lease_expires_at": "2026-11-22T00:10:00Z",
+                "created_at": "2026-11-22T00:00:00Z",
+                "updated_at": "2026-11-22T00:05:00Z",
+                "binding_json": binding.model_dump_json(),
+                "events": [{
+                    "sequence": 1,
+                    "state": "QUEUED",
+                    "occurred_at": "2026-11-22T00:00:00Z",
+                    "outcome": "success",
+                    "result_code": None,
+                }],
+            }]
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.list_software_install_jobs(request, limit=10)
+
+    assert requested == [("owner-1", 10)]
+    assert response.jobs[0].package_id == binding.evidence.package_id
+    assert response.jobs[0].package_name == binding.evidence.package_name
+    assert response.jobs[0].version == binding.evidence.version
+    assert response.jobs[0].state == "RUNNING"
+    assert response.jobs[0].events[0].state == "QUEUED"
+    assert not hasattr(response.jobs[0], "binding_json")
+    assert not hasattr(response.jobs[0], "lease_token")
+    assert not hasattr(response.jobs[0], "action_digest")
+
+
 def test_install_job_status_is_owner_scoped_and_exposes_only_safe_fields(monkeypatch):
     from types import SimpleNamespace
 
