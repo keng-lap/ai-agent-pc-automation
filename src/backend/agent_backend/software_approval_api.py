@@ -317,10 +317,6 @@ def create_software_approval_challenge(
     )
 
 
-def _release_authorization_for_request(request: Request):
-    return getattr(request.app.state, "real_install_release_authorization", None)
-
-
 @router.post(
     "/api/plans/{plan_id}/software-approval/confirm",
     response_model=SoftwareApprovalResult,
@@ -360,27 +356,6 @@ def confirm_software_approval(
         with _lock:
             _bindings.pop(plan_id, None)
         raise HTTPException(status_code=409, detail="Software approval digest changed; rediscovery is required.")
-
-    release_authorization = _release_authorization_for_request(request)
-    if (
-        release_authorization is None
-        or release_authorization.task_id != "P6-609-C"
-        or release_authorization.package_id != binding.evidence.package_id
-        or release_authorization.version != binding.evidence.version
-        or release_authorization.expires_at <= datetime.now(UTC)
-    ):
-        emit_event(
-            event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_DENIED",
-            component="approval",
-            stage="release_authorization",
-            correlation=correlation,
-            severity="WARNING",
-            fields={"status_code": 409},
-        )
-        raise HTTPException(
-            status_code=409,
-            detail="A current one-use real-install release authorization for this exact package/version is required.",
-        )
 
     # Serialize confirmation per process: distinct one-use TOTP challenges must not
     # authorize the same plan/evidence binding more than once.
@@ -434,6 +409,17 @@ def confirm_software_approval(
                 raise HTTPException(status_code=409, detail="Install approval was already consumed or conflicts with an existing job.") from None
             except ApprovalReservationError:
                 raise HTTPException(status_code=503, detail="Install job could not be durably queued.") from None
+            emit_event(
+                event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_CREATED",
+                component="approval",
+                stage="release_authorization",
+                correlation=correlation,
+                fields={
+                    "package_id": binding.evidence.package_id,
+                    "version": binding.evidence.version,
+                    "binding": "exact_package_version_action_digest",
+                },
+            )
             _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:
         emit_event(
