@@ -993,6 +993,11 @@ export class App implements AfterViewChecked {
       });
   }
 
+  protected sortedSoftwareVersions(versions: string[]): string[] {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    return [...versions].sort((left, right) => collator.compare(right, left));
+  }
+
   protected selectSoftwareVersion(entryId: number, version: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
     const packageId = entry?.discovery?.packageId;
