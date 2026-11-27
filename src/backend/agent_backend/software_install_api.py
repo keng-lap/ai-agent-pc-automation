@@ -62,7 +62,11 @@ class SoftwareInstallProposalResponse(BaseModel):
 @router.get("/api/software/install/readiness")
 def get_software_install_readiness(request: Request) -> dict:
     """Expose Windows capability; each install release is issued after exact-action TOTP."""
-    platform_supported = sys.platform == "win32"
+    settings = getattr(request.app.state, "settings", None)
+    platform_supported = (
+        sys.platform == "win32"
+        and getattr(settings, "app_env", "development") != "test"
+    )
     emit_event(
         event_code="INSTALL_READINESS_CHECKED",
         component="install",
