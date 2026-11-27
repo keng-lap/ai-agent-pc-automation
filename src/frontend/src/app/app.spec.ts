@@ -830,7 +830,7 @@ describe('App chat UI (T-202)', () => {
     versionButtons[0].click();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(api.discoveryCalls.at(-1)).toEqual({ packageId: 'DBeaver.DBeaver.Community', version: '7.3.5', architecture: 'x64' });
+    expect(api.discoveryCalls[api.discoveryCalls.length - 1]).toEqual({ packageId: 'DBeaver.DBeaver.Community', version: '7.3.5', architecture: 'x64' });
     expect(fixture.nativeElement.textContent).toContain('บล็อก: Manifest ไม่ตรงกับ Release ทางการ');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
