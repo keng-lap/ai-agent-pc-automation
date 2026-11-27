@@ -39,7 +39,6 @@ class InstallerStageError(RuntimeError):
         "installer file type is not supported": ("installer_type_unsupported", "Installer file extension is not supported."),
         "encoded installer responses are not accepted": ("encoded_installer_response", "Installer source returned an encoded response; only identity encoding is accepted."),
         "installer candidate must come from the backend discovery service": ("untrusted_installer_candidate", "Installer candidate was not produced by the backend discovery service."),
-        "official DBeaver release asset identity is missing": ("official_asset_identity_missing", "Verified DBeaver release asset identifier was missing."),
         "installer could not be staged safely": ("installer_staging_failed", "Installer download or staging failed due to an operating-system or transport error."),
         "installer content length was invalid": ("invalid_content_length", "Installer source returned an invalid Content-Length."),
         "installer exceeded the staging size limit": ("installer_size_limit_exceeded", "Installer exceeded the configured staging size limit."),
@@ -52,7 +51,6 @@ class InstallerStageError(RuntimeError):
         "official installer redirect chain was invalid": ("installer_redirect_invalid", "Official installer redirect chain was missing or exceeded its limit."),
         "official installer redirect target was not trusted": ("installer_redirect_untrusted", "Installer redirect target was outside the approved HTTPS host set."),
         "official installer redirect limit was exceeded": ("installer_redirect_limit_exceeded", "Installer redirect count exceeded the configured limit."),
-        "DBeaver installer is not matched to its verified official release": ("official_release_evidence_mismatch", "Selected DBeaver version, URL, or SHA-256 did not match verified official release evidence."),
         "installer publisher source check did not pass": ("publisher_source_check_failed", "Publisher source verification did not pass."),
         "installer URL is not an approved HTTPS URL": ("installer_url_untrusted", "Installer URL failed the approved HTTPS origin check."),
     }
@@ -170,11 +168,7 @@ class InstallerStager:
             declared_length: int | None = None
             with staged_file:
                 download_url = self._download_url(candidate)
-                allowed_redirect_hosts = (
-                    ALLOWED_RELEASE_REDIRECT_HOSTS
-                    if candidate.package_id == "DBeaver.DBeaver.Community"
-                    else frozenset({candidate.installer_domain.casefold()}) | ALLOWED_RELEASE_REDIRECT_HOSTS
-                )
+                allowed_redirect_hosts = frozenset({candidate.installer_domain.casefold()}) | ALLOWED_RELEASE_REDIRECT_HOSTS
                 response = self._get_safe_release_response(
                     download_url,
                     allowed_redirect_hosts=allowed_redirect_hosts,
@@ -269,11 +263,8 @@ class InstallerStager:
 
     @staticmethod
     def _download_url(candidate: InstallerCandidate) -> str:
-        if candidate.package_id == "DBeaver.DBeaver.Community":
-            asset_id = candidate.official_asset_id
-            if type(asset_id) is not int or asset_id < 1:
-                raise InstallerStageError("official DBeaver release asset identity is missing")
-            return f"https://api.github.com/repos/dbeaver/dbeaver/releases/assets/{asset_id}"
+        # Always download the exact URL pinned in the selected WinGet manifest.
+        # Optional vendor metadata must never substitute a package-specific asset endpoint.
         return candidate.installer_url
 
     def _get_safe_release_response(
