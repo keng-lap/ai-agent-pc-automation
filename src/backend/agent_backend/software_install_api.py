@@ -295,9 +295,9 @@ def create_software_install_proposal(
         ) from None
     except EvidenceRejected as exc:
         emit_exception(
-            event_code="INSTALLER_PUBLISHER_EVIDENCE_REJECTED",
+            event_code="INSTALLER_EVIDENCE_REJECTED",
             component="install",
-            stage="publisher_evidence",
+            stage="installer_evidence",
             correlation=correlation,
             error=exc,
             severity="ERROR",
@@ -312,7 +312,7 @@ def create_software_install_proposal(
         )
         raise HTTPException(
             status_code=409,
-            detail="Authenticode signer identity does not match the WinGet manifest Publisher.",
+            detail="Installer evidence did not satisfy the verification policy.",
         ) from None
     except InstallPlanCapacityError:
         emit_event(
