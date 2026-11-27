@@ -291,7 +291,51 @@ def test_worker_never_marks_success_when_winget_exits_nonzero(monkeypatch, tmp_p
 
     assert result.state == "UNKNOWN"
     assert result.result_code == "WINGET_NONZERO_EXIT"
-    assert [item[1] for item in store.transitions] == ["RUNNING", "UNKNOWN"]
+    assert [item[1] for item in store.transitions] == ["RUNNING", "VERIFYING", "UNKNOWN"]
+
+
+@pytest.mark.parametrize(
+    ("verification_result", "expected_state", "expected_code"),
+    [
+        (True, "SUCCEEDED", "PACKAGE_VERSION_VERIFIED_AFTER_NONZERO_EXIT"),
+        (None, "UNKNOWN", "POST_INSTALL_VERIFICATION_AMBIGUOUS"),
+    ],
+)
+def test_worker_verifies_exact_package_after_nonzero_winget_exit(
+    monkeypatch, tmp_path, verification_result, expected_state, expected_code
+):
+    binding = make_binding()
+    store = FakeStore(binding)
+    verifier_calls = []
+    monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
+    monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
+
+    def verifier(package_id, version):
+        verifier_calls.append((package_id, version))
+        return False if len(verifier_calls) == 1 else verification_result
+
+    worker = worker_module.SoftwareInstallWorker(
+        store,
+        work_root=tmp_path / "work",
+        worker_id="worker-1",
+        executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=2316632066),
+        verifier=verifier,
+        heartbeat_seconds=5,
+    )
+
+    result = worker.run_once()
+
+    assert result.state == expected_state
+    assert result.result_code == expected_code
+    assert verifier_calls == [
+        (binding.evidence.package_id, binding.evidence.version),
+        (binding.evidence.package_id, binding.evidence.version),
+    ]
+    assert [item[1] for item in store.transitions] == [
+        "RUNNING",
+        "VERIFYING",
+        expected_state,
+    ]
 
 
 def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeypatch, tmp_path):
