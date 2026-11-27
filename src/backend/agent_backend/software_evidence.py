@@ -9,6 +9,7 @@ from __future__ import annotations
 import secrets
 import threading
 from collections.abc import Callable
+from typing import ClassVar
 from datetime import UTC, datetime, timedelta
 
 from pydantic import ValidationError
@@ -32,7 +33,7 @@ class EvidenceNotFound(LookupError):
 class EvidenceRejected(ValueError):
     """Trusted discovery/staging facts failed policy with a safe diagnostic reason."""
 
-    _REASONS = {
+    _REASONS: ClassVar[dict[str, tuple[str, str]]] = {
         "candidate and staged proof must be backend model instances": ("invalid_evidence_input", "Candidate or staged proof was not created by the backend trust pipeline."),
         "DBeaver official release evidence is not verified": ("official_release_evidence_unverified", "Official DBeaver release version, URL, and digest were not verified."),
         "unchecked publisher candidate contained unexpected vendor release claims": ("unexpected_publisher_claims", "Unverified candidate contained unexpected official publisher claims."),
