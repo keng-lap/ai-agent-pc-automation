@@ -105,9 +105,7 @@ export interface SoftwareDiscoveryResponse {
 export interface SoftwareInstallReadiness {
   platform_supported: boolean;
   authenticode_verification_available: boolean;
-  publisher_identity_policy_available: boolean;
-  publisher_trust_configured: boolean;
-  publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH';
+  installer_trust_mode: 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
   real_install_enabled: boolean;
   real_install_release_package_id: string | null;
   real_install_release_version: string | null;
