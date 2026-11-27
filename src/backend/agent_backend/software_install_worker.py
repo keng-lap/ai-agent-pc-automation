@@ -23,7 +23,6 @@ from agent_backend.approval_reservation_store import (
     InstallExecutionJob,
     SQLiteApprovalReservationStore,
 )
-from agent_backend.config import RealInstallReleaseAuthorization
 from agent_backend.runtime_diagnostics import (
     emit_event,
     emit_exception,
@@ -151,7 +150,6 @@ class SoftwareInstallWorker:
         lease_seconds: int = _LEASE_SECONDS,
         heartbeat_seconds: int = _HEARTBEAT_SECONDS,
         stop_event: threading.Event | None = None,
-        release_authorization: RealInstallReleaseAuthorization | None = None,
     ) -> None:
         self._store = store
         self._work_root = Path(work_root)
@@ -167,7 +165,6 @@ class SoftwareInstallWorker:
         self._lease_seconds = lease_seconds
         self._heartbeat_seconds = heartbeat_seconds
         self._stop_event = stop_event or threading.Event()
-        self._release_authorization = release_authorization
 
     def run_once(self) -> InstallExecutionJob | None:
         """Claim and process one queue item; no item returns None."""
@@ -293,28 +290,18 @@ class SoftwareInstallWorker:
                 correlation=job.correlation_id,
                 fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
             )
-            authorization = self._release_authorization
-            if (
-                authorization is None
-                or authorization.task_id != "P6-609-C"
-                or authorization.package_id != binding.evidence.package_id
-                or authorization.version != binding.evidence.version
-            ):
-                return self._transition(
-                    job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
-                ) or job
             if self._stop_event.is_set() or lease_lost.is_set():
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WORKER_CANCELLED_BEFORE_EXECUTION"
                 ) or job
             try:
                 self._store.consume_real_install_release_authorization(
-                    task_id=authorization.task_id,
-                    package_id=authorization.package_id,
-                    version=authorization.version,
+                    task_id="P6-609-C",
+                    owner_id=job.owner_id,
+                    plan_id=job.plan_id,
+                    package_id=binding.evidence.package_id,
+                    version=binding.evidence.version,
                     action_digest=binding.approval_digest,
-                    nonce=authorization.nonce,
-                    expires_at=authorization.expires_at,
                 )
             except (ApprovalReservationConflict, ApprovalReservationExpired):
                 return self._transition(
