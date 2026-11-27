@@ -1,9 +1,8 @@
 """Runtime privilege guard for the local Backend / Agent process.
 
-The Backend must remain a non-elevated process. UAC elevation belongs only to
-the separately signed Elevated Installer Helper (not implemented by this
-module). On Windows, inability to inspect the effective process token is a
-fail-closed startup error.
+The Backend and in-process Agent must remain non-elevated. This module verifies
+the effective process token and fails closed when its elevation state cannot
+be inspected.
 """
 
 from __future__ import annotations
@@ -98,5 +97,5 @@ def enforce_backend_not_elevated() -> None:
     if is_current_process_elevated():
         raise BackendPrivilegeError(
             "Backend/Agent must run unelevated. UAC elevation is reserved for "
-            "the separately signed Elevated Installer Helper."
+            "No backend or in-process agent elevation is permitted."
         )
