@@ -492,7 +492,9 @@ class WinGetManifestRepository:
         custom_switch = read_switch("Custom")
         success_codes = installer.get("InstallerSuccessCodes")
         if success_codes is None:
-            success_codes = installer_doc.get("InstallerSuccessCodes", [])
+            success_codes = installer_doc.get("InstallerSuccessCodes")
+        if success_codes is None:
+            success_codes = []
         if (
             not isinstance(success_codes, list)
             or len(success_codes) > 16
