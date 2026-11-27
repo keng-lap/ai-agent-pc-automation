@@ -31,7 +31,7 @@ def request_path(url):
 
 class FakeSource:
     def __init__(
-        self, *, bad_scope=False, bad_hash=False, bad_url=False, wrap_base64=False,
+        self, *, bad_scope=False, bad_hash=False, bad_url=False, wrap_base64=False, publisher_url=None,
     ):
         self.calls = []
         self.wrap_base64 = wrap_base64
@@ -61,6 +61,7 @@ class FakeSource:
                 "PackageLocale": "en-US",
                 "PackageName": "Acme Editor",
                 "Publisher": "Acme Inc",
+                **({"PublisherUrl": publisher_url} if publisher_url else {}),
                 "ManifestType": "defaultLocale",
                 "ManifestVersion": "1.10.0",
             },
@@ -79,6 +80,8 @@ class FakeSource:
         path = request_path(url)
         if path.endswith("/commits/master"):
             payload = {"sha": COMMIT}
+        elif path.startswith("repos/acme/editor/releases/tags/"):
+            payload = {"message": "Not Found"}
         elif path.endswith("/Acme/Editor"):
             payload = [{"name": VERSION, "type": "dir"}]
         elif path.endswith(f"/{VERSION}"):
@@ -125,6 +128,90 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
         for call in source.calls
     )
 
+
+
+def test_generic_github_publisher_release_is_discovered_from_manifest_publisher_url():
+    source = FakeSource(publisher_url="https://github.com/acme/editor")
+    original_get = source.get
+
+    def with_release(url, **kwargs):
+        if request_path(url) == "repos/acme/editor/releases/tags/" + VERSION:
+            source.calls.append((url, kwargs))
+            return FakeResponse({
+                "tag_name": VERSION,
+                "html_url": "https://github.com/acme/editor/releases/tag/" + VERSION,
+                "assets": [{
+                    "id": 101,
+                    "browser_download_url": (
+                        "https://github.com/acme/editor/releases/download/"
+                        + VERSION + "/acme-editor-" + VERSION + "-windows-x86_64.exe"
+                    ),
+                    "digest": "sha256:" + "b" * 64,
+                }],
+            })
+        return original_get(url, **kwargs)
+
+    result = WinGetManifestRepository(http_get=with_release).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "VERIFIED"
+    assert result.candidate.publisher_url == "https://github.com/acme/editor"
+    assert result.candidate.official_version == VERSION
+    assert result.candidate.official_asset_sha256 == "b" * 64
+    assert result.candidate.official_asset_id == 101
+    release_calls = [call for call in source.calls if "api.github.com/repos/acme/editor/releases/tags/" in call[0]]
+    assert len(release_calls) == 1
+    assert release_calls[0][1]["allow_redirects"] is False
+
+
+def test_generic_github_publisher_release_hash_mismatch_fails_closed_for_candidate():
+    source = FakeSource(publisher_url="https://github.com/acme/editor")
+    original_get = source.get
+
+    def with_wrong_release_hash(url, **kwargs):
+        if request_path(url) == "repos/acme/editor/releases/tags/" + VERSION:
+            return FakeResponse({
+                "tag_name": VERSION,
+                "html_url": "https://github.com/acme/editor/releases/tag/" + VERSION,
+                "assets": [{
+                    "id": 101,
+                    "browser_download_url": (
+                        "https://github.com/acme/editor/releases/download/"
+                        + VERSION + "/acme-editor-" + VERSION + "-windows-x86_64.exe"
+                    ),
+                    "digest": "sha256:" + "c" * 64,
+                }],
+            })
+        return original_get(url, **kwargs)
+
+    result = WinGetManifestRepository(http_get=with_wrong_release_hash).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "SOURCE_MISMATCH"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "MISMATCH"
+
+
+def test_non_github_publisher_url_uses_generic_manifest_hash_policy_without_hardcoded_lookup():
+    source = FakeSource(publisher_url="https://www.acme.example")
+    result = WinGetManifestRepository(http_get=source.get).discover(
+        package_id=PACKAGE_ID,
+        version=VERSION,
+        architecture="x64",
+    )
+
+    assert result.status == "CONDITIONAL"
+    assert result.candidate is not None
+    assert result.candidate.publisher_verification == "NOT_CHECKED"
+    assert not any("api.github.com/repos/" in call[0] for call in source.calls)
 
 
 @pytest.mark.parametrize("manifest_type", ["nullsoft", "inno", "burn"])
