@@ -228,6 +228,63 @@ class GitHubPublisherReleaseVerifier:
             return None
         return parts[0], parts[1]
 
+    def list_versions(self, publisher_url: str | None) -> tuple[str, ...] | None:
+        """Return published stable tags from the repository named by PublisherUrl."""
+        repository = self._repository_from_publisher_url(publisher_url)
+        if repository is None:
+            return None
+        owner, name = repository
+        response = None
+        try:
+            token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": USER_AGENT,
+            }
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+            response = self._http_get(
+                f"{self.API_ORIGIN}/repos/{owner}/{name}/releases?per_page=100",
+                headers=headers,
+                timeout=(3.05, 10),
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code != 200:
+                return None
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > MAX_RESPONSE_BYTES:
+                    return None
+                chunks.append(chunk)
+            releases = json.loads(b"".join(chunks))
+            if not isinstance(releases, list) or len(releases) > 100:
+                return None
+            versions = {
+                release["tag_name"]
+                for release in releases
+                if isinstance(release, dict)
+                and release.get("draft") is False
+                and release.get("prerelease") is False
+                and isinstance(release.get("tag_name"), str)
+                and VERSION_PATTERN.fullmatch(release["tag_name"])
+            }
+            if not versions:
+                return None
+            return tuple(sorted(versions, key=_version_sort_key))
+        except (requests.RequestException, ValueError, TypeError, KeyError):
+            return None
+        finally:
+            if response is not None:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+
     def verify(
         self,
         *,
