@@ -312,6 +312,7 @@ class SoftwareInstallWorker:
                     severity="WARNING",
                     fields={
                         "plan_id": job.plan_id,
+                        "reservation_id": job.reservation_id,
                         "package_id": binding.evidence.package_id,
                         "version": binding.evidence.version,
                         "failure_code": "RELEASE_AUTHORIZATION_DENIED",
@@ -329,6 +330,7 @@ class SoftwareInstallWorker:
                     severity="ERROR",
                     fields={
                         "plan_id": job.plan_id,
+                        "reservation_id": job.reservation_id,
                         "package_id": binding.evidence.package_id,
                         "version": binding.evidence.version,
                         "failure_code": "RELEASE_AUTHORIZATION_UNAVAILABLE",
@@ -344,6 +346,7 @@ class SoftwareInstallWorker:
                 correlation=job.correlation_id,
                 fields={
                     "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
                     "package_id": binding.evidence.package_id,
                     "version": binding.evidence.version,
                     "binding": "exact_package_version_action_digest",
