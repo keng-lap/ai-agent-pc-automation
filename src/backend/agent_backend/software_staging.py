@@ -47,7 +47,7 @@ class InstallerStageError(RuntimeError):
         "installer size did not match its declared content length": ("installer_size_mismatch", "Downloaded byte count did not match Content-Length."),
         "installer SHA-256 did not match the approved release digest": ("installer_manifest_hash_mismatch", "Downloaded SHA-256 did not match the WinGet manifest digest."),
         "installer SHA-256 did not match the official release asset": ("installer_official_hash_mismatch", "Downloaded SHA-256 did not match the official release asset digest."),
-        "Windows Authenticode trust or signer extraction failed": ("authenticode_verification_failed", "Windows Authenticode trust validation or signer identity extraction failed."),
+        "Windows Authenticode signature verification failed": ("authenticode_verification_failed", "Windows Authenticode signature integrity verification failed."),
         "official installer source returned an unsuccessful response": ("installer_source_http_error", "Official installer source returned an unsuccessful HTTP status."),
         "official installer redirect chain was invalid": ("installer_redirect_invalid", "Official installer redirect chain was missing or exceeded its limit."),
         "official installer redirect target was not trusted": ("installer_redirect_untrusted", "Installer redirect target was outside the approved HTTPS host set."),
@@ -77,7 +77,7 @@ class StagedInstaller(BaseModel):
     file_size: int
     sha256: str
     authenticode_valid: Literal[True] = True
-    # Subject is matched to the manifest Publisher; fingerprint is bound into approval evidence.
+    # Optional signer metadata is informational only and never matched to Publisher.
     signature_subject: str | None = None
     signature_sha256: str | None = None
     official_release_url: str | None = None
@@ -100,22 +100,21 @@ class WindowsAuthenticodeVerifier:
             extract_identity = getattr(self._verifier, "verify_and_get_signer_identity", None)
             if callable(extract_identity):
                 trusted, subject, thumbprint = extract_identity(installer_path)
-                if (
-                    trusted is True
-                    and isinstance(subject, str)
-                    and subject.strip()
-                    and isinstance(thumbprint, str)
-                    and len(thumbprint) == 64
-                    and all(char in "0123456789abcdef" for char in thumbprint)
-                ):
-                    return True, subject.strip(), thumbprint
+                if trusted is True:
+                    safe_subject = subject.strip() if isinstance(subject, str) and subject.strip() else None
+                    safe_thumbprint = (
+                        thumbprint.lower()
+                        if isinstance(thumbprint, str)
+                        and len(thumbprint) == 64
+                        and all(char in "0123456789abcdefABCDEF" for char in thumbprint)
+                        else None
+                    )
+                    return True, safe_subject, safe_thumbprint
                 return False, None, None
             extract_subject = getattr(self._verifier, "verify_and_get_signer_subject", None)
             if callable(extract_subject):
                 subject = extract_subject(installer_path)
-                if isinstance(subject, str) and subject.strip():
-                    return True, subject.strip(), None
-                return False, None, None
+                return True, subject.strip() if isinstance(subject, str) and subject.strip() else None, None
             return self._verifier.verify(installer_path) is True, None, None
         except (OSError, TypeError, ValueError):
             return False, None, None
