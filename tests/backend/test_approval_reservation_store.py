@@ -535,6 +535,27 @@ def test_approval_bindings_and_audit_ledger_are_append_only(tmp_path):
             )
 
 
+def test_install_job_history_is_durable_owner_scoped_and_includes_lifecycle_events(tmp_path):
+    store = make_store(tmp_path)
+    create_install_reservation(store)
+    jobs = store.list_install_jobs(owner_id=OWNER)
+
+    assert len(jobs) == 1
+    assert jobs[0]["plan_id"] == PLAN_ID
+    assert jobs[0]["state"] == "QUEUED"
+    assert jobs[0]["binding_json"]
+    assert jobs[0]["created_at"]
+    assert jobs[0]["events"][-1]["state"] == "QUEUED"
+    assert store.list_install_jobs(owner_id="another-owner") == []
+    assert store.list_install_jobs(owner_id=OWNER, limit=1) == jobs
+
+
+def test_install_job_history_rejects_unbounded_limit(tmp_path):
+    store = make_store(tmp_path)
+    with pytest.raises(ValueError, match="limit"):
+        store.list_install_jobs(owner_id=OWNER, limit=101)
+
+
 @pytest.mark.parametrize("lookup", ["plan", "reservation"])
 def test_status_lookup_reconciles_expired_install_lease(tmp_path, lookup):
     current = NOW + timedelta(seconds=60)
