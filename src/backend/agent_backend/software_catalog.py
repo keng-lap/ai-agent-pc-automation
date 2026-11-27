@@ -64,6 +64,17 @@ def _matches_expected_publisher_subject(subject: str) -> bool:
 class CatalogUnavailable(RuntimeError):
     """The signed Microsoft catalog could not be loaded or trusted."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        upstream_status: int | None = None,
+        failure_code: str = "catalog_unavailable",
+    ) -> None:
+        super().__init__(message)
+        self.upstream_status = upstream_status
+        self.failure_code = failure_code
+
 
 class CatalogCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
@@ -89,7 +100,7 @@ class WindowsMsixSignatureVerifier:
     """Use WinVerifyTrust and extract the verified primary signer identity."""
 
     def verify(self, package_path: Path) -> bool:
-        trusted, _subject, _thumbprint = self._verify_and_read_signer(
+        trusted, _subject, _thumbprint, _hresult = self._verify_and_read_signer(
             package_path,
             include_identity=False,
         )
@@ -105,6 +116,14 @@ class WindowsMsixSignatureVerifier:
         package_path: Path,
     ) -> tuple[bool, str | None, str | None]:
         """Return signer subject and SHA-256 of the signer certificate DER."""
+        trusted, subject, thumbprint, _hresult = self.verify_with_diagnostics(package_path)
+        return trusted, subject, thumbprint
+
+    def verify_with_diagnostics(
+        self,
+        package_path: Path,
+    ) -> tuple[bool, str | None, str | None, str | None]:
+        """Return trust result, signer identity, and a safe WinVerifyTrust HRESULT."""
         return self._verify_and_read_signer(package_path, include_identity=True)
 
     @staticmethod
@@ -112,9 +131,9 @@ class WindowsMsixSignatureVerifier:
         package_path: Path,
         *,
         include_identity: bool,
-    ) -> tuple[bool, str | None, str | None]:
+    ) -> tuple[bool, str | None, str | None, str | None]:
         if os.name != "nt" or not package_path.is_file():
-            return False, None, None
+            return False, None, None, None
 
         class _Guid(ctypes.Structure):
             _fields_ = [
@@ -174,10 +193,14 @@ class WindowsMsixSignatureVerifier:
         trust_data = _WinTrustData()
         trust_data.cbStruct = ctypes.sizeof(_WinTrustData)
         trust_data.dwUIChoice = 2  # WTD_UI_NONE
-        trust_data.fdwRevocationChecks = 1  # WTD_REVOKE_WHOLECHAIN
+        trust_data.fdwRevocationChecks = 0  # WTD_REVOKE_NONE; chain checking is explicit below
         trust_data.dwUnionChoice = 1  # WTD_CHOICE_FILE
         trust_data.dwStateAction = 1  # WTD_STATEACTION_VERIFY
-        trust_data.dwProvFlags = 0x1000  # WTD_CACHE_ONLY_URL_RETRIEVAL
+        # Allow Windows to retrieve missing intermediate certificates through
+        # their AIA URLs while still checking the chain for revocation. A
+        # cache-only chain build incorrectly rejects valid signers when an
+        # intermediate certificate is not already present on this machine.
+        trust_data.dwProvFlags = 0x80  # WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT
         trust_data.pFile = ctypes.pointer(file_info)
 
         wintrust = None
@@ -190,20 +213,22 @@ class WindowsMsixSignatureVerifier:
                 ctypes.POINTER(_Guid),
                 ctypes.POINTER(_WinTrustData),
             ]
-            trusted = verify(
+            trust_status = int(verify(
                 ctypes.c_void_p(-1),
                 ctypes.byref(action),
                 ctypes.byref(trust_data),
-            ) == 0
+            ))
+            trusted = trust_status == 0
+            hresult = None if trusted else f"0x{trust_status & 0xFFFFFFFF:08X}"
             if not trusted or not include_identity:
-                return trusted, None, None
+                return trusted, None, None, hresult
 
             get_provider_data = wintrust.WTHelperProvDataFromStateData
             get_provider_data.restype = ctypes.c_void_p
             get_provider_data.argtypes = [ctypes.c_void_p]
             provider_data = get_provider_data(trust_data.hWVTStateData)
             if not provider_data:
-                return False, None, None
+                return False, None, None, hresult
 
             get_signer = wintrust.WTHelperGetProvSignerFromChain
             get_signer.restype = ctypes.c_void_p
@@ -215,21 +240,21 @@ class WindowsMsixSignatureVerifier:
             ]
             signer = get_signer(provider_data, 0, 0, 0)
             if not signer:
-                return False, None, None
+                return False, None, None, hresult
 
             get_provider_cert = wintrust.WTHelperGetProvCertFromChain
             get_provider_cert.restype = ctypes.c_void_p
             get_provider_cert.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
             provider_cert = get_provider_cert(signer, 0)
             if not provider_cert:
-                return False, None, None
+                return False, None, None, hresult
 
             cert_context_pointer = ctypes.cast(
                 provider_cert,
                 ctypes.POINTER(_CryptProviderCertPrefix),
             ).contents.pCert
             if not cert_context_pointer:
-                return False, None, None
+                return False, None, None, hresult
             cert = ctypes.cast(
                 cert_context_pointer,
                 ctypes.POINTER(_CertContext),
@@ -239,7 +264,7 @@ class WindowsMsixSignatureVerifier:
                 or cert.cbCertEncoded < 1
                 or cert.cbCertEncoded > 1_000_000
             ):
-                return False, None, None
+                return False, None, None, hresult
             certificate_der = ctypes.string_at(cert.pbCertEncoded, cert.cbCertEncoded)
             thumbprint = hashlib.sha256(certificate_der).hexdigest()
 
@@ -264,7 +289,7 @@ class WindowsMsixSignatureVerifier:
                 0,
             )  # CERT_NAME_RDN_TYPE
             if required < 2 or required > 1024:
-                return False, None, None
+                return False, None, None, hresult
             buffer = ctypes.create_unicode_buffer(required)
             written = get_name(
                 cert_context_pointer,
@@ -275,13 +300,13 @@ class WindowsMsixSignatureVerifier:
                 required,
             )
             if written != required:
-                return False, None, None
+                return False, None, None, hresult
             subject = buffer.value.strip()
             if not subject or len(subject) > 1000 or len(thumbprint) != 64:
-                return False, None, None
-            return True, subject, thumbprint
+                return False, None, None, hresult
+            return True, subject, thumbprint, None
         except (AttributeError, OSError, TypeError, ValueError):
-            return False, None, None
+            return False, None, None, "WINVERIFYTRUST_CALL_FAILED"
         finally:
             if wintrust is not None:
                 trust_data.dwStateAction = 2  # WTD_STATEACTION_CLOSE
@@ -341,7 +366,7 @@ class MicrosoftWinGetCatalogIndex:
             assert self._connection is not None
             # Match every meaningful query token against the catalog's name,
             # package ID, or moniker. This supports natural-language product names
-            # such as "DBeaver Community" while keeping package identity catalog-owned.
+            # such as a product display name while keeping package identity catalog-owned.
             search_terms = tuple(
                 dict.fromkeys(re.findall(r"[^\W_]+", normalized.casefold()))
             ) or (normalized.casefold(),)
@@ -420,7 +445,11 @@ class MicrosoftWinGetCatalogIndex:
                 )
                 try:
                     if response.status_code != 200:
-                        raise CatalogUnavailable("Microsoft catalog download was unsuccessful")
+                        raise CatalogUnavailable(
+                            "Microsoft catalog download was unsuccessful",
+                            upstream_status=response.status_code,
+                            failure_code="upstream_http_error",
+                        )
                     content_length = response.headers.get("Content-Length")
                     if content_length and int(content_length) > MAX_MSIX_BYTES:
                         raise CatalogUnavailable("Microsoft catalog exceeded its size limit")

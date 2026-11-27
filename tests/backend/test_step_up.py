@@ -217,6 +217,27 @@ def test_failed_attempts_are_rate_limited_across_challenges_for_one_session():
     assert store.get(final.challenge_id).status == "locked"
 
 
+def test_scope_change_invalidates_all_active_challenges_for_exact_plan():
+    store = build_store()
+    first = create(store)
+    second = create(store)
+
+    invalidated = store.invalidate_plan(
+        owner_sub=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+    )
+
+    assert invalidated == 2
+    assert store.get(first.challenge_id).status == "invalidated"
+    assert store.get(second.challenge_id).status == "invalidated"
+    assert store.invalidate_plan(
+        owner_sub="different-owner",
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+    ) == 0
+
+
 def test_challenge_expiry_uses_monotonic_time_after_wall_clock_rollback():
     wall_time = [100000.0]
     monotonic_time = [500.0]

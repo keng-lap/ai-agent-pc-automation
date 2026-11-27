@@ -33,8 +33,6 @@ def make_binding():
         manifest_sha256="c" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=DBeaver Corporation",
-        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -46,10 +44,15 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
         def __init__(self):
             self.created = []
             self.verified = []
+            self.invalidated = []
 
         def create(self, **kwargs):
             self.created.append(kwargs)
             return SimpleNamespace(challenge_id="f" * 32, expires_at=NOW.timestamp() + 120)
+
+        def invalidate_plan(self, **kwargs):
+            self.invalidated.append(kwargs)
+            return 1
 
         def verify_and_consume(self, **kwargs):
             self.verified.append(kwargs)
@@ -62,24 +65,22 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
 
     step_up = StepUp()
     principal = SimpleNamespace(owner_sub=owner, session_id=session)
-    monkeypatch.setattr(
-        api,
-        "_release_authorization_for_request",
-        lambda _request: SimpleNamespace(
-            task_id="P6-609-C",
-            package_id="DBeaver.DBeaver.Community",
-            version="26.2.4",
-            expires_at=NOW + timedelta(minutes=5),
-        ),
-    )
-
     class ReservationStore:
         def __init__(self):
             self.created = []
             self.reserved = []
+            self.revoked = []
+            self.revoke_conflict = False
 
         def create_approval(self, **kwargs):
             self.created.append(kwargs)
+
+        def revoke_active_approvals_for_plan(self, **kwargs):
+            self.revoked.append(kwargs)
+            if self.revoke_conflict:
+                from agent_backend.approval_reservation_store import ApprovalReservationConflict
+                raise ApprovalReservationConflict("already queued")
+            return 1
 
         def reserve(self, **kwargs):
             self.reserved.append(kwargs)
@@ -116,6 +117,52 @@ def setup_context(monkeypatch, *, owner="owner-1", session="session-1", accepted
     return step_up, principal, reservation_store
 
 
+def test_scope_change_revokes_pending_approval_evidence_and_plan(monkeypatch):
+    step_up, principal, reservation_store = setup_context(monkeypatch)
+    revoked_evidence = []
+    revoked_plans = []
+    monkeypatch.setattr(api.software_evidence_registry, "revoke", revoked_evidence.append)
+    monkeypatch.setattr(
+        api.software_install_plan_store,
+        "revoke",
+        lambda plan_id, **kwargs: revoked_plans.append((plan_id, kwargs["owner_id"])),
+    )
+
+    response = api.revoke_software_install_proposal(PLAN_ID, request=object())
+
+    assert response == {"revoked": True, "revoked_approvals": 1}
+    assert reservation_store.revoked == [{"plan_id": PLAN_ID, "owner_id": principal.owner_sub}]
+    assert step_up.invalidated == [{
+        "owner_sub": principal.owner_sub,
+        "session_id": principal.session_id,
+        "plan_id": PLAN_ID,
+    }]
+    assert revoked_evidence == ["e" * 32]
+    assert revoked_plans == [(PLAN_ID, principal.owner_sub)]
+    assert PLAN_ID not in api._bindings
+
+
+def test_scope_change_refuses_to_revoke_proposal_after_install_is_queued(monkeypatch):
+    _step_up, _principal, reservation_store = setup_context(monkeypatch)
+    reservation_store.revoke_conflict = True
+    revoked_evidence = []
+    revoked_plans = []
+    monkeypatch.setattr(api.software_evidence_registry, "revoke", revoked_evidence.append)
+    monkeypatch.setattr(
+        api.software_install_plan_store,
+        "revoke",
+        lambda *args, **kwargs: revoked_plans.append(args),
+    )
+
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as captured:
+        api.revoke_software_install_proposal(PLAN_ID, request=object())
+
+    assert captured.value.status_code == 409
+    assert revoked_evidence == []
+    assert revoked_plans == []
+
+
 def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypatch):
     binding = make_binding()
     step_up, _principal, reservation_store = setup_context(monkeypatch)
@@ -141,8 +188,6 @@ def test_challenge_binds_exact_evidence_digest_and_returns_no_execution(monkeypa
     assert response.manifest_source_url == binding.evidence.manifest_source_url
     assert response.repository_commit == binding.evidence.repository_commit
     assert response.installer_type == binding.evidence.installer_type
-    assert response.signature_subject == binding.evidence.signature_subject
-    assert response.signature_sha256 == binding.evidence.signature_sha256
     assert response.notice == "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
     assert reservation_store.created[0]["approval_id"] == "f" * 32
     assert reservation_store.created[0]["action_digest"] == binding.approval_digest
@@ -223,6 +268,8 @@ def test_confirm_consumes_exact_digest_and_persists_queued_install(monkeypatch):
     assert response.reservation_id == "reservation-123"
     assert reservation_store.reserved[0]["approval_id"] == "f" * 32
     assert reservation_store.reserved[0]["binding_json"] == binding.model_dump_json()
+    assert reservation_store.reserved[0]["workflow_id"] == "unknown"
+    assert reservation_store.reserved[0]["correlation_id"] == "unknown"
     assert response.approval_digest == binding.approval_digest
     assert step_up.verified[0]["action_digest"] == binding.approval_digest
     assert step_up.verified[0]["code"] == "123456"
@@ -316,6 +363,57 @@ def test_consumed_binding_cannot_create_another_challenge(monkeypatch):
         )
     assert getattr(error.value, "status_code", None) == 409
 
+
+
+def test_install_job_history_is_owner_scoped_and_returns_safe_package_summary(monkeypatch):
+    from types import SimpleNamespace
+
+    binding = make_binding()
+    requested = []
+
+    class Store:
+        def list_install_jobs(self, *, owner_id, limit):
+            requested.append((owner_id, limit))
+            return [{
+                "reservation_id": "a" * 32,
+                "plan_id": PLAN_ID,
+                "state": "RUNNING",
+                "attempts": 1,
+                "version": 3,
+                "result_code": None,
+                "lease_expires_at": "2026-11-22T00:10:00Z",
+                "created_at": "2026-11-22T00:00:00Z",
+                "updated_at": "2026-11-22T00:05:00Z",
+                "binding_json": binding.model_dump_json(),
+                "events": [{
+                    "sequence": 1,
+                    "state": "QUEUED",
+                    "occurred_at": "2026-11-22T00:00:00Z",
+                    "outcome": "success",
+                    "result_code": None,
+                }],
+            }]
+
+    monkeypatch.setattr(
+        api,
+        "_authenticated_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(owner_sub="owner-1"), None),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        approval_reservation_store=Store(),
+    )))
+
+    response = api.list_software_install_jobs(request, limit=10)
+
+    assert requested == [("owner-1", 10)]
+    assert response.jobs[0].package_id == binding.evidence.package_id
+    assert response.jobs[0].package_name == binding.evidence.package_name
+    assert response.jobs[0].version == binding.evidence.version
+    assert response.jobs[0].state == "RUNNING"
+    assert response.jobs[0].events[0].state == "QUEUED"
+    assert not hasattr(response.jobs[0], "binding_json")
+    assert not hasattr(response.jobs[0], "lease_token")
+    assert not hasattr(response.jobs[0], "action_digest")
 
 
 def test_install_job_status_is_owner_scoped_and_exposes_only_safe_fields(monkeypatch):
@@ -458,21 +556,3 @@ def test_owner_can_recover_committed_install_job_by_plan_without_new_approval(mo
     assert response.reservation_id == job.reservation_id
     assert response.state == "RUNNING"
     assert response.attempts == 1
-
-def test_confirm_rejects_missing_exact_release_before_consuming_totp(monkeypatch):
-    binding = make_binding()
-    step_up, _principal, reservation_store = setup_context(monkeypatch)
-    monkeypatch.setattr(api, "_release_authorization_for_request", lambda _request: None)
-    monkeypatch.setattr(api.software_evidence_registry, "bind_to_plan", lambda **_kwargs: binding)
-    api._bindings[PLAN_ID] = ("owner-1", "session-1", binding)
-
-    with pytest.raises(api.HTTPException) as error:
-        api.confirm_software_approval(
-            PLAN_ID,
-            api.SoftwareApprovalProofRequest(challenge_id="f" * 32, totp_code="123456"),
-            request=object(),
-        )
-
-    assert error.value.status_code == 409
-    assert step_up.verified == []
-    assert reservation_store.reserved == []

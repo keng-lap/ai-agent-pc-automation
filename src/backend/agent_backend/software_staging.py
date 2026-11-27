@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -30,7 +30,62 @@ ALLOWED_RELEASE_REDIRECT_HOSTS = frozenset({
 
 
 class InstallerStageError(RuntimeError):
-    """A bounded download or verification step failed."""
+    """A bounded download or verification step failed with a safe diagnostic code."""
+
+    _WINVERIFYTRUST_RESULTS: ClassVar[dict[str, str]] = {
+        "0x800B0100": "no valid signature was found",
+        "0x800B0109": "certificate chain terminates at an untrusted root",
+        "0x800B010A": "certificate chain could not be built",
+        "0x800B010C": "signing certificate was revoked",
+        "0x80092013": "revocation status could not be checked because the service was offline",
+        "0x800B0111": "signature is explicitly distrusted",
+        "0x80096010": "signed file digest does not match",
+    }
+
+    _REASONS: ClassVar[dict[str, tuple[str, str]]] = {
+        "staging directory must be an absolute, non-symlink path": ("unsafe_staging_path", "Staging directory was not an absolute, non-symlink path."),
+        "staging directory is not a safe directory": ("unsafe_staging_directory", "Staging directory failed the directory safety check."),
+        "staging directory is unavailable": ("staging_storage_unavailable", "Staging directory could not be created or accessed."),
+        "installer file type is not supported": ("installer_type_unsupported", "Installer file extension is not supported."),
+        "encoded installer responses are not accepted": ("encoded_installer_response", "Installer source returned an encoded response; only identity encoding is accepted."),
+        "installer candidate must come from the backend discovery service": ("untrusted_installer_candidate", "Installer candidate was not produced by the backend discovery service."),
+        "installer could not be staged safely": ("installer_staging_failed", "Installer download or staging failed due to an operating-system or transport error."),
+        "installer content length was invalid": ("invalid_content_length", "Installer source returned an invalid Content-Length."),
+        "installer exceeded the staging size limit": ("installer_size_limit_exceeded", "Installer exceeded the configured staging size limit."),
+        "installer source returned non-binary content": ("invalid_installer_content", "Installer source returned non-binary content."),
+        "installer size did not match its declared content length": ("installer_size_mismatch", "Downloaded byte count did not match Content-Length."),
+        "installer SHA-256 did not match the approved release digest": ("installer_manifest_hash_mismatch", "Downloaded SHA-256 did not match the WinGet manifest digest."),
+        "installer SHA-256 did not match the official release asset": ("installer_official_hash_mismatch", "Downloaded SHA-256 did not match the official release asset digest."),
+        "Windows Authenticode signature verification failed": ("authenticode_verification_failed", "Windows Authenticode signature integrity verification failed."),
+        "official installer source returned an unsuccessful response": ("installer_source_http_error", "Official installer source returned an unsuccessful HTTP status."),
+        "official installer redirect chain was invalid": ("installer_redirect_invalid", "Official installer redirect chain was missing or exceeded its limit."),
+        "official installer redirect target was not trusted": ("installer_redirect_untrusted", "Installer redirect target was outside the approved HTTPS host set."),
+        "official installer redirect limit was exceeded": ("installer_redirect_limit_exceeded", "Installer redirect count exceeded the configured limit."),
+        "installer publisher source check did not pass": ("publisher_source_check_failed", "Publisher source verification did not pass."),
+        "installer URL is not an approved HTTPS URL": ("installer_url_untrusted", "Installer URL failed the approved HTTPS origin check."),
+    }
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostic_fields: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.failure_code, self.failure_reason = self._REASONS.get(
+            message,
+            ("installer_staging_failed", "Installer could not be staged or verified safely."),
+        )
+        self.diagnostic_fields = dict(diagnostic_fields or {})
+        trust_result = self.diagnostic_fields.get("winverifytrust_hresult")
+        if trust_result:
+            explanation = self._WINVERIFYTRUST_RESULTS.get(
+                trust_result,
+                "Windows did not accept the Authenticode trust validation",
+            )
+            self.failure_reason = (
+                f"{self.failure_reason} WinVerifyTrust result: {trust_result} ({explanation})."
+            )
 
 
 class StagedInstaller(BaseModel):
@@ -45,7 +100,7 @@ class StagedInstaller(BaseModel):
     file_size: int
     sha256: str
     authenticode_valid: Literal[True] = True
-    # Subject is matched to the manifest Publisher; fingerprint is bound into approval evidence.
+    # Optional signer metadata is informational only and never matched to Publisher.
     signature_subject: str | None = None
     signature_sha256: str | None = None
     official_release_url: str | None = None
@@ -62,31 +117,61 @@ class WindowsAuthenticodeVerifier:
         self,
         installer_path: Path,
     ) -> tuple[bool, str | None, str | None]:
+        trusted, subject, thumbprint, _hresult = self.verify_with_diagnostics(installer_path)
+        return trusted, subject, thumbprint
+
+    def verify_with_diagnostics(
+        self,
+        installer_path: Path,
+    ) -> tuple[bool, str | None, str | None, str | None]:
         if not installer_path.is_file():
-            return False, None, None
+            return False, None, None, None
         try:
+            extract_diagnostics = getattr(self._verifier, "verify_with_diagnostics", None)
+            if callable(extract_diagnostics):
+                trusted, subject, thumbprint, hresult = extract_diagnostics(installer_path)
+                safe_hresult = (
+                    hresult
+                    if isinstance(hresult, str)
+                    and (hresult == "WINVERIFYTRUST_CALL_FAILED"
+                         or (len(hresult) == 10
+                             and hresult.startswith("0x")
+                             and all(char in "0123456789ABCDEF" for char in hresult[2:])))
+                    else None
+                )
+                if trusted is not True:
+                    return False, None, None, safe_hresult
+                safe_subject = subject.strip() if isinstance(subject, str) and subject.strip() else None
+                safe_thumbprint = (
+                    thumbprint.lower()
+                    if isinstance(thumbprint, str)
+                    and len(thumbprint) == 64
+                    and all(char in "0123456789abcdefABCDEF" for char in thumbprint)
+                    else None
+                )
+                return True, safe_subject, safe_thumbprint, None
+
             extract_identity = getattr(self._verifier, "verify_and_get_signer_identity", None)
             if callable(extract_identity):
                 trusted, subject, thumbprint = extract_identity(installer_path)
-                if (
-                    trusted is True
-                    and isinstance(subject, str)
-                    and subject.strip()
-                    and isinstance(thumbprint, str)
-                    and len(thumbprint) == 64
-                    and all(char in "0123456789abcdef" for char in thumbprint)
-                ):
-                    return True, subject.strip(), thumbprint
-                return False, None, None
+                if trusted is True:
+                    safe_subject = subject.strip() if isinstance(subject, str) and subject.strip() else None
+                    safe_thumbprint = (
+                        thumbprint.lower()
+                        if isinstance(thumbprint, str)
+                        and len(thumbprint) == 64
+                        and all(char in "0123456789abcdefABCDEF" for char in thumbprint)
+                        else None
+                    )
+                    return True, safe_subject, safe_thumbprint, None
+                return False, None, None, None
             extract_subject = getattr(self._verifier, "verify_and_get_signer_subject", None)
             if callable(extract_subject):
                 subject = extract_subject(installer_path)
-                if isinstance(subject, str) and subject.strip():
-                    return True, subject.strip(), None
-                return False, None, None
-            return self._verifier.verify(installer_path) is True, None, None
+                return True, subject.strip() if isinstance(subject, str) and subject.strip() else None, None, None
+            return self._verifier.verify(installer_path) is True, None, None, None
         except (OSError, TypeError, ValueError):
-            return False, None, None
+            return False, None, None, "WINVERIFYTRUST_CALL_FAILED"
 
     def verify_with_subject(self, installer_path: Path) -> tuple[bool, str | None]:
         trusted, subject, _thumbprint = self.verify_with_identity(installer_path)
@@ -139,11 +224,7 @@ class InstallerStager:
             declared_length: int | None = None
             with staged_file:
                 download_url = self._download_url(candidate)
-                allowed_redirect_hosts = (
-                    ALLOWED_RELEASE_REDIRECT_HOSTS
-                    if candidate.package_id == "DBeaver.DBeaver.Community"
-                    else frozenset({candidate.installer_domain.casefold()}) | ALLOWED_RELEASE_REDIRECT_HOSTS
-                )
+                allowed_redirect_hosts = frozenset({candidate.installer_domain.casefold()}) | ALLOWED_RELEASE_REDIRECT_HOSTS
                 response = self._get_safe_release_response(
                     download_url,
                     allowed_redirect_hosts=allowed_redirect_hosts,
@@ -186,19 +267,36 @@ class InstallerStager:
             ):
                 raise InstallerStageError("installer SHA-256 did not match the official release asset")
 
-            verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
-            if callable(verify_with_identity):
-                signature_valid, signature_subject, signature_sha256 = verify_with_identity(temp_path)
+            verify_with_diagnostics = getattr(self._signature_verifier, "verify_with_diagnostics", None)
+            trust_hresult = None
+            if callable(verify_with_diagnostics):
+                signature_valid, signature_subject, signature_sha256, trust_hresult = verify_with_diagnostics(temp_path)
             else:
-                verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
-                if callable(verify_with_subject):
-                    signature_valid, signature_subject = verify_with_subject(temp_path)
+                verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
+                if callable(verify_with_identity):
+                    signature_valid, signature_subject, signature_sha256 = verify_with_identity(temp_path)
                 else:
-                    signature_valid = self._signature_verifier.verify(temp_path) is True
-                    signature_subject = None
-                signature_sha256 = None
+                    verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
+                    if callable(verify_with_subject):
+                        signature_valid, signature_subject = verify_with_subject(temp_path)
+                    else:
+                        signature_valid = self._signature_verifier.verify(temp_path) is True
+                        signature_subject = None
+                    signature_sha256 = None
             if signature_valid is not True:
-                raise InstallerStageError("Windows Authenticode trust or signer extraction failed")
+                safe_hresult = (
+                    trust_hresult
+                    if isinstance(trust_hresult, str)
+                    and (trust_hresult == "WINVERIFYTRUST_CALL_FAILED"
+                         or (len(trust_hresult) == 10
+                             and trust_hresult.startswith("0x")
+                             and all(char in "0123456789ABCDEF" for char in trust_hresult[2:])))
+                    else None
+                )
+                raise InstallerStageError(
+                    "Windows Authenticode signature verification failed",
+                    diagnostic_fields={"winverifytrust_hresult": safe_hresult} if safe_hresult else None,
+                )
 
             final_path = root / f"installer-{uuid.uuid4().hex}{suffix}"
             os.replace(temp_path, final_path)
@@ -238,11 +336,8 @@ class InstallerStager:
 
     @staticmethod
     def _download_url(candidate: InstallerCandidate) -> str:
-        if candidate.package_id == "DBeaver.DBeaver.Community":
-            asset_id = candidate.official_asset_id
-            if type(asset_id) is not int or asset_id < 1:
-                raise InstallerStageError("official DBeaver release asset identity is missing")
-            return f"https://api.github.com/repos/dbeaver/dbeaver/releases/assets/{asset_id}"
+        # Always download the exact URL pinned in the selected WinGet manifest.
+        # Optional vendor metadata must never substitute a package-specific asset endpoint.
         return candidate.installer_url
 
     def _get_safe_release_response(
@@ -300,18 +395,7 @@ class InstallerStager:
     def _require_official_release_match(candidate: InstallerCandidate) -> None:
         if not isinstance(candidate, InstallerCandidate):
             raise InstallerStageError("installer candidate must come from the backend discovery service")
-        if candidate.package_id == "DBeaver.DBeaver.Community":
-            if (
-                candidate.publisher_verification != "VERIFIED"
-                or candidate.official_version != candidate.version
-                or not candidate.official_release_url
-                or not candidate.official_asset_sha256
-                or candidate.official_asset_sha256 != candidate.installer_sha256.lower()
-                or type(candidate.official_asset_id) is not int
-                or candidate.official_asset_id < 1
-            ):
-                raise InstallerStageError("DBeaver installer is not matched to its verified official release")
-        elif candidate.publisher_verification == "NOT_CHECKED":
+        if candidate.publisher_verification == "NOT_CHECKED":
             if any((
                 candidate.official_version is not None,
                 candidate.official_release_url is not None,

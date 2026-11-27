@@ -23,6 +23,8 @@ client = TestClient(
 @pytest.fixture(autouse=True)
 def clear_provider_key(monkeypatch):
     monkeypatch.setattr(gemini, "_api_key", None)
+    monkeypatch.setattr(gemini, "_model_name", gemini.MODEL_NAME)
+    monkeypatch.setattr(gemini, "_tested_configuration", None)
     chat_module._conversation_store.clear()
 
 
@@ -54,10 +56,17 @@ def test_status_does_not_expose_api_key():
     assert response.json() == {
         "configured": False,
         "model": "gemini-3.1-flash-lite",
+        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-4-hydrogen", "gemini-4-argon", "gemini-4-neon", "gemini-4-carbon"],
     }
 
 
 def test_save_key_keeps_it_out_of_response(monkeypatch):
+    monkeypatch.setattr(gemini, "test_connection", lambda **_kwargs: None)
+    test_response = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.1-flash-lite", "api_key": "test-gemini-api-key-123456789"},
+    )
+    assert test_response.status_code == 200
     response = client.put(
         "/api/settings/gemini",
         json={"api_key": "test-gemini-api-key-123456789"},
@@ -90,7 +99,7 @@ def test_invalid_api_key_is_rejected(api_key):
 
 def test_test_connection_uses_saved_key(monkeypatch):
     calls = []
-    monkeypatch.setattr(gemini, "test_connection", lambda: calls.append("tested"))
+    monkeypatch.setattr(gemini, "test_connection", lambda **kwargs: calls.append(kwargs))
     gemini.save_api_key("test-gemini-api-key-123456789")
     response = client.post("/api/settings/gemini/test", json={})
     assert response.status_code == 200
@@ -98,7 +107,115 @@ def test_test_connection_uses_saved_key(monkeypatch):
         "connected": True,
         "model": "gemini-3.1-flash-lite",
     }
-    assert calls == ["tested"]
+    assert calls == [{"model": "gemini-3.1-flash-lite", "api_key": "test-gemini-api-key-123456789"}]
+
+
+def test_test_connection_uses_selected_model_and_candidate_key_without_saving(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        gemini,
+        "test_connection",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    response = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.5-flash-lite", "api_key": "candidate-gemini-api-key-123456"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "model": "gemini-3.5-flash-lite"}
+    assert calls == [{
+        "model": "gemini-3.5-flash-lite",
+        "api_key": "candidate-gemini-api-key-123456",
+    }]
+    assert not gemini.is_configured()
+    assert gemini.get_model_name() == "gemini-3.1-flash-lite"
+
+
+def test_failed_retest_invalidates_previous_successful_test(monkeypatch):
+    attempts = []
+
+    def test_connection(**_kwargs):
+        attempts.append(True)
+        if len(attempts) == 2:
+            raise gemini.GeminiProviderError("quota_exceeded")
+
+    monkeypatch.setattr(gemini, "test_connection", test_connection)
+    candidate_key = "candidate-gemini-api-key-123456"
+    first = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.5-flash-lite", "api_key": candidate_key},
+    )
+    assert first.status_code == 200
+    second = client.post(
+        "/api/settings/gemini/test",
+        json={"model": "gemini-3.8-flash", "api_key": candidate_key},
+    )
+    assert second.status_code == 502
+    save = client.put(
+        "/api/settings/gemini",
+        json={"model": "gemini-3.5-flash-lite", "api_key": candidate_key},
+    )
+    assert save.status_code == 409
+    assert not gemini.is_configured()
+
+
+def test_chat_generation_uses_saved_selected_model(monkeypatch):
+    calls = []
+
+    class Response:
+        text = _response_json("model selected")
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    gemini.save_api_key("test-gemini-api-key-123456789")
+    gemini.save_model_name("gemini-3.5-flash-lite")
+    monkeypatch.setattr(gemini, "_client", lambda: Client())
+    assert gemini.generate_universal_response("hello", type(
+        "Schema",
+        (),
+        {"model_json_schema": classmethod(lambda _cls: {"type": "OBJECT", "properties": {"message": {"type": "STRING"}}})},
+    )) == Response.text
+    assert calls[0]["model"] == "gemini-3.5-flash-lite"
+
+
+def test_save_is_rejected_until_matching_model_test_succeeds():
+    gemini.save_api_key("existing-gemini-api-key-123456")
+    response = client.put(
+        "/api/settings/gemini",
+        json={"model": "gemini-3.5-flash-lite"},
+    )
+    assert response.status_code == 409
+    assert gemini.get_model_name() == "gemini-3.1-flash-lite"
+
+
+def test_save_model_without_replacing_existing_key(monkeypatch):
+    gemini.save_api_key("existing-gemini-api-key-123456")
+    monkeypatch.setattr(gemini, "test_connection", lambda **_kwargs: None)
+    tested = client.post("/api/settings/gemini/test", json={"model": "gemini-4-hydrogen"})
+    assert tested.status_code == 200
+    response = client.put(
+        "/api/settings/gemini",
+        json={"model": "gemini-4-hydrogen"},
+    )
+    assert response.status_code == 200
+    assert response.json()["model"] == "gemini-4-hydrogen"
+    assert gemini.is_configured()
+
+
+def test_unsupported_model_is_rejected_without_changing_configuration():
+    gemini.save_api_key("existing-gemini-api-key-123456")
+    response = client.put(
+        "/api/settings/gemini",
+        json={"api_key": "replacement-gemini-api-key-123456", "model": "not-a-gemini-model"},
+    )
+    assert response.status_code == 422
+    assert gemini.get_model_name() == "gemini-3.1-flash-lite"
 
 
 def test_test_connection_requires_saved_key():
@@ -195,6 +312,56 @@ def test_universal_response_generation_uses_json_schema_and_backend_instruction(
     assert calls[0]["config"].response_mime_type == "application/json"
     assert calls[0]["config"].response_json_schema == Schema.model_json_schema()
     assert "Return ONLY one JSON object" in calls[0]["config"].system_instruction
+
+
+def test_connection_exercises_chat_json_schema_with_candidate_model_and_key(monkeypatch):
+    calls = []
+
+    class Response:
+        text = _response_json("ทดสอบสำเร็จ")
+
+    class Models:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            return Response()
+
+    class Client:
+        models = Models()
+
+    client_kwargs = []
+    monkeypatch.setattr(
+        gemini,
+        "_client",
+        lambda **kwargs: client_kwargs.append(kwargs) or Client(),
+    )
+
+    candidate_key = "candidate-gemini-api-key-123456"
+    gemini.test_connection(model="gemini-3.8-flash", api_key=candidate_key)
+
+    assert client_kwargs == [{"api_key": candidate_key}]
+    assert calls[0]["model"] == "gemini-3.8-flash"
+    assert calls[0]["contents"] == "สวัสดี ทดสอบการสนทนาและตอบกลับตามรูปแบบที่กำหนด"
+    assert calls[0]["config"].response_mime_type == "application/json"
+    assert calls[0]["config"].response_json_schema == (
+        chat_module.UniversalConversationResponse.model_json_schema()
+    )
+    assert calls[0]["config"].system_instruction == gemini.UNIVERSAL_RESPONSE_SYSTEM_INSTRUCTION
+
+
+def test_connection_rejects_invalid_chat_schema_response(monkeypatch):
+    class Response:
+        text = '{"message":"not a complete conversation response"}'
+
+    class Models:
+        def generate_content(self, **_kwargs):
+            return Response()
+
+    class Client:
+        models = Models()
+
+    monkeypatch.setattr(gemini, "_client", lambda **_kwargs: Client())
+    with pytest.raises(gemini.GeminiProviderError, match="invalid_response"):
+        gemini.test_connection(model="gemini-3.8-flash", api_key="candidate-gemini-api-key-123456")
 
 
 def test_chat_system_instruction_is_supplied_on_every_reply(monkeypatch):
@@ -445,7 +612,7 @@ def test_connection_error_returns_safe_category(monkeypatch):
     monkeypatch.setattr(
         gemini,
         "test_connection",
-        lambda: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
+        lambda **_kwargs: (_ for _ in ()).throw(gemini.GeminiProviderError("quota_exceeded")),
     )
     response = client.post("/api/settings/gemini/test", json={})
     assert response.status_code == 502
@@ -457,7 +624,7 @@ def test_connection_error_returns_safe_stage_and_trace(monkeypatch):
     monkeypatch.setattr(
         gemini,
         "test_connection",
-        lambda: (_ for _ in ()).throw(
+        lambda **_kwargs: (_ for _ in ()).throw(
             gemini.GeminiProviderError(
                 "sdk_runtime_error",
                 "RuntimeError",

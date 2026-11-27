@@ -26,18 +26,17 @@ class FakeChatApi {
   readiness = {
     platform_supported: true,
     authenticode_verification_available: true,
-    publisher_identity_policy_available: true,
-    publisher_trust_configured: true,
-    publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' as const,
+    installer_trust_mode: 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY' as const,
     real_install_enabled: true,
-    real_install_release_package_id: 'DBeaver.DBeaver.Community' as string | null,
-    real_install_release_version: '25.3.0' as string | null,
-    real_install_release_expires_at: '2026-11-12T00:10:00Z' as string | null,
+    real_install_release_package_id: null as string | null,
+    real_install_release_version: null as string | null,
+    real_install_release_expires_at: null as string | null,
     package_allowlist_enabled: false,
     supported_package_ids: [] as string[],
-    notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT' as const,
+    notice: 'RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP' as const,
   };
-  proposalCalls: Array<{ packageId: string; version: string; architecture: string }> = [];
+  proposalCalls: Array<{ packageId: string; version: string; architecture: string; scope: string }> = [];
+  revokeProposalCalls: string[] = [];
   approvalChallengeCalls: Array<{ planId: string; evidenceId: string }> = [];
   softwareApprovalCalls: Array<{ planId: string; challengeId: string; code: string }> = [];
   approvalErrorStatus: number | null = null;
@@ -46,26 +45,31 @@ class FakeChatApi {
   reservationRecoveryCalls: string[] = [];
   reservationRecoveryResponder: (planId: string) => Observable<unknown> = () => throwError(() => ({ status: 404 }));
   jobStatusCalls: string[] = [];
-  discoveryResponder: (packageId: string, version: string | null) => Observable<SoftwareDiscoveryResponse> = (packageId, version) => of(
+  discoveryResponder: (packageId: string, version: string | null, scope?: 'user' | 'machine') => Observable<SoftwareDiscoveryResponse> = (packageId, version, scope = 'user') => of(
     version === null
       ? {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
-        available_versions: ['25.2.0', '25.3.0'],
+        available_versions: ['25.3.0'],
+        manifest_versions: ['25.2.0', '25.3.0'],
+        official_versions: ['25.3.0'],
         candidate: null,
+        available_scopes: ['user'],
         source: 'winget-community-repository',
       }
       : {
         status: 'CONDITIONAL',
         package_id: packageId,
         available_versions: ['25.2.0', '25.3.0'],
+        manifest_versions: ['25.2.0', '25.3.0'],
+        official_versions: null,
         candidate: {
           package_id: packageId,
           package_name: 'DBeaver Community Edition',
           publisher: 'DBeaver Corp',
           version,
           architecture: 'x64',
-          scope: 'user',
+          scope,
           installer_type: 'exe',
           installer_url: 'https://github.com/dbeaver/dbeaver/releases/download/' + version + '/dbeaver-ce-' + version + '-windows-x86_64.exe',
           installer_domain: 'github.com',
@@ -81,6 +85,7 @@ class FakeChatApi {
           status: 'CONDITIONAL',
           limitations: ['installer_authenticode_signature_not_yet_verified'],
         },
+        available_scopes: ['user'],
         source: 'winget-community-repository',
       },
   );
@@ -130,8 +135,24 @@ class FakeChatApi {
     notice: 'DRY_RUN_ONLY_NO_CHANGES_MADE',
   });
 
+  getDiagnosticsMode(): Observable<{ enabled: boolean; storage_available: boolean }> {
+    return of({ enabled: false, storage_available: true });
+  }
+
+  setDiagnosticsMode(enabled: boolean): Observable<{ enabled: boolean; storage_available: boolean }> {
+    return of({ enabled, storage_available: true });
+  }
+
+  recordBrowserDiagnostic(): Observable<{ recorded: boolean }> {
+    return of({ recorded: true });
+  }
+
   getAuthSession(): Observable<{ enabled: boolean; authenticated: boolean; authenticator_enrolled: boolean }> {
     return of(this.authSession);
+  }
+
+  getSoftwareInstallJobs(): Observable<{ jobs: []; checked_at: string }> {
+    return of({ jobs: [], checked_at: '2026-11-28T00:00:00Z' });
   }
 
   startGoogleLogin(): Observable<{ authorization_url: string }> {
@@ -155,9 +176,9 @@ class FakeChatApi {
     return this.catalogResponder(query);
   }
 
-  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64'): Observable<SoftwareDiscoveryResponse> {
+  discoverSoftware(packageId: string, version: string | null, architecture: 'x86' | 'x64' | 'arm64' = 'x64', scope: 'user' | 'machine' = 'user'): Observable<SoftwareDiscoveryResponse> {
     this.discoveryCalls.push({ packageId, version, architecture });
-    return this.discoveryResponder(packageId, version);
+    return this.discoveryResponder(packageId, version, scope);
   }
 
   getSoftwareInstallReadiness(): Observable<typeof this.readiness> {
@@ -170,8 +191,13 @@ class FakeChatApi {
     return this.reservationRecoveryResponder(planId);
   }
 
-  createSoftwareInstallProposal(packageId: string, version: string, architecture: string): Observable<unknown> {
-    this.proposalCalls.push({ packageId, version, architecture });
+  revokeSoftwareInstallProposal(planId: string): Observable<{ revoked: boolean; revoked_approvals: number }> {
+    this.revokeProposalCalls.push(planId);
+    return of({ revoked: true, revoked_approvals: 1 });
+  }
+
+  createSoftwareInstallProposal(packageId: string, version: string, architecture: string, scope: 'user'): Observable<unknown> {
+    this.proposalCalls.push({ packageId, version, architecture, scope });
     return of({
       plan_id: 'f'.repeat(32),
       evidence_id: 'e'.repeat(32),
@@ -221,13 +247,6 @@ class FakeChatApi {
       const detail = this.approvalErrorDetail;
       this.approvalErrorStatus = null;
       this.approvalErrorDetail = null;
-      if (status === 409 && detail?.toLowerCase().includes('release authorization')) {
-        // The release can be revoked after readiness was loaded but before approval.
-        this.readiness.real_install_enabled = false;
-        this.readiness.real_install_release_package_id = null;
-        this.readiness.real_install_release_version = null;
-        this.readiness.real_install_release_expires_at = null;
-      }
       return throwError(() => ({ status, error: detail ? { detail } : undefined }));
     }
     return of({
@@ -346,16 +365,16 @@ class FakeChatApi {
     return of(undefined);
   }
 
-  getGeminiStatus(): Observable<{ configured: boolean; model: string }> {
-    return of({ configured: this.configured, model: 'gemini-3.1-flash-lite' });
+  getGeminiStatus(): Observable<{ configured: boolean; model: string; models: string[] }> {
+    return of({ configured: this.configured, model: 'gemini-3.1-flash-lite', models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-4-neon', 'gemini-4-carbon'] });
   }
 
-  saveGeminiKey(_apiKey: string): Observable<{ configured: boolean; model: string }> {
+  saveGeminiKey(_apiKey: string, _model: string): Observable<{ configured: boolean; model: string; models: string[] }> {
     this.configured = true;
-    return of({ configured: true, model: 'gemini-3.1-flash-lite' });
+    return of({ configured: true, model: 'gemini-3.1-flash-lite', models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-4-neon', 'gemini-4-carbon'] });
   }
 
-  testGeminiConnection(): Observable<{ connected: boolean; model: string }> {
+  testGeminiConnection(_model: string, _apiKey: string): Observable<{ connected: boolean; model: string }> {
     if (this.testError !== undefined) return throwError(() => this.testError);
     return of({ connected: true, model: 'gemini-3.1-flash-lite' });
   }
@@ -498,7 +517,15 @@ describe('App chat UI (T-202)', () => {
     expect(api.approvalCalls).toEqual([]);
   });
 
-  it('uses Gemini to understand install requests while Backend independently resolves Package IDs', async () => {
+  it('lets the user select an older WinGet version when it matches an official release', async () => {
+    const originalDiscoveryResponder = api.discoveryResponder;
+    api.discoveryResponder = (packageId, version) => originalDiscoveryResponder(packageId, version).pipe(
+      map((result) => version === null ? {
+        ...result,
+        available_versions: ['25.2.0', '25.3.0'],
+        official_versions: ['25.2.0', '25.3.0'],
+      } : result),
+    );
     await render();
 
     send('ติดตั้ง DBeaver Community Edition');
@@ -525,17 +552,18 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('เลือกเวอร์ชันที่ต้องการ');
     expect(fixture.nativeElement.textContent).toContain('25.3.0');
 
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(version.disabled).toBe(false);
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.2.0');
+    version.value = '25.2.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(api.discoveryCalls[1]).toEqual({
       packageId: 'DBeaver.DBeaver.Community',
-      version: '25.3.0',
+      version: '25.2.0',
       architecture: 'x64',
     });
     expect(fixture.nativeElement.textContent).toContain('CONDITIONAL');
@@ -546,10 +574,116 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
 
+  it('requires an explicit Machine Scope choice and keeps Machine installation blocked', async () => {
+    const originalDiscoveryResponder = api.discoveryResponder;
+    api.discoveryResponder = (packageId, version, scope = 'user') => originalDiscoveryResponder(packageId, version, scope).pipe(
+      map((result) => result.candidate ? {
+        ...result,
+        available_scopes: ['user', 'machine'],
+        candidate: { ...result.candidate, scope },
+      } : result),
+    );
+    await render();
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const machineScope = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('Machine Scope'));
+    if (!machineScope) throw new Error('Machine Scope option was not rendered');
+    machineScope.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.discoveryCalls[2]).toEqual({
+      packageId: 'DBeaver.DBeaver.Community',
+      version: '25.3.0',
+      architecture: 'x64',
+    });
+    expect(fixture.nativeElement.textContent).toContain('พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง');
+    expect(fixture.nativeElement.textContent).toContain('Signed Elevated Helper');
+    expect(api.proposalCalls).toEqual([]);
+    expect(Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+      .some((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'))).toBe(false);
+  });
+
+  it('revokes the previous verified proposal before changing its scope', async () => {
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
+    api.readiness.package_allowlist_enabled = false;
+    api.readiness.supported_package_ids = [];
+    const originalDiscoveryResponder = api.discoveryResponder;
+    api.discoveryResponder = (packageId, version, scope = 'user') => originalDiscoveryResponder(packageId, version, scope).pipe(
+      map((result) => result.candidate ? {
+        ...result,
+        available_scopes: ['user', 'machine'],
+        candidate: { ...result.candidate, scope },
+      } : result),
+    );
+    await render();
+
+    send('install DBeaver Community Edition');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const community = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-candidate') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('DBeaver.DBeaver.Community'));
+    if (!community) throw new Error('Community package candidate was not rendered');
+    community.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const prepare = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('ตรวจสอบไฟล์และเตรียม Approval'));
+    if (!prepare) throw new Error('Real install preparation button was not rendered');
+    prepare.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.proposalCalls).toHaveLength(1);
+
+    const machineScope = Array.from(
+      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.includes('Machine Scope'));
+    if (!machineScope) throw new Error('Machine Scope option was not rendered');
+    machineScope.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.revokeProposalCalls).toEqual(['f'.repeat(32)]);
+    expect(fixture.nativeElement.textContent).toContain('พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง');
+    expect(api.proposalCalls).toHaveLength(1);
+    expect(api.approvalChallengeCalls).toEqual([]);
+  });
+
   it('queues a verified real install only after exact TOTP approval', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    // Generic publisher trust does not depend on a per-package certificate pin or allowlist.
-    api.readiness.publisher_identity_policy_available = true;
+    // Installer trust uses the same SHA-256 and signature-integrity policy for every package.
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -565,11 +699,11 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -585,6 +719,7 @@ describe('App chat UI (T-202)', () => {
       packageId: 'DBeaver.DBeaver.Community',
       version: '25.3.0',
       architecture: 'x64',
+      scope: 'user',
     }]);
     expect(fixture.nativeElement.textContent).toContain('DBeaver Community Edition');
 
@@ -622,7 +757,7 @@ describe('App chat UI (T-202)', () => {
     expect(fixture.nativeElement.textContent).toContain('ติดตั้งและตรวจสอบ Package ผ่านแล้ว');
   });
 
-  it('blocks a WinGet manifest version that differs from the vendor official release', async () => {
+  it('allows choosing a WinGet version before blocking a verified official-release mismatch', async () => {
     api.catalogResponder = () => of({
       status: 'CATALOG_MATCHES',
       source: 'microsoft-winget-source2',
@@ -638,14 +773,20 @@ describe('App chat UI (T-202)', () => {
         status: 'VERSION_REQUIRED',
         package_id: packageId,
         available_versions: ['7.3.5'],
+        manifest_versions: ['7.3.5'],
+        official_versions: null,
         candidate: null,
+        available_scopes: ['user'],
         source: 'winget-community-repository',
       }
       : {
       status: 'SOURCE_MISMATCH',
       package_id: packageId,
-      available_versions: ['7.3.5'],
-      source: 'winget-community-repository',
+      available_versions: [],
+      manifest_versions: ['7.3.5'],
+      official_versions: null,
+      available_scopes: ['user'],
+        source: 'winget-community-repository',
       candidate: {
         package_id: packageId,
         package_name: 'DBeaver Community Edition',
@@ -678,17 +819,14 @@ describe('App chat UI (T-202)', () => {
     packageButton.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    const versionButton = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '7.3.5');
-    if (!versionButton) throw new Error('Stale manifest version was not rendered');
-    versionButton.click();
+    const versionSelect = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    expect(versionSelect).not.toBeNull();
+    expect(Array.from(versionSelect.options).map((option) => option.value)).toEqual(['', '7.3.5']);
+    versionSelect.value = '7.3.5';
+    versionSelect.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('SOURCE MISMATCH');
-    expect(fixture.nativeElement.textContent).toContain('7.3.5');
-    expect(fixture.nativeElement.textContent).toContain('26.2.4');
+    expect(api.discoveryCalls[api.discoveryCalls.length - 1]).toEqual({ packageId: 'DBeaver.DBeaver.Community', version: '7.3.5', architecture: 'x64' });
     expect(fixture.nativeElement.textContent).toContain('บล็อก: Manifest ไม่ตรงกับ Release ทางการ');
     expect(fixture.nativeElement.textContent).not.toContain('ยืนยันตัวตนเพื่ออนุมัติ');
   });
@@ -712,7 +850,7 @@ describe('App chat UI (T-202)', () => {
     api.testError = { status: 502, error: { detail: { code: 'quota_exceeded' } } };
     await render();
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
-    buttons.find((button) => button.textContent?.includes('ทดสอบการเชื่อมต่อ'))?.click();
+    buttons.find((button) => button.textContent?.includes('ทดสอบ Model ที่เลือก'))?.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('โควตา Gemini เต็มหรือเกินขีดจำกัด');
   });
@@ -1101,7 +1239,7 @@ describe('App chat UI (T-202)', () => {
 
   it('refreshes readiness after a definitive release-authorization rejection without reservation recovery', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -1117,11 +1255,11 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -1144,7 +1282,7 @@ describe('App chat UI (T-202)', () => {
     const codeInput = fixture.nativeElement.querySelector('input[id^="install-totp-"]') as HTMLInputElement;
     expect(codeInput).not.toBeNull();
     api.approvalErrorStatus = 409;
-    api.approvalErrorDetail = 'A current one-use real-install release authorization for this exact package/version is required.';
+    api.approvalErrorDetail = 'The approval reservation conflicts with an existing install.';
     codeInput.value = '123456';
     codeInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -1157,16 +1295,15 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(api.readinessCalls).toBe(2);
-    expect(api.reservationRecoveryCalls).toEqual([]);
+    expect(api.readinessCalls).toBe(1);
+    expect(api.reservationRecoveryCalls).toHaveLength(1);
     expect(fixture.nativeElement.querySelector('input[id^="install-totp-"]')).toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('รีเฟรช Release Authorization');
-    expect(fixture.nativeElement.textContent).toContain('Release Authorization หมดอายุ');
+    expect(fixture.nativeElement.textContent).not.toContain('รีเฟรช Release Authorization');
   });
 
   it('recovers a committed reservation after an ambiguous confirmation failure', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     const reservationId = '12345678-1234-4678-9234-567812345678';
@@ -1190,11 +1327,11 @@ describe('App chat UI (T-202)', () => {
     community.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -1236,7 +1373,7 @@ describe('App chat UI (T-202)', () => {
 
   it('clears a definitively missing proposal and offers installer preparation again', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -1252,11 +1389,11 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -1303,7 +1440,7 @@ describe('App chat UI (T-202)', () => {
 
   it('keeps reservation recovery visible when readiness is revoked mid-recovery', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     const recovery = new Subject<unknown>();
@@ -1320,11 +1457,11 @@ describe('App chat UI (T-202)', () => {
     community.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
     const prepare = Array.from(
@@ -1368,7 +1505,7 @@ describe('App chat UI (T-202)', () => {
 
   it('restores TOTP approval after a definitive 403 rejection', async () => {
     api.authSession = { enabled: true, authenticated: true, authenticator_enrolled: true };
-    api.readiness.publisher_identity_policy_available = true;
+    api.readiness.installer_trust_mode = 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
     api.readiness.package_allowlist_enabled = false;
     api.readiness.supported_package_ids = [];
     await render();
@@ -1384,11 +1521,11 @@ describe('App chat UI (T-202)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const version = Array.from(
-      fixture.nativeElement.querySelectorAll('.software-version') as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.trim() === '25.3.0');
-    if (!version) throw new Error('Exact version choice was not rendered');
-    version.click();
+    const version = fixture.nativeElement.querySelector('.software-version-select') as HTMLSelectElement;
+    if (!version) throw new Error('Version dropdown was not rendered');
+    expect(Array.from(version.options).map((option) => option.value)).toContain('25.3.0');
+    version.value = '25.3.0';
+    version.dispatchEvent(new Event('change'));
     await fixture.whenStable();
     fixture.detectChanges();
 

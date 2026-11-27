@@ -1,8 +1,7 @@
 """Backend-only registry for immutable, short-lived installer evidence.
 
-Windows Authenticode establishes the code-signing chain. The signer subject is
-compared with the Publisher from the independently resolved WinGet manifest.
-The certificate fingerprint is bound to approval evidence, not used as a pin.
+All packages use the same installer SHA-256 verification policy. Authenticode
+checks signature integrity only; signer identity is never compared with Publisher.
 """
 
 from __future__ import annotations
@@ -11,6 +10,7 @@ import secrets
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 from pydantic import ValidationError
 
@@ -26,67 +26,33 @@ EVIDENCE_TTL = timedelta(minutes=15)
 MAX_EVIDENCE = 128
 
 
-def _normalize_publisher(value: str) -> str:
-    """Normalize formatting and common equivalent legal suffixes."""
-    normalized = "".join(char for char in value.casefold() if char.isalnum())
-    for long_form, short_form in (("corporation", "corp"), ("incorporated", "inc"), ("limited", "ltd")):
-        if normalized.endswith(long_form):
-            normalized = normalized[: -len(long_form)] + short_form
-            break
-    return normalized
-
-
-def _subject_attributes(subject: str) -> dict[str, list[str]]:
-    """Extract O and CN from quoted or escaped Windows X.500 subject strings."""
-    attributes: dict[str, list[str]] = {}
-    components: list[str] = []
-    current: list[str] = []
-    escaped = False
-    quoted = False
-    for char in subject:
-        if escaped:
-            current.append(char)
-            escaped = False
-        elif char == chr(92):
-            current.append(char)
-            escaped = True
-        elif char == chr(34):
-            current.append(char)
-            quoted = not quoted
-        elif char == ',' and not quoted:
-            components.append("".join(current).strip())
-            current = []
-        else:
-            current.append(char)
-    if quoted or escaped:
-        return attributes
-    components.append("".join(current).strip())
-    for component in components:
-        key, separator, raw_value = component.partition("=")
-        name = key.strip().upper()
-        if separator and name in {"O", "CN"}:
-            value = raw_value.strip().strip(chr(34))
-            value = value.replace(chr(92) + ",", ",").replace(chr(92) * 2, chr(92))
-            attributes.setdefault(name, []).append(value)
-    return attributes
-
-def signer_subject_matches_publisher(subject: str, publisher: str) -> bool:
-    """Require exact organization match; use CN only when no organization is present."""
-    if not isinstance(subject, str) or not subject.strip() or not isinstance(publisher, str) or not publisher.strip():
-        return False
-    attributes = _subject_attributes(subject)
-    organizations = attributes.get('O', [])
-    if organizations:
-        return len(organizations) == 1 and _normalize_publisher(organizations[0]) == _normalize_publisher(publisher)
-    common_names = attributes.get('CN', [])
-    return len(common_names) == 1 and _normalize_publisher(common_names[0]) == _normalize_publisher(publisher)
-
 class EvidenceNotFound(LookupError):
     """Evidence is unknown, expired, or no longer available."""
 
 
 class EvidenceRejected(ValueError):
-    """The trusted discovery/staging facts do not satisfy evidence policy."""
+    """Trusted discovery/staging facts failed policy with a safe diagnostic reason."""
+
+    _REASONS: ClassVar[dict[str, tuple[str, str]]] = {
+        "candidate and staged proof must be backend model instances": ("invalid_evidence_input", "Candidate or staged proof was not created by the backend trust pipeline."),
+        "unchecked publisher candidate contained unexpected vendor release claims": ("unexpected_publisher_claims", "Unverified candidate contained unexpected official publisher claims."),
+        "verified vendor release did not match the exact manifest candidate": ("official_release_manifest_mismatch", "Official release evidence did not match the exact WinGet manifest candidate."),
+        "package publisher source check did not pass": ("publisher_source_check_failed", "Official publisher source verification did not pass."),
+        "staged installer does not prove the exact candidate and signer": ("staged_installer_evidence_mismatch", "Staged file hash, version, architecture, or Authenticode proof did not match the selected candidate."),
+        "staged installer release origin does not match the candidate": ("official_release_origin_mismatch", "Staged installer release origin did not match the verified candidate."),
+        "discovery or staging timestamp is invalid": ("invalid_evidence_timestamp", "Discovery or staging timestamp could not be parsed."),
+        "discovery and staging timestamps must be timezone-aware": ("invalid_evidence_timestamp", "Discovery and staging timestamps were not timezone-aware."),
+        "discovery or staged installer proof is not current": ("installer_evidence_expired", "Discovery or staged installer evidence exceeded its validity window."),
+        "evidence registry capacity reached": ("evidence_capacity_reached", "Verified evidence registry reached its capacity limit."),
+        "evidence identifier collision": ("evidence_id_collision", "Evidence identifier collision prevented registration."),
+    }
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.failure_code, self.failure_reason = self._REASONS.get(
+            message,
+            ("installer_evidence_rejected", "Installer evidence did not satisfy the verification policy."),
+        )
 
 
 class SoftwareEvidenceRegistry:
@@ -97,29 +63,13 @@ class SoftwareEvidenceRegistry:
         *,
         clock: Callable[[], datetime] | None = None,
         capacity: int = MAX_EVIDENCE,
-        publisher_identity_verifier: Callable[[InstallerCandidate, str, str], bool] | None = None,
     ) -> None:
         if type(capacity) is not int or not 1 <= capacity <= MAX_EVIDENCE:
             raise ValueError("evidence capacity must be between 1 and 128")
         self._clock = clock or (lambda: datetime.now(UTC))
         self._capacity = capacity
-        self._publisher_identity_verifier = publisher_identity_verifier or (
-            lambda candidate, subject, _fingerprint: signer_subject_matches_publisher(
-                subject, candidate.publisher
-            )
-        )
         self._entries: dict[str, VerifiedPackageEvidence] = {}
         self._lock = threading.RLock()
-
-    @property
-    def publisher_identity_policy_available(self) -> bool:
-        """Generic Authenticode-plus-manifest identity matching is implemented."""
-        return True
-
-    @property
-    def trust_anchor_configured(self) -> bool:
-        """Compatibility alias; this is not a configured certificate pin."""
-        return self.publisher_identity_policy_available
 
     def register_staged_candidate(
         self,
@@ -130,18 +80,9 @@ class SoftwareEvidenceRegistry:
         """Mint evidence only from matching backend candidate and staged-file proof."""
         if not isinstance(candidate, InstallerCandidate) or not isinstance(staged, StagedInstaller):
             raise EvidenceRejected("candidate and staged proof must be backend model instances")
-        is_dbeaver = candidate.package_id == "DBeaver.DBeaver.Community"
         if candidate.status != "CONDITIONAL":
             raise EvidenceRejected("package discovery candidate is not conditional")
-        if is_dbeaver:
-            if (
-                candidate.publisher_verification != "VERIFIED"
-                or candidate.official_version != candidate.version
-                or not candidate.official_release_url
-                or candidate.official_asset_sha256 != candidate.installer_sha256
-            ):
-                raise EvidenceRejected("DBeaver official release evidence is not verified")
-        elif candidate.publisher_verification == "NOT_CHECKED":
+        if candidate.publisher_verification == "NOT_CHECKED":
             if any((
                 candidate.official_version is not None,
                 candidate.official_release_url is not None,
@@ -164,22 +105,10 @@ class SoftwareEvidenceRegistry:
             or staged.architecture != candidate.architecture
             or staged.sha256 != candidate.installer_sha256
             or staged.authenticode_valid is not True
-            or not staged.signature_subject
-            or not isinstance(staged.signature_sha256, str)
-            or len(staged.signature_sha256) != 64
-            or any(char not in "0123456789abcdef" for char in staged.signature_sha256)
         ):
             raise EvidenceRejected("staged installer does not prove the exact candidate and signer")
         if staged.official_release_url != candidate.official_release_url:
             raise EvidenceRejected("staged installer release origin does not match the candidate")
-        try:
-            signer_matches = self._publisher_identity_verifier(
-                candidate, staged.signature_subject, staged.signature_sha256
-            )
-        except (TypeError, ValueError, RuntimeError):
-            signer_matches = False
-        if signer_matches is not True:
-            raise EvidenceRejected("Authenticode signer identity does not match the WinGet manifest Publisher")
 
         try:
             verified_at = datetime.fromisoformat(staged.staged_at)
@@ -210,7 +139,11 @@ class SoftwareEvidenceRegistry:
                 version=candidate.version,
                 source="winget",
                 installer_type=candidate.installer_type,
+                installer_technology=candidate.installer_technology,
                 installer_silent_switch=candidate.installer_silent_switch,
+                installer_silent_with_progress_switch=candidate.installer_silent_with_progress_switch,
+                installer_custom_switch=candidate.installer_custom_switch,
+                installer_success_codes=candidate.installer_success_codes,
                 installer_url=candidate.installer_url,
                 official_release_url=candidate.official_release_url,
                 manifest_source_url=candidate.manifest_source_url,
@@ -219,8 +152,6 @@ class SoftwareEvidenceRegistry:
                 manifest_sha256=candidate.manifest_sha256,
                 architecture=candidate.architecture,
                 scope=candidate.scope,
-                signature_subject=staged.signature_subject,
-                signature_sha256=staged.signature_sha256,
                 verified_at=verified_at,
                 expires_at=min(verified_at + EVIDENCE_TTL, now + EVIDENCE_TTL),
             )

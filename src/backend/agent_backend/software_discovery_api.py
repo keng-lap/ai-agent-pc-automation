@@ -2,9 +2,10 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent_backend.runtime_diagnostics import emit_event, emit_exception
 from agent_backend.software_catalog import CatalogUnavailable, MicrosoftWinGetCatalogIndex
 from agent_backend.software_discovery import (
     DiscoveryNotFound,
@@ -42,6 +43,7 @@ class SoftwareDiscoveryRequest(BaseModel):
     package_id: str = Field(min_length=3, max_length=160)
     version: str | None = Field(default=None, min_length=1, max_length=80)
     architecture: Literal["x86", "x64", "arm64"] = "x64"
+    scope: Literal["user", "machine"] = "user"
 
     @field_validator("package_id")
     @classmethod
@@ -53,33 +55,148 @@ class SoftwareDiscoveryRequest(BaseModel):
 
 
 @router.post("/api/software/discovery/search")
-def search_software_catalog(payload: SoftwareDiscoverySearchRequest) -> dict:
+def search_software_catalog(payload: SoftwareDiscoverySearchRequest, request: Request) -> dict:
     """Search Microsoft's signed source2 catalog without invoking winget.exe."""
     try:
         result = _catalog.search(payload.query, limit=payload.limit)
-    except CatalogUnavailable:
+    except CatalogUnavailable as exc:
+        emit_exception(
+            event_code="CATALOG_SOURCE_UNAVAILABLE",
+            component="catalog",
+            stage="catalog_lookup",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            error=exc,
+            fields={
+                "status_code": 503,
+                "upstream_status": exc.upstream_status,
+                "failure_code": exc.failure_code,
+            },
+        )
         raise HTTPException(
             status_code=503,
             detail="Microsoft WinGet catalog is unavailable or failed trust validation.",
         ) from None
     except ValueError:
+        emit_event(
+            event_code="CATALOG_QUERY_INVALID",
+            component="catalog",
+            stage="catalog_lookup",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="WARNING",
+            fields={"status_code": 422},
+        )
         raise HTTPException(status_code=422, detail="Catalog search parameters are invalid.") from None
+    emit_event(
+        event_code="CATALOG_LOOKUP_COMPLETED",
+        component="catalog",
+        stage="catalog_lookup",
+        correlation=getattr(request.state, "correlation_id", "unknown"),
+        fields={"candidate_count": len(result.candidates), "status_code": 200},
+    )
     return result.model_dump(mode="json")
 
 
 @router.post("/api/software/discovery")
-def discover_software(payload: SoftwareDiscoveryRequest) -> dict:
+def discover_software(payload: SoftwareDiscoveryRequest, request: Request) -> dict:
     """Read official WinGet community manifests; never download or execute installers."""
     try:
         result = _repository.discover(
             package_id=payload.package_id,
             version=payload.version,
             architecture=payload.architecture,
+            scope=payload.scope,
         )
-    except DiscoveryNotFound:
+    except DiscoveryNotFound as exc:
+        emit_exception(
+            event_code="MANIFEST_NOT_FOUND",
+            component="manifest",
+            stage="manifest_discovery",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            error=exc,
+            severity="WARNING",
+            fields={
+                "status_code": 404,
+                "upstream_status": exc.upstream_status,
+                "package_id": payload.package_id,
+                "selected_version": payload.version,
+                "architecture": payload.architecture,
+            },
+        )
         raise HTTPException(status_code=404, detail="Package or version not found in the approved source.") from None
-    except DiscoveryUnavailable:
+    except DiscoveryUnavailable as exc:
+        emit_exception(
+            event_code="MANIFEST_SOURCE_UNAVAILABLE_OR_INVALID",
+            component="manifest",
+            stage="manifest_validation",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            error=exc,
+            fields={
+                "status_code": 503,
+                "upstream_status": exc.upstream_status,
+                "failure_code": exc.failure_code,
+                "failure_reason": str(exc),
+                "package_id": payload.package_id,
+                "version": payload.version,
+                "selected_version": payload.version,
+                "architecture": payload.architecture,
+                **exc.diagnostic_fields,
+            },
+        )
         raise HTTPException(status_code=503, detail="Approved package source is unavailable or its data failed validation.") from None
     except ValueError:
+        emit_event(
+            event_code="MANIFEST_LOOKUP_PARAMETERS_INVALID",
+            component="manifest",
+            stage="manifest_discovery",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity="WARNING",
+            fields={"status_code": 422},
+        )
         raise HTTPException(status_code=422, detail="Package lookup parameters are invalid.") from None
+    emit_event(
+        event_code="MANIFEST_" + result.status,
+        component="manifest",
+        stage="manifest_validation",
+        correlation=getattr(request.state, "correlation_id", "unknown"),
+        fields={
+            "status_code": 200,
+            "available_version_count": len(result.available_versions),
+            "available_versions": list(result.available_versions),
+            "selectable_version_count": len(result.available_versions),
+            "selectable_versions": list(result.available_versions),
+            "manifest_version_count": len(result.manifest_versions or result.available_versions),
+            "manifest_versions": list(result.manifest_versions or result.available_versions),
+            "latest_available_version": (
+                result.available_versions[-1] if result.available_versions else None
+            ),
+            "official_version_count": (
+                len(result.official_versions) if result.official_versions is not None else None
+            ),
+            "official_versions": (
+                list(result.official_versions) if result.official_versions is not None else None
+            ),
+            "official_release_check_available": result.official_versions is not None,
+            "version_limit": 20,
+            "version_sort_strategy": "numeric-natural-v1",
+            "selected_version": payload.version,
+            "package_id": payload.package_id,
+            "version": payload.version,
+            "architecture": payload.architecture,
+        },
+    )
+    if result.candidate is not None:
+        emit_event(
+            event_code="PUBLISHER_" + result.candidate.publisher_verification,
+            component="publisher",
+            stage="publisher_verification",
+            correlation=getattr(request.state, "correlation_id", "unknown"),
+            severity=(
+                "ERROR" if result.candidate.publisher_verification in {"MISMATCH", "UNAVAILABLE"}
+                else "INFO"
+            ),
+            fields={
+                "official_version": result.candidate.official_version,
+                "status_code": 200,
+            },
+        )
     return result.model_dump(mode="json")

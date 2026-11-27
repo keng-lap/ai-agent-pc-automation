@@ -25,6 +25,12 @@ dev = [
     "httpx2>=2.13",
     "ruff>=0.17",
 ]
+build = [
+    "pyinstaller>=6.19,<7",
+]
+
+[project.scripts]
+agent-backend = "agent_backend.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["agent_backend*"]

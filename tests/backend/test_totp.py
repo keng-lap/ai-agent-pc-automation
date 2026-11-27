@@ -172,3 +172,48 @@ def test_replay_guard_rejects_invalid_restart_timestamp():
             owner_key="master-user",
             timestamp=float("nan"),
         )
+
+def test_restart_seed_blocks_a_future_skew_step_consumed_by_prior_process():
+    first_process = TotpReplayGuard()
+    future_code = code_at(RFC_SECRET, 120)
+
+    # At t=90 the verifier accepts t=120 because one future step is allowed.
+    assert first_process.verify_and_consume(
+        owner_key="owner-1",
+        secret=RFC_SECRET,
+        code=future_code,
+        timestamp=90,
+    )
+
+    restarted_process = TotpReplayGuard()
+    restarted_process.block_through_current_step(
+        owner_key="owner-1",
+        timestamp=90,
+        future_steps=1,
+    )
+
+    # The same future-step code cannot be replayed after restart.
+    assert not restarted_process.verify_and_consume(
+        owner_key="owner-1",
+        secret=RFC_SECRET,
+        code=future_code,
+        timestamp=90,
+    )
+
+    # Once the local clock advances, a strictly newer step remains usable.
+    assert restarted_process.verify_and_consume(
+        owner_key="owner-1",
+        secret=RFC_SECRET,
+        code=code_at(RFC_SECRET, 150),
+        timestamp=120,
+    )
+
+
+def test_replay_seed_rejects_invalid_future_window():
+    guard = TotpReplayGuard()
+    with pytest.raises(TotpConfigurationError):
+        guard.block_through_current_step(
+            owner_key="owner-1",
+            timestamp=90,
+            future_steps=2,
+        )

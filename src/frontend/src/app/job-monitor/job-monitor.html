@@ -17,6 +17,62 @@
     </div>
   }
 
+  <section class="jm-install-history" aria-labelledby="jm-install-title">
+    <header>
+      <div>
+        <h3 id="jm-install-title">{{ isThai() ? 'งานติดตั้ง WinGet' : 'WinGet installation jobs' }}</h3>
+        <span>{{ isThai() ? 'สถานะถาวรจาก Approval Reservation ใน Backend · อัปเดตทุก 5 วินาที' : 'Persistent status from backend approval reservations · refreshes every 5 seconds' }}</span>
+      </div>
+      <b [class.connected]="installApiAvailable() === true">
+        {{ installApiAvailable() === true ? (isThai() ? 'เชื่อมต่อแล้ว' : 'CONNECTED') : (installApiAvailable() === false ? (isThai() ? 'อ่านสถานะไม่ได้' : 'UNAVAILABLE') : (isThai() ? 'กำลังโหลด' : 'LOADING')) }}
+      </b>
+    </header>
+
+    @if (installApiAvailable() === false) {
+      <p class="jm-connection" role="alert">
+        {{ isThai() ? 'อ่านประวัติงานติดตั้งจาก Backend ไม่สำเร็จ ข้อมูลด้านล่างจะไม่ถูกแทนด้วยข้อมูลจำลอง' : 'Could not load installation history from the backend. No simulated status is shown.' }}
+      </p>
+    } @else if (installJobs().length === 0 && installApiAvailable() === true) {
+      <p class="jm-empty">{{ isThai() ? 'ยังไม่มีรายการติดตั้งที่ผ่านการอนุมัติ' : 'No approved installation jobs yet.' }}</p>
+    } @else {
+      @for (job of installJobs(); track job.reservation_id) {
+        <article class="jm-install-item">
+          <header>
+            <div>
+              <strong>{{ job.package_name }} {{ job.version }}</strong>
+              <small>{{ job.package_id }} · {{ isThai() ? 'สร้างเมื่อ' : 'Created' }} {{ formatTime(job.created_at) }}</small>
+            </div>
+            <b [class]="'status ' + installStateClass(job.state)">{{ installStateLabel(job.state) }}</b>
+          </header>
+          <div class="jm-install-meta">
+            <span>Plan: {{ job.plan_id }}</span>
+            <span>Reservation: {{ job.reservation_id }}</span>
+            <span>{{ isThai() ? 'อัปเดตล่าสุด' : 'Last update' }}: {{ formatTime(job.updated_at) }}</span>
+            <span>{{ isThai() ? 'ผลลัพธ์' : 'Result' }}: {{ job.result_code || '—' }}</span>
+          </div>
+          @if (job.state === 'UNKNOWN') {
+            <p class="jm-connection" role="alert">{{ isThai() ? 'ไม่ทราบผลแน่ชัด ระบบจะไม่สั่งติดตั้งซ้ำอัตโนมัติ ต้องตรวจสอบก่อนดำเนินการใหม่' : 'The outcome is unknown. The system will not retry automatically; investigate before taking another action.' }}</p>
+          }
+          <ol class="jm-install-events">
+            @for (event of job.events; track event.sequence) {
+              <li>
+                <time>{{ formatTime(event.occurred_at) }}</time>
+                <span>{{ installStateLabel(event.state) }}</span>
+                @if (event.result_code) { <code>{{ event.result_code }}</code> }
+                <small>{{ event.outcome }}</small>
+              </li>
+            } @empty {
+              <li>{{ isThai() ? 'ยังไม่มีเหตุการณ์เพิ่มเติม' : 'No additional lifecycle events recorded.' }}</li>
+            }
+          </ol>
+        </article>
+      }
+    }
+    @if (installLastCheckedAt()) {
+      <footer>{{ isThai() ? 'ตรวจสอบสถานะติดตั้งล่าสุด' : 'Install status checked' }}: {{ formatTime(installLastCheckedAt()) }}</footer>
+    }
+  </section>
+
   <div class="jm-stats">
     <article><small>{{ isThai() ? 'กำลังทำงาน' : 'Running' }}</small><strong>{{ runningCount() }}</strong></article>
     <article><small>{{ isThai() ? 'รอคิว' : 'Queued' }}</small><strong>{{ queuedCount() }}</strong></article>

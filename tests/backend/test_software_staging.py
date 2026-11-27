@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from agent_backend.software_discovery import InstallerCandidate
-from agent_backend.software_staging import InstallerStageError, InstallerStager
+from agent_backend.software_staging import (
+    InstallerStageError,
+    InstallerStager,
+    WindowsAuthenticodeVerifier,
+)
 
 
 class FakeResponse:
@@ -35,17 +39,23 @@ class AcceptSignature:
         return self.accepted
 
 
+class RejectSignatureWithDiagnostics:
+    def verify_with_diagnostics(self, path):
+        assert path.is_file()
+        return False, None, None, "0x800B0109"
+
+
 def make_candidate(body=b"verified-installer-bytes"):
     digest = hashlib.sha256(body).hexdigest()
     return InstallerCandidate(
-        package_id="DBeaver.DBeaver.Community",
-        package_name="DBeaver Community Edition",
-        publisher="DBeaver Corp",
+        package_id="Acme.Editor",
+        package_name="Acme Editor",
+        publisher="Acme Inc",
         version="26.2.4",
         architecture="x64",
         scope="user",
         installer_type="exe",
-        installer_url="https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver-ce-26.2.4-windows-x86_64.exe",
+        installer_url="https://github.com/acme/editor/releases/download/26.2.4/acme-editor-26.2.4-windows-x86_64.exe",
         installer_domain="github.com",
         installer_sha256=digest,
         manifest_sha256="a" * 64,
@@ -54,7 +64,7 @@ def make_candidate(body=b"verified-installer-bytes"):
         checked_at="2026-11-12T00:00:00Z",
         publisher_verification="VERIFIED",
         official_version="26.2.4",
-        official_release_url="https://github.com/dbeaver/dbeaver/releases/tag/26.2.4",
+        official_release_url="https://github.com/acme/editor/releases/tag/26.2.4",
         official_asset_sha256=digest,
         official_asset_id=12345,
         limitations=("installer_authenticode_signature_not_yet_verified",),
@@ -85,7 +95,7 @@ def test_stage_downloads_hashes_and_verifies_without_executing(tmp_path):
     assert staged.authenticode_valid is True
     assert response.closed is True
     assert signature.paths == [path] or signature.paths[0].suffix == ".exe"
-    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
+    assert calls[0][0] == make_candidate(body).installer_url
     assert calls[0][1]["allow_redirects"] is False
     assert calls[0][1]["stream"] is True
     assert list(tmp_path.glob("*.part.exe")) == []
@@ -136,7 +146,7 @@ def test_unverified_candidate_is_rejected_before_network_or_file_creation(tmp_pa
     candidate = make_candidate().model_copy(update={"publisher_verification": "MISMATCH"})
     calls = []
 
-    with pytest.raises(InstallerStageError, match="not matched"):
+    with pytest.raises(InstallerStageError, match="source check did not pass"):
         InstallerStager(http_get=lambda *args, **kwargs: calls.append(args)).stage(
             candidate,
             staging_root=tmp_path,
@@ -175,6 +185,24 @@ def test_invalid_authenticode_signature_removes_downloaded_file(tmp_path):
 
     assert response.closed is True
     assert len(signature.paths) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_authenticode_failure_preserves_safe_winverifytrust_hresult(tmp_path):
+    body = b"verified-installer-bytes"
+    response = FakeResponse(body)
+
+    with pytest.raises(InstallerStageError, match="Authenticode") as captured:
+        InstallerStager(
+            http_get=lambda *args, **kwargs: response,
+            signature_verifier=WindowsAuthenticodeVerifier(verifier=RejectSignatureWithDiagnostics()),
+        ).stage(make_candidate(body), staging_root=tmp_path)
+
+    assert captured.value.failure_code == "authenticode_verification_failed"
+    assert captured.value.diagnostic_fields == {"winverifytrust_hresult": "0x800B0109"}
+    assert "0x800B0109" in captured.value.failure_reason
+    assert "untrusted root" in captured.value.failure_reason
+    assert response.closed is True
     assert list(tmp_path.iterdir()) == []
 
 
@@ -217,7 +245,7 @@ def test_generic_installer_redirect_cannot_escape_manifest_host(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(tmp_path):
+def test_manifest_url_redirect_to_approved_github_asset_cdn_is_followed_without_auth(tmp_path):
     body = b"verified-installer-bytes"
     redirect = FakeResponse(
         status_code=302,
@@ -239,7 +267,7 @@ def test_github_release_redirect_to_approved_asset_cdn_is_followed_without_auth(
     assert Path(staged.file_path).read_bytes() == body
     assert redirect.closed is True
     assert final.closed is True
-    assert calls[0][0] == "https://api.github.com/repos/dbeaver/dbeaver/releases/assets/12345"
+    assert calls[0][0] == make_candidate(body).installer_url
     assert calls[1][0].startswith("https://release-assets.githubusercontent.com/")
     assert all("Authorization" not in call[1]["headers"] for call in calls)
     assert all(call[1]["allow_redirects"] is False for call in calls)
@@ -306,3 +334,10 @@ def test_stager_carries_verified_certificate_fingerprint(tmp_path):
     assert staged.authenticode_valid is True
     assert staged.signature_subject == "CN=Trusted Test Publisher, O=Trusted Test Publisher"
     assert staged.signature_sha256 == "d" * 64
+
+
+def test_installer_stage_error_exposes_safe_diagnostic_classification():
+    error = InstallerStageError("installer SHA-256 did not match the approved release digest")
+
+    assert error.failure_code == "installer_manifest_hash_mismatch"
+    assert error.failure_reason == "Downloaded SHA-256 did not match the WinGet manifest digest."

@@ -23,7 +23,11 @@ class VerifiedPackageEvidence(BaseModel):
     version: str = Field(min_length=1, max_length=80)
     source: Literal["winget"]
     installer_type: Literal["exe", "msi", "msix", "appx"]
-    installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=256)
+    installer_technology: str | None = Field(default=None, min_length=1, max_length=32)
+    installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=512)
+    installer_silent_with_progress_switch: str | None = Field(default=None, min_length=1, max_length=512)
+    installer_custom_switch: str | None = Field(default=None, min_length=1, max_length=2048)
+    installer_success_codes: tuple[int, ...] = Field(default=(), max_length=16)
     installer_url: str = Field(min_length=8, max_length=2048)
     official_release_url: str | None = Field(default=None, min_length=8, max_length=2048)
     manifest_source_url: str = Field(min_length=8, max_length=2048)
@@ -32,21 +36,38 @@ class VerifiedPackageEvidence(BaseModel):
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     architecture: Literal["x86", "x64", "arm64"]
     scope: Literal["user"]
-    signature_subject: str = Field(min_length=1, max_length=300)
-    signature_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     verified_at: datetime
     expires_at: datetime
 
-    @field_validator("installer_silent_switch")
+    @field_validator(
+        "installer_silent_switch",
+        "installer_silent_with_progress_switch",
+        "installer_custom_switch",
+    )
     @classmethod
-    def validate_silent_switch(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
-            raise ValueError("installer silent switch must not be blank")
-        if value is not None and any(ord(char) < 0x20 for char in value):
-            raise ValueError("installer silent switch contains control characters")
+    def validate_installer_switch(cls, value: str | None) -> str | None:
+        if value is not None and (
+            not value.strip() or any(ord(char) < 0x20 for char in value)
+        ):
+            raise ValueError("installer switch must not be blank or contain control characters")
         return value
 
-    @field_validator("package_name", "publisher", "version", "signature_subject")
+    @field_validator("installer_success_codes")
+    @classmethod
+    def validate_installer_success_codes(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        if (
+            len(set(value)) != len(value)
+            or any(
+                type(code) is not int
+                or code == 0
+                or not -2147483648 <= code <= 4294967295
+                for code in value
+            )
+        ):
+            raise ValueError("installer success codes are invalid")
+        return value
+
+    @field_validator("package_name", "publisher", "version")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
@@ -92,8 +113,13 @@ class VerifiedPackageEvidence(BaseModel):
             or self.expires_at.utcoffset() is None
         ):
             raise ValueError("evidence timestamps must be timezone-aware")
-        if self.installer_type == "exe" and self.installer_silent_switch is None:
-            raise ValueError("EXE installer evidence requires a manifest-declared silent switch")
+        if (
+            self.installer_type == "exe"
+            and self.installer_silent_switch is None
+            and self.installer_silent_with_progress_switch is None
+            and (self.installer_technology or self.installer_type) not in {"nullsoft", "inno", "burn"}
+        ):
+            raise ValueError("EXE installer evidence requires a silent switch or supported WinGet installer technology")
         if self.expires_at <= self.verified_at:
             raise ValueError("evidence expiry must be after verification")
         if (self.expires_at - self.verified_at).total_seconds() > 900:

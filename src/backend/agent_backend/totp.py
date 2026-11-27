@@ -210,13 +210,14 @@ class TotpReplayGuard:
         *,
         owner_key: str,
         timestamp: float | None = None,
+        future_steps: int = 0,
     ) -> None:
-        """Block the current and all earlier codes after a process restart.
+        """Seed replay protection through the current and optionally future steps.
 
-        The replay cache itself is process-local. Seeding it from the current
-        time step prevents a code from the immediately preceding process from
-        being replayed after restart while the same RFC 6238 time step remains
-        acceptable.
+        The replay cache itself is process-local. On restart, callers that
+        accept clock-skewed future codes must seed through the full accepted
+        window; otherwise a future-step code consumed by the prior process
+        could be replayed before the local clock catches up.
         """
         if not isinstance(owner_key, str) or not owner_key or len(owner_key) > 256:
             raise TotpConfigurationError("Invalid TOTP owner key.")
@@ -229,7 +230,13 @@ class TotpReplayGuard:
             or timestamp < 0
         ):
             raise TotpConfigurationError("Invalid TOTP timestamp.")
-        current_step = int(timestamp // TOTP_PERIOD_SECONDS)
+        if (
+            isinstance(future_steps, bool)
+            or not isinstance(future_steps, int)
+            or not 0 <= future_steps <= TOTP_WINDOW_STEPS
+        ):
+            raise TotpConfigurationError("Invalid TOTP replay seed window.")
+        current_step = int(timestamp // TOTP_PERIOD_SECONDS) + future_steps
         with self._lock:
             previous = self._last_consumed.get(owner_key)
             if previous is None or current_step > previous:

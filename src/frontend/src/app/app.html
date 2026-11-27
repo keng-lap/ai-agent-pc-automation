@@ -15,7 +15,30 @@
       <p>การติดตั้งจริงต้องตรวจสอบแหล่งที่มาและ Publisher พร้อมยืนยัน TOTP ก่อน Worker ทำงานบนเครื่องนี้</p>
       <span class="safety-mode">APPROVAL GATED</span>
     </section>
-    <div class="rail-bottom"><span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span></div>
+    <div class="rail-bottom">
+      @if (authReady() && authEnabled() && authenticated()) {
+        <button type="button" class="rail-link" [disabled]="diagnosticsBusy() || !diagnosticsStorageAvailable()" [attr.aria-pressed]="diagnosticsEnabled()" (click)="toggleDiagnostics()">
+          {{ !diagnosticsStorageAvailable() ? 'Diagnostics: UNAVAILABLE' : (diagnosticsBusy() ? 'กำลังเปลี่ยน Diagnostics...' : (diagnosticsEnabled() ? 'Diagnostics: ON' : 'Diagnostics: OFF')) }}
+        </button>
+        @if (diagnosticsError()) { <small role="alert">{{ diagnosticsError() }}</small> }
+        @if (diagnosticsPublishStatus() !== 'idle') {
+          <small [attr.role]="diagnosticsPublishStatus() === 'failed' ? 'alert' : 'status'" aria-live="polite">
+            {{ diagnosticsPublishMessage() }}
+          </small>
+          @if (diagnosticsPublishStatus() === 'succeeded' && diagnosticsPublishUrl()) {
+            <a class="rail-link" [href]="diagnosticsPublishUrl()" target="_blank" rel="noopener noreferrer">
+              เปิด Log บน GitHub
+            </a>
+          }
+          @if (diagnosticsPublishStatus() === 'failed') {
+            <button type="button" class="rail-link" [disabled]="diagnosticsPublishBusy()" (click)="publishDiagnostics()">
+              ลองส่ง Log อีกครั้ง
+            </button>
+          }
+        }
+      }
+      <span class="rail-live-dot" aria-hidden="true"></span><span>ทำงานภายในเครื่องนี้</span>
+    </div>
   </aside>
   <div class="main-column" id="top">
   <header class="topbar">
@@ -31,6 +54,43 @@
       <button type="button" [class.active]="language() === 'en'" [attr.aria-pressed]="language() === 'en'" (click)="setLanguage('en')">EN</button>
     </div>
   </header>
+
+  @if (authReady() && authEnabled() && authenticated()) {
+    <section class="diagnostics-status-banner"
+      [class.diagnostics-status-banner--running]="diagnosticsPublishStatus() === 'running'"
+      [class.diagnostics-status-banner--success]="diagnosticsPublishStatus() === 'succeeded'"
+      [class.diagnostics-status-banner--error]="diagnosticsPublishStatus() === 'failed' || !!diagnosticsError()"
+      [attr.role]="diagnosticsPublishStatus() === 'failed' || !!diagnosticsError() ? 'alert' : 'status'"
+      aria-live="polite" aria-atomic="true">
+      <div class="diagnostics-status-copy">
+        <strong>{{ diagnosticsPublishStatus() === 'running'
+          ? (language() === 'th' ? 'กำลังส่ง Diagnostics Log' : 'Publishing diagnostics logs')
+          : diagnosticsPublishStatus() === 'succeeded'
+            ? (language() === 'th' ? 'ส่ง Diagnostics Log สำเร็จ' : 'Diagnostics logs published')
+            : diagnosticsPublishStatus() === 'failed'
+              ? (language() === 'th' ? 'ส่ง Diagnostics Log ไม่สำเร็จ' : 'Diagnostics log publishing failed')
+              : 'Diagnostics' }}</strong>
+        <span>{{ diagnosticsError() || diagnosticsPublishMessage() || (language() === 'th' ? 'ยังไม่มีสถานะการส่ง Log ในรอบนี้' : 'No log publishing activity in this session.') }}</span>
+      </div>
+      <div class="diagnostics-status-actions">
+        @if (diagnosticsPublishStatus() === 'failed') {
+          <button type="button" class="new-chat-button" [disabled]="diagnosticsPublishBusy()" (click)="publishDiagnostics()">
+            {{ language() === 'th' ? 'ลองส่งอีกครั้ง' : 'Retry' }}
+          </button>
+        }
+        @if (diagnosticsPublishStatus() === 'succeeded' && diagnosticsPublishUrl()) {
+          <a class="new-chat-button diagnostics-github-link" [href]="diagnosticsPublishUrl()" target="_blank" rel="noopener noreferrer">
+            {{ language() === 'th' ? 'เปิด Log บน GitHub' : 'View logs on GitHub' }}
+          </a>
+        }
+        @if (!diagnosticsPublishBusy() && diagnosticsPublishStatus() !== 'running' && diagnosticsPublishStatus() !== 'succeeded') {
+          <button type="button" class="new-chat-button" [disabled]="!diagnosticsStorageAvailable()" (click)="publishDiagnostics()">
+            {{ language() === 'th' ? 'ส่ง Log ตอนนี้' : 'Send logs now' }}
+          </button>
+        }
+      </div>
+    </section>
+  }
 
   <div class="content-stage">
   @if (!authReady()) {
@@ -113,6 +173,28 @@
 
     @if (conversationNotice()) {
       <p class="conversation-notice" role="status">{{ conversationNotice() }}</p>
+    }
+    @if (recentInstallJobs().length > 0) {
+      <section class="chat-install-status" aria-label="{{ language() === 'th' ? 'สถานะงานติดตั้งล่าสุด' : 'Recent installation status' }}" aria-live="polite">
+        <div class="chat-install-status-heading">
+          <strong>{{ language() === 'th' ? 'สถานะงานติดตั้ง' : 'Installation status' }}</strong>
+          <button type="button" class="new-chat-button" (click)="setActiveView('jobs')">
+            {{ language() === 'th' ? 'ดูงานทั้งหมด' : 'View all jobs' }}
+          </button>
+        </div>
+        @for (job of recentInstallJobs(); track job.reservation_id) {
+          <div class="chat-install-status-row">
+            <span><strong>{{ job.package_name }} {{ job.version }}</strong><small>{{ job.package_id }}</small></span>
+            <b [class]="'chat-install-state chat-install-state--' + job.state.toLowerCase()">{{ installJobStateLabel(job.state) }}</b>
+          </div>
+          @if (job.result_code) {
+            <small class="chat-install-result">{{ language() === 'th' ? 'รหัสผลลัพธ์' : 'Result code' }}: {{ job.result_code }}</small>
+          }
+        }
+        @if (installJobStatusUnavailable()) {
+          <small role="status">{{ language() === 'th' ? 'อัปเดตสถานะจาก Backend ไม่สำเร็จ กำลังลองใหม่' : 'Could not refresh backend status; retrying.' }}</small>
+        }
+      </section>
     }
 
     <div #messageLog class="message-log" role="log" aria-live="polite" aria-relevant="additions text" [attr.aria-label]="language() === 'th' ? 'ข้อความสนทนา' : 'Conversation messages'">
@@ -445,10 +527,31 @@
                   }
                   @if (discovery.status === 'version_required' && discovery.result) {
                     <div class="detail-heading">{{ language() === 'th' ? 'เลือกเวอร์ชันที่ต้องการ' : 'Choose an exact version' }}</div>
-                    <p class="detail-meta">{{ discovery.packageId }} — {{ language() === 'th' ? 'ไม่มีการเลือกเวอร์ชันล่าสุดให้อัตโนมัติ' : 'No version is selected automatically.' }}</p>
-                    <div class="software-version-list">
+                    <p class="detail-meta">{{ discovery.packageId }} — {{ language() === 'th' ? 'เลือกเวอร์ชันจาก WinGet Manifest โดยตรง' : 'Choose a version directly from the WinGet manifest.' }}</p>
+                    <label class="software-version-label" [for]="'software-version-' + entry.id">
+                      {{ language() === 'th' ? 'เวอร์ชัน (ใหม่สุดอยู่ด้านบน)' : 'Version (newest first)' }}
+                    </label>
+                    <select class="software-version-select" [id]="'software-version-' + entry.id"
+                      [disabled]="planning()" [value]="''"
+                      [attr.aria-label]="language() === 'th' ? 'เลือกเวอร์ชันซอฟต์แวร์' : 'Select software version'"
+                      (change)="selectSoftwareVersion(entry.id, $any($event.target).value)">
+                      <option value="" disabled>{{ language() === 'th' ? 'เลือกเวอร์ชัน...' : 'Choose a version...' }}</option>
+                      @for (version of sortedSoftwareVersions(discovery.result.available_versions); track version) {
+                        <option [value]="version">{{ version }}</option>
+                      }
+                    </select>
+                  }
+                  @if (discovery.status === 'scope_required' && discovery.result) {
+                    <div class="tool-preview installer-actions--blocked" role="status">
+                      <strong>{{ language() === 'th' ? 'Manifest ไม่มี User Scope สำหรับ Architecture นี้' : 'No User Scope installer exists for this architecture' }}</strong>
+                      <span>{{ language() === 'th' ? 'พบ Scope ต่อไปนี้ใน Manifest โปรดเลือกเอง Machine Scope จะแสดงข้อมูลเท่านั้นและยังติดตั้งไม่ได้' : 'The manifest exposes these scopes. Select explicitly. Machine Scope is informational only and cannot be installed yet.' }}</span>
                       @for (version of discovery.result.available_versions; track version) {
-                        <button class="software-version" type="button" [disabled]="planning()" (click)="selectSoftwareVersion(entry.id, version)">{{ version }}</button>
+                        @for (scope of discovery.result.available_scopes; track scope) {
+                          <button class="software-version" type="button" [disabled]="planning()"
+                            (click)="selectSoftwareScopeForVersion(entry.id, version, scope)">
+                            {{ scope === 'user' ? 'User Scope' : 'Machine Scope' }} · {{ version }}
+                          </button>
+                        }
                       }
                     </div>
                   }
@@ -481,6 +584,18 @@
                       <span>Repository commit: {{ candidate.repository_commit }}</span>
                       <a [href]="candidate.manifest_source_url" target="_blank" rel="noopener noreferrer">{{ language() === 'th' ? 'เปิด Manifest ต้นทาง' : 'Open source manifest' }}</a>
                     </div>
+                    @if (discovery.result?.available_scopes?.length) {
+                      <div class="software-version-list" aria-label="Installer scope selection">
+                        @for (scope of discovery.result.available_scopes; track scope) {
+                          <button class="software-version" type="button" [disabled]="planning() || scope === candidate.scope"
+                            [attr.aria-pressed]="scope === candidate.scope"
+                            (click)="selectSoftwareScope(entry.id, scope)">
+                            <strong>{{ scope === 'user' ? 'User Scope' : 'Machine Scope' }}</strong>
+                            <small>{{ scope === candidate.scope ? (language() === 'th' ? 'กำลังเลือกอยู่' : 'Selected') : (language() === 'th' ? 'เลือกขอบเขตนี้' : 'Select this scope') }}</small>
+                          </button>
+                        }
+                      </div>
+                    }
                     <div class="tool-preview installer-actions--blocked" role="status">
                       @if (discovery.status === 'source_mismatch') {
                         <strong>{{ language() === 'th' ? 'บล็อก: Manifest ไม่ตรงกับ Release ทางการ' : 'Blocked: manifest does not match the official release' }}</strong>
@@ -490,7 +605,7 @@
                         <strong>{{ language() === 'th' ? 'ยังไม่ใช่หลักฐานอนุญาตติดตั้ง' : 'Not installation authorization evidence' }}</strong>
                       }
                       @if (discovery.status === 'source_mismatch') {
-                        <span>{{ language() === 'th' ? 'เวอร์ชันจาก WinGet ไม่ตรงกับ Release ล่าสุดจากผู้ผลิต จึงห้ามนำรายการนี้ไปอนุมัติหรือติดตั้ง' : 'The WinGet manifest version differs from the vendor latest release. This candidate must not be approved or installed.' }}</span>
+                        <span>{{ language() === 'th' ? 'เวอร์ชันจาก WinGet ไม่พบ Release ทางการที่ตรงกัน จึงห้ามนำรายการนี้ไปอนุมัติหรือติดตั้ง' : 'The WinGet manifest version has no matching official vendor release. This candidate must not be approved or installed.' }}</span>
                       } @else if (discovery.status === 'source_check_unavailable') {
                         <span>{{ language() === 'th' ? 'ระบบตรวจสอบแหล่ง Release ทางการไม่ได้ จึงปฏิเสธการยืนยันความน่าเชื่อถือในครั้งนี้' : 'The official release source could not be verified, so this candidate remains blocked.' }}</span>
                       } @else {
@@ -502,18 +617,23 @@
                     </div>
                   }
                   @if (discovery.status === 'conditional' && discovery.result?.candidate; as installCandidate) {
-                    @if (installCandidate.publisher_verification === 'VERIFIED' || installCandidate.publisher_verification === 'NOT_CHECKED') {
+                    @if (installCandidate.scope === 'machine') {
+                      <div class="tool-preview installer-actions--blocked" role="status">
+                        <strong>{{ language() === 'th' ? 'พบ Machine Scope แต่ยังไม่เปิดให้ติดตั้ง' : 'Machine Scope discovered but installation is disabled' }}</strong>
+                        <span>{{ language() === 'th' ? 'ระบบแสดงรายการจาก Manifest ได้ แต่ยังไม่มี Signed Elevated Helper และการตรวจสอบ UAC/Process Containment จึงไม่สามารถสร้าง Approval หรือติดตั้งได้' : 'Discovery is informational only. A signed elevated helper and verified UAC/process containment are not available, so proposal, approval, and installation are blocked.' }}</span>
+                      </div>
+                    } @else {
                       <section class="tool-preview installer-actions" aria-label="Real WinGet install">
                         <strong>{{ language() === 'th' ? 'เตรียมติดตั้งจริงผ่าน WinGet' : 'Prepare real WinGet installation' }}</strong>
                         @if (discovery.readinessChecking) {
-                          <span role="status">{{ language() === 'th' ? 'กำลังตรวจสอบความพร้อมของเครื่องและ Publisher Trust…' : 'Checking Windows and publisher trust readiness…' }}</span>
+                          <span role="status">{{ language() === 'th' ? 'กำลังตรวจสอบความพร้อมของเครื่องและนโยบาย SHA-256…' : 'Checking Windows and SHA-256 trust readiness…' }}</span>
                         } @else if (discovery.readinessError) {
                           <span class="installer-error" role="alert">{{ discovery.readinessError }}</span>
                         } @else if (discovery.readiness && !discovery.readiness.platform_supported) {
                           <span>{{ language() === 'th' ? 'การตรวจสอบ Authenticode และการติดตั้งจริงรองรับเฉพาะ Windows' : 'Authenticode verification and real installation require Windows.' }}</span>
-                        } @else if (discovery.readiness && (!discovery.readiness.authenticode_verification_available || !discovery.readiness.publisher_identity_policy_available || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH')) {
-                          <span>{{ language() === 'th' ? 'นโยบายตรวจสอบ Authenticode และ Publisher ของ Backend ยังไม่พร้อม จึงยังไม่อนุญาตให้เตรียมการติดตั้ง' : 'Backend Authenticode and publisher identity verification is not ready. Install preparation remains blocked.' }}</span>
-                        } @else if (discovery.readiness?.publisher_identity_policy_available && discovery.readiness.authenticode_verification_available && discovery.readiness.publisher_trust_mode === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH' && !discovery.proposal) {
+                        } @else if (discovery.readiness && (!discovery.readiness.authenticode_verification_available || discovery.readiness.installer_trust_mode !== 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY')) {
+                          <span>{{ language() === 'th' ? 'นโยบายตรวจสอบ SHA-256 และ Authenticode ของ Backend ยังไม่พร้อม จึงยังไม่อนุญาตให้เตรียมการติดตั้ง' : 'Backend SHA-256 and Authenticode signature-integrity verification is not ready. Install preparation remains blocked.' }}</span>
+                        } @else if (discovery.readiness?.authenticode_verification_available && discovery.readiness.installer_trust_mode === 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY' && !discovery.proposal) {
                           <span>{{ language() === 'th' ? 'ระบบจะดาวน์โหลดไฟล์ชั่วคราว ตรวจ SHA-256 และ Authenticode แล้วลบไฟล์ชั่วคราวหลังสร้างข้อเสนอ' : 'The installer will be temporarily downloaded, SHA-256 and Authenticode checked, then the temporary file removed.' }}</span>
                           <button class="send-button" type="button" [disabled]="planning()" (click)="prepareSoftwareInstall(entry.id)">
                             {{ discovery.proposalStatus === 'preparing' ? (language() === 'th' ? 'กำลังตรวจสอบไฟล์…' : 'Verifying installer…') : (language() === 'th' ? 'ตรวจสอบไฟล์และเตรียม Approval' : 'Verify installer and prepare approval') }}
@@ -552,7 +672,7 @@
                             <button class="send-button" type="button" [disabled]="discovery.jobStatusChecking" (click)="retrySoftwareInstallReservation(entry.id)">
                               {{ language() === 'th' ? 'ตรวจสอบ Reservation อีกครั้ง' : 'Retry reservation recovery' }}
                             </button>
-                          } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true && discovery.readiness?.real_install_release_package_id === discovery.proposal?.package_id && discovery.readiness?.real_install_release_version === discovery.proposal?.version) {
+                          } @else if (discovery.approvalChallenge && !discovery.reservationRecoveryPending && discovery.readiness?.real_install_enabled === true) {
                             <div class="program-review" aria-label="Verified installer approval evidence">
                               <strong>{{ language() === "th" ? "หลักฐานไฟล์ติดตั้งที่ตรวจสอบแล้ว" : "Verified installer evidence" }}</strong>
                               <span>Package ID: {{ discovery.approvalChallenge.package_id }}</span>
@@ -562,8 +682,6 @@
                               <span>{{ language() === "th" ? "แหล่งไฟล์" : "Installer source" }}: {{ discovery.approvalChallenge.installer_url }}</span>
                               <span>SHA-256: {{ discovery.approvalChallenge.installer_sha256 }}</span>
                               <span>{{ language() === "th" ? "แหล่ง Manifest" : "Manifest source" }}: {{ discovery.approvalChallenge.manifest_source_url }}</span>
-                              <span>{{ language() === "th" ? "Fingerprint ผู้ลงนาม" : "Signer certificate SHA-256" }}: {{ discovery.approvalChallenge.signature_sha256 }}</span>
-                              <span>{{ language() === "th" ? "ผู้ลงนามที่ตรวจสอบแล้ว" : "Verified signer" }}: {{ discovery.approvalChallenge.signature_subject }}</span>
                               @if (discovery.approvalChallenge.installer_silent_switch) {
                                 <span>{{ language() === "th" ? "คำสั่ง Silent จาก Manifest" : "Manifest silent switch" }}: {{ discovery.approvalChallenge.installer_silent_switch }}</span>
                               }
@@ -573,12 +691,10 @@
                             <button class="send-button" type="button" [disabled]="planning() || (discovery.totpCode ?? '').length !== 6" (click)="confirmSoftwareInstall(entry.id)">
                               {{ language() === 'th' ? 'อนุมัติและเข้าคิวติดตั้งจริง' : 'Approve and queue real install' }}
                             </button>
-                          } @else if (!discovery.readiness?.real_install_enabled || discovery.readiness?.real_install_release_package_id !== discovery.proposal?.package_id || discovery.readiness?.real_install_release_version !== discovery.proposal?.version) {
-                            <small role="status">{{ language() === 'th' ? 'ยังไม่มี Release Authorization สำหรับ Package/Version นี้ ให้รัน scripts/authorize-real-install.ps1 จาก PowerShell แล้ว Restart Backend จากหน้าต่างเดียวกัน จากนั้นรีเฟรชสถานะ' : 'No active release authorization for this exact package/version. Run scripts/authorize-real-install.ps1 in PowerShell, restart the backend from that same window, then refresh readiness.' }}</small>
-                            <small>{{ language() === 'th' ? 'เป้าหมายที่อนุญาตอยู่ในระบบ: ' : 'Currently authorized target: ' }}{{ discovery.readiness?.real_install_release_package_id ?? '—' }} {{ discovery.readiness?.real_install_release_version ?? '' }}</small>
+                          } @else if (discovery.readiness?.real_install_enabled !== true) {
+                            <small role="status">{{ language() === 'th' ? 'การติดตั้งจริงรองรับเฉพาะ Windows และต้องให้ Backend พร้อมใช้งาน' : 'Real installation is supported only on Windows and requires the backend to be ready.' }}</small>
                             <button class="send-button" type="button" [disabled]="discovery.readinessChecking" (click)="refreshSoftwareInstallReadiness(entry.id)">
-                              {{ language() === 'th' ? 'รีเฟรช Release Authorization' : 'Refresh release authorization' }}
-                            </button>
+                              {{ language() === 'th' ? 'ตรวจสอบความพร้อมอีกครั้ง' : 'Refresh readiness' }}</button>
                           } @else {
                             <button class="send-button" type="button" [disabled]="planning() || !authenticated() || !authenticatorEnrolled() || !authenticatorStorageAvailable()" (click)="requestSoftwareApproval(entry.id)">
                               {{ language() === 'th' ? 'ยืนยันตัวตนและขออนุมัติ' : 'Verify identity and request approval' }}

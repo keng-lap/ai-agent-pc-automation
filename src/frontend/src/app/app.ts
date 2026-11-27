@@ -1,8 +1,12 @@
 import { DOCUMENT } from '@angular/common';
-import { AfterViewChecked, Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
-import { defer, finalize, take, timeout, TimeoutError } from 'rxjs';
+import { AfterViewChecked, Component, DestroyRef, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
+import { catchError, defer, exhaustMap, filter, finalize, of, take, takeUntil, takeWhile, timeout, TimeoutError, timer, switchMap } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AuthSession,
+  BrowserDiagnosticCode,
+  DiagnosticsMode,
+  DiagnosticsPublishStatus,
   ChatApi,
   ConversationHistory,
   GeminiChatResponse,
@@ -12,6 +16,7 @@ import {
   SoftwareCatalogSearchResponse,
   SoftwareDiscoveryResponse,
   SoftwareInstallJobStatus,
+  SoftwareInstallJobSummary,
   SoftwareInstallProposalResponse,
   SoftwareInstallReadiness,
   UiLanguage,
@@ -19,13 +24,14 @@ import {
 import { GeminiSettingsComponent } from './gemini-settings';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder';
 import { JobMonitorComponent } from './job-monitor/job-monitor';
+import { RuntimeDiagnosticsState } from './runtime-diagnostics.state';
 
 type EntryKind = 'user' | 'agent' | 'error';
 type ErrorCode = 'MSG-03' | 'MSG-04' | 'MSG-05' | 'MSG-06' | 'MSG-07' | 'MSG-08' | 'MSG-09' | 'MSG-10' | 'MSG-11' | 'MSG-12' | 'MSG-13' | 'MSG-14' | 'MSG-15' | 'MSG-16' | 'MSG-17' | 'MSG-18' | 'MSG-19' | 'MSG-20' | 'MSG-21' | 'MSG-22' | 'MSG-23';
 
 interface SoftwareDiscoveryUiState {
   query: string;
-  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'verifying_manifest' | 'conditional' | 'source_mismatch' | 'source_check_unavailable' | 'error';
+  status: 'searching' | 'matches' | 'not_found' | 'checking_versions' | 'version_required' | 'scope_required' | 'verifying_manifest' | 'conditional' | 'source_mismatch' | 'source_check_unavailable' | 'error';
   catalog?: SoftwareCatalogSearchResponse;
   packageId?: string;
   result?: SoftwareDiscoveryResponse;
@@ -99,13 +105,20 @@ function isSoftwareCatalogSearchResponse(value: unknown): value is SoftwareCatal
 function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscoveryResponse {
   if (
     !isRecord(value)
-    || !['VERSION_REQUIRED', 'CONDITIONAL', 'SOURCE_MISMATCH', 'SOURCE_CHECK_UNAVAILABLE'].includes(String(value['status']))
+    || !['VERSION_REQUIRED', 'SCOPE_REQUIRED', 'CONDITIONAL', 'SOURCE_MISMATCH', 'SOURCE_CHECK_UNAVAILABLE'].includes(String(value['status']))
     || value['source'] !== 'winget-community-repository'
     || typeof value['package_id'] !== 'string'
     || !Array.isArray(value['available_versions'])
     || !value['available_versions'].every((version) => typeof version === 'string')
+    || !Array.isArray(value['manifest_versions'])
+    || !value['manifest_versions'].every((version) => typeof version === 'string')
+    || !(value['official_versions'] === null
+      || (Array.isArray(value['official_versions'])
+        && value['official_versions'].every((version) => typeof version === 'string')))
+    || !Array.isArray(value['available_scopes'])
+    || !value['available_scopes'].every((scope) => scope === 'user' || scope === 'machine')
   ) return false;
-  if (value['status'] === 'VERSION_REQUIRED') {
+  if (value['status'] === 'VERSION_REQUIRED' || value['status'] === 'SCOPE_REQUIRED') {
     return value['candidate'] === null;
   }
   const candidate = value['candidate'];
@@ -116,7 +129,7 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && typeof candidate['publisher'] === 'string'
     && typeof candidate['version'] === 'string'
     && ['x86', 'x64', 'arm64'].includes(String(candidate['architecture']))
-    && candidate['scope'] === 'user'
+    && (candidate['scope'] === 'user' || candidate['scope'] === 'machine')
     && typeof candidate['installer_type'] === 'string'
     && typeof candidate['installer_url'] === 'string'
     && candidate['installer_url'].startsWith('https://')
@@ -133,7 +146,7 @@ function isSoftwareDiscoveryResponse(value: unknown): value is SoftwareDiscovery
     && ['NOT_CHECKED', 'VERIFIED', 'MISMATCH', 'UNAVAILABLE'].includes(String(candidate['publisher_verification']))
     && (typeof candidate['official_version'] === 'string' || candidate['official_version'] === null)
     && (typeof candidate['official_release_url'] === 'string' || candidate['official_release_url'] === null)
-    && (candidate['official_release_url'] === null || candidate['official_release_url'].startsWith('https://github.com/dbeaver/dbeaver/releases/tag/'))
+    && (candidate['official_release_url'] === null || candidate['official_release_url'].startsWith('https://'))
     && (typeof candidate['official_asset_sha256'] === 'string' || candidate['official_asset_sha256'] === null)
     && (candidate['official_asset_sha256'] === null || /^[0-9a-f]{64}$/i.test(candidate['official_asset_sha256']))
     && Array.isArray(candidate['limitations'])
@@ -144,9 +157,7 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
   return isRecord(value)
     && typeof value['platform_supported'] === 'boolean'
     && typeof value['authenticode_verification_available'] === 'boolean'
-    && typeof value['publisher_identity_policy_available'] === 'boolean'
-    && typeof value['publisher_trust_configured'] === 'boolean'
-    && value['publisher_trust_mode'] === 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
+    && value['installer_trust_mode'] === 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY'
     && typeof value['real_install_enabled'] === 'boolean'
     && (value['real_install_release_package_id'] === null || typeof value['real_install_release_package_id'] === 'string')
     && (value['real_install_release_version'] === null || typeof value['real_install_release_version'] === 'string')
@@ -154,7 +165,7 @@ function isSoftwareInstallReadiness(value: unknown): value is SoftwareInstallRea
     && typeof value['package_allowlist_enabled'] === 'boolean'
     && Array.isArray(value['supported_package_ids'])
     && value['supported_package_ids'].every((item) => typeof item === 'string')
-    && value['notice'] === 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+    && value['notice'] === 'RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP';
 }
 
 function isSoftwareInstallProposalResponse(value: unknown): value is SoftwareInstallProposalResponse {
@@ -184,8 +195,6 @@ function isSoftwareApprovalChallenge(value: unknown): value is SoftwareApprovalC
     && (value['installer_silent_switch'] === null || typeof value['installer_silent_switch'] === 'string')
     && typeof value['installer_url'] === 'string'
     && typeof value['installer_sha256'] === 'string'
-    && typeof value['signature_subject'] === 'string'
-    && typeof value['signature_sha256'] === 'string'
     && typeof value['manifest_source_url'] === 'string'
     && typeof value['approval_digest'] === 'string'
     && /^[0-9a-f]{64}$/.test(value['approval_digest'])
@@ -382,6 +391,8 @@ function writeStoredConversationId(conversationId: string): void {
 export class App implements AfterViewChecked {
   private readonly document = inject(DOCUMENT);
   private readonly chatApi = inject(ChatApi);
+  private readonly diagnosticsState = inject(RuntimeDiagnosticsState);
+  private readonly destroyRef = inject(DestroyRef);
   private nextEntryId = 0;
 
   @ViewChild('messageLog') private messageLog?: ElementRef<HTMLElement>;
@@ -391,12 +402,23 @@ export class App implements AfterViewChecked {
   protected readonly language = signal<UiLanguage>(readStoredLanguage());
   protected readonly draft = signal('');
   protected readonly entries = signal<ChatEntry[]>([]);
+  protected readonly installJobs = signal<SoftwareInstallJobSummary[]>([]);
+  protected readonly installJobStatusUnavailable = signal(false);
+  protected readonly recentInstallJobs = computed(() => this.installJobs().slice(0, 3));
   protected readonly pending = signal(false);
   protected readonly planning = signal(false);
   protected readonly restoring = signal(false);
   protected readonly clearing = signal(false);
   protected readonly conversationNotice = signal('');
   private readonly conversationId = signal('');
+  protected readonly diagnosticsEnabled = signal(false);
+  protected readonly diagnosticsBusy = signal(false);
+  protected readonly diagnosticsStorageAvailable = signal(false);
+  protected readonly diagnosticsError = signal('');
+  protected readonly diagnosticsPublishStatus = signal<'idle' | 'running' | 'succeeded' | 'failed'>('idle');
+  protected readonly diagnosticsPublishMessage = signal('');
+  protected readonly diagnosticsPublishUrl = signal('');
+  protected readonly diagnosticsPublishBusy = signal(false);
   protected readonly authReady = signal(false);
   protected readonly authEnabled = signal(false);
   protected readonly authenticated = signal(false);
@@ -410,7 +432,24 @@ export class App implements AfterViewChecked {
 
   constructor() {
     this.document.documentElement.lang = this.language();
+    const browserWindow = this.document.defaultView;
+    browserWindow?.addEventListener('error', (event: ErrorEvent) => this.reportBrowserDiagnostic('BROWSER_UNCAUGHT_ERROR', event.error));
+    browserWindow?.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => this.reportBrowserDiagnostic('BROWSER_UNHANDLED_REJECTION', event.reason));
     this.refreshAuthSession();
+    timer(0, 5000)
+      .pipe(
+        filter(() => this.authReady() && this.authenticated()),
+        switchMap(() => this.chatApi.getSoftwareInstallJobs(50).pipe(catchError(() => of(null)))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((response) => {
+        if (response === null) {
+          this.installJobStatusUnavailable.set(true);
+          return;
+        }
+        this.installJobs.set(response.jobs);
+        this.installJobStatusUnavailable.set(false);
+      });
     const storedConversationId = readStoredConversationId();
     const conversationId = storedConversationId ?? globalThis.crypto.randomUUID();
     this.conversationId.set(conversationId);
@@ -427,6 +466,168 @@ export class App implements AfterViewChecked {
   }
 
 
+  private reportBrowserDiagnostic(eventCode: BrowserDiagnosticCode, error: unknown): void {
+    if (!this.diagnosticsState.enabled) return;
+    const errorType = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
+      ? error.name
+      : undefined;
+    const stack = error instanceof Error && typeof error.stack === 'string'
+      ? error.stack.split('\n').slice(1, 9)
+        .map((frame) => frame.match(/:(\d+):(\d+)\)?$/))
+        .filter((match): match is RegExpMatchArray => match !== null)
+        .map((match) => `${match[1]}:${match[2]}`)
+        .join('|')
+        .slice(0, 1024)
+      : undefined;
+    defer(() => this.chatApi.recordBrowserDiagnostic(eventCode, errorType, stack))
+      .pipe(take(1))
+      .subscribe({ error: () => undefined });
+  }
+
+  protected refreshDiagnosticsMode(): void {
+    defer(() => this.chatApi.getDiagnosticsMode())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (mode: DiagnosticsMode) => {
+          this.diagnosticsStorageAvailable.set(mode.storage_available);
+          this.diagnosticsEnabled.set(mode.enabled);
+          this.diagnosticsState.setEnabled(mode.enabled);
+          if (!mode.storage_available) {
+            this.diagnosticsError.set(this.language() === 'th'
+              ? 'พื้นที่จัดเก็บ Diagnostics ไม่พร้อมใช้งาน'
+              : 'Diagnostics storage is unavailable.');
+          }
+        },
+        error: () => this.diagnosticsError.set(
+          this.language() === 'th' ? 'อ่านสถานะ Diagnostics ไม่สำเร็จ' : 'Could not read diagnostics status.',
+        ),
+      });
+  }
+
+  protected toggleDiagnostics(): void {
+    if (this.diagnosticsBusy() || !this.diagnosticsStorageAvailable()) return;
+    const nextValue = !this.diagnosticsEnabled();
+    this.diagnosticsBusy.set(true);
+    this.diagnosticsError.set('');
+    defer(() => this.chatApi.setDiagnosticsMode(nextValue))
+      .pipe(
+        timeout({ first: 10_000 }),
+        take(1),
+        finalize(() => this.diagnosticsBusy.set(false)),
+      )
+      .subscribe({
+        next: (mode: DiagnosticsMode) => {
+          this.diagnosticsStorageAvailable.set(mode.storage_available);
+          this.diagnosticsEnabled.set(mode.enabled);
+          this.diagnosticsState.setEnabled(mode.enabled);
+          if (!mode.enabled) this.publishDiagnostics();
+        },
+        error: () => this.diagnosticsError.set(
+          this.language() === 'th' ? 'เปลี่ยนโหมด Diagnostics ไม่สำเร็จ' : 'Could not change diagnostics mode.',
+        ),
+      });
+  }
+
+  protected publishDiagnostics(): void {
+    if (this.diagnosticsPublishBusy()) return;
+    this.diagnosticsPublishBusy.set(true);
+    this.diagnosticsPublishStatus.set('running');
+    this.diagnosticsPublishMessage.set(this.language() === 'th'
+      ? 'กำลังส่ง Log ไปยัง GitHub...'
+      : 'Publishing logs to GitHub...');
+    this.diagnosticsPublishUrl.set('');
+    defer(() => this.diagnosticsPublishStatus() === 'failed'
+      ? this.chatApi.retryDiagnosticsPublish()
+      : this.chatApi.publishDiagnostics())
+      .pipe(take(1))
+      .subscribe({
+        next: (status) => {
+          this.applyDiagnosticsPublishStatus(status);
+          if (status.status === 'running') this.pollDiagnosticsPublish();
+          else this.diagnosticsPublishBusy.set(false);
+        },
+        error: () => {
+          this.diagnosticsPublishStatus.set('failed');
+          this.diagnosticsPublishMessage.set(this.language() === 'th'
+            ? 'เริ่มส่ง Log ไม่สำเร็จ สามารถกด Retry ได้'
+            : 'Could not start log publishing. You can retry.');
+          this.diagnosticsPublishBusy.set(false);
+        },
+      });
+  }
+
+  private refreshDiagnosticsPublishStatus(): void {
+    defer(() => this.chatApi.getDiagnosticsPublishStatus())
+      .pipe(timeout({ first: 10_000 }), take(1))
+      .subscribe({
+        next: (status) => {
+          if (status.status === 'running') this.pollDiagnosticsPublish();
+          else if (status.status !== 'idle') this.applyDiagnosticsPublishStatus(status);
+        },
+        error: () => {
+          this.diagnosticsPublishStatus.set('failed');
+          this.diagnosticsPublishMessage.set(this.language() === 'th'
+            ? 'อ่านสถานะการส่ง Log ไม่สำเร็จ กด Retry ได้'
+            : 'Could not read publishing status. You can retry.');
+        },
+      });
+  }
+
+  private pollDiagnosticsPublish(): void {
+    this.diagnosticsPublishBusy.set(true);
+    this.diagnosticsPublishStatus.set('running');
+    this.diagnosticsPublishMessage.set(this.language() === 'th'
+      ? 'กำลังส่ง Log ไปยัง GitHub...'
+      : 'Publishing logs to GitHub...');
+    timer(0, 1000).pipe(
+      exhaustMap(() => defer(() => this.chatApi.getDiagnosticsPublishStatus()).pipe(
+        timeout({ first: 5000 }),
+      )),
+      takeWhile((status) => status.status === 'running', true),
+      takeUntil(timer(180_000)),
+      finalize(() => {
+        this.diagnosticsPublishBusy.set(false);
+        if (this.diagnosticsPublishStatus() === 'running') {
+          this.diagnosticsPublishStatus.set('failed');
+          this.diagnosticsPublishMessage.set(this.language() === 'th'
+            ? 'รอผลการส่ง Log นานเกินไป ตรวจสอบอีกครั้งหรือกด Retry'
+            : 'Log publishing took too long. Check again or retry.');
+        }
+      }),
+    ).subscribe({
+      next: (status) => this.applyDiagnosticsPublishStatus(status),
+      error: () => {
+        this.diagnosticsPublishStatus.set('failed');
+        this.diagnosticsPublishMessage.set(this.language() === 'th'
+          ? 'อ่านสถานะการส่ง Log ไม่สำเร็จ กด Retry ได้'
+          : 'Could not read publishing status. You can retry.');
+      },
+    });
+  }
+
+  private applyDiagnosticsPublishStatus(status: DiagnosticsPublishStatus): void {
+    this.diagnosticsPublishStatus.set(status.status);
+    this.diagnosticsPublishUrl.set(status.url ?? '');
+    if (status.status === 'succeeded') {
+      this.diagnosticsPublishMessage.set(this.language() === 'th'
+        ? `ส่ง Log สำเร็จ (Run ID: ${status.run_id ?? 'unknown'})`
+        : `Logs published (Run ID: ${status.run_id ?? 'unknown'})`);
+    } else if (status.status === 'failed') {
+      const messages: Record<string, [string, string]> = {
+        no_events: ['ยังไม่มี Log สำหรับส่ง', 'There are no diagnostic events to publish.'],
+        publisher_unavailable: ['ไม่พบตัวส่ง Log ในเครื่องนี้', 'The local log publisher is unavailable.'],
+        publish_timeout: ['ส่ง Log หมดเวลา กด Retry ได้', 'Log publishing timed out. You can retry.'],
+        publish_failed: ['ส่ง Log ไม่สำเร็จ ตรวจสอบ Git authentication แล้วกด Retry', 'Publishing failed. Check Git authentication and retry.'],
+      };
+      const message = messages[status.error_code ?? ''] ?? messages['publish_failed'];
+      this.diagnosticsPublishMessage.set(this.language() === 'th' ? message[0] : message[1]);
+    } else if (status.status === 'running') {
+      this.diagnosticsPublishMessage.set(this.language() === 'th'
+        ? 'กำลังส่ง Log ไปยัง GitHub...'
+        : 'Publishing logs to GitHub...');
+    }
+  }
+
   protected refreshAuthSession(): void {
     defer(() => this.chatApi.getAuthSession())
       .pipe(timeout({ first: 10_000 }), take(1))
@@ -437,6 +638,10 @@ export class App implements AfterViewChecked {
           this.authenticatorEnrolled.set(session.authenticator_enrolled);
           this.authenticatorStorageAvailable.set(session.authenticator_storage_available !== false);
           this.authReady.set(true);
+          if (session.authenticated) {
+            this.refreshDiagnosticsMode();
+            this.refreshDiagnosticsPublishStatus();
+          }
           this.logAuthenticatorUiState("auth-session-loaded");
         },
         error: () => {
@@ -564,6 +769,20 @@ export class App implements AfterViewChecked {
           ? 'ออกจากระบบไม่สำเร็จ'
           : 'Could not sign out.'),
       });
+  }
+
+  protected installJobStateLabel(state: SoftwareInstallJobSummary['state']): string {
+    const labels: Record<SoftwareInstallJobSummary['state'], [string, string]> = {
+      QUEUED: ['รอ Worker รับงาน', 'Queued for worker'],
+      CLAIMED: ['Worker รับงานแล้ว', 'Claimed by worker'],
+      RUNNING: ['กำลังติดตั้ง', 'Installing'],
+      VERIFYING: ['กำลังตรวจสอบผล', 'Verifying installation'],
+      SUCCEEDED: ['ติดตั้งสำเร็จ', 'Installed successfully'],
+      FAILED: ['ติดตั้งไม่สำเร็จ', 'Installation failed'],
+      REBOOT_REQUIRED: ['ต้องรีสตาร์ต', 'Restart required'],
+      UNKNOWN: ['ไม่สามารถยืนยันผลได้', 'Outcome unknown'],
+    };
+    return labels[state][this.language() === 'th' ? 0 : 1];
   }
 
   protected setActiveView(view: 'chat' | 'workflow' | 'jobs'): void {
@@ -730,6 +949,87 @@ export class App implements AfterViewChecked {
       });
   }
 
+  protected selectSoftwareScope(entryId: number, scope: 'user' | 'machine'): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    const candidate = discovery?.result?.candidate;
+    if (!candidate || candidate.scope === scope) return;
+    this.changeSoftwareScope(entryId, candidate.version, candidate.architecture, scope);
+  }
+
+  protected selectSoftwareScopeForVersion(entryId: number, version: string, scope: 'user' | 'machine'): void {
+    this.changeSoftwareScope(entryId, version, 'x64', scope);
+  }
+
+  private changeSoftwareScope(
+    entryId: number,
+    version: string,
+    architecture: 'x86' | 'x64' | 'arm64',
+    scope: 'user' | 'machine',
+  ): void {
+    const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
+    if (!discovery?.packageId || this.planning() || discovery.reservationId) return;
+
+    const beginDiscovery = (): void => {
+      this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+        ? {
+            ...item,
+            discovery: {
+              ...item.discovery,
+              status: 'verifying_manifest',
+              proposal: undefined,
+              proposalStatus: undefined,
+              proposalError: undefined,
+              approvalChallenge: undefined,
+              totpCode: '',
+              reservationId: undefined,
+              error: undefined,
+            },
+          }
+        : item));
+      defer(() => this.chatApi.discoverSoftware(discovery.packageId!, version, architecture, scope))
+        .pipe(
+          timeout({ first: REQUEST_TIMEOUT_MS }),
+          take(1),
+          finalize(() => this.planning.set(false)),
+        )
+        .subscribe({
+          next: (result: unknown) => this.updateSoftwareDiscovery(entryId, result),
+          error: () => this.setSoftwareDiscoveryError(entryId),
+        });
+    };
+
+    this.planning.set(true);
+    if (!discovery.proposal) {
+      beginDiscovery();
+      return;
+    }
+    defer(() => this.chatApi.revokeSoftwareInstallProposal(discovery.proposal!.plan_id))
+      .pipe(timeout({ first: REQUEST_TIMEOUT_MS }), take(1))
+      .subscribe({
+        next: (result) => {
+          if (!result || result.revoked !== true) {
+            this.planning.set(false);
+            this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+              ? { ...item, discovery: { ...item.discovery, proposalError: this.language() === 'th' ? 'ยกเลิกข้อเสนอเดิมไม่สำเร็จ จึงยังเปลี่ยน Scope ไม่ได้' : 'The previous proposal was not revoked; Scope was not changed.' } }
+              : item));
+            return;
+          }
+          beginDiscovery();
+        },
+        error: () => {
+          this.planning.set(false);
+          this.entries.update((entries) => entries.map((item) => item.id === entryId && item.discovery
+            ? { ...item, discovery: { ...item.discovery, proposalError: this.language() === 'th' ? 'ยกเลิกข้อเสนอเดิมไม่สำเร็จ จึงยังเปลี่ยน Scope ไม่ได้' : 'Could not revoke the previous proposal; Scope was not changed.' } }
+            : item));
+        },
+      });
+  }
+
+  protected sortedSoftwareVersions(versions: string[]): string[] {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    return [...versions].sort((left, right) => collator.compare(right, left));
+  }
+
   protected selectSoftwareVersion(entryId: number, version: string): void {
     const entry = this.entries().find((item) => item.id === entryId);
     const packageId = entry?.discovery?.packageId;
@@ -765,7 +1065,9 @@ export class App implements AfterViewChecked {
           ...entry.discovery,
           status: value.status === 'VERSION_REQUIRED'
             ? 'version_required'
-            : value.status === 'SOURCE_MISMATCH'
+            : value.status === 'SCOPE_REQUIRED'
+              ? 'scope_required'
+              : value.status === 'SOURCE_MISMATCH'
               ? 'source_mismatch'
               : value.status === 'SOURCE_CHECK_UNAVAILABLE'
                 ? 'source_check_unavailable'
@@ -822,11 +1124,9 @@ export class App implements AfterViewChecked {
     if (
       !discovery
       || !candidate
+      || candidate.scope !== 'user'
       || discovery.readiness?.platform_supported !== true
       || discovery.readiness.authenticode_verification_available !== true
-      || discovery.readiness.publisher_identity_policy_available !== true
-      || discovery.readiness.publisher_trust_mode !== 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH'
-      || !['VERIFIED', 'NOT_CHECKED'].includes(candidate.publisher_verification)
       || this.planning()
     ) return;
 
@@ -838,6 +1138,7 @@ export class App implements AfterViewChecked {
       candidate.package_id,
       candidate.version,
       candidate.architecture,
+      'user',
     ))
       .pipe(
         timeout({ first: REQUEST_TIMEOUT_MS }),
@@ -858,7 +1159,7 @@ export class App implements AfterViewChecked {
         })),
         error: () => this.entries.update((entries) => entries.map((item) => (
           item.id === entryId && item.discovery
-            ? { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'ตรวจสอบไฟล์ติดตั้งหรือลายเซ็น Publisher ไม่ผ่าน ระบบจึงไม่อนุญาตให้อนุมัติ' : 'Installer verification or publisher trust failed. Approval remains blocked.' } }
+            ? { ...item, discovery: { ...item.discovery, proposalStatus: 'error', proposalError: this.language() === 'th' ? 'เตรียมหลักฐานไฟล์ติดตั้งไม่สำเร็จ ระบบจึงยังไม่อนุญาตให้อนุมัติ โปรดตรวจ failure_code และ failure_reason ใน Runtime Diagnostics' : 'Installer evidence preparation failed. Approval remains blocked. Check failure_code and failure_reason in Runtime Diagnostics.' } }
             : item
         ))),
       });
@@ -867,7 +1168,7 @@ export class App implements AfterViewChecked {
   protected requestSoftwareApproval(entryId: number): void {
     const discovery = this.entries().find((item) => item.id === entryId)?.discovery;
     const proposal = discovery?.proposal;
-    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== proposal.package_id || discovery.readiness.real_install_release_version !== proposal.version || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
+    if (!discovery || !proposal || discovery.readiness?.real_install_enabled !== true || !this.authenticated() || !this.authenticatorEnrolled() || !this.authenticatorStorageAvailable() || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.createSoftwareApprovalChallenge(proposal.plan_id, proposal.evidence_id))
@@ -906,7 +1207,7 @@ export class App implements AfterViewChecked {
     const proposal = discovery?.proposal;
     const challenge = discovery?.approvalChallenge;
     const code = discovery?.totpCode ?? '';
-    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || discovery.readiness.real_install_release_package_id !== challenge.package_id || discovery.readiness.real_install_release_version !== challenge.version || !/^\d{6}$/.test(code) || this.planning()) return;
+    if (!discovery || !proposal || !challenge || discovery.reservationRecoveryPending || discovery.readiness?.real_install_enabled !== true || !/^\d{6}$/.test(code) || this.planning()) return;
 
     this.planning.set(true);
     defer(() => this.chatApi.confirmSoftwareApproval(proposal.plan_id, challenge.challenge_id, code))
@@ -974,32 +1275,6 @@ export class App implements AfterViewChecked {
                 }
                 : item
             )));
-            return;
-          }
-          const releaseAuthorizationRejected = isRecord(error)
-            && error['status'] === 409
-            && isRecord(error['error'])
-            && typeof error['error']['detail'] === 'string'
-            && error['error']['detail'].toLowerCase().includes('release authorization');
-          if (releaseAuthorizationRejected) {
-            this.entries.update((entries) => entries.map((item) => (
-              item.id === entryId && item.discovery
-                ? {
-                  ...item,
-                  discovery: {
-                    ...item.discovery,
-                    approvalChallenge: undefined,
-                    reservationRecoveryPending: false,
-                    jobStatusChecking: false,
-                    totpCode: '',
-                    proposalError: this.language() === 'th'
-                      ? 'Release Authorization หมดอายุหรือไม่ตรงกับ Package/Version กรุณาตั้งค่าใหม่แล้วรีเฟรช'
-                      : 'The release authorization expired or does not match this package/version. Refresh authorization and try again.',
-                  },
-                }
-                : item
-            )));
-            this.loadSoftwareInstallReadiness(entryId);
             return;
           }
           if (isRecord(error) && error['status'] === 403) {

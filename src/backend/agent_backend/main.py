@@ -1,11 +1,13 @@
 """FastAPI application for local Gemini chat without PC automation."""
 
+import asyncio
 import logging
 import os
 import re
 import shlex
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -19,9 +21,21 @@ from .auth_api import build_auth_services, require_session
 from .auth_api import router as auth_router
 from .chat import router as chat_router
 from .config import load_settings
+from .diagnostics_api import router as diagnostics_router
 from .jobs_api import router as jobs_router
 from .plan_api import router as plan_router
 from .policy import validate_policy_configuration
+from .runtime_diagnostics import (
+    close_store,
+    configure_store,
+    correlation_id,
+    emit_event,
+    emit_exception,
+    is_enabled,
+    reset_workflow_context,
+    set_workflow_context,
+)
+from .runtime_privilege import enforce_backend_not_elevated
 from .security import LocalWebSecurityMiddleware
 from .software_approval_api import router as software_approval_router
 from .software_discovery_api import router as software_discovery_router
@@ -68,6 +82,8 @@ def enforce_single_worker(*, environ=None, argv=None) -> None:
 
 
 def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
+    # The process privilege check runs at ASGI startup, not app construction.
+    # Importing the app for tooling/tests must not be confused with running it.
     enforce_single_worker()
     validate_policy_configuration()
     settings = settings or load_settings()
@@ -85,13 +101,61 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.auth_services = auth_services
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
-    application.state.real_install_enabled = settings.real_install_enabled
-    application.state.real_install_release_authorization = settings.real_install_release_authorization
     application.state.job_store_lock = threading.Lock()
     application.state.approval_reservation_store = None
     application.state.approval_reservation_store_lock = threading.Lock()
+
+    @application.middleware("http")
+    async def runtime_diagnostics_middleware(request: Request, call_next):
+        request_id = correlation_id(request.headers.get("x-correlation-id"))
+        workflow_id = correlation_id(request.headers.get("x-workflow-id"))
+        request.state.correlation_id = request_id
+        request.state.workflow_id = workflow_id
+        workflow_token = set_workflow_context(workflow_id)
+        started = time.perf_counter()
+        try:
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                if is_enabled():
+                    await asyncio.to_thread(
+                        emit_exception,
+                        event_code="REQUEST_EXCEPTION",
+                    component="backend",
+                    stage="request",
+                    correlation=request_id,
+                    error=exc,
+                        fields={"route": getattr(request.scope.get("route"), "path", "unmatched")},
+                    )
+                raise
+            response.headers["X-Correlation-ID"] = request_id
+            response.headers["X-Workflow-ID"] = workflow_id
+            if is_enabled():
+                await asyncio.to_thread(
+                    emit_event,
+                    event_code="REQUEST_COMPLETED",
+                component="backend",
+                stage="request",
+                correlation=request_id,
+                severity=(
+                    "ERROR" if response.status_code >= 500
+                    else "WARNING" if response.status_code >= 400
+                    else "INFO"
+                ),
+                fields={
+                    "route": getattr(request.scope.get("route"), "path", "unmatched"),
+                    "method": request.method,
+                    "status_code": response.status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                    },
+                )
+            return response
+        finally:
+            reset_workflow_context(workflow_token)
+
     application.add_middleware(LocalWebSecurityMiddleware, settings=settings)
     application.include_router(auth_router)
+    application.include_router(diagnostics_router)
     application.include_router(chat_router, dependencies=[Depends(require_session)])
     application.include_router(plan_router, dependencies=[Depends(require_session)])
     application.include_router(software_discovery_router, dependencies=[Depends(require_session)])
@@ -104,9 +168,19 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
 
     @application.on_event("startup")
     def start_local_install_worker() -> None:
-        # Reconcile stale jobs on Windows even while live execution is disabled.
-        # This path never claims queued work or starts WinGet.
-        if os.name != "nt":
+        # Backend and its in-process Agent must never inherit an elevated token.
+        # Installation execution uses the current user's WinGet context only.
+        # Check the effective token immediately before serving requests.
+        enforce_backend_not_elevated()
+        if settings.app_env != "test":
+            job_state_directory = Path(settings.job_store_path).parent
+            diagnostics_directory = job_state_directory.with_name(
+                job_state_directory.name + "-Diagnostics"
+            )
+            configure_store(diagnostics_directory / "runtime.sqlite3")
+        # Keep the Windows worker idle and polling. It can execute only a
+        # durable queue item created after exact-action TOTP approval.
+        if os.name != "nt" or settings.app_env == "test":
             return
         try:
             store = application.state.approval_reservation_store
@@ -117,13 +191,10 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
                         store = SQLiteApprovalReservationStore(settings.job_store_path)
                         application.state.approval_reservation_store = store
             store.reconcile_expired_install_leases()
-            if not settings.real_install_enabled:
-                return
             worker = SoftwareInstallWorker(
                 store,
                 work_root=Path(settings.job_store_path).parent / "winget-work",
                 stop_event=application.state.install_worker_stop,
-                release_authorization=settings.real_install_release_authorization,
             )
         except Exception:
             logging.getLogger(__name__).exception("Local software install worker could not start.")
@@ -159,6 +230,7 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
             # Shutdown is not complete until the worker has observed the stop
             # signal and the contained WinGet process has exited.
             thread.join()
+        close_store()
 
     return application
 

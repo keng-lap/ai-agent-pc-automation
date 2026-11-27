@@ -4,11 +4,11 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from agent_backend import software_install_api as api
 from agent_backend.software_approval import VerifiedPackageEvidence
 from agent_backend.software_discovery import InstallerCandidate
-from agent_backend.software_evidence import EvidenceRejected
 from agent_backend.software_staging import StagedInstaller
 
 NOW = datetime.now(UTC)
@@ -60,8 +60,6 @@ def make_evidence():
         manifest_sha256="b" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=DBeaver Corporation",
-        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -69,7 +67,10 @@ def make_evidence():
 
 def make_request(tmp_path):
     return SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(job_store_path=tmp_path / "jobs.sqlite")),
+        app=SimpleNamespace(state=SimpleNamespace(
+            job_store_path=tmp_path / "jobs.sqlite",
+            install_worker_thread=SimpleNamespace(is_alive=lambda: True),
+        )),
         state=SimpleNamespace(principal=SimpleNamespace(owner_sub="owner-1")),
     )
 
@@ -121,7 +122,7 @@ def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file
 
 
 
-def test_generic_package_proposal_is_not_blocked_by_dbeaver_release_metadata(monkeypatch, tmp_path):
+def test_generic_package_proposal_uses_publisher_independent_sha256_trust_path(monkeypatch, tmp_path):
     candidate = make_candidate(
         package_id="Acme.Editor",
         package_name="Acme Editor",
@@ -144,8 +145,6 @@ def test_generic_package_proposal_is_not_blocked_by_dbeaver_release_metadata(mon
         file_size=18,
         sha256="a" * 64,
         authenticode_valid=True,
-        signature_subject="CN=Acme Editor, O=Acme Inc",
-        signature_sha256="d" * 64,
         official_release_url=None,
         staged_at=NOW.isoformat(),
     )
@@ -170,8 +169,8 @@ def test_generic_package_proposal_is_not_blocked_by_dbeaver_release_metadata(mon
     assert not staged_path.exists()
 
 
-def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_path):
-    candidate = make_candidate(installer_type="inno")
+def test_unsupported_portable_installer_type_is_rejected_before_staging(monkeypatch, tmp_path):
+    candidate = make_candidate(installer_type="portable")
     stage_calls = []
     monkeypatch.setattr(api.sys, "platform", "win32")
     discovery_calls = []
@@ -182,6 +181,7 @@ def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_
             "package_id": candidate.package_id,
             "version": candidate.version,
             "architecture": "x64",
+            "scope": "user",
         }
         return SimpleNamespace(status="CONDITIONAL", candidate=candidate)
 
@@ -202,12 +202,20 @@ def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_
         "package_id": candidate.package_id,
         "version": candidate.version,
         "architecture": "x64",
+        "scope": "user",
     }]
     assert stage_calls == []
 
 
-def test_unverified_official_release_is_rejected_before_download(monkeypatch, tmp_path):
-    candidate = make_candidate(publisher_verification="NOT_CHECKED")
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"official_version": "26.2.4"},
+        {"official_asset_sha256": "f" * 64},
+    ],
+)
+def test_official_release_version_and_digest_must_match_before_download(monkeypatch, tmp_path, changes):
+    candidate = make_candidate(**changes)
     stage_calls = []
     monkeypatch.setattr(api.sys, "platform", "win32")
     monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
@@ -224,45 +232,6 @@ def test_unverified_official_release_is_rejected_before_download(monkeypatch, tm
 
     assert getattr(error.value, "status_code", None) == 409
     assert stage_calls == []
-
-
-def test_publisher_identity_mismatch_fails_closed_and_removes_staged_file(monkeypatch, tmp_path):
-    candidate = make_candidate()
-    staged_path = tmp_path / "installer.exe"
-    staged_path.write_bytes(b"verified installer")
-    staged = StagedInstaller(
-        package_id=candidate.package_id,
-        version=candidate.version,
-        architecture=candidate.architecture,
-        file_path=str(staged_path),
-        file_size=18,
-        sha256="a" * 64,
-        authenticode_valid=True,
-        signature_subject="CN=DBeaver Corporation",
-        signature_sha256="d" * 64,
-        official_release_url=candidate.official_release_url,
-        staged_at=NOW.isoformat(),
-    )
-    monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.setattr(api._repository, "discover", lambda **_kwargs: SimpleNamespace(status="CONDITIONAL", candidate=candidate))
-    monkeypatch.setattr(api._stager, "stage", lambda *_args, **_kwargs: staged)
-
-    def reject(**_kwargs):
-        raise EvidenceRejected("untrusted signer")
-
-    monkeypatch.setattr(api.software_evidence_registry, "register_staged_candidate", reject)
-
-    with pytest.raises(Exception) as error:
-        api.create_software_install_proposal(
-            api.SoftwareInstallProposalRequest(
-                package_id=candidate.package_id,
-                version=candidate.version,
-            ),
-            request=make_request(tmp_path),
-        )
-
-    assert getattr(error.value, "status_code", None) == 409
-    assert not staged_path.exists()
 
 
 def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
@@ -281,54 +250,48 @@ def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
 
 
 
-def test_readiness_exposes_generic_authenticode_publisher_policy_without_package_pin(monkeypatch, tmp_path):
+def test_readiness_exposes_sha256_and_authenticode_integrity_policy(monkeypatch, tmp_path):
     monkeypatch.delenv("AI_AGENT_DBEAVER_SIGNER_SHA256", raising=False)
+    monkeypatch.setattr(api.sys, "platform", "win32")
     request = make_request(tmp_path)
-    request.app.state.real_install_enabled = False
-    request.app.state.real_install_release_authorization = None
     ready = api.get_software_install_readiness(request)
-    assert ready["publisher_identity_policy_available"] is True
-    assert ready["publisher_trust_configured"] is True
+    assert ready["notice"] == "RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP"
+    assert ready["real_install_enabled"] is True
+    assert ready["real_install_release_package_id"] is None
+    assert ready["real_install_release_version"] is None
+    assert ready["real_install_release_expires_at"] is None
     assert ready["package_allowlist_enabled"] is False
-    assert ready["publisher_trust_mode"] == "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH"
+    assert ready["installer_trust_mode"] == "WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY"
+    assert "publisher" not in str(ready).casefold()
     assert ready["supported_package_ids"] == []
     assert "AI_AGENT_DBEAVER_SIGNER_SHA256" not in str(ready)
     assert "d" * 64 not in str(ready)
 
 
-def test_readiness_uses_worker_configuration_not_process_environment(monkeypatch, tmp_path):
-    from agent_backend.config import RealInstallReleaseAuthorization
+def test_readiness_disables_real_install_off_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr(api.sys, "platform", "linux")
+    ready = api.get_software_install_readiness(make_request(tmp_path))
+    assert ready["platform_supported"] is False
+    assert ready["real_install_enabled"] is False
+    assert ready["notice"] == "RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP"
 
+
+def test_readiness_disables_real_install_in_test_mode(monkeypatch, tmp_path):
     monkeypatch.setattr(api.sys, "platform", "win32")
-    monkeypatch.setenv("AI_AGENT_ENABLE_REAL_INSTALL", "1")
     request = make_request(tmp_path)
-    request.app.state.real_install_enabled = False
-    request.app.state.real_install_release_authorization = None
-    assert api.get_software_install_readiness(request)["real_install_enabled"] is False
-
-    authorization = RealInstallReleaseAuthorization(
-        task_id="P6-609-C",
-        package_id="Contoso.Editor",
-        version="2.4.1",
-        expires_at=datetime.now(UTC) + timedelta(minutes=5),
-        nonce="a" * 64,
-    )
-    request.app.state.real_install_enabled = True
-    request.app.state.real_install_release_authorization = authorization
+    request.app.state.settings = SimpleNamespace(app_env="test")
     ready = api.get_software_install_readiness(request)
-    assert ready["real_install_enabled"] is True
-    assert ready["real_install_release_package_id"] == "Contoso.Editor"
-    assert ready["real_install_release_version"] == "2.4.1"
+    assert ready["platform_supported"] is False
+    assert ready["real_install_enabled"] is False
 
-    expired = RealInstallReleaseAuthorization(
-        task_id="P6-609-C",
-        package_id="Contoso.Editor",
-        version="2.4.1",
-        expires_at=datetime.now(UTC) - timedelta(seconds=1),
-        nonce="b" * 64,
-    )
-    request.app.state.real_install_release_authorization = expired
-    assert api.get_software_install_readiness(request)["real_install_enabled"] is False
+
+def test_readiness_disables_real_install_when_worker_is_not_running(monkeypatch, tmp_path):
+    monkeypatch.setattr(api.sys, "platform", "win32")
+    request = make_request(tmp_path)
+    request.app.state.install_worker_thread = None
+    ready = api.get_software_install_readiness(request)
+    assert ready["platform_supported"] is False
+    assert ready["real_install_enabled"] is False
 
 
 def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypatch, tmp_path):
@@ -343,6 +306,7 @@ def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypat
             "package_id": candidate.package_id,
             "version": candidate.version,
             "architecture": "x64",
+            "scope": "user",
         }
         return SimpleNamespace(status="CONDITIONAL", candidate=candidate)
 
@@ -357,3 +321,13 @@ def test_exe_without_manifest_silent_switch_is_rejected_before_staging(monkeypat
 
     assert getattr(error.value, "status_code", None) == 409
     assert stage_calls == []
+
+def test_proposal_request_rejects_machine_scope_until_elevated_helper_is_available():
+    with pytest.raises(ValidationError):
+        api.SoftwareInstallProposalRequest(
+            package_id="DBeaver.DBeaver.Community",
+            version="26.2.5",
+            architecture="x64",
+            scope="machine",
+        )
+

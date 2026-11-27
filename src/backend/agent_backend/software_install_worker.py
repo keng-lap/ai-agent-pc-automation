@@ -23,7 +23,12 @@ from agent_backend.approval_reservation_store import (
     InstallExecutionJob,
     SQLiteApprovalReservationStore,
 )
-from agent_backend.config import RealInstallReleaseAuthorization
+from agent_backend.runtime_diagnostics import (
+    emit_event,
+    emit_exception,
+    reset_workflow_context,
+    set_workflow_context,
+)
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.winget_adapter import (
     WinGetAdapterError,
@@ -145,7 +150,6 @@ class SoftwareInstallWorker:
         lease_seconds: int = _LEASE_SECONDS,
         heartbeat_seconds: int = _HEARTBEAT_SECONDS,
         stop_event: threading.Event | None = None,
-        release_authorization: RealInstallReleaseAuthorization | None = None,
     ) -> None:
         self._store = store
         self._work_root = Path(work_root)
@@ -161,7 +165,6 @@ class SoftwareInstallWorker:
         self._lease_seconds = lease_seconds
         self._heartbeat_seconds = heartbeat_seconds
         self._stop_event = stop_event or threading.Event()
-        self._release_authorization = release_authorization
 
     def run_once(self) -> InstallExecutionJob | None:
         """Claim and process one queue item; no item returns None."""
@@ -179,6 +182,14 @@ class SoftwareInstallWorker:
         token = job.lease_token
         if not token:
             raise SoftwareInstallWorkerError("claimed install job has no lease token")
+        workflow_token = set_workflow_context(job.workflow_id)
+        emit_event(
+            event_code="INSTALL_WORKER_CLAIMED",
+            component="install_worker",
+            stage="queue_claim",
+            correlation=job.correlation_id,
+            fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+        )
         version = {"value": job.version}
         version_lock = threading.Lock()
         stop_heartbeat = threading.Event()
@@ -231,7 +242,25 @@ class SoftwareInstallWorker:
                 return job
             # Establish the pre-install state first. An already-present exact
             # package satisfies the requested state without launching an installer.
+            emit_event(
+                event_code="INSTALL_PRECHECK_STARTED",
+                component="install_worker",
+                stage="pre_install_verification",
+                correlation=job.correlation_id,
+                fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+            )
             before = self._verifier(binding.evidence.package_id, binding.evidence.version)
+            emit_event(
+                event_code="INSTALL_PRECHECK_COMPLETED",
+                component="install_worker",
+                stage="pre_install_verification",
+                correlation=job.correlation_id,
+                fields={
+                    "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
+                    "result": "ambiguous" if before is None else "already_present" if before else "not_present",
+                },
+            )
             if before is None:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "PRE_INSTALL_STATE_AMBIGUOUS"
@@ -246,44 +275,116 @@ class SoftwareInstallWorker:
                     job, token, version, version_lock, "SUCCEEDED", "PACKAGE_ALREADY_PRESENT"
                 ) or job
 
+            emit_event(
+                event_code="INSTALLER_PREPARATION_STARTED",
+                component="install_worker",
+                stage="installer_preparation",
+                correlation=job.correlation_id,
+                fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+            )
             prepared = prepare_approved_install(binding, work_root=self._work_root)
-            authorization = self._release_authorization
-            if (
-                authorization is None
-                or authorization.task_id != "P6-609-C"
-                or authorization.package_id != binding.evidence.package_id
-                or authorization.version != binding.evidence.version
-            ):
-                return self._transition(
-                    job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
-                ) or job
+            emit_event(
+                event_code="INSTALLER_PREPARATION_COMPLETED",
+                component="install_worker",
+                stage="installer_preparation",
+                correlation=job.correlation_id,
+                fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+            )
             if self._stop_event.is_set() or lease_lost.is_set():
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WORKER_CANCELLED_BEFORE_EXECUTION"
                 ) or job
             try:
                 self._store.consume_real_install_release_authorization(
-                    task_id=authorization.task_id,
-                    package_id=authorization.package_id,
-                    version=authorization.version,
+                    task_id="P6-609-C",
+                    owner_id=job.owner_id,
+                    plan_id=job.plan_id,
+                    package_id=binding.evidence.package_id,
+                    version=binding.evidence.version,
                     action_digest=binding.approval_digest,
-                    nonce=authorization.nonce,
-                    expires_at=authorization.expires_at,
                 )
             except (ApprovalReservationConflict, ApprovalReservationExpired):
+                emit_event(
+                    event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_DENIED",
+                    component="install_worker",
+                    stage="release_authorization",
+                    correlation=job.correlation_id,
+                    severity="WARNING",
+                    fields={
+                        "plan_id": job.plan_id,
+                        "reservation_id": job.reservation_id,
+                        "package_id": binding.evidence.package_id,
+                        "version": binding.evidence.version,
+                        "failure_code": "RELEASE_AUTHORIZATION_DENIED",
+                    },
+                )
                 return self._transition(
                     job, token, version, version_lock, "FAILED", "RELEASE_AUTHORIZATION_DENIED"
                 ) or job
             except ApprovalReservationError:
+                emit_event(
+                    event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_DENIED",
+                    component="install_worker",
+                    stage="release_authorization",
+                    correlation=job.correlation_id,
+                    severity="ERROR",
+                    fields={
+                        "plan_id": job.plan_id,
+                        "reservation_id": job.reservation_id,
+                        "package_id": binding.evidence.package_id,
+                        "version": binding.evidence.version,
+                        "failure_code": "RELEASE_AUTHORIZATION_UNAVAILABLE",
+                    },
+                )
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "RELEASE_AUTHORIZATION_UNAVAILABLE"
                 ) or job
+            emit_event(
+                event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_CONSUMED",
+                component="install_worker",
+                stage="release_authorization",
+                correlation=job.correlation_id,
+                fields={
+                    "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
+                    "package_id": binding.evidence.package_id,
+                    "version": binding.evidence.version,
+                    "binding": "exact_package_version_action_digest",
+                },
+            )
+            emit_event(
+                event_code="WINGET_EXECUTION_STARTED",
+                component="install_worker",
+                stage="winget_execution",
+                correlation=job.correlation_id,
+                fields={
+                    "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
+                    "package_id": binding.evidence.package_id,
+                    "version": binding.evidence.version,
+                    "scope": binding.evidence.scope,
+                },
+            )
             result = self._executor(
                 binding,
                 prepared,
                 work_root=self._work_root,
                 timeout_seconds=900,
                 cancel_event=_CombinedCancellationSignal(self._stop_event, lease_lost),
+            )
+            emit_event(
+                event_code="WINGET_EXECUTION_COMPLETED",
+                component="install_worker",
+                stage="winget_execution",
+                correlation=job.correlation_id,
+                severity="WARNING" if result.exit_code != 0 or result.timed_out else "INFO",
+                fields={
+                    "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
+                    "exit_code": result.exit_code,
+                    "timed_out": bool(result.timed_out),
+                    "cancelled": bool(getattr(result, "cancelled", False) or lease_lost.is_set()),
+                },
             )
             if getattr(result, "cancelled", False) or lease_lost.is_set():
                 return self._transition(
@@ -293,27 +394,54 @@ class SoftwareInstallWorker:
                 return self._transition(
                     job, token, version, version_lock, "UNKNOWN", "WINGET_TIMEOUT"
                 ) or job
-            if result.exit_code != 0:
-                return self._transition(
-                    job, token, version, version_lock, "UNKNOWN", "WINGET_NONZERO_EXIT"
-                ) or job
+            # A nonzero WinGet exit code is not proof that the installer did
+            # nothing. Verify the exact approved package/version before deciding
+            # the outcome; never retry the install from this worker.
+            nonzero_exit = result.exit_code != 0
             verifying = self._transition(
                 job, token, version, version_lock, "VERIFYING", None
             )
             if verifying is None:
                 return job
+            emit_event(
+                event_code="POST_INSTALL_VERIFICATION_STARTED",
+                component="install_worker",
+                stage="post_install_verification",
+                correlation=job.correlation_id,
+                fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+            )
             verified = self._verifier(binding.evidence.package_id, binding.evidence.version)
+            emit_event(
+                event_code="POST_INSTALL_VERIFICATION_COMPLETED",
+                component="install_worker",
+                stage="post_install_verification",
+                correlation=job.correlation_id,
+                severity="INFO" if verified is True else "WARNING",
+                fields={
+                    "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
+                    "result": "verified" if verified is True else "not_confirmed" if verified is False else "ambiguous",
+                },
+            )
             if verified is True:
                 return self._transition(
-                    job, token, version, version_lock, "SUCCEEDED", "PACKAGE_VERSION_VERIFIED"
+                    job,
+                    token,
+                    version,
+                    version_lock,
+                    "SUCCEEDED",
+                    "PACKAGE_VERSION_VERIFIED_AFTER_NONZERO_EXIT" if nonzero_exit else "PACKAGE_VERSION_VERIFIED",
                 ) or job
+            if nonzero_exit and verified is False:
+                failure_code = "WINGET_NONZERO_EXIT"
+            else:
+                failure_code = (
+                    "POST_INSTALL_VERIFICATION_AMBIGUOUS"
+                    if verified is None
+                    else "PACKAGE_VERSION_NOT_CONFIRMED"
+                )
             return self._transition(
-                job,
-                token,
-                version,
-                version_lock,
-                "UNKNOWN",
-                "POST_INSTALL_VERIFICATION_AMBIGUOUS" if verified is None else "PACKAGE_VERSION_NOT_CONFIRMED",
+                job, token, version, version_lock, "UNKNOWN", failure_code
             ) or job
         except (ValueError, TypeError, WinGetAdapterError):
             return self._transition(
@@ -322,6 +450,18 @@ class SoftwareInstallWorker:
         except (OSError, WinGetExecutionError, ApprovalReservationError):
             return self._transition(
                 job, token, version, version_lock, "UNKNOWN", "EXECUTION_OUTCOME_AMBIGUOUS"
+            ) or job
+        except Exception as exc:  # noqa: BLE001 - record unexpected worker failures without leaking messages
+            emit_exception(
+                event_code="INSTALL_WORKER_UNEXPECTED_FAILURE",
+                component="install_worker",
+                stage="install_lifecycle",
+                correlation=job.correlation_id,
+                error=exc,
+                fields={"plan_id": job.plan_id, "reservation_id": job.reservation_id},
+            )
+            return self._transition(
+                job, token, version, version_lock, "UNKNOWN", "WORKER_UNEXPECTED_FAILURE"
             ) or job
         finally:
             stop_heartbeat.set()
@@ -335,6 +475,7 @@ class SoftwareInstallWorker:
                     # The manifest contains only public package metadata; a
                     # cleanup failure is not permission to retry the install.
                     pass
+            reset_workflow_context(workflow_token)
 
     def _transition(self, job, token, version, version_lock, target, result_code):
         if target == "RUNNING" and job.state != "CLAIMED":
@@ -352,4 +493,17 @@ class SoftwareInstallWorker:
             except ApprovalReservationError:
                 return None
             version["value"] = updated.version
+            emit_event(
+                event_code="INSTALL_JOB_STATE_CHANGED",
+                component="install_worker",
+                stage="install_lifecycle",
+                correlation=job.correlation_id,
+                severity="WARNING" if target in {"FAILED", "UNKNOWN"} else "INFO",
+                fields={
+                    "plan_id": job.plan_id,
+                    "reservation_id": job.reservation_id,
+                    "state": target,
+                    "result_code": result_code,
+                },
+            )
             return updated

@@ -84,8 +84,6 @@ def make_install_binding():
         manifest_sha256="c" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=Contoso Ltd.",
-        signature_sha256="d" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -118,6 +116,175 @@ def reserve(store, *, approval_id="approval-1", key="request-1", now=NOW):
         idempotency_key=key,
         now=now,
     )
+
+
+def create_install_reservation(store, *, now=NOW):
+    binding = make_install_binding()
+    store.create_approval(
+        approval_id="install-approval",
+        owner_id=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+        plan_digest=binding.plan_digest,
+        action_digest=binding.approval_digest,
+        evidence_expires_at=binding.evidence.expires_at,
+        now=now,
+    )
+    store.reserve(
+        approval_id="install-approval",
+        owner_id=OWNER,
+        session_id=SESSION,
+        plan_id=PLAN_ID,
+        plan_digest=binding.plan_digest,
+        action_digest=binding.approval_digest,
+        idempotency_key=PLAN_ID,
+        binding_json=binding.model_dump_json(),
+        now=now,
+    )
+    return binding
+
+
+def consume_release(store, binding, *, now=NOW, **overrides):
+    values = {
+        "task_id": "P6-609-C",
+        "owner_id": OWNER,
+        "plan_id": PLAN_ID,
+        "package_id": binding.evidence.package_id,
+        "version": binding.evidence.version,
+        "action_digest": binding.approval_digest,
+        "now": now,
+    }
+    values.update(overrides)
+    return store.consume_real_install_release_authorization(**values)
+
+
+def test_successful_install_reservation_creates_exact_one_use_release_authorization(tmp_path):
+    store = make_store(tmp_path)
+    binding = create_install_reservation(store)
+
+    consume_release(store, binding)
+
+    with sqlite3.connect(store.path) as connection:
+        issued = connection.execute(
+            "SELECT task_id, owner_id, plan_id, package_id, package_version, action_digest "
+            "FROM real_install_release_authorizations"
+        ).fetchone()
+        consumed = connection.execute(
+            "SELECT COUNT(*) FROM real_install_release_consumptions"
+        ).fetchone()[0]
+
+    assert issued == (
+        "P6-609-C", OWNER, PLAN_ID, "Contoso.Sample", "2.4.1",
+        binding.approval_digest,
+    )
+    assert consumed == 1
+    with pytest.raises(ApprovalReservationConflict):
+        consume_release(store, binding)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"owner_id": "another-owner"},
+        {"plan_id": "2" * 32},
+        {"package_id": "Another.Package"},
+        {"version": "99.0"},
+        {"action_digest": "c" * 64},
+    ],
+)
+def test_release_authorization_rejects_any_exact_binding_mismatch(tmp_path, overrides):
+    store = make_store(tmp_path)
+    binding = create_install_reservation(store)
+
+    with pytest.raises(ApprovalReservationConflict):
+        consume_release(store, binding, **overrides)
+
+    # A rejected mismatch must not consume or invalidate the correct authorization.
+    consume_release(store, binding)
+
+
+def test_release_authorization_expiry_is_enforced_at_consumption(tmp_path):
+    store = make_store(tmp_path)
+    binding = create_install_reservation(store)
+
+    with pytest.raises(ApprovalReservationExpired):
+        consume_release(store, binding, now=NOW + timedelta(minutes=10))
+
+    with pytest.raises(ApprovalReservationExpired):
+        consume_release(store, binding, now=NOW + timedelta(minutes=10))
+
+
+def test_concurrent_release_consumption_has_exactly_one_winner(tmp_path):
+    store_a = make_store(tmp_path)
+    store_b = make_store(tmp_path)
+    binding = create_install_reservation(store_a)
+    barrier = threading.Barrier(2)
+
+    def consume(store):
+        barrier.wait()
+        try:
+            consume_release(store, binding)
+            return "consumed"
+        except ApprovalReservationConflict:
+            return "denied"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(consume, (store_a, store_b)))
+
+    assert sorted(results) == ["consumed", "denied"]
+    with sqlite3.connect(store_a.path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM real_install_release_consumptions"
+        ).fetchone()[0] == 1
+
+
+def test_scope_change_revokes_all_active_approvals_for_exact_plan(tmp_path):
+    store = make_store(tmp_path)
+    create_approval(store, approval_id="approval-scope-change")
+
+    revoked = store.revoke_active_approvals_for_plan(
+        plan_id=PLAN_ID,
+        owner_id=OWNER,
+        now=NOW,
+    )
+
+    assert revoked == 1
+    with sqlite3.connect(store.path) as connection:
+        state = connection.execute(
+            "SELECT state FROM approval_records WHERE approval_id=?",
+            ("approval-scope-change",),
+        ).fetchone()[0]
+        audit = connection.execute(
+            "SELECT event_type, reason FROM approval_audit_events WHERE approval_id=? ORDER BY rowid DESC LIMIT 1",
+            ("approval-scope-change",),
+        ).fetchone()
+    assert state == "REVOKED"
+    assert audit == ("approval.revoked", "owner_revoked")
+
+
+def test_scope_change_cannot_revoke_approval_after_install_is_queued(tmp_path):
+    store = make_store(tmp_path)
+    create_approval(store, approval_id="approval-scope-change")
+    reserve(store, approval_id="approval-scope-change")
+
+    with pytest.raises(ApprovalReservationConflict):
+        store.revoke_active_approvals_for_plan(
+            plan_id=PLAN_ID,
+            owner_id=OWNER,
+            now=NOW,
+        )
+
+    with sqlite3.connect(store.path) as connection:
+        state = connection.execute(
+            "SELECT state FROM approval_records WHERE approval_id=?",
+            ("approval-scope-change",),
+        ).fetchone()[0]
+        reservation_count = connection.execute(
+            "SELECT COUNT(*) FROM job_reservations WHERE plan_id=?",
+            (PLAN_ID,),
+        ).fetchone()[0]
+    assert state == "RESERVED"
+    assert reservation_count == 1
 
 
 def test_reservation_is_durable_and_exactly_idempotent(tmp_path):
@@ -166,6 +333,8 @@ def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_
             action_digest=binding.approval_digest,
             idempotency_key=PLAN_ID,
             binding_json=binding.model_dump_json(),
+            workflow_id="11111111-2222-4333-8444-555555555555",
+            correlation_id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
             now=NOW,
         )
 
@@ -174,6 +343,9 @@ def test_committed_install_can_be_recovered_after_post_commit_lease_failure(tmp_
     assert recovered.state == "QUEUED"
     assert recovered.reservation_id
     assert recovered.attempts == 0
+    assert recovered.plan_id == PLAN_ID
+    assert recovered.workflow_id == "11111111-2222-4333-8444-555555555555"
+    assert recovered.correlation_id == "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 
 def test_concurrent_same_request_returns_one_stable_receipt(tmp_path):
@@ -361,6 +533,27 @@ def test_approval_bindings_and_audit_ledger_are_append_only(tmp_path):
                 "DELETE FROM job_reservations WHERE reservation_id=?",
                 (receipt.reservation_id,),
             )
+
+
+def test_install_job_history_is_durable_owner_scoped_and_includes_lifecycle_events(tmp_path):
+    store = make_store(tmp_path)
+    create_install_reservation(store)
+    jobs = store.list_install_jobs(owner_id=OWNER)
+
+    assert len(jobs) == 1
+    assert jobs[0]["plan_id"] == PLAN_ID
+    assert jobs[0]["state"] == "QUEUED"
+    assert jobs[0]["binding_json"]
+    assert jobs[0]["created_at"]
+    assert jobs[0]["events"][-1]["state"] == "QUEUED"
+    assert store.list_install_jobs(owner_id="another-owner") == []
+    assert store.list_install_jobs(owner_id=OWNER, limit=1) == jobs
+
+
+def test_install_job_history_rejects_unbounded_limit(tmp_path):
+    store = make_store(tmp_path)
+    with pytest.raises(ValueError, match="limit"):
+        store.list_install_jobs(owner_id=OWNER, limit=101)
 
 
 @pytest.mark.parametrize("lookup", ["plan", "reservation"])

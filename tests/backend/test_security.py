@@ -253,15 +253,22 @@ def test_openapi_read_routes_and_methods_match_allow_list():
         "/api/jobs/{job_id}",
         "/api/software/install/readiness",
         "/api/software/install/jobs/{reservation_id}",
+        "/api/software/install/jobs",
         "/api/plans/{plan_id}/software-approval/reservation",
         "/api/auth/session",
         "/api/auth/google/start",
         "/api/authenticator/status",
+        "/api/diagnostics",
+        "/api/diagnostics/export",
+        "/api/diagnostics/publish/status",
         "/auth/google/callback",
     }
     assert set(paths["/api/chat"]) == {"post"}
     assert set(paths["/api/chat/{conversation_id}"]) == {"get", "delete"}
     assert set(paths["/api/settings/gemini"]) == {"get", "put"}
+    assert set(paths["/api/diagnostics"]) == {"get", "put"}
+    assert set(paths["/api/diagnostics/export"]) == {"get"}
+    assert set(paths["/api/diagnostics/browser-events"]) == {"post"}
     assert set(paths["/api/settings/gemini/test"]) == {"post"}
     assert set(paths["/api/plans"]) == {"post"}
     assert set(paths["/api/plans/{plan_id}"]) == {"get"}

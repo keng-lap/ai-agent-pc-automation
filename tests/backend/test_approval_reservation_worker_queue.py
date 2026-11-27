@@ -59,8 +59,6 @@ def make_binding():
         manifest_sha256="d" * 64,
         architecture="x64",
         scope="user",
-        signature_subject="CN=DBeaver Corp",
-        signature_sha256="f" * 64,
         verified_at=NOW,
         expires_at=NOW + timedelta(minutes=10),
     )
@@ -316,34 +314,35 @@ def test_expired_reboot_required_lease_becomes_unknown_without_retry(tmp_path):
     assert recovered.attempts == 1
     assert recovered.result_code == "WORKER_LEASE_EXPIRED"
 
-def test_real_install_release_nonce_is_one_use_and_bound_to_exact_action(tmp_path):
+def test_real_install_release_is_created_by_reservation_and_consumed_once(tmp_path):
     binding = make_binding()
     store = make_store(tmp_path)
-    expiry = NOW + timedelta(minutes=5)
+    make_reservation(store, binding)
     args = {
         "task_id": "P6-609-C",
+        "owner_id": OWNER,
+        "plan_id": PLAN_ID,
         "package_id": binding.evidence.package_id,
         "version": binding.evidence.version,
         "action_digest": binding.approval_digest,
-        "nonce": "a" * 64,
-        "expires_at": expiry,
         "now": NOW,
     }
     store.consume_real_install_release_authorization(**args)
-    with pytest.raises(ApprovalReservationConflict, match="already consumed"):
+    with pytest.raises(ApprovalReservationConflict):
         store.consume_real_install_release_authorization(**args)
 
 
 def test_expired_real_install_release_authorization_is_rejected(tmp_path):
     binding = make_binding()
     store = make_store(tmp_path)
+    make_reservation(store, binding)
     with pytest.raises(Exception, match="expired"):
         store.consume_real_install_release_authorization(
             task_id="P6-609-C",
+            owner_id=OWNER,
+            plan_id=PLAN_ID,
             package_id=binding.evidence.package_id,
             version=binding.evidence.version,
             action_digest=binding.approval_digest,
-            nonce="b" * 64,
-            expires_at=NOW,
-            now=NOW,
+            now=NOW + timedelta(minutes=10),
         )

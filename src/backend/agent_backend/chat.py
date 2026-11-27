@@ -7,14 +7,15 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from agent_backend.conversation_contract import UniversalConversationResponse
 from agent_backend.providers import gemini
+from agent_backend.runtime_diagnostics import emit_event, emit_exception
 
 router = APIRouter()
 _ERROR_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
@@ -119,11 +120,14 @@ class ChatRequest(BaseModel):
 class GeminiKeyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    api_key: str
+    api_key: str | None = None
+    model: str | None = None
 
     @field_validator("api_key")
     @classmethod
-    def validate_api_key(cls, value: str) -> str:
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         value = value.strip()
         if not 20 <= len(value) <= 512:
             raise ValueError("API key length is invalid")
@@ -132,32 +136,113 @@ class GeminiKeyRequest(BaseModel):
 
 @router.get("/api/settings/gemini")
 def gemini_status() -> dict[str, object]:
-    return {"configured": gemini.is_configured(), "model": gemini.MODEL_NAME}
+    return {
+        "configured": gemini.is_configured(),
+        "model": gemini.get_model_name(),
+        "models": list(gemini.SUPPORTED_MODELS),
+    }
 
 
 @router.put("/api/settings/gemini")
 def save_gemini_key(payload: GeminiKeyRequest) -> dict[str, object]:
-    gemini.save_api_key(payload.api_key)
-    return {"configured": True, "model": gemini.MODEL_NAME}
+    if payload.api_key is None and payload.model is None:
+        raise HTTPException(status_code=422, detail="Provide a Gemini API key or model.")
+    try:
+        selected_model = gemini.validate_model_name(payload.model or gemini.get_model_name())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    if not gemini.save_tested_configuration(selected_model, payload.api_key):
+        raise HTTPException(
+            status_code=409,
+            detail="Test the selected Gemini model and API key successfully before saving.",
+        )
+    return {
+        "configured": True,
+        "model": gemini.get_model_name(),
+        "models": list(gemini.SUPPORTED_MODELS),
+    }
+
+
+class GeminiTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    model: str | None = None
+    api_key: str | None = None
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_optional_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not 20 <= len(value) <= 512:
+            raise ValueError("API key length is invalid")
+        return value
 
 
 @router.post("/api/settings/gemini/test")
-def test_gemini_connection() -> dict[str, object]:
-    if not gemini.is_configured():
-        raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
+def test_gemini_connection(payload: GeminiTestRequest, request: Request) -> dict[str, object]:
     try:
-        gemini.test_connection()
+        selected_model = gemini.validate_model_name(payload.model or gemini.get_model_name())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported Gemini model") from exc
+    gemini.clear_successful_test()
+    effective_api_key = payload.api_key if payload.api_key is not None else gemini.get_api_key()
+    if not effective_api_key:
+        raise HTTPException(status_code=409, detail="Gemini API key is not configured.")
+    started = time.perf_counter()
+    correlation = getattr(request.state, "correlation_id", "unknown")
+    emit_event(
+        event_code="GEMINI_CONNECTION_TEST_STARTED",
+        component="gemini",
+        stage="provider_connection",
+        correlation=correlation,
+    )
+    try:
+        gemini.test_connection(model=selected_model, api_key=effective_api_key)
+        gemini.record_successful_test(selected_model, effective_api_key)
     except gemini.GeminiProviderError as exc:
+        emit_exception(
+            event_code="GEMINI_CONNECTION_TEST_FAILED",
+            component="gemini",
+            stage="provider_connection",
+            correlation=correlation,
+            error=exc,
+            fields={"provider_error_code": exc.code},
+        )
         raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
     except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
+        emit_exception(
+            event_code="GEMINI_CONNECTION_TEST_FAILED",
+            component="gemini",
+            stage="provider_connection",
+            correlation=correlation,
+            error=exc,
+        )
         raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
-    return {"connected": True, "model": gemini.MODEL_NAME}
+    emit_event(
+        event_code="GEMINI_CONNECTION_TEST_SUCCEEDED",
+        component="gemini",
+        stage="provider_connection",
+        correlation=correlation,
+        fields={"duration_ms": round((time.perf_counter() - started) * 1000, 2)},
+    )
+    return {"connected": True, "model": selected_model}
 
 
 @router.post("/api/chat")
-def chat(payload: ChatRequest) -> dict[str, object]:
+def chat(payload: ChatRequest, request: Request) -> dict[str, object]:
     if not gemini.is_configured():
         raise HTTPException(status_code=409, detail="Configure Gemini API key first.")
+    started = time.perf_counter()
+    correlation = getattr(request.state, "correlation_id", "unknown")
+    emit_event(
+        event_code="GEMINI_REQUEST_STARTED",
+        component="gemini",
+        stage="provider_generation",
+        correlation=correlation,
+        fields={"model": gemini.get_model_name()},
+    )
     conversation = _conversation_store.get_or_create(payload.conversation_id)
     with conversation.lock:
         contents: list[types.Content] = []
@@ -187,6 +272,13 @@ def chat(payload: ChatRequest) -> dict[str, object]:
             try:
                 structured = UniversalConversationResponse.model_validate_json(raw_response)
             except ValidationError:
+                emit_event(
+                    event_code="GEMINI_STRUCTURED_RESPONSE_REPAIR_ATTEMPTED",
+                    component="gemini",
+                    stage="structured_response_validation",
+                    correlation=correlation,
+                    severity="WARNING",
+                )
                 # One bounded correction attempt. The malformed output remains untrusted
                 # and is never returned as a valid plan or saved into conversation history.
                 repair_contents = [
@@ -214,11 +306,39 @@ def chat(payload: ChatRequest) -> dict[str, object]:
                 except ValidationError:
                     raise gemini.GeminiProviderError("invalid_response") from None
         except gemini.GeminiProviderError as exc:
+            emit_exception(
+                event_code="GEMINI_REQUEST_FAILED",
+                component="gemini",
+                stage="provider_generation",
+                correlation=correlation,
+                error=exc,
+                fields={"provider_error_code": exc.code},
+            )
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
         except Exception as exc:  # noqa: BLE001 - sanitize all SDK and transport errors
+            emit_exception(
+                event_code="GEMINI_REQUEST_FAILED",
+                component="gemini",
+                stage="provider_generation",
+                correlation=correlation,
+                error=exc,
+            )
             raise HTTPException(status_code=502, detail=_provider_error_detail(exc)) from None
 
-        request_id = str(uuid4())
+        emit_event(
+            event_code="GEMINI_RESPONSE_VALIDATED",
+            component="gemini",
+            stage="structured_response_validation",
+            correlation=correlation,
+            fields={
+                "response_bytes": len(raw_response.encode("utf-8")),
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                "intent": structured.intent,
+                "status": structured.status,
+                "package_count": len(structured.data.packages),
+            },
+        )
+        request_id = correlation
         normalized = structured.model_dump(mode="json")
         conversation.turns.append((payload.message, structured.message))
         del conversation.turns[:-MAX_CONTEXT_PAIRS]
@@ -228,7 +348,7 @@ def chat(payload: ChatRequest) -> dict[str, object]:
         "gemini_response": normalized,
         "gemini_raw_json": raw_response,
         "provider": "gemini",
-        "model": gemini.MODEL_NAME,
+        "model": gemini.get_model_name(),
         "provider_connected": True,
     }
 

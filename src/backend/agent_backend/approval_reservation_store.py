@@ -70,6 +70,9 @@ class InstallExecutionJob:
     attempts: int
     version: int
     result_code: str | None
+    plan_id: str = ""
+    workflow_id: str = "unknown"
+    correlation_id: str = "unknown"
 
 
 def _timestamp(value: datetime) -> str:
@@ -213,6 +216,9 @@ class SQLiteApprovalReservationStore:
                         attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 1),
                         version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0),
                         result_code TEXT,
+                        plan_id TEXT NOT NULL DEFAULT '',
+                        workflow_id TEXT NOT NULL DEFAULT 'unknown',
+                        correlation_id TEXT NOT NULL DEFAULT 'unknown',
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     );
@@ -234,6 +240,31 @@ class SQLiteApprovalReservationStore:
                     END;
                     CREATE TRIGGER IF NOT EXISTS real_install_release_no_delete
                     BEFORE DELETE ON real_install_release_consumptions
+                    BEGIN
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
+                    END;
+                    CREATE TABLE IF NOT EXISTS real_install_release_authorizations (
+                        nonce TEXT PRIMARY KEY CHECK(length(nonce) = 64),
+                        task_id TEXT NOT NULL CHECK(task_id = 'P6-609-C'),
+                        owner_id TEXT NOT NULL,
+                        plan_id TEXT NOT NULL CHECK(length(plan_id) = 32),
+                        package_id TEXT NOT NULL,
+                        package_version TEXT NOT NULL,
+                        action_digest TEXT NOT NULL CHECK(length(action_digest) = 64),
+                        expires_at TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_real_install_release_binding
+                        ON real_install_release_authorizations(
+                            owner_id, plan_id, package_id, package_version, action_digest, created_at
+                        );
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_authorizations_no_update
+                    BEFORE UPDATE ON real_install_release_authorizations
+                    BEGIN
+                        SELECT RAISE(ABORT, 'release authorizations are append-only');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS real_install_release_authorizations_no_delete
+                    BEFORE DELETE ON real_install_release_authorizations
                     BEGIN
                         SELECT RAISE(ABORT, 'release authorizations are append-only');
                     END;
@@ -314,7 +345,39 @@ class SQLiteApprovalReservationStore:
                     BEGIN
                         SELECT RAISE(ABORT, 'reservation receipts cannot be deleted');
                     END;
-                    PRAGMA user_version = 1;
+                    PRAGMA user_version = 3;
+                    """
+                )
+                # Add diagnostic correlation metadata to databases created by
+                # earlier versions. These fields are immutable job metadata and
+                # contain identifiers only, never request bodies or credentials.
+                columns = {
+                    row["name"]
+                    for row in connection.execute(
+                        "PRAGMA table_info(install_execution_jobs)"
+                    ).fetchall()
+                }
+                for name, declaration in (
+                    ("plan_id", "TEXT NOT NULL DEFAULT ''"),
+                    ("workflow_id", "TEXT NOT NULL DEFAULT 'unknown'"),
+                    ("correlation_id", "TEXT NOT NULL DEFAULT 'unknown'"),
+                ):
+                    if name not in columns:
+                        connection.execute(
+                            f"ALTER TABLE install_execution_jobs ADD COLUMN {name} {declaration}"
+                        )
+                # Recreate the immutable-payload trigger after adding columns so
+                # existing databases migrate before SQLite validates the trigger.
+                connection.executescript(
+                    """
+                    DROP TRIGGER IF EXISTS install_execution_payload_immutable;
+                    CREATE TRIGGER install_execution_payload_immutable
+                    BEFORE UPDATE OF reservation_id, owner_id, action_digest,
+                        binding_json, plan_id, workflow_id, correlation_id, created_at
+                    ON install_execution_jobs
+                    BEGIN
+                        SELECT RAISE(ABORT, 'install execution payload is immutable');
+                    END;
                     """
                 )
         except (sqlite3.Error, OSError, PlatformStorageUnavailable):
@@ -385,6 +448,8 @@ class SQLiteApprovalReservationStore:
         action_digest: str,
         idempotency_key: str,
         binding_json: str | None = None,
+        workflow_id: str = "unknown",
+        correlation_id: str = "unknown",
         now: datetime | None = None,
     ) -> ReservationReceipt:
         """Consume an active approval and persist one inert reservation atomically."""
@@ -408,7 +473,8 @@ class SQLiteApprovalReservationStore:
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                timestamp = _timestamp(now if now is not None else self._clock())
+                current_time = now if now is not None else self._clock()
+                timestamp = _timestamp(current_time)
                 prior = connection.execute(
                     """
                     SELECT * FROM job_reservations
@@ -499,10 +565,14 @@ class SQLiteApprovalReservationStore:
                             """
                             INSERT INTO install_execution_jobs (
                                 reservation_id, owner_id, action_digest, binding_json,
-                                state, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?)
+                                state, plan_id, workflow_id, correlation_id,
+                                created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?)
                             """,
-                            (reservation_id, owner_id, action_digest, binding_json, timestamp, timestamp),
+                            (
+                                reservation_id, owner_id, action_digest, binding_json,
+                                plan_id, workflow_id[:36], correlation_id[:36], timestamp, timestamp,
+                            ),
                         )
                         connection.execute(
                             """
@@ -511,6 +581,31 @@ class SQLiteApprovalReservationStore:
                             ) VALUES (?, 'QUEUED', ?, 'success')
                             """,
                             (reservation_id, timestamp),
+                        )
+                        # A successful exact-action TOTP confirmation reaches
+                        # reserve(); create its short-lived release capability in
+                        # the same SQLite transaction as the durable job.
+                        release_expiry = min(
+                            binding.evidence.expires_at,
+                            current_time + timedelta(minutes=10),
+                        )
+                        if release_expiry <= current_time:
+                            raise ApprovalReservationExpired(
+                                "release authorization evidence has expired"
+                            )
+                        release_nonce = secrets.token_hex(32)
+                        connection.execute(
+                            """
+                            INSERT INTO real_install_release_authorizations (
+                                nonce, task_id, owner_id, plan_id, package_id,
+                                package_version, action_digest, expires_at, created_at
+                            ) VALUES (?, 'P6-609-C', ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                release_nonce, owner_id, plan_id,
+                                binding.evidence.package_id, binding.evidence.version,
+                                action_digest, _timestamp(release_expiry), timestamp,
+                            ),
                         )
                     connection.execute(
                         """
@@ -533,6 +628,54 @@ class SQLiteApprovalReservationStore:
         if expired:
             raise ApprovalReservationExpired("approval evidence expired before reservation")
         raise ApprovalReservationUnavailable("Reservation did not reach a stable state.")
+
+    def revoke_active_approvals_for_plan(
+        self, *, plan_id: str, owner_id: str, now: datetime | None = None
+    ) -> int:
+        """Revoke all unused approvals for a proposal, never touching queued jobs."""
+        _identity(owner_id, "owner_id")
+        _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = _timestamp(now if now is not None else self._clock())
+                reservations = connection.execute(
+                    "SELECT 1 FROM job_reservations WHERE plan_id=? AND owner_id=? LIMIT 1",
+                    (plan_id, owner_id),
+                ).fetchone()
+                if reservations is not None:
+                    raise ApprovalReservationConflict("proposal already has a queued install reservation")
+                rows = connection.execute(
+                    "SELECT approval_id, state FROM approval_records WHERE plan_id=? AND owner_id=?",
+                    (plan_id, owner_id),
+                ).fetchall()
+                if any(row["state"] != "ACTIVE" for row in rows):
+                    raise ApprovalReservationConflict("proposal approval is no longer revocable")
+                approval_ids = [row["approval_id"] for row in rows]
+                for approval_id in approval_ids:
+                    connection.execute(
+                        """
+                        UPDATE approval_records SET state='REVOKED', version=version+1
+                        WHERE approval_id=? AND owner_id=? AND state='ACTIVE'
+                        """,
+                        (approval_id, owner_id),
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO approval_audit_events (
+                            approval_id, event_type, outcome, occurred_at, reason
+                        ) VALUES (?, 'approval.revoked', 'success', ?, 'owner_revoked')
+                        """,
+                        (approval_id, timestamp),
+                    )
+                connection.commit()
+                return len(approval_ids)
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable(
+                "Proposal approval revocation could not be persisted."
+            ) from None
 
     def revoke(self, *, approval_id: str, owner_id: str, now: datetime | None = None) -> None:
         """Revoke an unused approval; reservation and revocation serialize in SQLite."""
@@ -845,23 +988,38 @@ class SQLiteApprovalReservationStore:
             raise ApprovalReservationUnavailable("Install job transition could not be persisted.") from None
 
     def consume_real_install_release_authorization(
-        self, *, task_id: str, package_id: str, version: str,
-        action_digest: str, nonce: str, expires_at: datetime, now: datetime | None = None,
+        self, *, task_id: str, owner_id: str, plan_id: str, package_id: str,
+        version: str, action_digest: str, now: datetime | None = None,
     ) -> None:
-        """Atomically consume a one-use release nonce for one exact approved install binding."""
+        """Atomically consume the persisted authorization for one exact queued install."""
         if task_id != "P6-609-C":
             raise ApprovalReservationConflict("release authorization task does not match")
+        _identity(owner_id, "owner_id")
         _identity(package_id, "package_id")
         _identity(version, "version")
+        _hex(plan_id, _PLAN_ID_LENGTH, "plan_id")
         _hex(action_digest, _DIGEST_LENGTH, "action_digest")
-        _hex(nonce, 64, "release_nonce")
-        expiry = _timestamp(expires_at)
         try:
             with self._lock, self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                current = now if now is not None else self._clock()
-                timestamp = _timestamp(current)
-                if expiry <= timestamp:
+                timestamp = _timestamp(now if now is not None else self._clock())
+                authorization = connection.execute(
+                    """
+                    SELECT auth.* FROM real_install_release_authorizations AS auth
+                    LEFT JOIN real_install_release_consumptions AS consumed
+                        ON consumed.nonce = auth.nonce
+                    WHERE auth.task_id=? AND auth.owner_id=? AND auth.plan_id=?
+                        AND auth.package_id=? AND auth.package_version=?
+                        AND auth.action_digest=? AND consumed.nonce IS NULL
+                    ORDER BY auth.created_at DESC LIMIT 1
+                    """,
+                    (task_id, owner_id, plan_id, package_id, version, action_digest),
+                ).fetchone()
+                if authorization is None:
+                    raise ApprovalReservationConflict(
+                        "no unused release authorization matches the exact install"
+                    )
+                if authorization["expires_at"] <= timestamp:
                     raise ApprovalReservationExpired("release authorization has expired")
                 connection.execute(
                     """
@@ -870,15 +1028,71 @@ class SQLiteApprovalReservationStore:
                         action_digest, expires_at, consumed_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (nonce, task_id, package_id, version, action_digest, expiry, timestamp),
+                    (
+                        authorization["nonce"], task_id, package_id, version,
+                        action_digest, authorization["expires_at"], timestamp,
+                    ),
                 )
                 connection.commit()
         except sqlite3.IntegrityError:
-            raise ApprovalReservationConflict("release authorization nonce was already consumed") from None
+            raise ApprovalReservationConflict(
+                "release authorization nonce was already consumed"
+            ) from None
         except ApprovalReservationError:
             raise
         except sqlite3.Error:
-            raise ApprovalReservationUnavailable("Real-install release authorization could not be consumed.") from None
+            raise ApprovalReservationUnavailable(
+                "Real-install release authorization could not be consumed."
+            ) from None
+
+    def list_install_jobs(self, *, owner_id: str, limit: int = 25) -> list[dict]:
+        """Return bounded owner-scoped install summaries and lifecycle events."""
+        _identity(owner_id, "owner_id")
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        self.reconcile_expired_install_leases()
+        try:
+            with self._connection() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT jobs.*, reservations.created_at AS reserved_at
+                    FROM install_execution_jobs AS jobs
+                    INNER JOIN job_reservations AS reservations
+                        ON reservations.reservation_id = jobs.reservation_id
+                    WHERE jobs.owner_id=? AND reservations.owner_id=?
+                    ORDER BY reservations.created_at DESC LIMIT ?
+                    """,
+                    (owner_id, owner_id, limit),
+                ).fetchall()
+                summaries = []
+                for row in rows:
+                    events = connection.execute(
+                        """
+                        SELECT sequence, state, occurred_at, outcome, result_code
+                        FROM install_execution_events
+                        WHERE reservation_id=? ORDER BY sequence DESC LIMIT 20
+                        """,
+                        (row["reservation_id"],),
+                    ).fetchall()
+                    summaries.append({
+                        "reservation_id": row["reservation_id"],
+                        "plan_id": row["plan_id"],
+                        "state": row["state"],
+                        "attempts": row["attempts"],
+                        "version": row["version"],
+                        "result_code": row["result_code"],
+                        "lease_expires_at": row["lease_expires_at"],
+                        "created_at": row["reserved_at"],
+                        "updated_at": row["updated_at"],
+                        "binding_json": row["binding_json"],
+                        "events": [dict(event) for event in reversed(events)],
+                    })
+                return summaries
+        except ApprovalReservationError:
+            raise
+        except sqlite3.Error:
+            raise ApprovalReservationUnavailable("Install job history could not be read.") from None
+
     def get_install_job_for_plan(self, *, plan_id: str, owner_id: str) -> InstallExecutionJob:
         """Recover the existing install job for an owner-scoped plan without dispatching it."""
         _identity(owner_id, "owner_id")
@@ -932,6 +1146,8 @@ class SQLiteApprovalReservationStore:
             state=row["state"], worker_id=row["worker_id"],
             lease_token=row["lease_token"], lease_expires_at=row["lease_expires_at"],
             attempts=row["attempts"], version=row["version"], result_code=row["result_code"],
+            plan_id=row["plan_id"], workflow_id=row["workflow_id"],
+            correlation_id=row["correlation_id"],
         )
 
     @staticmethod

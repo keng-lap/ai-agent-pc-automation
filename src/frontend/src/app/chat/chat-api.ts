@@ -3,7 +3,16 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export type UiLanguage = 'th' | 'en';
-export interface GeminiStatus { configured: boolean; model: string; }
+export interface GeminiStatus { configured: boolean; model: string; models: string[]; }
+export interface DiagnosticsMode { enabled: boolean; storage_available: boolean; }
+export interface DiagnosticsPublishStatus {
+  status: 'idle' | 'running' | 'succeeded' | 'failed';
+  run_id: string | null;
+  reason: string | null;
+  url: string | null;
+  error_code: string | null;
+}
+export type BrowserDiagnosticCode = 'BROWSER_UNCAUGHT_ERROR' | 'BROWSER_UNHANDLED_REJECTION';
 export interface GeminiTestResult { connected: boolean; model: string; }
 export interface ConversationMessage { role: 'user' | 'assistant'; text: string; }
 export interface ConversationHistory { messages: ConversationMessage[]; }
@@ -65,7 +74,7 @@ export interface SoftwareInstallerCandidate {
   publisher: string;
   version: string;
   architecture: 'x86' | 'x64' | 'arm64';
-  scope: 'user';
+  scope: 'user' | 'machine';
   installer_type: string;
   installer_url: string;
   installer_domain: string;
@@ -83,26 +92,27 @@ export interface SoftwareInstallerCandidate {
 }
 
 export interface SoftwareDiscoveryResponse {
-  status: 'VERSION_REQUIRED' | 'CONDITIONAL' | 'SOURCE_MISMATCH' | 'SOURCE_CHECK_UNAVAILABLE';
+  status: 'VERSION_REQUIRED' | 'SCOPE_REQUIRED' | 'CONDITIONAL' | 'SOURCE_MISMATCH' | 'SOURCE_CHECK_UNAVAILABLE';
   package_id: string;
   available_versions: string[];
+  manifest_versions: string[];
+  official_versions: string[] | null;
   candidate: SoftwareInstallerCandidate | null;
+  available_scopes: Array<'user' | 'machine'>;
   source: 'winget-community-repository';
 }
 
 export interface SoftwareInstallReadiness {
   platform_supported: boolean;
   authenticode_verification_available: boolean;
-  publisher_identity_policy_available: boolean;
-  publisher_trust_configured: boolean;
-  publisher_trust_mode: 'WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH';
+  installer_trust_mode: 'WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY';
   real_install_enabled: boolean;
   real_install_release_package_id: string | null;
   real_install_release_version: string | null;
   real_install_release_expires_at: string | null;
   package_allowlist_enabled: boolean;
   supported_package_ids: string[];
-  notice: 'NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT';
+  notice: 'RELEASE_AUTHORIZATION_CREATED_AFTER_EXACT_ACTION_TOTP';
 }
 
 export interface SoftwareInstallProposalResponse {
@@ -136,11 +146,38 @@ export interface SoftwareApprovalChallenge {
   repository_commit: string;
   installer_sha256: string;
   manifest_sha256: string;
-  signature_subject: string;
-  signature_sha256: string;
   evidence_expires_at: string;
   approval_digest: string;
   notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
+}
+
+export interface SoftwareInstallJobEvent {
+  sequence: number;
+  state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
+  occurred_at: string;
+  outcome: 'success' | 'denied';
+  result_code: string | null;
+}
+
+export interface SoftwareInstallJobSummary {
+  reservation_id: string;
+  plan_id: string;
+  package_id: string;
+  package_name: string;
+  version: string;
+  state: 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'VERIFYING' | 'SUCCEEDED' | 'FAILED' | 'REBOOT_REQUIRED' | 'UNKNOWN';
+  attempts: number;
+  version_number: number;
+  result_code: string | null;
+  lease_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  events: SoftwareInstallJobEvent[];
+}
+
+export interface SoftwareInstallJobListResponse {
+  jobs: SoftwareInstallJobSummary[];
+  checked_at: string;
 }
 
 export interface SoftwareInstallJobStatus {
@@ -265,11 +302,13 @@ export class ChatApi {
     packageId: string,
     version: string | null,
     architecture: 'x86' | 'x64' | 'arm64' = 'x64',
+    scope: 'user' | 'machine' = 'user',
   ): Observable<SoftwareDiscoveryResponse> {
     return this.http.post<SoftwareDiscoveryResponse>('/api/software/discovery', {
       package_id: packageId,
       version,
       architecture,
+      scope,
     });
   }
 
@@ -281,12 +320,21 @@ export class ChatApi {
     packageId: string,
     version: string,
     architecture: 'x86' | 'x64' | 'arm64',
+    scope: 'user',
   ): Observable<SoftwareInstallProposalResponse> {
     return this.http.post<SoftwareInstallProposalResponse>('/api/software/install/proposals', {
       package_id: packageId,
       version,
       architecture,
+      scope,
     });
+  }
+
+  revokeSoftwareInstallProposal(planId: string): Observable<{ revoked: boolean; revoked_approvals: number }> {
+    return this.http.post<{ revoked: boolean; revoked_approvals: number }>(
+      `/api/software/install/proposals/${encodeURIComponent(planId)}/revoke`,
+      {},
+    );
   }
 
   createSoftwareApprovalChallenge(
@@ -307,6 +355,13 @@ export class ChatApi {
     return this.http.post<SoftwareApprovalResult>(
       `/api/plans/${encodeURIComponent(planId)}/software-approval/confirm`,
       { challenge_id: challengeId, totp_code: totpCode },
+    );
+  }
+
+  getSoftwareInstallJobs(limit = 50): Observable<SoftwareInstallJobListResponse> {
+    return this.http.get<SoftwareInstallJobListResponse>(
+      '/api/software/install/jobs',
+      { params: { limit } },
     );
   }
 
@@ -372,12 +427,49 @@ export class ChatApi {
     return this.http.get<GeminiStatus>('/api/settings/gemini');
   }
 
-  saveGeminiKey(apiKey: string): Observable<GeminiStatus> {
-    return this.http.put<GeminiStatus>('/api/settings/gemini', { api_key: apiKey });
+  saveGeminiKey(apiKey: string, model: string): Observable<GeminiStatus> {
+    const payload: { api_key?: string; model: string } = { model };
+    if (apiKey.trim()) payload.api_key = apiKey.trim();
+    return this.http.put<GeminiStatus>('/api/settings/gemini', payload);
   }
 
-  testGeminiConnection(): Observable<GeminiTestResult> {
-    return this.http.post<GeminiTestResult>('/api/settings/gemini/test', {});
+  testGeminiConnection(model: string, apiKey: string): Observable<GeminiTestResult> {
+    const payload: { model: string; api_key?: string } = { model };
+    if (apiKey.trim()) payload.api_key = apiKey.trim();
+    return this.http.post<GeminiTestResult>('/api/settings/gemini/test', payload);
+  }
+
+  recordBrowserDiagnostic(
+    eventCode: BrowserDiagnosticCode,
+    errorType?: string,
+    stack?: string,
+  ): Observable<{ recorded: boolean }> {
+    return this.http.post<{ recorded: boolean }>('/api/diagnostics/browser-events', {
+      event_code: eventCode,
+      component: 'browser',
+      error_type: errorType,
+      stack,
+    });
+  }
+
+  getDiagnosticsMode(): Observable<DiagnosticsMode> {
+    return this.http.get<DiagnosticsMode>('/api/diagnostics');
+  }
+
+  setDiagnosticsMode(enabled: boolean): Observable<DiagnosticsMode> {
+    return this.http.put<DiagnosticsMode>('/api/diagnostics', { enabled });
+  }
+
+  publishDiagnostics(): Observable<DiagnosticsPublishStatus> {
+    return this.http.post<DiagnosticsPublishStatus>('/api/diagnostics/publish', {});
+  }
+
+  retryDiagnosticsPublish(): Observable<DiagnosticsPublishStatus> {
+    return this.http.post<DiagnosticsPublishStatus>('/api/diagnostics/publish/retry', {});
+  }
+
+  getDiagnosticsPublishStatus(): Observable<DiagnosticsPublishStatus> {
+    return this.http.get<DiagnosticsPublishStatus>('/api/diagnostics/publish/status');
   }
 
   getAuthSession(): Observable<AuthSession> {

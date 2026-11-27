@@ -5,6 +5,7 @@ endpoint, written to disk, or included in logs. Restarting the backend clears it
 """
 from __future__ import annotations
 
+import hashlib
 import traceback
 from pathlib import PurePath
 from threading import RLock
@@ -12,8 +13,93 @@ from threading import RLock
 import httpx2
 from google import genai
 from google.genai import errors, types
+from pydantic import ValidationError
 
 MODEL_NAME = "gemini-3.1-flash-lite"
+SUPPORTED_MODELS = (
+    MODEL_NAME,
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-4-hydrogen",
+    "gemini-4-argon",
+    "gemini-4-neon",
+    "gemini-4-carbon",
+)
+_model_name = MODEL_NAME
+_tested_configuration: tuple[str, str] | None = None
+
+
+def get_model_name() -> str:
+    with _lock:
+        return _model_name
+
+
+def get_api_key() -> str | None:
+    """Return the configured key to trusted backend code under the provider lock."""
+    with _lock:
+        return _api_key
+
+
+def save_tested_configuration(model: str, api_key: str | None) -> bool:
+    """Atomically consume matching test evidence and activate the tested pair."""
+    global _tested_configuration, _api_key, _model_name
+    selected_model = validate_model_name(model)
+    with _lock:
+        key = api_key if api_key is not None else _api_key
+        if not key:
+            return False
+        fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        if _tested_configuration != (selected_model, fingerprint):
+            return False
+        if api_key is not None:
+            _api_key = api_key
+        _model_name = selected_model
+        _tested_configuration = None
+        return True
+
+
+def validate_model_name(model: str) -> str:
+    value = model.strip()
+    if value not in SUPPORTED_MODELS:
+        raise ValueError("Unsupported Gemini model")
+    return value
+
+
+def save_model_name(model: str) -> None:
+    value = validate_model_name(model)
+    with _lock:
+        global _model_name
+        _model_name = value
+
+def clear_successful_test() -> None:
+    with _lock:
+        global _tested_configuration
+        _tested_configuration = None
+
+
+def record_successful_test(model: str, api_key: str | None = None) -> None:
+    selected_model = validate_model_name(model)
+    with _lock:
+        key = api_key or _api_key
+        if not key:
+            raise GeminiNotConfiguredError("Gemini API key is not configured")
+        fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        global _tested_configuration
+        _tested_configuration = (selected_model, fingerprint)
+
+
+def consume_successful_test(model: str, api_key: str | None = None) -> bool:
+    selected_model = validate_model_name(model)
+    with _lock:
+        key = api_key or _api_key
+        if not key:
+            return False
+        fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        global _tested_configuration
+        if _tested_configuration != (selected_model, fingerprint):
+            return False
+        _tested_configuration = None
+        return True
 
 # Backend-owned instruction is supplied on every chat generation request.
 CHAT_SYSTEM_INSTRUCTION = """You are the concise assistant in a local Windows PC automation application.
@@ -94,9 +180,12 @@ def _safe_sdk_trace(exc: Exception) -> list[str]:
 def _generate_content(
     contents: str | list[types.Content],
     config: types.GenerateContentConfig | None = None,
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> types.GenerateContentResponse:
     try:
-        client = _client()
+        client = _client(api_key=api_key) if api_key is not None else _client()
     except RuntimeError as exc:
         if str(exc) == "Could not resolve API token from the environment":
             raise GeminiProviderError("google_cloud_auth_missing") from None
@@ -109,7 +198,7 @@ def _generate_content(
 
     try:
         return client.models.generate_content(
-            model=MODEL_NAME,
+            model=model or get_model_name(),
             contents=contents,
             config=config,
         )
@@ -157,8 +246,21 @@ def _response_text(response: types.GenerateContentResponse) -> str:
     return reply
 
 
-def test_connection() -> None:
-    _response_text(_generate_content("Reply with the single word OK."))
+def test_connection(model: str | None = None, api_key: str | None = None) -> None:
+    # Exercise the exact structured-output path used by /api/chat. A plain-text
+    # ping can pass while the selected model rejects the chat JSON schema.
+    from agent_backend.conversation_contract import UniversalConversationResponse
+
+    raw_response = generate_universal_response(
+        "สวัสดี ทดสอบการสนทนาและตอบกลับตามรูปแบบที่กำหนด",
+        UniversalConversationResponse,
+        model=model,
+        api_key=api_key,
+    )
+    try:
+        UniversalConversationResponse.model_validate_json(raw_response)
+    except ValidationError:
+        raise GeminiProviderError("invalid_response") from None
 
 
 def generate_reply(contents: str | list[types.Content]) -> str:
@@ -193,6 +295,9 @@ Data rules:
 def generate_universal_response(
     contents: str | list[types.Content],
     response_schema: type,
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> str:
     """Generate schema-constrained JSON under the universal conversation instruction."""
     config = types.GenerateContentConfig(
@@ -200,7 +305,9 @@ def generate_universal_response(
         response_mime_type="application/json",
         response_json_schema=response_schema.model_json_schema(),
     )
-    return _response_text(_generate_content(contents, config=config))
+    return _response_text(
+        _generate_content(contents, config=config, model=model, api_key=api_key)
+    )
 
 
 def generate_structured_plan(

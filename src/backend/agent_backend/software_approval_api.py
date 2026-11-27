@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_backend.approval_reservation_store import (
     ApprovalReservationConflict,
@@ -24,6 +24,7 @@ from agent_backend.approval_reservation_store import (
 )
 from agent_backend.auth_audit import record_auth_audit_event
 from agent_backend.authenticator import AuthenticatorNotEnrolled, SecretStoreError
+from agent_backend.runtime_diagnostics import emit_event
 from agent_backend.software_approval import InstallApprovalBinding
 from agent_backend.software_evidence import (
     EvidenceNotFound,
@@ -88,8 +89,6 @@ class SoftwareApprovalChallengeResponse(BaseModel):
     repository_commit: str
     installer_sha256: str
     manifest_sha256: str
-    signature_subject: str
-    signature_sha256: str
     evidence_expires_at: str
     approval_digest: str
     notice: Literal["APPROVAL_REQUIRED_FOR_REAL_INSTALL"] = "APPROVAL_REQUIRED_FOR_REAL_INSTALL"
@@ -106,6 +105,41 @@ class SoftwareApprovalResult(BaseModel):
     reservation_id: str
     execution_state: Literal["QUEUED"] = "QUEUED"
     notice: Literal["APPROVED_QUEUED_NOT_YET_EXECUTED"] = "APPROVED_QUEUED_NOT_YET_EXECUTED"
+
+
+class SoftwareInstallJobEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    sequence: int
+    state: Literal["QUEUED", "CLAIMED", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"]
+    occurred_at: str
+    outcome: Literal["success", "denied"]
+    result_code: str | None
+
+
+class SoftwareInstallJobSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    reservation_id: str
+    plan_id: str
+    package_id: str
+    package_name: str
+    version: str
+    state: Literal["QUEUED", "CLAIMED", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "REBOOT_REQUIRED", "UNKNOWN"]
+    attempts: int
+    version_number: int
+    result_code: str | None
+    lease_expires_at: str | None
+    created_at: str
+    updated_at: str
+    events: list[SoftwareInstallJobEventResponse]
+
+
+class SoftwareInstallJobListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    jobs: list[SoftwareInstallJobSummaryResponse]
+    checked_at: str
 
 
 class SoftwareInstallJobStatusResponse(BaseModel):
@@ -167,6 +201,50 @@ def _get_install_plan(plan_id: str, *, owner_id: str):
 
 
 @router.post(
+    "/api/software/install/proposals/{plan_id}/revoke",
+)
+def revoke_software_install_proposal(plan_id: str, request: Request) -> dict:
+    """Revoke an unused proposal and all pending approval state for a scope change."""
+    services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
+    with _lock:
+        try:
+            revoked_approvals = _reservation_store(request).revoke_active_approvals_for_plan(
+                plan_id=plan_id,
+                owner_id=principal.owner_sub,
+            )
+        except ApprovalReservationConflict:
+            raise HTTPException(
+                status_code=409,
+                detail="This proposal already has a queued or consumed install and cannot be revoked.",
+            ) from None
+        except ApprovalReservationError:
+            raise HTTPException(
+                status_code=503,
+                detail="Proposal approval state could not be safely revoked.",
+            ) from None
+        _bindings.pop(plan_id, None)
+        services.step_up.invalidate_plan(
+            owner_sub=principal.owner_sub,
+            session_id=principal.session_id,
+            plan_id=plan_id,
+        )
+        software_evidence_registry.revoke(plan.evidence_id)
+        try:
+            software_install_plan_store.revoke(plan_id, owner_id=principal.owner_sub)
+        except InstallPlanNotFound:
+            raise HTTPException(status_code=404, detail="Install proposal not found or expired.") from None
+    emit_event(
+        event_code="INSTALL_PROPOSAL_REVOKED",
+        component="install",
+        stage="proposal_revocation",
+        correlation=getattr(getattr(request, "state", None), "correlation_id", "unknown"),
+        fields={"revoked_approvals": revoked_approvals},
+    )
+    return {"revoked": True, "revoked_approvals": revoked_approvals}
+
+
+@router.post(
     "/api/plans/{plan_id}/software-approval",
     response_model=SoftwareApprovalChallengeResponse,
 )
@@ -176,6 +254,7 @@ def create_software_approval_challenge(
     request: Request,
 ) -> SoftwareApprovalChallengeResponse:
     """Bind registry evidence to the plan, then create an exact-digest TOTP challenge."""
+    correlation = getattr(getattr(request, "state", None), "correlation_id", "unknown")
     services, principal, _secret = _authenticated_context(request)
     plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
     try:
@@ -202,6 +281,11 @@ def create_software_approval_challenge(
 
     with _lock:
         _prune_bindings()
+        # Serialize challenge creation with proposal revocation. A challenge must
+        # never be persisted after its proposal has been revoked.
+        current_plan = _get_install_plan(plan_id, owner_id=principal.owner_sub)
+        if current_plan.plan_digest != plan.plan_digest:
+            raise HTTPException(status_code=409, detail="Install proposal changed; rediscovery is required.")
         if plan_id in _consumed_bindings:
             raise HTTPException(status_code=409, detail="This software approval has already been consumed.")
         existing = _bindings.get(plan_id)
@@ -213,29 +297,38 @@ def create_software_approval_challenge(
             raise HTTPException(status_code=409, detail="Plan already has a different approval binding.")
         if existing is None and len(_bindings) >= MAX_BINDINGS:
             raise HTTPException(status_code=503, detail="Software approval capacity reached.")
-        _bindings[plan_id] = (principal.owner_sub, principal.session_id, binding)
-
-    challenge = services.step_up.create(
-        owner_sub=principal.owner_sub,
-        session_id=principal.session_id,
-        plan_id=plan.plan_id,
-        action_digest=binding.approval_digest,
-        risk_class="high",
-    )
-    try:
-        _reservation_store(request).create_approval(
-            approval_id=challenge.challenge_id,
-            owner_id=principal.owner_sub,
+        challenge = services.step_up.create(
+            owner_sub=principal.owner_sub,
             session_id=principal.session_id,
             plan_id=plan.plan_id,
-            plan_digest=plan.plan_digest,
             action_digest=binding.approval_digest,
-            evidence_expires_at=binding.evidence.expires_at,
+            risk_class="high",
         )
-    except ApprovalReservationError:
-        with _lock:
-            _bindings.pop(plan_id, None)
-        raise HTTPException(status_code=503, detail="Could not persist the install approval.") from None
+        try:
+            _reservation_store(request).create_approval(
+                approval_id=challenge.challenge_id,
+                owner_id=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan.plan_id,
+                plan_digest=plan.plan_digest,
+                action_digest=binding.approval_digest,
+                evidence_expires_at=binding.evidence.expires_at,
+            )
+        except ApprovalReservationError:
+            services.step_up.invalidate_plan(
+                owner_sub=principal.owner_sub,
+                session_id=principal.session_id,
+                plan_id=plan_id,
+            )
+            raise HTTPException(status_code=503, detail="Could not persist the install approval.") from None
+        _bindings[plan_id] = (principal.owner_sub, principal.session_id, binding)
+    emit_event(
+        event_code="APPROVAL_CHALLENGE_CREATED",
+        component="approval",
+        stage="approval_challenge",
+        correlation=correlation,
+        fields={"status_code": 200},
+    )
     return SoftwareApprovalChallengeResponse(
         plan_id=plan_id,
         challenge_id=challenge.challenge_id,
@@ -254,15 +347,9 @@ def create_software_approval_challenge(
         repository_commit=evidence.repository_commit,
         installer_sha256=evidence.installer_sha256,
         manifest_sha256=evidence.manifest_sha256,
-        signature_subject=evidence.signature_subject,
-        signature_sha256=evidence.signature_sha256,
         evidence_expires_at=evidence.expires_at.isoformat(),
         approval_digest=binding.approval_digest,
     )
-
-
-def _release_authorization_for_request(request: Request):
-    return getattr(request.app.state, "real_install_release_authorization", None)
 
 
 @router.post(
@@ -275,6 +362,7 @@ def confirm_software_approval(
     request: Request,
 ) -> SoftwareApprovalResult:
     """Consume the one-use TOTP challenge for the exact evidence-bound proposal."""
+    correlation = getattr(getattr(request, "state", None), "correlation_id", "unknown")
     services, principal, _secret = _authenticated_context(
         request,
         require_enrolled=False,
@@ -303,19 +391,6 @@ def confirm_software_approval(
         with _lock:
             _bindings.pop(plan_id, None)
         raise HTTPException(status_code=409, detail="Software approval digest changed; rediscovery is required.")
-
-    release_authorization = _release_authorization_for_request(request)
-    if (
-        release_authorization is None
-        or release_authorization.task_id != "P6-609-C"
-        or release_authorization.package_id != binding.evidence.package_id
-        or release_authorization.version != binding.evidence.version
-        or release_authorization.expires_at <= datetime.now(UTC)
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="A current one-use real-install release authorization for this exact package/version is required.",
-        )
 
     # Serialize confirmation per process: distinct one-use TOTP challenges must not
     # authorize the same plan/evidence binding more than once.
@@ -360,6 +435,8 @@ def confirm_software_approval(
                     action_digest=binding.approval_digest,
                     idempotency_key=plan.plan_id,
                     binding_json=binding.model_dump_json(),
+                    workflow_id=getattr(getattr(request, "state", None), "workflow_id", "unknown"),
+                    correlation_id=correlation,
                 )
             except ApprovalReservationExpired:
                 raise HTTPException(status_code=410, detail="Install approval expired before it could be queued.") from None
@@ -367,8 +444,27 @@ def confirm_software_approval(
                 raise HTTPException(status_code=409, detail="Install approval was already consumed or conflicts with an existing job.") from None
             except ApprovalReservationError:
                 raise HTTPException(status_code=503, detail="Install job could not be durably queued.") from None
+            emit_event(
+                event_code="REAL_INSTALL_RELEASE_AUTHORIZATION_CREATED",
+                component="approval",
+                stage="release_authorization",
+                correlation=correlation,
+                fields={
+                    "package_id": binding.evidence.package_id,
+                    "version": binding.evidence.version,
+                    "binding": "exact_package_version_action_digest",
+                },
+            )
             _consumed_bindings[plan_id] = binding.evidence.expires_at
     if not accepted:
+        emit_event(
+            event_code="TOTP_APPROVAL_DENIED",
+            component="approval",
+            stage="totp_verification",
+            correlation=correlation,
+            severity="WARNING",
+            fields={"status_code": 403},
+        )
         challenge_state = services.step_up.get(payload.challenge_id)
         if challenge_state is None or challenge_state.status != "active":
             raise HTTPException(
@@ -382,6 +478,17 @@ def confirm_software_approval(
         )
         raise HTTPException(status_code=403, detail="Step-up verification failed.")
     record_auth_audit_event(event_type="auth.step_up", outcome="success")
+    emit_event(
+        event_code="REAL_INSTALL_APPROVAL_QUEUED",
+        component="approval",
+        stage="approval_queue",
+        correlation=correlation,
+        fields={
+            "status_code": 200,
+            "plan_id": plan_id,
+            "reservation_id": receipt.reservation_id,
+        },
+    )
     return SoftwareApprovalResult(
         plan_id=plan_id,
         approval_digest=binding.approval_digest,
@@ -421,6 +528,71 @@ def get_software_install_job_for_plan(
         result_code=job.result_code,
         lease_expires_at=job.lease_expires_at,
     )
+
+@router.get(
+    "/api/software/install/jobs",
+    response_model=SoftwareInstallJobListResponse,
+)
+def list_software_install_jobs(
+    request: Request,
+    limit: int = 25,
+) -> SoftwareInstallJobListResponse:
+    """List durable install jobs for the signed-in owner; never returns approval payloads."""
+    _services, principal, _secret = _authenticated_context(request, require_enrolled=False)
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=422, detail="Job history limit is invalid.")
+    try:
+        rows = _reservation_store(request).list_install_jobs(
+            owner_id=principal.owner_sub,
+            limit=limit,
+        )
+    except ApprovalReservationError:
+        raise HTTPException(status_code=503, detail="Install job history is temporarily unavailable.") from None
+
+    summaries = []
+    for row in rows:
+        try:
+            binding = InstallApprovalBinding.model_validate_json(row["binding_json"])
+            evidence = binding.evidence
+        except (ValidationError, ValueError, TypeError):
+            # A corrupt or incompatible persisted payload is not exposed to the
+            # client; report a bounded UNKNOWN row without leaking stored data.
+            summaries.append(SoftwareInstallJobSummaryResponse(
+                reservation_id=row["reservation_id"],
+                plan_id=row["plan_id"],
+                package_id="unknown",
+                package_name="Unknown package",
+                version="unknown",
+                state="UNKNOWN",
+                attempts=row["attempts"],
+                version_number=row["version"],
+                result_code="PERSISTED_BINDING_UNREADABLE",
+                lease_expires_at=None,
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+                events=[],
+            ))
+            continue
+        summaries.append(SoftwareInstallJobSummaryResponse(
+            reservation_id=row["reservation_id"],
+            plan_id=row["plan_id"],
+            package_id=evidence.package_id,
+            package_name=evidence.package_name,
+            version=evidence.version,
+            state=row["state"],
+            attempts=row["attempts"],
+            version_number=row["version"],
+            result_code=row["result_code"],
+            lease_expires_at=row["lease_expires_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            events=[SoftwareInstallJobEventResponse(**event) for event in row["events"]],
+        ))
+    return SoftwareInstallJobListResponse(
+        jobs=summaries,
+        checked_at=datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+    )
+
 
 @router.get(
     "/api/software/install/jobs/{reservation_id}",
