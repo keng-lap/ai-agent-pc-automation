@@ -280,7 +280,14 @@ def create_software_install_proposal(
             correlation=correlation,
             error=exc,
             severity="ERROR",
-            fields={"status_code": 409},
+            fields={
+                "status_code": 409,
+                "failure_code": exc.failure_code,
+                "failure_reason": exc.failure_reason,
+                "package_id": payload.package_id,
+                "selected_version": payload.version,
+                "scope": payload.scope,
+            },
         )
         raise HTTPException(
             status_code=409,
@@ -294,7 +301,14 @@ def create_software_install_proposal(
             correlation=correlation,
             error=exc,
             severity="ERROR",
-            fields={"status_code": 409},
+            fields={
+                "status_code": 409,
+                "failure_code": exc.failure_code,
+                "failure_reason": exc.failure_reason,
+                "package_id": payload.package_id,
+                "selected_version": payload.version,
+                "scope": payload.scope,
+            },
         )
         raise HTTPException(
             status_code=409,
