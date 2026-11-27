@@ -66,5 +66,5 @@ def test_authenticode_chain_build_can_retrieve_missing_intermediates(tmp_path, m
     assert thumbprint is None
     assert hresult == "0x800B010A"
     assert library.WinVerifyTrust.calls[0][0] == 0x80
-    assert library.WinVerifyTrust.calls[0][1] == 1
+    assert library.WinVerifyTrust.calls[0][1] == 0
     assert library.WinVerifyTrust.calls[0][0] & 0x1000 == 0
