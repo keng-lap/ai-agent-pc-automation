@@ -63,9 +63,12 @@ class SoftwareInstallProposalResponse(BaseModel):
 def get_software_install_readiness(request: Request) -> dict:
     """Expose Windows capability; each install release is issued after exact-action TOTP."""
     settings = getattr(request.app.state, "settings", None)
+    worker = getattr(request.app.state, "install_worker_thread", None)
+    worker_ready = worker is not None and worker.is_alive()
     platform_supported = (
         sys.platform == "win32"
         and getattr(settings, "app_env", "development") != "test"
+        and worker_ready
     )
     emit_event(
         event_code="INSTALL_READINESS_CHECKED",
