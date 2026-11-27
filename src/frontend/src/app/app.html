@@ -506,11 +506,18 @@
                   @if (discovery.status === 'version_required' && discovery.result) {
                     <div class="detail-heading">{{ language() === 'th' ? 'เลือกเวอร์ชันที่ต้องการ' : 'Choose an exact version' }}</div>
                     <p class="detail-meta">{{ discovery.packageId }} — {{ language() === 'th' ? 'เลือกเวอร์ชันจาก WinGet Manifest โดยตรง' : 'Choose a version directly from the WinGet manifest.' }}</p>
-                    <div class="software-version-list">
-                      @for (version of discovery.result.available_versions; track version) {
-                        <button class="software-version" type="button" [disabled]="planning()" (click)="selectSoftwareVersion(entry.id, version)">{{ version }}</button>
+                    <label class="software-version-label" [for]="'software-version-' + entry.id">
+                      {{ language() === 'th' ? 'เวอร์ชัน (ใหม่สุดอยู่ด้านบน)' : 'Version (newest first)' }}
+                    </label>
+                    <select class="software-version-select" [id]="'software-version-' + entry.id"
+                      [disabled]="planning()" [value]="''"
+                      [attr.aria-label]="language() === 'th' ? 'เลือกเวอร์ชันซอฟต์แวร์' : 'Select software version'"
+                      (change)="selectSoftwareVersion(entry.id, ($event.target as HTMLSelectElement).value)">
+                      <option value="" disabled>{{ language() === 'th' ? 'เลือกเวอร์ชัน...' : 'Choose a version...' }}</option>
+                      @for (version of sortedSoftwareVersions(discovery.result.available_versions); track version) {
+                        <option [value]="version">{{ version }}</option>
                       }
-                    </div>
+                    </select>
                   }
                   @if (discovery.status === 'scope_required' && discovery.result) {
                     <div class="tool-preview installer-actions--blocked" role="status">
