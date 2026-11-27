@@ -32,6 +32,16 @@ ALLOWED_RELEASE_REDIRECT_HOSTS = frozenset({
 class InstallerStageError(RuntimeError):
     """A bounded download or verification step failed with a safe diagnostic code."""
 
+    _WINVERIFYTRUST_RESULTS: ClassVar[dict[str, str]] = {
+        "0x800B0100": "no valid signature was found",
+        "0x800B0109": "certificate chain terminates at an untrusted root",
+        "0x800B010A": "certificate chain could not be built",
+        "0x800B010C": "signing certificate was revoked",
+        "0x80092013": "revocation status could not be checked because the service was offline",
+        "0x800B0111": "signature is explicitly distrusted",
+        "0x80096010": "signed file digest does not match",
+    }
+
     _REASONS: ClassVar[dict[str, tuple[str, str]]] = {
         "staging directory must be an absolute, non-symlink path": ("unsafe_staging_path", "Staging directory was not an absolute, non-symlink path."),
         "staging directory is not a safe directory": ("unsafe_staging_directory", "Staging directory failed the directory safety check."),
@@ -69,7 +79,13 @@ class InstallerStageError(RuntimeError):
         self.diagnostic_fields = dict(diagnostic_fields or {})
         trust_result = self.diagnostic_fields.get("winverifytrust_hresult")
         if trust_result:
-            self.failure_reason = f"{self.failure_reason} WinVerifyTrust result: {trust_result}."
+            explanation = self._WINVERIFYTRUST_RESULTS.get(
+                trust_result,
+                "Windows did not accept the Authenticode trust validation",
+            )
+            self.failure_reason = (
+                f"{self.failure_reason} WinVerifyTrust result: {trust_result} ({explanation})."
+            )
 
 
 class StagedInstaller(BaseModel):
