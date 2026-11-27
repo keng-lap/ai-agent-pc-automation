@@ -236,6 +236,15 @@ def test_nullsoft_manifest_preserves_custom_scope_switch_and_uses_technology_def
     }
 
 
+def test_local_manifest_preserves_manifest_declared_installer_success_codes():
+    binding, _ = _binding(
+        installer_success_codes=(3010, 1641),
+    )
+    documents = build_local_manifest_documents(binding)
+    installer = yaml.safe_load(documents["Contoso.Sample.installer.yaml"])
+    assert installer["Installers"][0]["InstallerSuccessCodes"] == [3010, 1641]
+
+
 def test_exe_evidence_without_manifest_silent_switch_is_rejected():
     with pytest.raises(ValidationError, match="silent switch"):
         _binding(installer_type="exe", installer_url="https://downloads.contoso.example/sample-2.4.1.exe", installer_silent_switch=None)

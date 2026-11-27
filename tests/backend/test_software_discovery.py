@@ -147,14 +147,14 @@ def test_discovery_normalizes_executable_installer_technologies_for_any_package(
     assert result.candidate.installer_silent_switch == "/S"
 
 
-def test_discovery_preserves_custom_and_silent_with_progress_switches():
+def test_discovery_preserves_custom_switches_and_installer_success_codes():
     source = FakeSource()
     installer = source.documents["Acme.Editor.installer.yaml"]["Installers"][0]
     installer["InstallerType"] = "nullsoft"
     installer["InstallerSwitches"] = {
-        "SilentWithProgress": "/S",
         "Custom": "/currentuser",
     }
+    installer["InstallerSuccessCodes"] = [3010]
     result = WinGetManifestRepository(http_get=source.get).discover(
         package_id=PACKAGE_ID,
         version=VERSION,
@@ -163,8 +163,9 @@ def test_discovery_preserves_custom_and_silent_with_progress_switches():
     assert result.candidate is not None
     assert result.candidate.installer_technology == "nullsoft"
     assert result.candidate.installer_silent_switch is None
-    assert result.candidate.installer_silent_with_progress_switch == "/S"
+    assert result.candidate.installer_silent_with_progress_switch is None
     assert result.candidate.installer_custom_switch == "/currentuser"
+    assert result.candidate.installer_success_codes == (3010,)
 
 
 def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():

@@ -127,7 +127,8 @@ class InstallerCandidate(BaseModel):
     installer_silent_switch: str | None = None
     installer_silent_with_progress_switch: str | None = None
     installer_custom_switch: str | None = None
-    installer_url: str
+    installer_success_codes: tuple[int, ...] = ()
+    installer_url:
     installer_domain: str
     installer_sha256: str
     manifest_sha256: str
@@ -489,6 +490,24 @@ class WinGetManifestRepository:
         silent_switch = read_switch("Silent")
         silent_with_progress_switch = read_switch("SilentWithProgress")
         custom_switch = read_switch("Custom")
+        success_codes = installer.get("InstallerSuccessCodes")
+        if success_codes is None:
+            success_codes = installer_doc.get("InstallerSuccessCodes", [])
+        if (
+            not isinstance(success_codes, list)
+            or len(success_codes) > 16
+            or any(
+                type(code) is not int
+                or code == 0
+                or not -2147483648 <= code <= 4294967295
+                for code in success_codes
+            )
+            or len(set(success_codes)) != len(success_codes)
+        ):
+            raise DiscoveryUnavailable(
+                "installer success-code list was invalid",
+                failure_code="installer_success_codes_invalid",
+            )
         domain = _validate_installer_url(installer_url)
         if not isinstance(installer_hash, str) or not SHA256_PATTERN.fullmatch(installer_hash):
             raise DiscoveryUnavailable("installer SHA-256 was missing or invalid")
@@ -544,6 +563,7 @@ class WinGetManifestRepository:
             installer_silent_switch=silent_switch,
             installer_silent_with_progress_switch=silent_with_progress_switch,
             installer_custom_switch=custom_switch,
+            installer_success_codes=tuple(success_codes),
             installer_url=installer_url,
             installer_domain=domain,
             installer_sha256=installer_hash.lower(),

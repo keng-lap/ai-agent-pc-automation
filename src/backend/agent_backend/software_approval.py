@@ -27,6 +27,7 @@ class VerifiedPackageEvidence(BaseModel):
     installer_silent_switch: str | None = Field(default=None, min_length=1, max_length=512)
     installer_silent_with_progress_switch: str | None = Field(default=None, min_length=1, max_length=512)
     installer_custom_switch: str | None = Field(default=None, min_length=1, max_length=2048)
+    installer_success_codes: tuple[int, ...] = Field(default=(), max_length=16)
     installer_url: str = Field(min_length=8, max_length=2048)
     official_release_url: str | None = Field(default=None, min_length=8, max_length=2048)
     manifest_source_url: str = Field(min_length=8, max_length=2048)
@@ -49,6 +50,21 @@ class VerifiedPackageEvidence(BaseModel):
             not value.strip() or any(ord(char) < 0x20 for char in value)
         ):
             raise ValueError("installer switch must be non-blank and contain no control characters")
+        return value
+
+    @field_validator("installer_success_codes")
+    @classmethod
+    def validate_installer_success_codes(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        if (
+            len(set(value)) != len(value)
+            or any(
+                type(code) is not int
+                or code == 0
+                or not -2147483648 <= code <= 4294967295
+                for code in value
+            )
+        ):
+            raise ValueError("installer success codes are invalid")
         return value
 
     @field_validator("package_name", "publisher", "version")

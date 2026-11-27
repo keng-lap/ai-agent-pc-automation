@@ -118,6 +118,8 @@ def build_local_manifest_documents(
     }
     if installer_switches:
         installer_entry["InstallerSwitches"] = installer_switches
+    if evidence.installer_success_codes:
+        installer_entry["InstallerSuccessCodes"] = list(evidence.installer_success_codes)
     if (
         evidence.installer_type == "exe"
         and not evidence.installer_silent_switch

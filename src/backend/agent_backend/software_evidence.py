@@ -143,6 +143,7 @@ class SoftwareEvidenceRegistry:
                 installer_silent_switch=candidate.installer_silent_switch,
                 installer_silent_with_progress_switch=candidate.installer_silent_with_progress_switch,
                 installer_custom_switch=candidate.installer_custom_switch,
+                installer_success_codes=candidate.installer_success_codes,
                 installer_url=candidate.installer_url,
                 official_release_url=candidate.official_release_url,
                 manifest_source_url=candidate.manifest_source_url,
