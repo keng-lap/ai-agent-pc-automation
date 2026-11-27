@@ -122,7 +122,7 @@ def test_verified_candidate_creates_an_exact_install_plan_and_cleans_staged_file
 
 
 
-def test_generic_package_proposal_keeps_existing_publisher_trust_path(monkeypatch, tmp_path):
+def test_generic_package_proposal_uses_publisher_independent_sha256_trust_path(monkeypatch, tmp_path):
     candidate = make_candidate(
         package_id="Acme.Editor",
         package_name="Acme Editor",
@@ -272,17 +272,16 @@ def test_proposal_endpoint_is_windows_only(monkeypatch, tmp_path):
 
 
 
-def test_readiness_exposes_generic_authenticode_publisher_policy_without_package_pin(monkeypatch, tmp_path):
+def test_readiness_exposes_sha256_and_authenticode_integrity_policy(monkeypatch, tmp_path):
     monkeypatch.delenv("AI_AGENT_DBEAVER_SIGNER_SHA256", raising=False)
     request = make_request(tmp_path)
     request.app.state.real_install_enabled = False
     request.app.state.real_install_release_authorization = None
     ready = api.get_software_install_readiness(request)
     assert ready["notice"] == "NO_INSTALL_IS_STARTED_BY_THIS_ENDPOINT"
-    assert ready["publisher_identity_policy_available"] is True
-    assert ready["publisher_trust_configured"] is True
     assert ready["package_allowlist_enabled"] is False
-    assert ready["publisher_trust_mode"] == "WINDOWS_AUTHENTICODE_AND_WINGET_PUBLISHER_MATCH"
+    assert ready["installer_trust_mode"] == "WINGET_MANIFEST_SHA256_AND_AUTHENTICODE_SIGNATURE_INTEGRITY"
+    assert "publisher" not in str(ready).casefold()
     assert ready["supported_package_ids"] == []
     assert "AI_AGENT_DBEAVER_SIGNER_SHA256" not in str(ready)
     assert "d" * 64 not in str(ready)
