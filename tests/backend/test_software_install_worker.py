@@ -41,15 +41,6 @@ def make_binding():
     return build_install_approval_binding(plan_digest="a" * 64, evidence=evidence)
 
 
-def make_release_authorization(binding):
-    return SimpleNamespace(
-        task_id="P6-609-C",
-        package_id=binding.evidence.package_id,
-        version=binding.evidence.version,
-        expires_at=datetime.now(UTC) + timedelta(minutes=5),
-        nonce="f" * 64,
-    )
-
 class FakeStore:
     def __init__(self, binding):
         self.job = InstallExecutionJob(
@@ -102,7 +93,6 @@ def test_worker_does_not_claim_jobs_after_shutdown_requested(tmp_path):
         work_root=tmp_path / "work",
         worker_id="worker-1",
         stop_event=stop,
-        release_authorization=make_release_authorization(binding),
     )
 
     assert worker.run_once() is None
@@ -130,7 +120,6 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
         executor=executor,
         verifier=lambda *_args: next(verification_results),
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
     result = worker.run_once()
 
@@ -138,14 +127,13 @@ def test_worker_executes_only_approved_binding_and_verifies_exact_package(monkey
     assert [item[1] for item in store.transitions] == ["RUNNING", "VERIFYING", "SUCCEEDED"]
     assert executor_calls[0][0].approval_digest == binding.approval_digest
     assert executor_calls[0][1] is prepared
-    authorization = worker._release_authorization
     assert store.release_consumptions == [{
-        "task_id": authorization.task_id,
-        "package_id": authorization.package_id,
-        "version": authorization.version,
+        "task_id": "P6-609-C",
+        "owner_id": store.job.owner_id,
+        "plan_id": store.job.plan_id,
+        "package_id": binding.evidence.package_id,
+        "version": binding.evidence.version,
         "action_digest": binding.approval_digest,
-        "nonce": authorization.nonce,
-        "expires_at": authorization.expires_at,
     }]
 
 
@@ -168,7 +156,6 @@ def test_worker_emits_correlated_runtime_diagnostics_for_complete_install(caplog
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=0),
         verifier=lambda *_a: next(verification_results),
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
 
     diagnostics.set_enabled(True)
@@ -212,7 +199,6 @@ def test_worker_does_not_emit_detailed_events_when_diagnostics_are_off(caplog, m
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=0),
         verifier=lambda *_a: next(verification_results),
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
 
     diagnostics.set_enabled(False)
@@ -235,7 +221,6 @@ def test_worker_records_unknown_after_execution_timeout(monkeypatch, tmp_path):
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=True, exit_code=None),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -276,7 +261,6 @@ def test_worker_does_not_reinstall_an_exact_package_already_present(monkeypatch,
         executor=lambda *_a, **_k: executor_calls.append(True),
         verifier=lambda *_a: True,
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -299,7 +283,6 @@ def test_worker_never_marks_success_when_winget_exits_nonzero(monkeypatch, tmp_p
         executor=lambda *_a, **_k: SimpleNamespace(timed_out=False, exit_code=1),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -337,7 +320,6 @@ def test_worker_marks_outcome_unknown_when_lease_loss_terminates_process(monkeyp
         executor=executor,
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
-        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
@@ -448,7 +430,6 @@ def test_worker_executor_observes_shutdown_directly(monkeypatch, tmp_path):
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
         stop_event=stop,
-        release_authorization=make_release_authorization(binding),
     )
     # The test calls the claimed-job path directly because run_once correctly
     # refuses to claim work after shutdown has already been requested.
@@ -457,14 +438,15 @@ def test_worker_executor_observes_shutdown_directly(monkeypatch, tmp_path):
     assert result.result_code == "WORKER_CANCELLED_PROCESS_TERMINATED"
 
 
-def test_worker_denies_release_for_different_exact_package_without_execution(monkeypatch, tmp_path):
+def test_worker_denies_when_no_exact_persisted_release_matches(monkeypatch, tmp_path):
     binding = make_binding()
     store = FakeStore(binding)
+    store.release_error = worker_module.ApprovalReservationConflict(
+        "no exact package/version/action authorization"
+    )
     executor_calls = []
     monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
     monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
-    authorization = make_release_authorization(binding)
-    authorization.package_id = "Another.Package"
     worker = worker_module.SoftwareInstallWorker(
         store,
         work_root=tmp_path / "work",
@@ -472,7 +454,6 @@ def test_worker_denies_release_for_different_exact_package_without_execution(mon
         executor=lambda *_a, **_k: executor_calls.append(True),
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
-        release_authorization=authorization,
     )
 
     result = worker.run_once()
@@ -499,15 +480,10 @@ def test_worker_denial_paths_never_reach_executor(monkeypatch, tmp_path, denial,
     executor_calls = []
     monkeypatch.setattr(worker_module, "prepare_approved_install", lambda *_a, **_k: object())
     monkeypatch.setattr(worker_module, "cleanup_prepared_install", lambda *_a, **_k: None)
-    authorization = make_release_authorization(binding)
-    if denial == "missing":
-        authorization = None
-    elif denial == "task":
-        authorization.task_id = "P6-OTHER"
-    elif denial == "version":
-        authorization.version = "99.99.99"
-    elif denial == "replay":
-        store.release_error = worker_module.ApprovalReservationConflict("nonce already consumed")
+    if denial in {"missing", "task", "version", "replay"}:
+        store.release_error = worker_module.ApprovalReservationConflict(
+            "no unused exact release authorization"
+        )
     elif denial == "expired":
         store.release_error = worker_module.ApprovalReservationExpired("authorization expired")
     elif denial == "unavailable":
@@ -551,7 +527,6 @@ def test_worker_does_not_consume_release_when_shutdown_arrives_before_execution(
         verifier=lambda *_a: False,
         heartbeat_seconds=5,
         stop_event=stop,
-        release_authorization=make_release_authorization(binding),
     )
 
     result = worker.run_once()
