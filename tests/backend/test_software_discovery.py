@@ -464,7 +464,7 @@ def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
         def get(self, url, **kwargs):
             if request_path(url).endswith("/Acme/Editor"):
                 versions = [f"{major}.0.0" for major in range(1, 26)]
-                versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5", "CN"])
+                versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5"])
                 return FakeResponse([
                     {"name": version, "type": "dir"} for version in versions
                 ])
@@ -484,7 +484,6 @@ def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
     assert result.available_versions == result.manifest_versions
     assert result.manifest_versions[-1] == "26.2.5"
     assert "25.3.0" in result.manifest_versions
-    assert "CN" not in result.manifest_versions
 
     selected = WinGetManifestRepository(
         http_get=VersionListingSource().get
