@@ -133,13 +133,16 @@ class FakeSource:
 
 
 def test_official_release_listing_reads_all_pages_and_ignores_non_version_tags():
-    versions = [f"26.{index}.0" for index in range(25)]
+    # The real DBeaver repository has more than 100 historical releases.
+    # Keep enough rows to exercise the second and third 100-item pages.
+    versions = [f"26.{index}.0" for index in range(225)]
     calls = []
 
     def paginated_get(url, **kwargs):
         page = int(kwargs["params"]["page"])
         calls.append(page)
-        start = (page - 1) * 10
+        assert kwargs["params"]["per_page"] == "100"
+        start = (page - 1) * 100
         releases = [
             {
                 "tag_name": version,
@@ -163,7 +166,7 @@ def test_official_release_listing_reads_all_pages_and_ignores_non_version_tags()
     )
 
     assert listed is not None
-    assert len(listed) == 25
+    assert len(listed) == 225
     assert set(listed) == set(versions)
     assert "CN" not in listed
     assert calls == [1, 2, 3]
