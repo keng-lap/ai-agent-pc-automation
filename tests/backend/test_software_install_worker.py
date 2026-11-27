@@ -55,6 +55,7 @@ class FakeStore:
             attempts=1,
             version=1,
             result_code=None,
+            plan_id="1" * 32,
         )
         self.transitions = []
         self.release_consumptions = []
