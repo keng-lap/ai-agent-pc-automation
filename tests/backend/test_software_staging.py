@@ -136,7 +136,7 @@ def test_unverified_candidate_is_rejected_before_network_or_file_creation(tmp_pa
     candidate = make_candidate().model_copy(update={"publisher_verification": "MISMATCH"})
     calls = []
 
-    with pytest.raises(InstallerStageError, match="not matched"):
+    with pytest.raises(InstallerStageError, match="source check did not pass"):
         InstallerStager(http_get=lambda *args, **kwargs: calls.append(args)).stage(
             candidate,
             staging_root=tmp_path,
