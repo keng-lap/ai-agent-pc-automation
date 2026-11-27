@@ -353,6 +353,38 @@ def test_selected_version_continues_when_optional_official_release_check_is_unav
     assert result.candidate.official_version is None
 
 
+def test_publisher_release_versions_are_primary_and_intersect_with_installable_manifest_versions():
+    source = FakeSource(publisher_url="https://github.com/acme/editor")
+    original_get = source.get
+
+    def with_release_list(url, **kwargs):
+        if request_path(url) == "repos/acme/editor/releases":
+            source.calls.append((url, kwargs))
+            return FakeResponse([
+                {"tag_name": "26.0.0", "draft": False, "prerelease": False},
+                {"tag_name": VERSION, "draft": False, "prerelease": False},
+                {"tag_name": "27.0.0-beta", "draft": False, "prerelease": True},
+                {"tag_name": "28.0.0", "draft": True, "prerelease": False},
+            ])
+        return original_get(url, **kwargs)
+
+    result = WinGetManifestRepository(http_get=with_release_list).discover(
+        package_id=PACKAGE_ID,
+        version=None,
+        architecture="x64",
+    )
+
+    assert result.status == "VERSION_REQUIRED"
+    assert result.manifest_versions == (VERSION,)
+    assert result.official_versions == (VERSION, "26.0.0")
+    assert result.available_versions == (VERSION,)
+    publisher_list_calls = [
+        call for call in source.calls
+        if "api.github.com/repos/acme/editor/releases?per_page=100" in call[0]
+    ]
+    assert len(publisher_list_calls) == 1
+
+
 def test_discovery_requires_explicit_version_and_never_guesses_latest():
     source = FakeSource()
     result = WinGetManifestRepository(http_get=source.get).discover(
