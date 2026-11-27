@@ -101,8 +101,6 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
     application.state.auth_services = auth_services
     application.state.job_store = job_store
     application.state.job_store_path = settings.job_store_path
-    application.state.real_install_enabled = settings.real_install_enabled
-    application.state.real_install_release_authorization = settings.real_install_release_authorization
     application.state.job_store_lock = threading.Lock()
     application.state.approval_reservation_store = None
     application.state.approval_reservation_store_lock = threading.Lock()
@@ -193,13 +191,10 @@ def create_app(settings=None, auth_services=None, job_store=None) -> FastAPI:
                         store = SQLiteApprovalReservationStore(settings.job_store_path)
                         application.state.approval_reservation_store = store
             store.reconcile_expired_install_leases()
-            if not settings.real_install_enabled:
-                return
             worker = SoftwareInstallWorker(
                 store,
                 work_root=Path(settings.job_store_path).parent / "winget-work",
                 stop_event=application.state.install_worker_stop,
-                release_authorization=settings.real_install_release_authorization,
             )
         except Exception:
             logging.getLogger(__name__).exception("Local software install worker could not start.")
