@@ -352,7 +352,7 @@ class MicrosoftWinGetCatalogIndex:
             assert self._connection is not None
             # Match every meaningful query token against the catalog's name,
             # package ID, or moniker. This supports natural-language product names
-            # such as "DBeaver Community" while keeping package identity catalog-owned.
+            # such as a product display name while keeping package identity catalog-owned.
             search_terms = tuple(
                 dict.fromkeys(re.findall(r"[^\W_]+", normalized.casefold()))
             ) or (normalized.casefold(),)
