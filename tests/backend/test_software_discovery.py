@@ -152,7 +152,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
     assert all("winget.exe" not in call[0] for call in source.calls)
     assert any(
-        "/contents/manifests/d/Acme/Editor" in call[0]
+        "/contents/manifests/a/Acme/Editor" in call[0]
         for call in source.calls
     )
 
@@ -539,7 +539,7 @@ def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata
     class IncompleteMetadataSource(FakeSource):
         def get(self, url, **kwargs):
             response = super().get(url, **kwargs)
-            if request_path(url).endswith(f"/manifests/d/Acme/Editor/{VERSION}"):
+            if request_path(url).endswith(f"/manifests/a/Acme/Editor/{VERSION}"):
                 entries = json.loads(response._body)
                 for entry in entries:
                     entry.pop("type", None)
