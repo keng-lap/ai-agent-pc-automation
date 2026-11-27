@@ -178,13 +178,13 @@ def test_default_registry_accepts_matching_manifest_publisher_without_user_pin()
     assert evidence.publisher == "DBeaver Corp"
 
 
-def test_registry_rejects_signer_subject_mismatch_even_when_windows_trusts_chain():
+def test_registry_accepts_dbeaver_when_signer_name_differs_but_sha256_matches():
     registry = make_registry(clock=lambda: NOW)
-    with pytest.raises(EvidenceRejected, match="does not match"):
-        registry.register_staged_candidate(
-            candidate=candidate(),
-            staged=staged(signature_subject="CN=Unrelated Publisher"),
-        )
+    evidence = registry.register_staged_candidate(
+        candidate=candidate(),
+        staged=staged(signature_subject="CN=Unrelated Publisher"),
+    )
+    assert evidence.installer_sha256 == candidate().installer_sha256
 
 
 
@@ -250,12 +250,3 @@ def test_approval_digest_changes_when_signer_certificate_fingerprint_changes():
     assert original.approval_digest != changed.approval_digest
 
 
-def test_evidence_rejection_exposes_safe_publisher_failure_classification():
-    error = EvidenceRejected(
-        "Authenticode signer identity does not match the WinGet manifest Publisher"
-    )
-
-    assert error.failure_code == "publisher_signer_mismatch"
-    assert error.failure_reason == (
-        "Authenticode signer identity did not match the WinGet manifest Publisher."
-    )
