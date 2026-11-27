@@ -146,8 +146,6 @@ export interface SoftwareApprovalChallenge {
   repository_commit: string;
   installer_sha256: string;
   manifest_sha256: string;
-  signature_subject: string;
-  signature_sha256: string;
   evidence_expires_at: string;
   approval_digest: string;
   notice: 'APPROVAL_REQUIRED_FOR_REAL_INSTALL';
