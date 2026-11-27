@@ -396,24 +396,16 @@ class WinGetManifestRepository:
         if not versions:
             raise DiscoveryNotFound("package has no published manifest versions")
         if version is None:
-            list_versions = getattr(self._publisher_verifier, "list_official_versions", None)
-            official_versions = list_versions(normalized_id) if callable(list_versions) else None
-            is_dbeaver = normalized_id == "DBeaver.DBeaver.Community"
-            # DBeaver must compare the complete valid source sets. Applying the
-            # generic UI cap before intersection can hide an older exact match.
-            manifest_versions = versions if is_dbeaver else versions[-MAX_AVAILABLE_VERSIONS:]
-            selectable_versions = manifest_versions
-            if is_dbeaver:
-                selectable_versions = (
-                    tuple(v for v in manifest_versions if v in set(official_versions))
-                    if official_versions is not None else ()
-                )
+            # Version selection is based on the pinned WinGet manifest only.
+            # Vendor release APIs are optional corroboration and must never
+            # make the manifest version list unavailable.
+            manifest_versions = versions[-MAX_AVAILABLE_VERSIONS:]
             return DiscoveryResponse(
                 status="VERSION_REQUIRED",
                 package_id=normalized_id,
-                available_versions=selectable_versions,
+                available_versions=manifest_versions,
                 manifest_versions=manifest_versions,
-                official_versions=official_versions,
+                official_versions=None,
             )
         if version not in versions:
             raise DiscoveryNotFound("requested package version was not found")
@@ -676,6 +668,11 @@ class WinGetManifestRepository:
             installer_url=installer_url,
             installer_sha256=installer_hash.lower(),
         )
+        # An unavailable optional vendor release endpoint is NOT_CHECKED,
+        # not a reason to suppress WinGet manifest versions or block approval.
+        if publisher_check.status == "UNAVAILABLE":
+            publisher_check = PublisherVerification(status="NOT_CHECKED")
+
         limitations = ["installer_authenticode_signature_not_yet_verified"]
         if publisher_check.status == "NOT_CHECKED":
             limitations.append("publisher_official_source_not_yet_cross_checked")
