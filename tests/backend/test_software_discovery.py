@@ -12,7 +12,7 @@ from agent_backend.software_discovery import (
 )
 
 COMMIT = "a" * 40
-PACKAGE_ID = "DBeaver.DBeaver.Community"
+PACKAGE_ID = "Acme.Editor"
 VERSION = "25.3.0"
 
 
@@ -44,7 +44,7 @@ class FakeSource:
             "Scope": "user" if not bad_scope else "machine",
             "InstallerType": "exe",
             "InstallerSwitches": {"Silent": "/S"},
-            "InstallerUrl": f"https://github.com/dbeaver/dbeaver/releases/download/{VERSION}/dbeaver-ce-{VERSION}-windows-x86_64.exe",
+            "InstallerUrl": f"https://github.com/acme/editor/releases/download/{VERSION}/acme-editor-{VERSION}-windows-x86_64.exe",
             "InstallerSha256": "b" * 64,
         }
         if bad_hash:
@@ -52,23 +52,23 @@ class FakeSource:
         if bad_url:
             installer["InstallerUrl"] = "http://127.0.0.1/installer.exe"
         self.documents = {
-            "DBeaver.DBeaver.Community.yaml": {
+            "Acme.Editor.yaml": {
                 "PackageIdentifier": PACKAGE_ID,
                 "PackageVersion": VERSION,
                 "DefaultLocale": "en-US",
                 "ManifestType": "version",
                 "ManifestVersion": "1.10.0",
             },
-            "DBeaver.DBeaver.Community.locale.en-US.yaml": {
+            "Acme.Editor.locale.en-US.yaml": {
                 "PackageIdentifier": PACKAGE_ID,
                 "PackageVersion": VERSION,
                 "PackageLocale": "en-US",
-                "PackageName": "DBeaver Community",
-                "Publisher": "DBeaver Corp",
+                "PackageName": "Acme Editor",
+                "Publisher": "Acme Inc",
                 "ManifestType": "defaultLocale",
                 "ManifestVersion": "1.10.0",
             },
-            "DBeaver.DBeaver.Community.installer.yaml": {
+            "Acme.Editor.installer.yaml": {
                 "PackageIdentifier": PACKAGE_ID,
                 "PackageVersion": VERSION,
                 "ManifestType": "installer",
@@ -81,36 +81,36 @@ class FakeSource:
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
         path = request_path(url)
-        if path == "repos/dbeaver/dbeaver/releases":
+        if path == "repos/acme/editor/releases":
             payload = [
                 {
                     "tag_name": version,
-                    "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{version}",
+                    "html_url": f"https://github.com/acme/editor/releases/tag/{version}",
                     "draft": False,
                     "prerelease": False,
                 }
                 for version in self.official_versions
             ]
-        elif path.startswith("repos/dbeaver/dbeaver/releases/tags/"):
+        elif path.startswith("repos/acme/editor/releases/tags/"):
             requested = path.rsplit("/", 1)[-1]
             if requested not in self.tag_versions:
                 return FakeResponse({}, status_code=404)
-            official_asset = f"dbeaver-ce-{requested}-windows-x86_64.exe"
+            official_asset = f"acme-editor-{requested}-windows-x86_64.exe"
             payload = {
                 "tag_name": requested,
-                "html_url": f"https://github.com/dbeaver/dbeaver/releases/tag/{requested}",
+                "html_url": f"https://github.com/acme/editor/releases/tag/{requested}",
                 "draft": False,
                 "prerelease": False,
                 "assets": [{
                     "id": 12345,
                     "name": official_asset,
-                    "browser_download_url": f"https://github.com/dbeaver/dbeaver/releases/download/{requested}/{official_asset}",
+                    "browser_download_url": f"https://github.com/acme/editor/releases/download/{requested}/{official_asset}",
                     "digest": "sha256:" + ("b" * 64 if requested == VERSION else "c" * 64),
                 }],
             }
         elif path.endswith("/commits/master"):
             payload = {"sha": COMMIT}
-        elif path.endswith("/DBeaver/DBeaver/Community"):
+        elif path.endswith("/Acme/Acme/Community"):
             payload = [{"name": VERSION, "type": "dir"}]
         elif path.endswith(f"/{VERSION}"):
             payload = [
@@ -141,7 +141,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
 
     assert result.status == "CONDITIONAL"
     assert result.candidate is not None
-    assert result.candidate.publisher == "DBeaver Corp"
+    assert result.candidate.publisher == "Acme Inc"
     assert result.candidate.installer_domain == "github.com"
     assert result.candidate.installer_sha256 == "b" * 64
     assert result.candidate.publisher_verification == "NOT_CHECKED"
@@ -152,7 +152,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
     assert all(call[1]["allow_redirects"] is False for call in source.calls)
     assert all("winget.exe" not in call[0] for call in source.calls)
     assert any(
-        "/contents/manifests/d/DBeaver/DBeaver/Community" in call[0]
+        "/contents/manifests/d/Acme/Acme/Community" in call[0]
         for call in source.calls
     )
 
@@ -160,7 +160,7 @@ def test_discovery_reads_source_and_returns_conditional_candidate_only():
 
 def test_discovery_inherits_user_scope_declared_at_installer_manifest_level():
     source = FakeSource()
-    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc = source.documents["Acme.Editor.installer.yaml"]
     installer_doc["Scope"] = "user"
     del installer_doc["Installers"][0]["Scope"]
     result = WinGetManifestRepository(http_get=source.get).discover(
@@ -189,7 +189,7 @@ def test_discovery_offers_manifest_versions_when_official_release_source_is_unav
     original_get = source.get
 
     def unavailable_releases(url, **kwargs):
-        if request_path(url) == "repos/dbeaver/dbeaver/releases":
+        if request_path(url) == "repos/acme/editor/releases":
             return FakeResponse({}, status_code=503)
         return original_get(url, **kwargs)
 
@@ -210,7 +210,7 @@ def test_selected_version_continues_when_optional_official_release_check_is_unav
     original_get = source.get
 
     def unavailable_selected_release(url, **kwargs):
-        if request_path(url).startswith("repos/dbeaver/dbeaver/releases/tags/"):
+        if request_path(url).startswith("repos/acme/editor/releases/tags/"):
             return FakeResponse({}, status_code=503)
         return original_get(url, **kwargs)
 
@@ -259,7 +259,7 @@ def test_discovery_fails_closed_on_unsafe_or_incomplete_installer(source):
 
 def test_discovery_inherits_root_level_silent_switch_for_selected_installer():
     source = FakeSource()
-    installer_doc = source.documents["DBeaver.DBeaver.Community.installer.yaml"]
+    installer_doc = source.documents["Acme.Editor.installer.yaml"]
     installer_doc["InstallerSwitches"] = {"Silent": "/S"}
     del installer_doc["Installers"][0]["InstallerSwitches"]
     result = WinGetManifestRepository(http_get=source.get).discover(
@@ -273,7 +273,7 @@ def test_discovery_inherits_root_level_silent_switch_for_selected_installer():
 
 def test_discovery_rejects_selected_installer_dependencies_not_in_exact_approval():
     source = FakeSource()
-    source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Installers"][0]["Dependencies"] = {
+    source.documents["Acme.Editor.installer.yaml"]["Installers"][0]["Dependencies"] = {
         "PackageDependencies": [{"PackageIdentifier": "Microsoft.VCRedist.2015+.x64"}]
     }
 
@@ -287,7 +287,7 @@ def test_discovery_rejects_selected_installer_dependencies_not_in_exact_approval
 
 def test_discovery_rejects_package_dependencies_not_in_exact_approval():
     source = FakeSource()
-    source.documents["DBeaver.DBeaver.Community.installer.yaml"]["Dependencies"] = {
+    source.documents["Acme.Editor.installer.yaml"]["Dependencies"] = {
         "PackageDependencies": [{
             "PackageIdentifier": "Microsoft.VCRedist.2015+.x64",
         }]
@@ -326,7 +326,7 @@ def test_manifest_schema_version_with_long_digit_run_is_rejected():
 def test_missing_package_is_not_found():
     class MissingSource(FakeSource):
         def get(self, url, **kwargs):
-            if request_path(url).endswith("/DBeaver/DBeaver/Community"):
+            if request_path(url).endswith("/Acme/Acme/Community"):
                 return FakeResponse({"message": "Not Found"}, status_code=404)
             return super().get(url, **kwargs)
 
@@ -462,7 +462,7 @@ def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
             super().__init__(official_versions=["1.0.0", VERSION])
 
         def get(self, url, **kwargs):
-            if request_path(url).endswith("/DBeaver/DBeaver/Community"):
+            if request_path(url).endswith("/Acme/Acme/Community"):
                 versions = [f"{major}.0.0" for major in range(1, 26)]
                 versions.extend([VERSION, "26.0.0", "26.1.0", "26.2.5", "CN"])
                 return FakeResponse([
@@ -498,13 +498,13 @@ def test_version_listing_uses_one_numeric_order_and_limit_for_every_package():
 
 
 def test_discovery_accepts_manifest_filenames_containing_plus_signs():
-    plus_package_id = PACKAGE_ID.replace("DBeaver", "DBeaver++")
+    plus_package_id = PACKAGE_ID.replace("Acme", "Acme++")
 
     class PlusFilenameSource(FakeSource):
         def __init__(self):
             super().__init__()
             self.documents = {
-                name.replace("DBeaver", "DBeaver++"): {
+                name.replace("Acme", "Acme++"): {
                     **document,
                     "PackageIdentifier": plus_package_id,
                 }
@@ -513,13 +513,13 @@ def test_discovery_accepts_manifest_filenames_containing_plus_signs():
 
         def get(self, url, **kwargs):
             path = request_path(url).replace(
-                "/DBeaver++/DBeaver++/Community",
-                "/DBeaver/DBeaver/Community",
+                "/Acme++/Acme++/Community",
+                "/Acme/Acme/Community",
             )
             if path != request_path(url):
                 url = url.replace(
-                    "/DBeaver++/DBeaver++/Community",
-                    "/DBeaver/DBeaver/Community",
+                    "/Acme++/Acme++/Community",
+                    "/Acme/Acme/Community",
                 )
             return super().get(url, **kwargs)
 
@@ -540,7 +540,7 @@ def test_discovery_accepts_yaml_file_entries_with_missing_optional_type_metadata
     class IncompleteMetadataSource(FakeSource):
         def get(self, url, **kwargs):
             response = super().get(url, **kwargs)
-            if request_path(url).endswith(f"/manifests/d/DBeaver/DBeaver/Community/{VERSION}"):
+            if request_path(url).endswith(f"/manifests/d/Acme/Acme/Community/{VERSION}"):
                 entries = json.loads(response._body)
                 for entry in entries:
                     entry.pop("type", None)
