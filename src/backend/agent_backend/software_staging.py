@@ -55,12 +55,21 @@ class InstallerStageError(RuntimeError):
         "installer URL is not an approved HTTPS URL": ("installer_url_untrusted", "Installer URL failed the approved HTTPS origin check."),
     }
 
-    def __init__(self, message: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostic_fields: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(message)
         self.failure_code, self.failure_reason = self._REASONS.get(
             message,
             ("installer_staging_failed", "Installer could not be staged or verified safely."),
         )
+        self.diagnostic_fields = dict(diagnostic_fields or {})
+        trust_result = self.diagnostic_fields.get("winverifytrust_hresult")
+        if trust_result:
+            self.failure_reason = f"{self.failure_reason} WinVerifyTrust result: {trust_result}."
 
 
 class StagedInstaller(BaseModel):
@@ -211,19 +220,36 @@ class InstallerStager:
             ):
                 raise InstallerStageError("installer SHA-256 did not match the official release asset")
 
-            verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
-            if callable(verify_with_identity):
-                signature_valid, signature_subject, signature_sha256 = verify_with_identity(temp_path)
+            verify_with_diagnostics = getattr(self._signature_verifier, "verify_with_diagnostics", None)
+            trust_hresult = None
+            if callable(verify_with_diagnostics):
+                signature_valid, signature_subject, signature_sha256, trust_hresult = verify_with_diagnostics(temp_path)
             else:
-                verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
-                if callable(verify_with_subject):
-                    signature_valid, signature_subject = verify_with_subject(temp_path)
+                verify_with_identity = getattr(self._signature_verifier, "verify_with_identity", None)
+                if callable(verify_with_identity):
+                    signature_valid, signature_subject, signature_sha256 = verify_with_identity(temp_path)
                 else:
-                    signature_valid = self._signature_verifier.verify(temp_path) is True
-                    signature_subject = None
-                signature_sha256 = None
+                    verify_with_subject = getattr(self._signature_verifier, "verify_with_subject", None)
+                    if callable(verify_with_subject):
+                        signature_valid, signature_subject = verify_with_subject(temp_path)
+                    else:
+                        signature_valid = self._signature_verifier.verify(temp_path) is True
+                        signature_subject = None
+                    signature_sha256 = None
             if signature_valid is not True:
-                raise InstallerStageError("Windows Authenticode signature verification failed")
+                safe_hresult = (
+                    trust_hresult
+                    if isinstance(trust_hresult, str)
+                    and (trust_hresult == "WINVERIFYTRUST_CALL_FAILED"
+                         or (len(trust_hresult) == 10
+                             and trust_hresult.startswith("0x")
+                             and all(char in "0123456789ABCDEF" for char in trust_hresult[2:])))
+                    else None
+                )
+                raise InstallerStageError(
+                    "Windows Authenticode signature verification failed",
+                    diagnostic_fields={"winverifytrust_hresult": safe_hresult} if safe_hresult else None,
+                )
 
             final_path = root / f"installer-{uuid.uuid4().hex}{suffix}"
             os.replace(temp_path, final_path)
