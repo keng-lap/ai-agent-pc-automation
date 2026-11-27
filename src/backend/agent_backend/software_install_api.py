@@ -228,6 +228,8 @@ def create_software_install_proposal(
             fields={
                 "status_code": 409,
                 "failure_code": "installer_type_unsupported",
+                "failure_reason": "The selected WinGet InstallerType is not supported by the verified install contract.",
+                "installer_type": candidate.installer_type,
                 "package_id": payload.package_id,
                 "version": payload.version,
                 "scope": payload.scope,
