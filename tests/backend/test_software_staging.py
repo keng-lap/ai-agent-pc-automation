@@ -35,6 +35,12 @@ class AcceptSignature:
         return self.accepted
 
 
+class RejectSignatureWithDiagnostics:
+    def verify_with_diagnostics(self, path):
+        assert path.is_file()
+        return False, None, None, "0x800B0109"
+
+
 def make_candidate(body=b"verified-installer-bytes"):
     digest = hashlib.sha256(body).hexdigest()
     return InstallerCandidate(
@@ -175,6 +181,23 @@ def test_invalid_authenticode_signature_removes_downloaded_file(tmp_path):
 
     assert response.closed is True
     assert len(signature.paths) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_authenticode_failure_preserves_safe_winverifytrust_hresult(tmp_path):
+    body = b"verified-installer-bytes"
+    response = FakeResponse(body)
+
+    with pytest.raises(InstallerStageError, match="Authenticode") as captured:
+        InstallerStager(
+            http_get=lambda *args, **kwargs: response,
+            signature_verifier=RejectSignatureWithDiagnostics(),
+        ).stage(make_candidate(body), staging_root=tmp_path)
+
+    assert captured.value.failure_code == "authenticode_verification_failed"
+    assert captured.value.diagnostic_fields == {"winverifytrust_hresult": "0x800B0109"}
+    assert "0x800B0109" in captured.value.failure_reason
+    assert response.closed is True
     assert list(tmp_path.iterdir()) == []
 
 
