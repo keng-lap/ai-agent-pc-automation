@@ -175,6 +175,24 @@ def test_registry_accepts_dbeaver_when_signer_name_differs_but_sha256_matches():
     assert evidence.installer_sha256 == candidate().installer_sha256
 
 
+def test_registry_accepts_dbeaver_without_official_release_metadata_when_manifest_hash_matches():
+    registry = make_registry(clock=lambda: NOW)
+    generic_manifest_candidate = candidate().model_copy(update={
+        "publisher_verification": "NOT_CHECKED",
+        "official_version": None,
+        "official_release_url": None,
+        "official_asset_sha256": None,
+        "official_asset_id": None,
+    })
+    manifest_staged = staged(official_release_url=None)
+    evidence = registry.register_staged_candidate(
+        candidate=generic_manifest_candidate,
+        staged=manifest_staged,
+    )
+    assert evidence.package_id == "DBeaver.DBeaver.Community"
+    assert evidence.official_release_url is None
+
+
 
 def test_registry_accepts_unrelated_package_when_signer_name_differs():
     registry = SoftwareEvidenceRegistry(clock=lambda: NOW)
