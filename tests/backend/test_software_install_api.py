@@ -166,8 +166,8 @@ def test_generic_package_proposal_uses_publisher_independent_sha256_trust_path(m
     assert not staged_path.exists()
 
 
-def test_unsupported_installer_type_is_rejected_before_staging(monkeypatch, tmp_path):
-    candidate = make_candidate(installer_type="inno")
+def test_unsupported_portable_installer_type_is_rejected_before_staging(monkeypatch, tmp_path):
+    candidate = make_candidate(installer_type="portable")
     stage_calls = []
     monkeypatch.setattr(api.sys, "platform", "win32")
     discovery_calls = []
